@@ -104,6 +104,36 @@ class ScopedAdminRename
     std::string backup_;
     bool restored_ = false;
 };
+// Portable scoped environment variable (MSVC has no setenv/unsetenv).
+// Restores the previous value (or removes the variable) on scope exit so a
+// test cannot leak configuration into later cases in the same binary.
+class ScopedEnv
+{
+  public:
+    ScopedEnv(const char *key, const char *value) : key_(key)
+    {
+#ifdef _WIN32
+        const std::string kv = std::string(key) + "=" + value;
+        _putenv(kv.c_str());
+#else
+        setenv(key, value, 1);
+#endif
+    }
+    ~ScopedEnv()
+    {
+#ifdef _WIN32
+        const std::string kv = std::string(key_) + "=";
+        _putenv(kv.c_str());
+#else
+        unsetenv(key_);
+#endif
+    }
+    ScopedEnv(const ScopedEnv &) = delete;
+    ScopedEnv &operator=(const ScopedEnv &) = delete;
+
+  private:
+    const char *key_;
+};
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -172,6 +202,44 @@ DROGON_TEST(Integration_P0_AdminBootstrap_FreshAdmin_EnvPasswordCreatesPbkdf2Use
     }
     // Original admin fully restored.
     CHECK(loginExpect("admin", "admin", drogon::k200OK));
+}
+
+// A configured bootstrap mailbox (FULLA_BOOTSTRAP_ADMIN_EMAIL) with real
+// SMTP delivery creates the admin UNVERIFIED: the login flow's email-verified
+// gate must hold until the verification email (sent on the forced password
+// change) is clicked — a verified=true seed here would recreate the prod
+// rollout deadlock in reverse (an ungateable placeholder).
+DROGON_TEST(Integration_P0_AdminBootstrap_EnvEmail_CreatesUnverifiedRow)
+{
+    ADMIN_BOOTSTRAP_SKIP_GUARD;
+
+    ScopedEnv emailEnv("FULLA_BOOTSTRAP_ADMIN_EMAIL", "admin@your-domain.com");
+    ScopedEnv hostEnv("FULLA_SMTP_HOST", "smtp.test.local");
+    ScopedEnv userEnv("FULLA_SMTP_USER", "tester");
+    ScopedEnv passEnv("FULLA_SMTP_PASSWORD", "testpass");
+
+    ScopedAdminRename guard("p0103bak_admin");
+
+    auto done = std::make_shared<std::promise<bool>>();
+    bootstrap::AdminBootstrapper::run(
+      "BootstrapPw!103x",
+      [done](bool ok, const std::string &detail) {
+          if (!ok)
+              LOG_WARN << "bootstrap env-email test: " << detail;
+          done->set_value(ok);
+      }
+    );
+    CHECK(done->get_future().get());
+
+    auto db = drogon::app().getDbClient();
+    auto rows = db->execSqlSync(
+      "SELECT email, email_verified FROM users WHERE username = 'admin'"
+    );
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0]["email"].as<std::string>() == "admin@your-domain.com");
+    CHECK(rows[0]["email_verified"].as<bool>() == false);
+
+    guard.restore();
 }
 
 // ---------------------------------------------------------------------------
