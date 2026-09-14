@@ -76,7 +76,9 @@ class MfaService
       std::shared_ptr<IMfaRepository> mfaRepo,
       std::shared_ptr<fulla::common::ports::ICryptoProvider> crypto,
       std::shared_ptr<fulla::common::ports::IClock> clock,
-      std::string issuerName = "OAuth2Server"
+      // Product-facing name shown by authenticator apps (Google
+      // Authenticator renders "issuer:account" as its entry title).
+      std::string issuerName = "Fulla"
     );
 
     /**

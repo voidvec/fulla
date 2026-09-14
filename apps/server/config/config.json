@@ -188,6 +188,9 @@
         }
     ],
     "custom_config": {
+        "mfa": {
+            "totp_issuer": "Fulla"
+        },
         "auth": {
             "require_pkce_for_public": true,
             "allow_http_redirect_uri": true,

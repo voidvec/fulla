@@ -165,8 +165,18 @@ void wireIdentityServices()
         oauthHttpClient,
         plugin ? plugin->getAuditSink() : nullptr);
     static auto sessionManager = std::make_shared<fulla::identity::SessionManager>(notifier);
+    // TOTP issuer shown by authenticator apps (custom_config.mfa.totp_issuer,
+    // env override FULLA_MFA_TOTP_ISSUER); "Fulla" instead of the historical
+    // "OAuth2Server" default, which is what users saw in their authenticator.
+    std::string totpIssuer = "Fulla";
+    if (customConfig.isMember("mfa") && customConfig["mfa"].isMember("totp_issuer"))
+    {
+        const std::string configured = customConfig["mfa"]["totp_issuer"].asString();
+        if (!configured.empty())
+            totpIssuer = configured;
+    }
     static auto mfaService =
-      std::make_shared<fulla::identity::MfaService>(mfaRepo, crypto, clock);
+      std::make_shared<fulla::identity::MfaService>(mfaRepo, crypto, clock, totpIssuer);
 #ifdef WITH_WEBAUTHN
     static auto webAuthnService =
       std::make_shared<fulla::identity::WebAuthnService>(webAuthnRepo, crypto, rpId, rpName);

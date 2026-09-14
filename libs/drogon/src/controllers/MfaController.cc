@@ -164,9 +164,11 @@ void MfaController::setup(
                   );
                   return;
               }
-              mfaService_->setupSecret(
+              // Account label = username (readable in the authenticator),
+            // not the opaque public_sub.
+            mfaService_->setupSecret(
                 user->id,
-                userId,
+                user->username,
                 [sharedCb, req](std::optional<fulla::identity::MfaSetupResult> result) {
                     if (!result)
                     {
@@ -191,6 +193,19 @@ void MfaController::setup(
 
     std::string secret = ::fulla::identity::totp::generateSecret(::fulla::drogon::utils::detail::cryptoProvider());
 
+    // Fallback leg: same TOTP issuer contract as the injected service
+    // (custom_config.mfa.totp_issuer, default "Fulla").
+    std::string totpIssuer = "Fulla";
+    {
+        const auto &customConfig = ::drogon::app().getCustomConfig();
+        if (customConfig.isMember("mfa") && customConfig["mfa"].isMember("totp_issuer"))
+        {
+            const std::string configured = customConfig["mfa"]["totp_issuer"].asString();
+            if (!configured.empty())
+                totpIssuer = configured;
+        }
+    }
+
     auto db = ::drogon::app().getDbClient();
     // #54: deleted_at filter — a soft-deleted user must not mutate MFA state
     // (V024: deleted users are excluded from all queries).
@@ -199,7 +214,7 @@ void MfaController::setup(
         Mapper<drogon_model::fulla_db::Users>(db).findBy(
           Criteria(drogon_model::fulla_db::Users::Cols::_public_sub, CompareOperator::EQ, userId) &&
             Criteria(drogon_model::fulla_db::Users::Cols::_deleted_at, CompareOperator::IsNull),
-          [sharedCb, secret, userId, db, req](
+          [sharedCb, secret, userId, db, req, totpIssuer](
             const std::vector<drogon_model::fulla_db::Users> &users
           ) {
               if (users.empty())
@@ -210,14 +225,15 @@ void MfaController::setup(
                   return;
               }
               drogon_model::fulla_db::Users updated = users[0];
+              const std::string accountLabel = updated.getValueOfUsername();
               updated.setMfaSecret(secret);
               try
               {
                   Mapper<drogon_model::fulla_db::Users>(db).update(
                     updated,
-                    [sharedCb, secret, userId](const size_t) {
+                    [sharedCb, secret, accountLabel, totpIssuer](const size_t) {
                         std::string otpUri = ::fulla::identity::totp::generateOtpAuthUri(
-                          secret, userId, "OAuth2Server"
+                          secret, accountLabel, totpIssuer
                         );
                         Json::Value json;
                         json["secret"] = secret;
