@@ -134,7 +134,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.filter.outputs.images == 'true'
-        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       # Same context/file as release.yml's "Build admin image" (push: false).
       - name: Smoke build admin image
