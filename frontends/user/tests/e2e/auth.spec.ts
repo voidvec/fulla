@@ -161,18 +161,7 @@ test.describe('Register', () => {
     await expect(page.getByRole('heading', { name: /create/i })).toBeVisible()
   })
 
-  test('successful registration shows success message', async ({ page }) => {
-    await page.goto('/register')
-    await page.locator('input[autocomplete="username"]').fill('newuser')
-    await page.locator('input[autocomplete="email"]').fill('new@example.com')
-    const passwordFields = page.locator('input[type="password"]')
-    await passwordFields.first().fill('StrongPass123')
-    await passwordFields.nth(1).fill('StrongPass123')
-    await page.locator('button[type="submit"]').click()
-    await expect(page.locator('text=successfully')).toBeVisible()
-  })
-
-  test('registration success auto-redirects after ~2 seconds', async ({ page }) => {
+  test('successful registration shows verification guidance instead of auto-redirect', async ({ page }) => {
     await page.goto('/register')
     await page.locator('input[autocomplete="username"]').fill('timeruser')
     await page.locator('input[autocomplete="email"]').fill('timer@example.com')
@@ -180,10 +169,16 @@ test.describe('Register', () => {
     await passwordFields.first().fill('Password123')
     await passwordFields.nth(1).fill('Password123')
     await page.locator('button[type="submit"]').click()
-    // Success message appears
+    // Success message appears with the email-verification guidance
     await expect(page.locator('text=successfully')).toBeVisible()
-    // After ~2 seconds, redirected to login page
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 })
+    const notice = page.getByTestId('verify-email-notice')
+    await expect(notice).toBeVisible()
+    await expect(notice).toContainText('timer@example.com')
+    // The page stays put — no auto-redirect to a login form that would only
+    // reject an unverified account; the user navigates via the explicit link.
+    await expect(page.getByTestId('go-to-login')).toBeVisible()
+    await page.waitForTimeout(2500)
+    await expect(page).not.toHaveURL(/\/login/)
   })
 })
 

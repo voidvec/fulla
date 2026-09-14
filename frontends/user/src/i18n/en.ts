@@ -104,6 +104,8 @@ export default {
       title: 'Create Account',
       subtitle: 'Join us today',
       success: 'Account created successfully!',
+      verifyEmailNotice:
+        'A verification email has been sent to {email}. Please verify your address before signing in.',
       usernameHint: 'Optional — generated for you when left blank',
       passwordHint:
         'Minimum 8 characters. A longer passphrase of 3–4 random words works well.',

@@ -88,7 +88,7 @@ export async function setupMocks(page: Page) {
   })
 
   await page.route('**/api/register', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'User registered successfully' }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'User registered successfully', note: 'Please check your email to verify your account' }) })
   })
 
   await page.route('**/api/password-reset/request', async (route) => {
