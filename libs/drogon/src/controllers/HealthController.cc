@@ -22,7 +22,7 @@ void HealthController::health(
     // Returns 200 OK if service is healthy
     Json::Value json;
     json["status"] = "ok";
-    json["service"] = "OAuth2 Server";
+    json["service"] = "Fulla";
     json["timestamp"] = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
                                                std::chrono::system_clock::now().time_since_epoch()
     )

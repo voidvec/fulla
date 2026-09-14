@@ -155,7 +155,7 @@ class WebAuthnService
       std::shared_ptr<IWebAuthnRepository> repo,
       std::shared_ptr<fulla::common::ports::ICryptoProvider> crypto,
       std::string rpId = "localhost",
-      std::string rpName = "OAuth2 Server"
+      std::string rpName = "Fulla"
     );
 
     /**
