@@ -15,7 +15,7 @@ especially in Docker/Kubernetes environments — sensitive values should not be 
 | `FULLA_DB_PASSWORD` | Database password | `db_clients[0].passwd` | `secret` |
 | `FULLA_REDIS_HOST` | Redis host | `redis_clients[0].host` | `redis` |
 | `FULLA_REDIS_PASSWORD` | Redis password | `redis_clients[0].passwd` | `secret` |
-| `FULLA_VUE_CLIENT_SECRET` | Vue client secret | `plugins[OAuth2Plugin].config.clients.vue-client.secret` | `...` |
+| `FULLA_PORTAL_CLIENT_SECRET` | Portal client secret (legacy alias: `FULLA_VUE_CLIENT_SECRET`) | `plugins[OAuth2Plugin].config.clients.fulla-portal.secret` | `...` |
 
 > For the full production environment variable list (30+ entries), see the variable table in
 > [Production Deployment](deployment.md); this table lists only the six core items of the
@@ -146,7 +146,7 @@ defaults are stored:
 - `PUBLIC` clients → `none` (they have no secret to begin with).
 - `CONFIDENTIAL` clients → `client_secret_basic`.
 
-Seed clients declare it explicitly: `vue-client` and `admin-console` → `none`;
+Seed clients declare it explicitly: `fulla-portal` and `fulla-admin-console` → `none`;
 `backend-svc` → `client_secret_basic`. Existing clients with NULL values keep their
 pre-upgrade behavior; the upgrade does not break existing deployments.
 

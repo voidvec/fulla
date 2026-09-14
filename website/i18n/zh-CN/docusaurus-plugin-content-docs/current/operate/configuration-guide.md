@@ -14,7 +14,7 @@
 | `FULLA_DB_PASSWORD` | 数据库密码 | `db_clients[0].passwd` | `secret` |
 | `FULLA_REDIS_HOST` | Redis 主机名 | `redis_clients[0].host` | `redis` |
 | `FULLA_REDIS_PASSWORD` | Redis 密码 | `redis_clients[0].passwd` | `secret` |
-| `FULLA_VUE_CLIENT_SECRET` | Vue 客户端密钥 | `plugins[OAuth2Plugin].config.clients.vue-client.secret` | `...` |
+| `FULLA_PORTAL_CLIENT_SECRET` | 门户客户端密钥（旧名别名：`FULLA_VUE_CLIENT_SECRET`） | `plugins[OAuth2Plugin].config.clients.fulla-portal.secret` | `...` |
 
 > 生产部署的完整环境变量清单（30+ 项）见[生产部署](deployment.md)的变量表；本表只列注入机制的六个核心项。
 
@@ -109,7 +109,7 @@ OAuth2 插件的 `config.storage_type` 决定持久化后端：
 - `PUBLIC` 客户端 → `none`（本就没有密钥）。
 - `CONFIDENTIAL` 客户端 → `client_secret_basic`。
 
-种子客户端均显式声明：`vue-client` 与 `admin-console` → `none`；
+种子客户端均显式声明：`fulla-portal` 与 `fulla-admin-console` → `none`；
 `backend-svc` → `client_secret_basic`。已有 NULL 值的客户端保持升级前的
 行为，升级不破坏存量部署。
 

@@ -36,7 +36,7 @@ Two nullable foreign keys attach entities to an organization:
 | `org_id` | `oauth2_clients` | The client is owned by the org; `NULL` = global/ownerless |
 
 Both are nullable by design: pre-V017 data and platform-level principals
-(the seed `admin`, the `admin-console` client) simply have no org.
+(the seed `admin`, the `fulla-admin-console` client) simply have no org.
 
 ## 2. Admin API surface
 

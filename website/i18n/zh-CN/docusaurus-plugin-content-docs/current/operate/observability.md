@@ -43,8 +43,8 @@
 **示例**:
 
 ```
-2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=vue-client Success=True
-2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=vue-client Success=False Reason="Replay Detected"
+2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
+2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
 ```
 
 ### 2.2 Contextual Logs (上下文日志)

@@ -570,7 +570,7 @@ Test Results: 59/59 passed, 0 failed
 
 #### Method 2: test with the PowerShell script
 
-`admin-console` is a PUBLIC client (PKCE enforced, no secret, no password grant), so constructing the token flow by hand is rather tedious; using the repository's bundled PowerShell test script is recommended (it implements PKCE login internally):
+`fulla-admin-console` is a PUBLIC client (PKCE enforced, no secret, no password grant), so constructing the token flow by hand is rather tedious; using the repository's bundled PowerShell test script is recommended (it implements PKCE login internally):
 
 ```powershell
 # Run the admin console endpoint tests (PKCE login + 52 assertions)

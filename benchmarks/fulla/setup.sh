@@ -214,7 +214,7 @@ fi
 # PBKDF2 rehash (AuthService.cc:94-122); we warm up BEFORE timed runs so that
 # CPU cost lands in warmup, not measured throughput.
 #
-# S256 PKCE is REQUIRED here (F-011 / RFC 9700 §2.1.1): vue-client is PUBLIC and
+# S256 PKCE is REQUIRED here (F-011 / RFC 9700 §2.1.1): fulla-portal is PUBLIC and
 # require_pkce_for_public=true in all shipped configs, so a login without
 # code_challenge is rejected. Each user gets its own code_verifier + the derived
 # S256 code_challenge.
@@ -236,7 +236,7 @@ print(v, c)
 EOF
         # check the HTTP status, not just curl's exit code (curl returns 0 for HTTP 401/500)
         login_code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$TARGET_URL/oauth2/login" \
-            -d "username=${uname}&password=admin&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=warmup-${i}&code_challenge=${challenge}&code_challenge_method=S256&json=true" \
+            -d "username=${uname}&password=admin&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=warmup-${i}&code_challenge=${challenge}&code_challenge_method=S256&json=true" \
             2>/dev/null || echo 000)"
         if [ "$login_code" = "200" ]; then
             ok=$((ok+1))

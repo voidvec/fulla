@@ -238,8 +238,8 @@ export async function setupAuthenticatedMocks(page: Page) {
 |------|---------|------|
 | `**/api/users` | Any origin + exact path match | `http://localhost:5174/api/users` ✅ |
 | `**/api/admin/logs**` | Path prefix match (including query parameters) | `/api/admin/logs?page=2` ✅ |
-| `**/api/admin/clients/*` | Path + single-segment wildcard | `/api/admin/clients/vue-client` ✅ |
-| `**/api/admin/clients/*/reset-secret` | Multi-segment path combination | `/api/admin/clients/vue-client/reset-secret` ✅ |
+| `**/api/admin/clients/*` | Path + single-segment wildcard | `/api/admin/clients/fulla-portal` ✅ |
+| `**/api/admin/clients/*/reset-secret` | Multi-segment path combination | `/api/admin/clients/fulla-portal/reset-secret` ✅ |
 
 **Same URL, different HTTP methods:**
 

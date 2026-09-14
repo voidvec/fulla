@@ -232,7 +232,7 @@ func TestPkcePairShape(t *testing.T) {
 
 // G6 -- BuildAuthorizeURL carries every parameter.
 func TestBuildAuthorizeURL(t *testing.T) {
-	flow := NewAuthCodeFlow("http://server.test/", "vue-client", "", "http://client.test/cb", []string{"openid", "profile"})
+	flow := NewAuthCodeFlow("http://server.test/", "fulla-portal", "", "http://client.test/cb", []string{"openid", "profile"})
 	pkce, _ := NewPkcePair()
 	raw, err := flow.BuildAuthorizeURL("st4te", &pkce)
 	if err != nil {
@@ -247,7 +247,7 @@ func TestBuildAuthorizeURL(t *testing.T) {
 	}
 	q := u.Query()
 	if q.Get("response_type") != "code" ||
-		q.Get("client_id") != "vue-client" ||
+		q.Get("client_id") != "fulla-portal" ||
 		q.Get("redirect_uri") != "http://client.test/cb" ||
 		q.Get("scope") != "openid profile" ||
 		q.Get("state") != "st4te" ||
@@ -291,14 +291,14 @@ func TestExchangeAndRefreshUseBasic(t *testing.T) {
 		t.Fatalf("refresh form = %q", form)
 	}
 
-	public := NewAuthCodeFlow(srv.URL, "vue-client", "", "http://client.test/cb", nil)
+	public := NewAuthCodeFlow(srv.URL, "fulla-portal", "", "http://client.test/cb", nil)
 	if _, err := public.ExchangeCode(context.Background(), "auth-code-2", ""); err != nil {
 		t.Fatalf("public exchange: %v", err)
 	}
 	if h := fake.lastAuthHeader(t); h != "" {
 		t.Fatalf("public client must not send Basic, got %q", h)
 	}
-	if form := fake.lastForm(t); form.Get("client_id") != "vue-client" {
+	if form := fake.lastForm(t); form.Get("client_id") != "fulla-portal" {
 		t.Fatalf("public client_id form = %q", form)
 	}
 }

@@ -156,10 +156,10 @@ WHERE u.username = 'admin';
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "
 SELECT client_id, name, client_type, token_endpoint_auth_method
 FROM oauth2_clients
-WHERE client_id IN ('admin-console', 'vue-client');
+WHERE client_id IN ('fulla-admin-console', 'fulla-portal');
 "
 
-# 预期输出：admin-console 与 vue-client 均为 PUBLIC（token_endpoint_auth_method = none）
+# 预期输出：fulla-admin-console 与 fulla-portal 均为 PUBLIC（token_endpoint_auth_method = none）
 
 # 检查默认 Scopes（scope 名称列是 name）
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "
@@ -193,7 +193,7 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
 
 ### 3.1 获取管理员令牌
 
-`admin-console` 是 **PUBLIC 客户端**（`token_endpoint_auth_method=none`，无 client_secret，不支持 password grant），令牌必须走 **授权码 + PKCE** 两步流程（F-011：PUBLIC 客户端强制 PKCE）。以下等价于 `scripts/backend/test-admin-endpoints.sh` 的 setup 步骤：
+`fulla-admin-console` 是 **PUBLIC 客户端**（`token_endpoint_auth_method=none`，无 client_secret，不支持 password grant），令牌必须走 **授权码 + PKCE** 两步流程（F-011：PUBLIC 客户端强制 PKCE）。以下等价于 `scripts/backend/test-admin-endpoints.sh` 的 setup 步骤：
 
 ```bash
 # 1) 登录换取授权码（表单编码；code_challenge = BASE64URL(SHA256(code_verifier))）
@@ -202,7 +202,7 @@ CODE_CHALLENGE=$(printf '%s' "$CODE_VERIFIER" | openssl dgst -sha256 -binary | b
 
 LOGIN_RESP=$(curl -s -X POST http://localhost:5555/oauth2/login \
   -d "username=admin&password=admin" \
-  -d "client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback" \
+  -d "client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback" \
   -d "scope=openid+profile+admin&state=verify-state" \
   -d "code_challenge=$CODE_CHALLENGE&code_challenge_method=S256&json=true")
 CODE=$(echo "$LOGIN_RESP" | jq -r '.code')
@@ -211,7 +211,7 @@ CODE=$(echo "$LOGIN_RESP" | jq -r '.code')
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=authorization_code&code=$CODE" \
   -d "redirect_uri=http://localhost:5174/admin/callback" \
-  -d "client_id=admin-console&code_verifier=$CODE_VERIFIER"
+  -d "client_id=fulla-admin-console&code_verifier=$CODE_VERIFIER"
 
 # 预期响应（保存 access_token）：
 {
@@ -235,12 +235,12 @@ export TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # 预期响应：
 {
   "active": true,
-  "client_id": "admin-console",
+  "client_id": "fulla-admin-console",
   "username": "admin",
   "scope": "openid profile admin",
   "exp": 1719123456,
@@ -253,7 +253,7 @@ curl -s -X POST http://localhost:5555/oauth2/introspect \
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=invalid_token" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # 预期响应：{"active": false}
 ```
@@ -266,7 +266,7 @@ curl -s -X POST http://localhost:5555/oauth2/introspect \
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=refresh_token" \
   -d "refresh_token=tGzv3JH7xN1yQ9X2..." \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # 预期响应：返回新的 access_token 和 refresh_token
 {
@@ -286,7 +286,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 curl -s -X POST http://localhost:5555/oauth2/revoke \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # 预期响应：HTTP 200 OK（空响应体）
 
@@ -294,7 +294,7 @@ curl -s -X POST http://localhost:5555/oauth2/revoke \
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # 预期响应：{"active": false}
 ```
@@ -365,7 +365,7 @@ curl -X GET http://localhost:5555/api/admin/clients \
 {
   "clients": [
     {
-      "client_id": "admin-console",
+      "client_id": "fulla-admin-console",
       "name": "Admin Console",
       "client_type": "PUBLIC",
       "token_endpoint_auth_method": "none",
@@ -444,7 +444,7 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 |--------|---------|---------|
 | 访问管理后台 | 打开 http://localhost:8081/admin | 显示管理后台登录页 |
 | 管理员登录 | 使用 admin/admin 登录 | 登录成功，显示仪表板 |
-| 应用管理 | 点击"应用"菜单 | 显示客户端列表（至少有 admin-console） |
+| 应用管理 | 点击"应用"菜单 | 显示客户端列表（至少有 fulla-admin-console） |
 | 创建应用 | 点击"新建应用"，填写表单 | 应用创建成功，出现在列表中 |
 | 用户管理 | 点击"用户"菜单 | 显示用户列表（至少有 admin 和刚注册的用户） |
 | Token 管理 | 点击"Token"菜单 | 显示 active tokens 列表 |
@@ -453,11 +453,11 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 
 ```bash
 # 步骤 1：构建授权 URL（在浏览器中访问）
-# 注意：redirect_uri 必须与客户端注册值精确匹配（vue-client 种子注册的是
+# 注意：redirect_uri 必须与客户端注册值精确匹配（fulla-portal 种子注册的是
 #       http://127.0.0.1:8080/callback —— 用 localhost 会被拒绝）
 # http://localhost:5555/oauth2/authorize?
 #   response_type=code&
-#   client_id=vue-client&
+#   client_id=fulla-portal&
 #   redirect_uri=http://127.0.0.1:8080/callback&
 #   scope=openid profile email&
 #   state=random_state_value
@@ -475,13 +475,13 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 # 预期：重定向到 redirect_uri，携带 authorization code
 # http://127.0.0.1:8080/callback?code=xxx&state=random_state_value
 
-# 步骤 4：交换令牌（vue-client 是 PUBLIC 客户端 → 必须带 PKCE code_verifier，
+# 步骤 4：交换令牌（fulla-portal 是 PUBLIC 客户端 → 必须带 PKCE code_verifier，
 #          且不能携带 client_secret）
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=authorization_code" \
   -d "code=从回调中获取的code" \
   -d "redirect_uri=http://127.0.0.1:8080/callback" \
-  -d "client_id=vue-client" \
+  -d "client_id=fulla-portal" \
   -d "code_verifier=登录时使用的PKCE_verifier"
 
 # 预期响应：返回 access_token 和 refresh_token
@@ -576,7 +576,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 # 测试错误密码（登录端点 —— 注意：失败计数会触发 F-018 限流，别连刷超过阈值）
 curl -s -X POST http://localhost:5555/oauth2/login \
   -d "username=admin&password=wrong-password" \
-  -d "client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback" \
+  -d "client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback" \
   -d "scope=openid&state=t&code_challenge=x&code_challenge_method=S256"
 
 # 预期响应：HTTP 401 Unauthorized（错误码经 ErrorCatalog，防枚举口径统一）

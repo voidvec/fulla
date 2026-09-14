@@ -124,7 +124,7 @@ def generate_refresh_tokens(out_dir: Path, count: int) -> None:
         "INSERT INTO oauth2_refresh_tokens\n",
         "    (token, access_token, client_id, user_id, scope,\n",
         "     expires_at, revoked, family_id)\n",
-        "SELECT td.token_hash, td.token_hash, 'vue-client', bu.id::text,\n",
+        "SELECT td.token_hash, td.token_hash, 'fulla-portal', bu.id::text,\n",
         f"    'openid profile', {expires_at}, false, td.family_id\n",
         "FROM token_data td\n",
         "JOIN bench_users bu ON bu.rn = (td.idx % (SELECT COUNT(*) FROM bench_users))\n",

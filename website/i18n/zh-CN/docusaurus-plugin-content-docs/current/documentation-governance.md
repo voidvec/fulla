@@ -94,7 +94,7 @@
 
 | # | 矛盾 | 定谳依据 |
 |---|---|---|
-| 1 | **admin 默认凭证三种口径**（'admin' vs admin123 vs admin/admin123+admin-console 双客户端） | 以 apps/server/seed/dev_admin_user.sql 实测定谳，全站统一 |
+| 1 | **admin 默认凭证三种口径**（'admin' vs admin123 vs admin/admin123+fulla-admin-console 双客户端） | 以 apps/server/seed/dev_admin_user.sql 实测定谳，全站统一 |
 | 2 | end_session "不验签"（api-reference L226、configuration-guide L132）vs 错误表收录 4006 | 代码已强制验签（#78）；两处正文改写 |
 | 3 | Redis 缓存层 "future"（configuration-guide L69）vs 已上线（architecture-overview L12 还指错章节） | config.json cache 块为准；configuration-guide 补缓存配置节 |
 | 4 | CHANGELOG 宣称指标全改 `fulla_*` vs 代码实发 `oauth2_*`（authforge_* 前缀的已改） | **已在本 PR 修正 CHANGELOG 措辞** |

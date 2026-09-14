@@ -156,10 +156,10 @@ WHERE u.username = 'admin';
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "
 SELECT client_id, name, client_type, token_endpoint_auth_method
 FROM oauth2_clients
-WHERE client_id IN ('admin-console', 'vue-client');
+WHERE client_id IN ('fulla-admin-console', 'fulla-portal');
 "
 
-# Expected output: both admin-console and vue-client are PUBLIC (token_endpoint_auth_method = none)
+# Expected output: both fulla-admin-console and fulla-portal are PUBLIC (token_endpoint_auth_method = none)
 
 # Check the default scopes (the scope name column is name)
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "
@@ -193,7 +193,7 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
 
 ### 3.1 Obtain an Admin Token
 
-`admin-console` is a **PUBLIC client** (`token_endpoint_auth_method=none`, no client_secret, password grant not supported). Tokens must go through the two-step **authorization code + PKCE** flow (F-011: PKCE is mandatory for PUBLIC clients). The following is equivalent to the setup step in `scripts/backend/test-admin-endpoints.sh`:
+`fulla-admin-console` is a **PUBLIC client** (`token_endpoint_auth_method=none`, no client_secret, password grant not supported). Tokens must go through the two-step **authorization code + PKCE** flow (F-011: PKCE is mandatory for PUBLIC clients). The following is equivalent to the setup step in `scripts/backend/test-admin-endpoints.sh`:
 
 ```bash
 # 1) Log in to obtain an authorization code (form-encoded; code_challenge = BASE64URL(SHA256(code_verifier)))
@@ -202,7 +202,7 @@ CODE_CHALLENGE=$(printf '%s' "$CODE_VERIFIER" | openssl dgst -sha256 -binary | b
 
 LOGIN_RESP=$(curl -s -X POST http://localhost:5555/oauth2/login \
   -d "username=admin&password=admin" \
-  -d "client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback" \
+  -d "client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback" \
   -d "scope=openid+profile+admin&state=verify-state" \
   -d "code_challenge=$CODE_CHALLENGE&code_challenge_method=S256&json=true")
 CODE=$(echo "$LOGIN_RESP" | jq -r '.code')
@@ -211,7 +211,7 @@ CODE=$(echo "$LOGIN_RESP" | jq -r '.code')
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=authorization_code&code=$CODE" \
   -d "redirect_uri=http://localhost:5174/admin/callback" \
-  -d "client_id=admin-console&code_verifier=$CODE_VERIFIER"
+  -d "client_id=fulla-admin-console&code_verifier=$CODE_VERIFIER"
 
 # Expected response (save the access_token):
 {
@@ -235,12 +235,12 @@ export TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # Expected response:
 {
   "active": true,
-  "client_id": "admin-console",
+  "client_id": "fulla-admin-console",
   "username": "admin",
   "scope": "openid profile admin",
   "exp": 1719123456,
@@ -253,7 +253,7 @@ curl -s -X POST http://localhost:5555/oauth2/introspect \
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=invalid_token" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # Expected response: {"active": false}
 ```
@@ -266,7 +266,7 @@ curl -s -X POST http://localhost:5555/oauth2/introspect \
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=refresh_token" \
   -d "refresh_token=tGzv3JH7xN1yQ9X2..." \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # Expected response: returns a new access_token and refresh_token
 {
@@ -286,7 +286,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 curl -s -X POST http://localhost:5555/oauth2/revoke \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # Expected response: HTTP 200 OK (empty response body)
 
@@ -294,7 +294,7 @@ curl -s -X POST http://localhost:5555/oauth2/revoke \
 curl -s -X POST http://localhost:5555/oauth2/introspect \
   -d "token=$TOKEN" \
   -d "token_type_hint=access_token" \
-  -d "client_id=admin-console"
+  -d "client_id=fulla-admin-console"
 
 # Expected response: {"active": false}
 ```
@@ -365,7 +365,7 @@ curl -X GET http://localhost:5555/api/admin/clients \
 {
   "clients": [
     {
-      "client_id": "admin-console",
+      "client_id": "fulla-admin-console",
       "name": "Admin Console",
       "client_type": "PUBLIC",
       "token_endpoint_auth_method": "none",
@@ -444,7 +444,7 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 |--------|---------|---------|
 | Open the admin console | Open http://localhost:8081/admin | The admin console login page is displayed |
 | Admin login | Log in with admin/admin | Login succeeds and the dashboard is displayed |
-| App management | Click the "Apps" menu | The client list is displayed (contains at least admin-console) |
+| App management | Click the "Apps" menu | The client list is displayed (contains at least fulla-admin-console) |
 | Create an app | Click "New App" and fill in the form | The app is created successfully and appears in the list |
 | User management | Click the "Users" menu | The user list is displayed (contains at least admin and the newly registered user) |
 | Token management | Click the "Token" menu | The list of active tokens is displayed |
@@ -454,10 +454,10 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 ```bash
 # Step 1: Build the authorization URL (visit it in a browser)
 # Note: the redirect_uri must exactly match the client's registered value
-#       (vue-client's seed registration uses http://127.0.0.1:8080/callback — using localhost will be rejected)
+#       (fulla-portal's seed registration uses http://127.0.0.1:8080/callback — using localhost will be rejected)
 # http://localhost:5555/oauth2/authorize?
 #   response_type=code&
-#   client_id=vue-client&
+#   client_id=fulla-portal&
 #   redirect_uri=http://127.0.0.1:8080/callback&
 #   scope=openid profile email&
 #   state=random_state_value
@@ -475,13 +475,13 @@ curl -X POST http://localhost:5555/api/admin/scopes \
 # Expected: redirect to the redirect_uri carrying the authorization code
 # http://127.0.0.1:8080/callback?code=xxx&state=random_state_value
 
-# Step 4: Exchange the token (vue-client is a PUBLIC client → must include the PKCE code_verifier
+# Step 4: Exchange the token (fulla-portal is a PUBLIC client → must include the PKCE code_verifier
 #          and must not include a client_secret)
 curl -s -X POST http://localhost:5555/oauth2/token \
   -d "grant_type=authorization_code" \
   -d "code=<code obtained from the callback>" \
   -d "redirect_uri=http://127.0.0.1:8080/callback" \
-  -d "client_id=vue-client" \
+  -d "client_id=fulla-portal" \
   -d "code_verifier=<PKCE verifier used at login>"
 
 # Expected response: returns an access_token and refresh_token
@@ -576,7 +576,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 # Test a wrong password (login endpoint — note: failed attempts trigger F-018 rate limiting, so do not exceed the threshold with repeated attempts)
 curl -s -X POST http://localhost:5555/oauth2/login \
   -d "username=admin&password=wrong-password" \
-  -d "client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback" \
+  -d "client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback" \
   -d "scope=openid&state=t&code_challenge=x&code_challenge_method=S256"
 
 # Expected response: HTTP 401 Unauthorized (error codes go through the ErrorCatalog, ensuring a unified anti-enumeration posture)

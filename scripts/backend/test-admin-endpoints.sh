@@ -30,7 +30,7 @@ auth_header() {
 
 # Setup: Admin Login + Token
 # F-011/RFC 7636 (RFC 9700 §2.1.1): PKCE mandatory for PUBLIC clients.
-# admin-console is PUBLIC → login carries code_challenge, token exchange
+# fulla-admin-console is PUBLIC → login carries code_challenge, token exchange
 # carries the matching code_verifier. client_secret is empty (PUBLIC client,
 # token_endpoint_auth_method='none' — F-017 rejects any secret).
 test_setup_login() {
@@ -39,14 +39,14 @@ test_setup_login() {
     challenge=$(pkce_s256_challenge "$verifier")
     local login_resp
     login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=admin&client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=admin-test-state&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=admin&password=admin&client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=admin-test-state&code_challenge=$challenge&code_challenge_method=S256&json=true")
     local code
     code=$(echo "$login_resp" | jq -r '.code')
     [ -n "$code" ] && [ "$code" != "null" ] || { echo "    no auth code from login"; return 1; }
 
     local tok_resp
     tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=admin-console&client_secret=&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=fulla-admin-console&client_secret=&code_verifier=$verifier")
     ACCESS_TOKEN=$(echo "$tok_resp" | jq -r '.access_token')
     [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ] || { echo "    no access_token"; return 1; }
     echo "    Token: ${ACCESS_TOKEN:0:16}..."
@@ -66,9 +66,9 @@ run_test "Test 1: GET /api/admin/dashboard/stats" test_1
 # Test 2: Client Detail
 test_2() {
     local r
-    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/vue-client")
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "status" "success" || return 1
-    assert_json_field "$r" "client_id" "vue-client" || return 1
+    assert_json_field "$r" "client_id" "fulla-portal" || return 1
 }
 run_test "Test 2: GET /api/admin/clients/:id - Client Detail" test_2
 
@@ -85,18 +85,18 @@ run_test "Test 3: GET /api/admin/clients/:id - Not Found (404)" test_3
 test_4() {
     local r
     r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
-        -d '{"name":"Vue Frontend Updated"}' "$BASE_URL/api/admin/clients/vue-client")
+        -d '{"name":"Vue Frontend Updated"}' "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "status" "success" || return 1
     # Restore
     curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
-        -d '{"name":"Vue Frontend"}' "$BASE_URL/api/admin/clients/vue-client" >/dev/null
+        -d '{"name":"Vue Frontend"}' "$BASE_URL/api/admin/clients/fulla-portal" >/dev/null
 }
 run_test "Test 4: PUT /api/admin/clients/:id - Update Client" test_4
 
 # Test 5: Client Scopes
 test_5() {
     local r
-    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/vue-client/scopes")
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/fulla-portal/scopes")
     assert_json_field "$r" "status" "success" || return 1
     assert_json_exists "$r" "scopes" || return 1
 }
@@ -106,7 +106,7 @@ run_test "Test 5: GET /api/admin/clients/:id/scopes" test_5
 test_6() {
     local r
     r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
-        -d '{"scopes":["openid","profile","email"]}' "$BASE_URL/api/admin/clients/vue-client/scopes")
+        -d '{"scopes":["openid","profile","email"]}' "$BASE_URL/api/admin/clients/fulla-portal/scopes")
     assert_json_field "$r" "status" "success" || return 1
 }
 run_test "Test 6: PUT /api/admin/clients/:id/scopes - Update" test_6
@@ -212,7 +212,7 @@ run_test "Test 7: GET /api/admin/tokens - Token List" test_7
 # Test 8: Tokens Filter
 test_8() {
     local r
-    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/tokens?client_id=admin-console&page=1&per_page=50")
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/tokens?client_id=fulla-admin-console&page=1&per_page=50")
     assert_json_exists "$r" "tokens" || return 1
 }
 run_test "Test 8: GET /api/admin/tokens - Filter by client_id" test_8
@@ -262,16 +262,16 @@ test_11b() {
     # list here: it is ordered by issued_at DESC, so the first row IS this
     # script's own live admin session -- revoking its prefix cascades 401s
     # through every remaining test. PKCE (F-011/RFC 7636) required for the
-    # admin-console PUBLIC client.
+    # fulla-admin-console PUBLIC client.
     local login_resp code tok_resp throwaway verifier challenge
     verifier=$(generate_pkce_verifier)
     challenge=$(pkce_s256_challenge "$verifier")
     login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=admin&client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=admin-test-11b&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=admin&password=admin&client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=admin-test-11b&code_challenge=$challenge&code_challenge_method=S256&json=true")
     code=$(echo "$login_resp" | jq -r '.code')
     [ -n "$code" ] && [ "$code" != "null" ] || { echo "    no auth code for throwaway token"; return 1; }
     tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=admin-console&client_secret=&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=fulla-admin-console&client_secret=&code_verifier=$verifier")
     throwaway=$(echo "$tok_resp" | jq -r '.access_token')
     [ -n "$throwaway" ] && [ "$throwaway" != "null" ] || { echo "    no throwaway access_token"; return 1; }
 
@@ -503,7 +503,7 @@ run_test "Test 29: POST /api/admin/scopes - Duplicate (409)" test_29
 # Test 30: Unauthorized Access
 test_30() {
     local endpoints=(
-        "$BASE_URL/api/admin/clients/vue-client"
+        "$BASE_URL/api/admin/clients/fulla-portal"
         "$BASE_URL/api/admin/tokens"
         "$BASE_URL/api/admin/roles"
         "$BASE_URL/api/admin/users/1"
@@ -614,7 +614,7 @@ test_39() {
     # (ClientManagementService.cc) and is stricter-but-correct.
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
-        -d '{}' "$BASE_URL/api/admin/clients/vue-client")
+        -d '{}' "$BASE_URL/api/admin/clients/fulla-portal")
     assert_status "$code" "400" || return 1
     echo "    Empty body update correctly rejected with 400"
 }
@@ -704,15 +704,15 @@ test_44() {
     local r
     r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
         -d '{"backchannel_logout_uri":"https://rp-bc.example.com/backchannel-logout"}' \
-        "$BASE_URL/api/admin/clients/vue-client")
+        "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "status" "success" || return 1
-    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/vue-client")
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "backchannel_logout_uri" "https://rp-bc.example.com/backchannel-logout" || return 1
     # Empty string clears the registration (NULL in DB, "" in the response).
     r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
-        -d '{"backchannel_logout_uri":""}' "$BASE_URL/api/admin/clients/vue-client")
+        -d '{"backchannel_logout_uri":""}' "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "status" "success" || return 1
-    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/vue-client")
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/clients/fulla-portal")
     assert_json_field "$r" "backchannel_logout_uri" "" || return 1
     echo "    set -> read -> cleared: ok"
 }
@@ -727,7 +727,7 @@ test_45() {
     code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$(auth_header)" \
         -H "Content-Type: application/json" \
         -d '{"backchannel_logout_uri":"ftp://rp.example.com/backchannel-logout"}' \
-        "$BASE_URL/api/admin/clients/vue-client")
+        "$BASE_URL/api/admin/clients/fulla-portal")
     assert_status "$code" "400" || return 1
     echo "    Correctly returned 400 for non-https backchannel_logout_uri"
 }

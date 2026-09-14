@@ -3,7 +3,7 @@
 --
 --   POST /oauth2/token
 --   Content-Type: application/x-www-form-urlencoded
---   body: grant_type=refresh_token&refresh_token=<RT>&client_id=vue-client
+--   body: grant_type=refresh_token&refresh_token=<RT>&client_id=fulla-portal
 --
 -- Measures refresh-token rotation (V008 family logic) + new token signing.
 -- The handler does an atomic CAS: UPDATE ... WHERE revoked=false RETURNING *,
@@ -17,8 +17,8 @@
 -- as socket errors in the summary; use --reseed to refresh the pool between
 -- concurrency levels).
 --
--- The RTs are seeded with client_id=vue-client (which has refresh_token in
--- its allowed_grant_types). vue-client is PUBLIC (token_endpoint_auth_method=
+-- The RTs are seeded with client_id=fulla-portal (which has refresh_token in
+-- its allowed_grant_types). fulla-portal is PUBLIC (token_endpoint_auth_method=
 -- none), so no client_secret is needed — just client_id in the body.
 --
 -- Usage:
@@ -84,7 +84,7 @@ request = function()
     wrk.path = "/oauth2/token"
     wrk.headers["Content-Type"] = "application/x-www-form-urlencoded"
     wrk.headers["Authorization"] = nil
-    -- vue-client is PUBLIC (token_endpoint_auth_method=none) — no secret needed.
-    wrk.body = "grant_type=refresh_token&refresh_token=" .. token .. "&client_id=vue-client"
+    -- fulla-portal is PUBLIC (token_endpoint_auth_method=none) — no secret needed.
+    wrk.body = "grant_type=refresh_token&refresh_token=" .. token .. "&client_id=fulla-portal"
     return wrk.format()
 end

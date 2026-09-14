@@ -106,7 +106,7 @@ otherwise the site would amplify them bilingually:
 
 | # | Conflict | Settled by |
 |---|---|---|
-| 1 | **Three admin default-credential calibers** ('admin' vs admin123 vs admin/admin123+admin-console dual client) | Measured against apps/server/seed/dev_admin_user.sql; unified site-wide |
+| 1 | **Three admin default-credential calibers** ('admin' vs admin123 vs admin/admin123+fulla-admin-console dual client) | Measured against apps/server/seed/dev_admin_user.sql; unified site-wide |
 | 2 | end_session "no signature check" (api-reference L226, configuration-guide L132) vs the error table listing 4006 | Code enforces verification (#78); both passages rewritten |
 | 3 | Redis cache layer "future" (configuration-guide L69) vs shipped (architecture-overview L12 pointed at the wrong section too) | config.json cache block is authoritative; configuration-guide gained a cache section |
 | 4 | CHANGELOG claimed all metrics renamed `fulla_*` vs code emitting `oauth2_*` (the authforge_* ones were renamed) | **CHANGELOG wording fixed in that PR** |

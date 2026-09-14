@@ -234,8 +234,8 @@ export async function setupAuthenticatedMocks(page: Page) {
 |------|---------|------|
 | `**/api/users` | 任何 origin + 路径精确匹配 | `http://localhost:5174/api/users` ✅ |
 | `**/api/admin/logs**` | 路径前缀匹配（含查询参数） | `/api/admin/logs?page=2` ✅ |
-| `**/api/admin/clients/*` | 路径 + 单段通配 | `/api/admin/clients/vue-client` ✅ |
-| `**/api/admin/clients/*/reset-secret` | 多段路径混合 | `/api/admin/clients/vue-client/reset-secret` ✅ |
+| `**/api/admin/clients/*` | 路径 + 单段通配 | `/api/admin/clients/fulla-portal` ✅ |
+| `**/api/admin/clients/*/reset-secret` | 多段路径混合 | `/api/admin/clients/fulla-portal/reset-secret` ✅ |
 
 **同一个 URL，不同 HTTP 方法：**
 

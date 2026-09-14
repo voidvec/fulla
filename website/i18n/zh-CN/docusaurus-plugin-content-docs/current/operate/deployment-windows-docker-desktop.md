@@ -570,7 +570,7 @@ Test Results: 59/59 passed, 0 failed
 
 #### 方法 2：使用 PowerShell 脚本测试
 
-`admin-console` 是 PUBLIC 客户端（PKCE 强制、无 secret、无 password grant），手工构造令牌流程较繁琐，推荐直接使用仓库自带的 PowerShell 测试脚本（内部已实现 PKCE 登录）：
+`fulla-admin-console` 是 PUBLIC 客户端（PKCE 强制、无 secret、无 password grant），手工构造令牌流程较繁琐，推荐直接使用仓库自带的 PowerShell 测试脚本（内部已实现 PKCE 登录）：
 
 ```powershell
 # 执行管理后台端点测试（含 PKCE 登录 + 52 项断言）

@@ -30,7 +30,7 @@ Used to request user authorization and obtain an authorization code.
 | Parameter | Required | Description | Example |
 |---|---|---|---|
 | `response_type` | Yes | Must be `code` | `code` |
-| `client_id` | Yes | Client ID | `vue-client` |
+| `client_id` | Yes | Client ID | `fulla-portal` |
 | `redirect_uri` | Yes | Callback URL (must match exactly) | `http://localhost:5173/callback` |
 | `scope` | No | Requested scope | `openid profile` |
 | `state` | Recommended | Random string for CSRF protection | `xyz123` |
@@ -78,7 +78,7 @@ Used to exchange an authorization code for an access token.
 | `grant_type` | Yes | Must be `authorization_code` | `authorization_code` |
 | `code` | Yes | The code obtained in the previous step | `SplxlOBeZQQYbYS6WxSbIA` |
 | `redirect_uri` | Yes | Must be identical to the one used to obtain the code | `http://localhost:5173/callback` |
-| `client_id` | Yes | Client ID | `vue-client` |
+| `client_id` | Yes | Client ID | `fulla-portal` |
 | `client_secret` | Yes | Client secret (used for authentication) | `vue-secret` |
 
 ### Response
