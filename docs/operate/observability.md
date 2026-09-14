@@ -43,8 +43,8 @@ Critical security operations (such as token issuance) emit logs tagged with `[AU
 **Example**:
 
 ```
-2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=vue-client Success=True
-2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=vue-client Success=False Reason="Replay Detected"
+2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
+2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
 ```
 
 Security-relevant policy denials and social-login issuance use stable action keywords:

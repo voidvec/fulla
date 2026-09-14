@@ -300,7 +300,7 @@ powershell -ExecutionPolicy Bypass -File scripts/backend/test-oauth2-endpoints.p
 ```bash
 # Git Bash 示例
 curl -X POST http://127.0.0.1:5555/oauth2/login \
-  -d 'username=admin&password=admin&client_id=vue-client&redirect_uri=http://localhost:5173/callback&json=true'
+  -d 'username=admin&password=admin&client_id=fulla-portal&redirect_uri=http://localhost:5173/callback&json=true'
 ```
 
 ---

@@ -28,7 +28,7 @@ class TestBuildAuthorizeUrl:
     def _flow(self) -> AuthorizationCodeFlow:
         return AuthorizationCodeFlow(
             "http://server.test/",
-            "vue-client",
+            "fulla-portal",
             redirect_uri="http://client.test/cb",
             scopes=["openid", "profile"],
         )
@@ -43,7 +43,7 @@ class TestBuildAuthorizeUrl:
         assert parsed.path == "/oauth2/authorize"
         q = parse_qs(parsed.query)
         assert q["response_type"] == ["code"]
-        assert q["client_id"] == ["vue-client"]
+        assert q["client_id"] == ["fulla-portal"]
         assert q["redirect_uri"] == ["http://client.test/cb"]
         assert q["scope"] == ["openid profile"]
         assert q["state"] == ["st4te"]
@@ -81,13 +81,13 @@ class TestExchangeAndRefresh:
     def test_exchange_code_public_client_identifies_in_form(self, fake, transport):
         self._route_token_success(fake)
         flow = AuthorizationCodeFlow(
-            "http://server.test", "vue-client",
+            "http://server.test", "fulla-portal",
             redirect_uri="http://client.test/cb", transport=transport,
         )
         tokens = flow.exchange_code("auth-code-2")
         assert tokens.access_token == "at-exchanged"
         assert all(not h.startswith("Basic ") for h in fake.basic_on_token_requests)
-        assert fake.token_form()["client_id"] == "vue-client"
+        assert fake.token_form()["client_id"] == "fulla-portal"
 
     def test_refresh_rotates(self, fake, transport):
         self._route_token_success(fake)

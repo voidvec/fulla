@@ -22,9 +22,9 @@ class LoginRequest:
         redirect_uri (str | Unset): Must match the registered client.
         scope (str | Unset): Space-separated (optional).
         state (str | Unset): Opaque value maintained between request and callback (recommended).
-        code_challenge (str | Unset): PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (vue-client, admin-
-            console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching
-            code_verifier must be sent on the /oauth2/token exchange.
+        code_challenge (str | Unset): PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (fulla-portal, fulla-
+            admin-console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The
+            matching code_verifier must be sent on the /oauth2/token exchange.
         code_challenge_method (str | Unset): S256 (recommended) or plain.
         nonce (str | Unset): OIDC nonce (anti-replay), echoed in the id_token.
         json (str | Unset): Set to "true" to receive a JSON body instead of a 302 redirect.

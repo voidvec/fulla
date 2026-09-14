@@ -392,7 +392,7 @@ FULLA_SMTP_SSL=true
 # Frontend build variables (injected at Vite build time)
 # VITE_API_BASE_URL must be left empty in production → the SPA uses relative paths (same-origin reverse proxying via nginx)
 VITE_API_BASE_URL=
-VITE_CLIENT_ID=vue-client
+VITE_CLIENT_ID=fulla-portal
 VITE_REDIRECT_URI=https://your-domain.com/callback
 VITE_GITHUB_CLIENT_ID=
 ```
@@ -537,9 +537,10 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_LISTEN_PORT` | Backend listen port | 5555 |
 | `FULLA_FRONTEND_URL` | Frontend URL (used for redirects etc.) | http://localhost:5173 |
 | `FULLA_CORS_ALLOW_ORIGINS` | CORS allowed origins (comma-separated; overrides the JSON array) | localhost list from config |
-| `FULLA_VUE_REDIRECT_URI` | vue-client OAuth callback URI | localhost value from config |
+| `FULLA_PORTAL_REDIRECT_URI` | fulla-portal OAuth callback URI (legacy alias: `FULLA_VUE_REDIRECT_URI`) | localhost value from config |
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth callback URI | localhost value from config |
-| `FULLA_VUE_CLIENT_SECRET` | vue-client secret | 123456 |
+| `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal secret (legacy alias: `FULLA_VUE_CLIENT_SECRET`) | 123456 |
+| `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth callback URI | localhost value from config |
 | `FULLA_AUTO_MIGRATE` | Run database migrations automatically | false (use the one-shot `migrate` service) |
 | `DETAILED_VALIDATION_ERRORS` | Whether to return field-level validation errors (false recommended in production) | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth (optional) | (empty) |
@@ -572,7 +573,7 @@ The frontend (the user-facing OAuth2Frontend) is configured through Vite environ
 | Variable | Purpose | Production value |
 |------|------|--------|
 | `VITE_API_BASE_URL` | API base URL | **(empty)** — the SPA uses same-origin relative paths; setting a value breaks the nginx reverse-proxy routing |
-| `VITE_CLIENT_ID` | OAuth2 Client ID | vue-client |
+| `VITE_CLIENT_ID` | OAuth2 Client ID | fulla-portal |
 | `VITE_REDIRECT_URI` | OAuth2 callback URI | https://your-domain.com/callback |
 | `VITE_GITHUB_CLIENT_ID` | GitHub "Sign in with GitHub" button (optional) | (button hidden when empty) |
 
@@ -630,58 +631,35 @@ ON CONFLICT (provider, subject) DO NOTHING;
 EOF
 ```
 
-### 2. Create the OAuth2 clients
+### 2. OAuth2 clients (automatic)
 
-Create the `vue-client` (user frontend) and `admin-console` (admin console) with production redirect URIs:
+The two first-party clients — `fulla-portal` (user frontend) and `fulla-admin-console` (admin console) — are **seeded automatically at server startup** (#204): the bootstrap seeder reads the `clients` block of the OAuth2Plugin config and inserts any missing rows (idempotent `ON CONFLICT DO NOTHING`, so clients edited through the admin API are never clobbered by a restart).
+
+You only provide the redirect URIs through `.env.docker`; the server applies them to the config before seeding:
 
 ```bash
-# Generate a secret for vue-client (used if client type is changed to CONFIDENTIAL)
-VUE_SECRET=$(openssl rand -hex 32)
-VUE_SALT=$(openssl rand -hex 16)
-VUE_HASH=$(echo -n "${VUE_SECRET}${VUE_SALT}" | sha256sum | cut -d' ' -f1)
-
-docker exec -i fulla-postgres psql -U fulla_user -d fulla_db <<EOF
--- User frontend client (PUBLIC, PKCE)
-INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
-VALUES (
-    'vue-client',
-    'PUBLIC',
-    '${VUE_HASH}',
-    '${VUE_SALT}',
-    'User Frontend',
-    'https://your-domain.com/callback',
-    'authorization_code,refresh_token',
-    'none'
-)
-ON CONFLICT (client_id) DO NOTHING;
-
-INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'vue-client', name FROM oauth2_scopes
-WHERE name IN ('openid', 'profile', 'email')
-ON CONFLICT (client_id, scope_name) DO NOTHING;
-
--- Admin console client (PUBLIC, PKCE)
-INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
-VALUES (
-    'admin-console',
-    'PUBLIC',
-    'not-used-public-client',
-    '',
-    'Admin Console',
-    'https://your-domain.com/admin/callback',
-    'authorization_code,refresh_token',
-    'none'
-)
-ON CONFLICT (client_id) DO NOTHING;
-
-INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'admin-console', name FROM oauth2_scopes
-WHERE name IN ('openid', 'profile', 'admin')
-ON CONFLICT (client_id, scope_name) DO NOTHING;
-EOF
+FULLA_PORTAL_REDIRECT_URI=https://your-domain.com/callback
+FULLA_ADMIN_CONSOLE_REDIRECT_URI=https://your-domain.com/admin/callback
 ```
 
-> Replace `your-domain.com` with your actual domain in the redirect URIs above. The `vue-client` client_id must match `VITE_CLIENT_ID` in `.env.docker` (default: `vue-client`).
+The `fulla-portal` client_id must match `VITE_CLIENT_ID` in `.env.docker` (default: `fulla-portal`), and `VITE_REDIRECT_URI` must equal `FULLA_PORTAL_REDIRECT_URI` (the SPA bakes its redirect in at build time).
+
+Nothing to run manually — continue with the stack startup below. First-boot log lines to expect:
+
+```
+ClientSeeder: seeded client 'fulla-portal'
+ClientSeeder: seeded client 'fulla-admin-console'
+ClientSeeder: config clients seeded/verified
+```
+
+> **Upgrading from a pre-1.3.0 deployment** (clients named `vue-client` / `admin-console`, or rows created by the old manual SQL): rename the existing rows once so consents and tokens keep pointing at a live client, then let the seeder add anything missing:
+>
+> ```sql
+> UPDATE oauth2_clients SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_clients SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> ```
 
 ---
 

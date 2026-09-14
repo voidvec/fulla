@@ -156,7 +156,7 @@ request = function()
         wrk.headers["Authorization"] = nil
         -- json=true in the body (getParameter covers form body, SessionController.cc:748)
         wrk.body = string.format(
-            "username=%s&password=admin&client_id=vue-client"
+            "username=%s&password=admin&client_id=fulla-portal"
                 .. "&redirect_uri=http://127.0.0.1:5173/callback"
                 .. "&scope=openid+profile"
                 .. "&state=t%d-r%d"
@@ -181,7 +181,7 @@ request = function()
         wrk.body = string.format(
             "grant_type=authorization_code&code=%s"
                 .. "&redirect_uri=http://127.0.0.1:5173/callback"
-                .. "&client_id=vue-client"
+                .. "&client_id=fulla-portal"
                 .. "&code_verifier=%s",
             code, verifier
         )

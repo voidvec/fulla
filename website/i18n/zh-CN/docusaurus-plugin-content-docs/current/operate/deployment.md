@@ -391,7 +391,7 @@ FULLA_SMTP_SSL=true
 # 前端构建变量（Vite 构建期注入）
 # VITE_API_BASE_URL 生产必须留空 → SPA 走相对路径（nginx 同源反代）
 VITE_API_BASE_URL=
-VITE_CLIENT_ID=vue-client
+VITE_CLIENT_ID=fulla-portal
 VITE_REDIRECT_URI=https://your-domain.com/callback
 VITE_GITHUB_CLIENT_ID=
 ```
@@ -536,9 +536,10 @@ curl -k https://localhost/admin/
 | `FULLA_LISTEN_PORT` | 后端监听端口 | 5555 |
 | `FULLA_FRONTEND_URL` | 前端 URL（用于重定向等） | http://localhost:5173 |
 | `FULLA_CORS_ALLOW_ORIGINS` | CORS 允许的源（逗号分隔，覆盖 JSON 数组） | config 中的 localhost 列表 |
-| `FULLA_VUE_REDIRECT_URI` | vue-client OAuth 回调 URI | config 中的 localhost 值 |
+| `FULLA_PORTAL_REDIRECT_URI` | fulla-portal OAuth 回调 URI（旧名别名：`FULLA_VUE_REDIRECT_URI`） | config 中的 localhost 值 |
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth 回调 URI | config 中的 localhost 值 |
-| `FULLA_VUE_CLIENT_SECRET` | vue-client 密钥 | 123456 |
+| `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal 密钥（旧名别名：`FULLA_VUE_CLIENT_SECRET`） | 123456 |
+| `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth 回调 URI | config 中的 localhost 值 |
 | `FULLA_AUTO_MIGRATE` | 自动执行数据库迁移 | false（改用一次性 `migrate` 服务） |
 | `DETAILED_VALIDATION_ERRORS` | 是否返回字段级校验错误（生产建议 false） | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth（可选） | (空) |
@@ -571,7 +572,7 @@ curl -k https://localhost/admin/
 | 变量 | 用途 | 生产值 |
 |------|------|--------|
 | `VITE_API_BASE_URL` | API 基础 URL | **(空)** — SPA 同域走相对路径，填值会破坏 nginx 反代路由 |
-| `VITE_CLIENT_ID` | OAuth2 Client ID | vue-client |
+| `VITE_CLIENT_ID` | OAuth2 Client ID | fulla-portal |
 | `VITE_REDIRECT_URI` | OAuth2 回调 URI | https://your-domain.com/callback |
 | `VITE_GITHUB_CLIENT_ID` | GitHub "Sign in with GitHub" 按钮（可选） | (空则不显示按钮) |
 
@@ -619,58 +620,35 @@ ON CONFLICT (provider, subject) DO NOTHING;
 EOF
 ```
 
-### 2. 创建 OAuth2 客户端
+### 2. OAuth2 客户端（自动播种）
 
-创建 `vue-client`（用户前端）和 `admin-console`（管理后台），配置生产回调地址：
+两个一方客户端 —— `fulla-portal`（用户前端）和 `fulla-admin-console`（管理后台）—— **在服务器启动时自动播种**（#204）：启动播种器读取 OAuth2Plugin 配置的 `clients` 块，对缺失的行做幂等插入（`ON CONFLICT DO NOTHING`，因此管理台对 client 的修改不会被重启覆盖）。
+
+你只需要在 `.env.docker` 提供回调地址，服务器会在播种前应用到配置：
 
 ```bash
-# 生成 vue-client 密钥
-VUE_SECRET=$(openssl rand -hex 32)
-VUE_SALT=$(openssl rand -hex 16)
-VUE_HASH=$(echo -n "${VUE_SECRET}${VUE_SALT}" | sha256sum | cut -d' ' -f1)
-
-docker exec -i fulla-postgres psql -U fulla_user -d fulla_db <<EOF
--- 用户前端客户端（PUBLIC，PKCE）
-INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
-VALUES (
-    'vue-client',
-    'PUBLIC',
-    '${VUE_HASH}',
-    '${VUE_SALT}',
-    'User Frontend',
-    'https://your-domain.com/callback',
-    'authorization_code,refresh_token',
-    'none'
-)
-ON CONFLICT (client_id) DO NOTHING;
-
-INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'vue-client', name FROM oauth2_scopes
-WHERE name IN ('openid', 'profile', 'email')
-ON CONFLICT (client_id, scope_name) DO NOTHING;
-
--- 管理后台客户端（PUBLIC，PKCE）
-INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
-VALUES (
-    'admin-console',
-    'PUBLIC',
-    'not-used-public-client',
-    '',
-    'Admin Console',
-    'https://your-domain.com/admin/callback',
-    'authorization_code,refresh_token',
-    'none'
-)
-ON CONFLICT (client_id) DO NOTHING;
-
-INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'admin-console', name FROM oauth2_scopes
-WHERE name IN ('openid', 'profile', 'admin')
-ON CONFLICT (client_id, scope_name) DO NOTHING;
-EOF
+FULLA_PORTAL_REDIRECT_URI=https://your-domain.com/callback
+FULLA_ADMIN_CONSOLE_REDIRECT_URI=https://your-domain.com/admin/callback
 ```
 
-> 将上方命令中的 `your-domain.com` 替换为你的实际域名。`vue-client` 的 client_id 必须与 `.env.docker` 中的 `VITE_CLIENT_ID` 一致（默认值：`vue-client`）。
+`fulla-portal` 的 client_id 必须与 `.env.docker` 中的 `VITE_CLIENT_ID` 一致（默认值：`fulla-portal`），且 `VITE_REDIRECT_URI` 必须等于 `FULLA_PORTAL_REDIRECT_URI`（SPA 在构建期烧录回调地址）。
+
+无需手工执行任何 SQL —— 继续下面的启动栈步骤。首次启动预期日志：
+
+```
+ClientSeeder: seeded client 'fulla-portal'
+ClientSeeder: seeded client 'fulla-admin-console'
+ClientSeeder: config clients seeded/verified
+```
+
+> **从 1.3.0 之前的部署升级**（client 旧名 `vue-client` / `admin-console`，或旧版手工 SQL 建的行）：先重命名存量行，让已有的授权记录和令牌继续指向存活的 client，播种器会补齐其余：
+>
+> ```sql
+> UPDATE oauth2_clients SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_clients SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> ```
 
 ---
 

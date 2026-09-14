@@ -43,13 +43,13 @@ $accessToken = $null
 
 Test-Endpoint "Setup: Admin Login + Token" {
     # F-011/RFC 7636 (RFC 9700 §2.1.1): PKCE mandatory for PUBLIC clients.
-    # admin-console is PUBLIC → login carries code_challenge, token exchange
+    # fulla-admin-console is PUBLIC → login carries code_challenge, token exchange
     # carries the matching code_verifier. client_secret is empty (PUBLIC client,
     # token_endpoint_auth_method='none' — F-017 rejects any secret).
     $pkce = New-PkcePair
     $loginBody = @{
         username = 'admin'; password = 'admin'
-        client_id = 'admin-console'
+        client_id = 'fulla-admin-console'
         redirect_uri = 'http://localhost:5174/admin/callback'
         scope = 'openid profile admin'
         state = 'admin-test-state'; json = 'true'
@@ -60,7 +60,7 @@ Test-Endpoint "Setup: Admin Login + Token" {
     $tok = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
         grant_type = 'authorization_code'; code = $login.code
         redirect_uri = 'http://localhost:5174/admin/callback'
-        client_id = 'admin-console'; client_secret = ''; code_verifier = $pkce.verifier
+        client_id = 'fulla-admin-console'; client_secret = ''; code_verifier = $pkce.verifier
     }
     if (-not $tok.access_token) { throw "no access_token" }
     $script:accessToken = $tok.access_token
@@ -90,9 +90,9 @@ Test-Endpoint "Test 1: GET /api/admin/dashboard/stats" {
 # ========================================
 Test-Endpoint "Test 2: GET /api/admin/clients/:id - Client Detail" {
     $h = Get-AuthHeaders
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Get -Headers $h
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Get -Headers $h
     if ($r.status -ne "success") { throw "status != success" }
-    if ($r.client_id -ne "vue-client") { throw "client_id mismatch" }
+    if ($r.client_id -ne "fulla-portal") { throw "client_id mismatch" }
     if (-not $r.client_type) { throw "missing client_type" }
     if ($null -eq $r.scopes) { throw "missing scopes" }
     if ($r.client_secret) { throw "SECURITY: client_secret exposed!" }
@@ -114,19 +114,19 @@ Test-Endpoint "Test 3: GET /api/admin/clients/:id - Not Found (404)" {
 Test-Endpoint "Test 4: PUT /api/admin/clients/:id - Update Client" {
     $h = Get-AuthHeaders
     $body = @{ name = "Vue Frontend Updated" } | ConvertTo-Json
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -Body $body
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -Body $body
     if ($r.status -ne "success") { throw "status != success" }
-    $check = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Get -Headers $h
+    $check = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Get -Headers $h
     if ($check.name -ne "Vue Frontend Updated") { throw "name not updated" }
     Write-Host "    Verified: name='$($check.name)'"
     # Restore
     $restore = @{ name = "Vue Frontend" } | ConvertTo-Json
-    Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -Body $restore | Out-Null
+    Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -Body $restore | Out-Null
 }
 
 Test-Endpoint "Test 5: GET /api/admin/clients/:id/scopes" {
     $h = Get-AuthHeaders
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client/scopes" -Method Get -Headers $h
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal/scopes" -Method Get -Headers $h
     if ($r.status -ne "success") { throw "status != success" }
     if ($r.scopes -isnot [array]) { throw "scopes is not array" }
     Write-Host "    scopes: [$($r.scopes -join ', ')]"
@@ -134,18 +134,18 @@ Test-Endpoint "Test 5: GET /api/admin/clients/:id/scopes" {
 
 Test-Endpoint "Test 6: PUT /api/admin/clients/:id/scopes - Update" {
     $h = Get-AuthHeaders
-    $current = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client/scopes" -Method Get -Headers $h
+    $current = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal/scopes" -Method Get -Headers $h
     $original = $current.scopes
     $body = @{ scopes = @("openid", "profile", "email") } | ConvertTo-Json
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client/scopes" -Method Put -Headers $h -Body $body
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal/scopes" -Method Put -Headers $h -Body $body
     if ($r.status -ne "success") { throw "status != success" }
-    $verify = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client/scopes" -Method Get -Headers $h
+    $verify = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal/scopes" -Method Get -Headers $h
     if ($verify.scopes.Count -ne 3) { throw "expected 3 scopes, got $($verify.scopes.Count)" }
     Write-Host "    Updated and verified: [$($verify.scopes -join ', ')]"
     # Restore
     if ($original -and $original.Count -gt 0) {
         $restoreBody = @{ scopes = $original } | ConvertTo-Json
-        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client/scopes" -Method Put -Headers $h -Body $restoreBody | Out-Null
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal/scopes" -Method Put -Headers $h -Body $restoreBody | Out-Null
     }
 }
 
@@ -264,11 +264,11 @@ Test-Endpoint "Test 7: GET /api/admin/tokens - Token List" {
 
 Test-Endpoint "Test 8: GET /api/admin/tokens - Filter by client_id" {
     $h = Get-AuthHeaders
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/tokens?client_id=admin-console&page=1&per_page=50" -Method Get -Headers $h
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/tokens?client_id=fulla-admin-console&page=1&per_page=50" -Method Get -Headers $h
     foreach ($t in $r.tokens) {
-        if ($t.client_id -ne "admin-console") { throw "filter failed: got '$($t.client_id)'" }
+        if ($t.client_id -ne "fulla-admin-console") { throw "filter failed: got '$($t.client_id)'" }
     }
-    Write-Host "    Filtered: $($r.tokens.Count) tokens for admin-console"
+    Write-Host "    Filtered: $($r.tokens.Count) tokens for fulla-admin-console"
 }
 
 Test-Endpoint "Test 9: POST /api/admin/tokens/revoke-by-client" {
@@ -308,11 +308,11 @@ Test-Endpoint "Test 11b: DELETE /api/admin/tokens/:tokenPrefix - Single Revoke" 
     # list here: it is ordered by issued_at DESC, so the first row IS this
     # script's own live admin session -- revoking its prefix cascades 401s
     # through every remaining test.
-    # PKCE (F-011/RFC 7636) required for the admin-console PUBLIC client.
+    # PKCE (F-011/RFC 7636) required for the fulla-admin-console PUBLIC client.
     $pkce = New-PkcePair
     $loginBody = @{
         username = 'admin'; password = 'admin'
-        client_id = 'admin-console'
+        client_id = 'fulla-admin-console'
         redirect_uri = 'http://localhost:5174/admin/callback'
         scope = 'openid profile admin'
         state = 'admin-test-11b'; json = 'true'
@@ -323,7 +323,7 @@ Test-Endpoint "Test 11b: DELETE /api/admin/tokens/:tokenPrefix - Single Revoke" 
     $tok = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
         grant_type = 'authorization_code'; code = $login.code
         redirect_uri = 'http://localhost:5174/admin/callback'
-        client_id = 'admin-console'; client_secret = ''; code_verifier = $pkce.verifier
+        client_id = 'fulla-admin-console'; client_secret = ''; code_verifier = $pkce.verifier
     }
     if (-not $tok.access_token) { throw "no throwaway access_token" }
     # Server stores SHA-256(raw) uppercase hex (CryptoUtils::hashToken);
@@ -560,7 +560,7 @@ Test-Endpoint "Test 29: POST /api/admin/scopes - Duplicate (409)" {
 # ========================================
 Test-Endpoint "Test 30: Unauthorized Access - Endpoints require auth" {
     $endpoints = @(
-        @{ Uri = "$BaseUrl/api/admin/clients/vue-client"; Method = "Get" },
+        @{ Uri = "$BaseUrl/api/admin/clients/fulla-portal"; Method = "Get" },
         @{ Uri = "$BaseUrl/api/admin/tokens"; Method = "Get" },
         @{ Uri = "$BaseUrl/api/admin/roles"; Method = "Get" },
         @{ Uri = "$BaseUrl/api/admin/users/1"; Method = "Get" },
@@ -686,7 +686,7 @@ Test-Endpoint "Test 39: PUT /api/admin/clients/:id - Empty body" {
     $h = Get-AuthHeaders
     $body = '{}'
     try {
-        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -Body $body -ErrorAction Stop
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -Body $body -ErrorAction Stop
         throw "should have returned 400"
     } catch {
         if ($_.Exception.Response.StatusCode -eq "BadRequest") {
@@ -776,14 +776,14 @@ Test-Endpoint "Test 43: GET /api/admin/dashboard/stats - Non-admin denied" {
 # B1 (OIDC Back-Channel Logout 1.0): backchannel_logout_uri admin config path.
 Test-Endpoint "Test 44: PUT/GET/clear backchannel_logout_uri (B1)" {
     $h = Get-AuthHeaders
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -Body (@{ backchannel_logout_uri = "https://rp-bc.example.com/backchannel-logout" } | ConvertTo-Json)
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -Body (@{ backchannel_logout_uri = "https://rp-bc.example.com/backchannel-logout" } | ConvertTo-Json)
     if ($r.status -ne "success") { throw "set failed" }
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Get -Headers $h
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Get -Headers $h
     if ($r.backchannel_logout_uri -ne "https://rp-bc.example.com/backchannel-logout") { throw "uri not persisted: '$($r.backchannel_logout_uri)'" }
     # Empty string clears the registration (NULL in DB, "" in the response).
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -Body (@{ backchannel_logout_uri = "" } | ConvertTo-Json)
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -Body (@{ backchannel_logout_uri = "" } | ConvertTo-Json)
     if ($r.status -ne "success") { throw "clear failed" }
-    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Get -Headers $h
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Get -Headers $h
     if ("$($r.backchannel_logout_uri)" -ne "") { throw "uri not cleared: '$($r.backchannel_logout_uri)'" }
     Write-Host "    set -> read -> cleared: ok"
 }
@@ -794,7 +794,7 @@ Test-Endpoint "Test 44: PUT/GET/clear backchannel_logout_uri (B1)" {
 Test-Endpoint "Test 45: PUT backchannel_logout_uri - non-https scheme (400)" {
     $h = Get-AuthHeaders
     try {
-        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/vue-client" -Method Put -Headers $h -ErrorAction Stop -Body (@{ backchannel_logout_uri = "ftp://rp.example.com/backchannel-logout" } | ConvertTo-Json)
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/fulla-portal" -Method Put -Headers $h -ErrorAction Stop -Body (@{ backchannel_logout_uri = "ftp://rp.example.com/backchannel-logout" } | ConvertTo-Json)
         throw "should have returned 400"
     } catch {
         if ($_.Exception.Response.StatusCode -eq "BadRequest") {

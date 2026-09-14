@@ -34,7 +34,7 @@ organizations (
 | `org_id` | `oauth2_clients` | 客户端由该组织拥有；`NULL` = 全局/无主 |
 
 两者按设计可空：V017 之前的数据与平台级主体（种子 `admin`、
-`admin-console` 客户端）没有组织。
+`fulla-admin-console` 客户端）没有组织。
 
 ## 2. 管理 API 面
 

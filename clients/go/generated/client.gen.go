@@ -374,7 +374,7 @@ type LoginRequest struct {
 	// ClientId Matches the requesting app (required for code issuance).
 	ClientId *string `json:"client_id,omitempty"`
 
-	// CodeChallenge PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (vue-client, admin-console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
+	// CodeChallenge PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (fulla-portal, fulla-admin-console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
 	CodeChallenge *string `json:"code_challenge,omitempty"`
 
 	// CodeChallengeMethod S256 (recommended) or plain.
@@ -551,7 +551,7 @@ type SocialLinksList struct {
 	Total       int               `json:"total"`
 }
 
-// SocialLoginTokenResponse First-party token pair issued by a social login endpoint (/api/{github,google,wechat}/login) once the provider identity is linked to a local account (or auto-created on first login). Issued for the configured first-party client (external_auth.social_token_client_id, default vue-client) with scope "openid profile email". Recorded as a SOCIAL_LOGIN_TOKEN_ISSUED audit event (NOT a consent row) — an explicit social-consent interaction is a registered follow-up.
+// SocialLoginTokenResponse First-party token pair issued by a social login endpoint (/api/{github,google,wechat}/login) once the provider identity is linked to a local account (or auto-created on first login). Issued for the configured first-party client (external_auth.social_token_client_id, default fulla-portal) with scope "openid profile email". Recorded as a SOCIAL_LOGIN_TOKEN_ISSUED audit event (NOT a consent row) — an explicit social-consent interaction is a registered follow-up.
 type SocialLoginTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	ExpiresIn    int64  `json:"expires_in"`

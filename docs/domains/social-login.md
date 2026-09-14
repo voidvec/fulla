@@ -17,7 +17,7 @@ The auto-create gate is GLOBAL — `external_auth.auto_create_on_first_login` (d
 The login endpoints mint an opaque access/refresh pair via the shared `SocialTokenIssuer`:
 
 - Token rows store the **platform subject** (`users.public_sub`) — the same value every Bearer-authenticated handler resolves (`/api/me`, change-password, MFA, WebAuthn). (GitHub previously stored the internal numeric id, which made its tokens 404 on every authenticated endpoint — fixed with the issuer extraction.)
-- Issued for the configured FIRST-PARTY client: `external_auth.social_token_client_id` (default `vue-client`). This key must never point at a third-party client — the issuance has no consent interaction, so doing so would hand that client tokens nobody agreed to.
+- Issued for the configured FIRST-PARTY client: `external_auth.social_token_client_id` (default `fulla-portal`). This key must never point at a third-party client — the issuance has no consent interaction, so doing so would hand that client tokens nobody agreed to.
 - Scope `openid profile email`. Note: the `openid` scope value carries no OIDC semantics on this endpoint (no id_token is issued); it is kept for consistency with the first-party client's scope set.
 
 ### Why an audit event and not a consent row

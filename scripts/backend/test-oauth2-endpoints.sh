@@ -83,7 +83,7 @@ run_test "Test 4: JWKS" test_4
 
 # Test 5: OAuth2 Login
 # F-011/RFC 7636 (RFC 9700 §2.1.1): PKCE mandatory for PUBLIC clients.
-# vue-client is PUBLIC → login must carry code_challenge; Test 6 must carry
+# fulla-portal is PUBLIC → login must carry code_challenge; Test 6 must carry
 # the matching code_verifier. The global PKCE_VERIFIER is set here and
 # consumed by test_6.
 test_5() {
@@ -92,7 +92,7 @@ test_5() {
     challenge=$(pkce_s256_challenge "$PKCE_VERIFIER")
     local r
     r=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=admin&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=test-state-12345678&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=admin&password=admin&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=test-state-12345678&code_challenge=$challenge&code_challenge_method=S256&json=true")
     AUTH_CODE=$(echo "$r" | jq -r '.code')
     [ -n "$AUTH_CODE" ] && [ "$AUTH_CODE" != "null" ] || { echo "    no auth code returned"; return 1; }
     echo "    Code: ${AUTH_CODE:0:20}... (${#AUTH_CODE} chars)"
@@ -104,7 +104,7 @@ test_6() {
     [ -n "$AUTH_CODE" ] || { echo "    skipped: no auth code"; return 1; }
     local r
     r=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=$AUTH_CODE&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client&code_verifier=$PKCE_VERIFIER")
+        -d "grant_type=authorization_code&code=$AUTH_CODE&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal&code_verifier=$PKCE_VERIFIER")
     ACCESS_TOKEN=$(echo "$r" | jq -r '.access_token')
     REFRESH_TOKEN=$(echo "$r" | jq -r '.refresh_token')
     [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ] || { echo "    no access_token"; return 1; }
@@ -130,11 +130,11 @@ test_7() {
 }
 run_test "Test 7: UserInfo" test_7
 
-# Test 8: Admin Dashboard (F-010: requires admin scope -- use admin-console token)
+# Test 8: Admin Dashboard (F-010: requires admin scope -- use fulla-admin-console token)
 test_8() {
     # F-010: /api/admin/* now requires the `admin` scope on the access token.
-    # The vue-client token (Test 6) carries only `openid profile`, so obtain
-    # a proper admin-scoped token via the admin-console client.
+    # The fulla-portal token (Test 6) carries only `openid profile`, so obtain
+    # a proper admin-scoped token via the fulla-admin-console client.
     local admin_token
     admin_token=$(get_admin_token "$BASE_URL" admin admin)
     [ -n "$admin_token" ] || { echo "    no admin token"; return 1; }
@@ -147,7 +147,7 @@ run_test "Test 8: Admin Dashboard" test_8
 # Test 8b: Insufficient scope on /api/admin (F-010, 403 insufficient_scope)
 test_8b() {
     [ -n "$ACCESS_TOKEN" ] || { echo "    skipped: no token"; return 1; }
-    # The vue-client token carries only `openid profile` (no admin scope) ->
+    # The fulla-portal token carries only `openid profile` (no admin scope) ->
     # F-010 rejects with 403 + WWW-Authenticate: Bearer error="insufficient_scope".
     local code www_auth
     code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -166,7 +166,7 @@ test_9() {
     [ -n "$REFRESH_TOKEN" ] || { echo "    skipped: no refresh_token"; return 1; }
     local r
     r=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=refresh_token&refresh_token=$REFRESH_TOKEN&client_id=vue-client")
+        -d "grant_type=refresh_token&refresh_token=$REFRESH_TOKEN&client_id=fulla-portal")
     local new_at new_rt
     new_at=$(echo "$r" | jq -r '.access_token')
     new_rt=$(echo "$r" | jq -r '.refresh_token')
@@ -183,10 +183,10 @@ test_9b() {
     [ -n "$REFRESH_TOKEN" ] || { echo "    skipped: no refresh_token"; return 1; }
     # F-003 (RFC 6749 §6 / §3.2.1): a CONFIDENTIAL client MUST authenticate
     # on the refresh_token grant; omitting the secret MUST yield 401
-    # invalid_client. PUBLIC clients (like vue-client) are exempt (RFC 6749
+    # invalid_client. PUBLIC clients (like fulla-portal) are exempt (RFC 6749
     # §10.2: client_id existence check only), so this test uses backend-svc
     # (CONFIDENTIAL) to exercise the F-003 secret requirement. The refresh
-    # token itself belongs to vue-client, so the secret check fires (401)
+    # token itself belongs to fulla-portal, so the secret check fires (401)
     # before any client_id↔token binding check.
     local code body
     code=$(curl -s -o /tmp/refresh_no_secret.$$ -w '%{http_code}' \
@@ -228,7 +228,7 @@ test_11() {
     # user Bearer token. No Authorization header is sent.
     # RFC 7662 §4 / TokenEndpointController.cc:428: ALL callers must supply a
     # client_secret (introspection is protected against token enumeration).
-    # vue-client is PUBLIC (no secret) and cannot call introspect; use
+    # fulla-portal is PUBLIC (no secret) and cannot call introspect; use
     # backend-svc (CONFIDENTIAL, secret "test-secret"). F-017: backend-svc is
     # seeded token_endpoint_auth_method=client_secret_basic, so authenticate
     # via HTTP Basic (-u), not a body client_secret.
@@ -254,12 +254,12 @@ test_12() {
     [ -n "$ACCESS_TOKEN" ] || { echo "    skipped: no token"; return 1; }
     # RFC 7009 §2.1: revoke authenticates the calling client AND enforces token
     # ownership — only the token's issuing client may revoke it. The token was
-    # issued to vue-client (PUBLIC), so vue-client must be the caller. RFC 7009
+    # issued to fulla-portal (PUBLIC), so fulla-portal must be the caller. RFC 7009
     # §2.1 exempts PUBLIC clients from client_secret at the revocation endpoint
     # ("if the client is a public client, then it does not authenticate"), so
     # client_id alone authenticates a PUBLIC caller.
     curl -s -X POST "$BASE_URL/oauth2/revoke" \
-        -d "token=$ACCESS_TOKEN&client_id=vue-client" >/dev/null
+        -d "token=$ACCESS_TOKEN&client_id=fulla-portal" >/dev/null
     # Verify revoked (Bearer header here checks userinfo rejects the token)
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ACCESS_TOKEN" "$BASE_URL/oauth2/userinfo")
@@ -281,27 +281,27 @@ test_12b() {
     verifier=$(generate_pkce_verifier)
     challenge=$(pkce_s256_challenge "$verifier")
     login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=admin&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=t12b&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=admin&password=admin&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=t12b&code_challenge=$challenge&code_challenge_method=S256&json=true")
     code=$(echo "$login_resp" | jq -r '.code')
     [ -n "$code" ] && [ "$code" != "null" ] || { echo "    no auth code"; return 1; }
     tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal&code_verifier=$verifier")
     rt=$(echo "$tok_resp" | jq -r '.refresh_token')
     [ -n "$rt" ] && [ "$rt" != "null" ] || { echo "    no refresh_token"; return 1; }
     # Rotate once to get a current (un-rotated) refresh token.
     rt2=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=refresh_token&refresh_token=$rt&client_id=vue-client" | jq -r '.refresh_token')
+        -d "grant_type=refresh_token&refresh_token=$rt&client_id=fulla-portal" | jq -r '.refresh_token')
     [ -n "$rt2" ] && [ "$rt2" != "null" ] || { echo "    refresh rotation failed"; return 1; }
 
-    # Revoke the refresh token (vue-client owns it; PUBLIC, client_id only).
+    # Revoke the refresh token (fulla-portal owns it; PUBLIC, client_id only).
     curl -s -o /dev/null -X POST "$BASE_URL/oauth2/revoke" \
-        -d "token=$rt2&client_id=vue-client"
+        -d "token=$rt2&client_id=fulla-portal"
 
     # RFC 7009 §2.1 + RFC 6749 §6: the revoked refresh token MUST NOT mint new
     # tokens. Expect an error (invalid_grant — reuse detected / revoked).
     local refresh_after
     refresh_after=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=refresh_token&refresh_token=$rt2&client_id=vue-client")
+        -d "grant_type=refresh_token&refresh_token=$rt2&client_id=fulla-portal")
     local err has_at
     err=$(echo "$refresh_after" | jq -r '.error // empty')
     has_at=$(echo "$refresh_after" | jq -r '.access_token // empty')
@@ -331,12 +331,12 @@ test_14() {
     challenge=$(pkce_s256_challenge "$verifier")
     local login_resp
     login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=admin&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=test-state-12345678&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=admin&password=admin&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=test-state-12345678&code_challenge=$challenge&code_challenge_method=S256&json=true")
     local code
     code=$(echo "$login_resp" | jq -r '.code')
     local tok_resp
     tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal&code_verifier=$verifier")
     ACCESS_TOKEN=$(echo "$tok_resp" | jq -r '.access_token')
 
     local r
@@ -381,13 +381,13 @@ test_17() {
     restore_challenge=$(pkce_s256_challenge "$restore_verifier")
     local login_resp
     login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
-        -d "username=admin&password=NewPass123!&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid&state=restore-pw-state1&code_challenge=$restore_challenge&code_challenge_method=S256&json=true" 2>/dev/null) || true
+        -d "username=admin&password=NewPass123!&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid&state=restore-pw-state1&code_challenge=$restore_challenge&code_challenge_method=S256&json=true" 2>/dev/null) || true
     local restore_code
     restore_code=$(echo "$login_resp" | jq -r '.code // empty')
     if [ -n "$restore_code" ] && [ "$restore_code" != "null" ]; then
         local tok_resp
         tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
-            -d "grant_type=authorization_code&code=$restore_code&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client&code_verifier=$restore_verifier")
+            -d "grant_type=authorization_code&code=$restore_code&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal&code_verifier=$restore_verifier")
         local restore_token
         restore_token=$(echo "$tok_resp" | jq -r '.access_token')
         curl -s -X PUT -H "Authorization: Bearer $restore_token" -H "Content-Type: application/json" \
@@ -446,7 +446,7 @@ run_test "Test 18: GET /.well-known/oauth-authorization-server" test_18
 test_19() {
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" \
-        -d '{"client_id":"vue-client","scope":"openid profile","action":"approve"}' "$BASE_URL/oauth2/consent")
+        -d '{"client_id":"fulla-portal","scope":"openid profile","action":"approve"}' "$BASE_URL/oauth2/consent")
     if [ "$code" = "400" ] || [ "$code" = "401" ] || [ "$code" = "403" ]; then
         echo "    Correctly rejected: $code"
     else
@@ -459,8 +459,8 @@ run_test "Test 19: POST /oauth2/consent - No session" test_19
 REG_CLIENT_ID=""
 test_20() {
     # /oauth2/register is behind AuthorizationFilter and requires the `admin`
-    # RBAC role (config.json rbac_rules). get_admin_token (admin-console
-    # client, admin scope) yields the right token; the vue-client user token
+    # RBAC role (config.json rbac_rules). get_admin_token (fulla-admin-console
+    # client, admin scope) yields the right token; the fulla-portal user token
     # (openid profile only) is insufficient.
     local admin_tok
     admin_tok=$(get_admin_token "$BASE_URL" "admin" "admin")
@@ -616,7 +616,7 @@ run_test "Test 26: DELETE /api/me/authorized-apps/:clientId - Non-existent" test
 # Test 26b: Revoke Authorized App - No auth (401)
 test_26b() {
     local code
-    code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE_URL/api/me/authorized-apps/vue-client")
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE_URL/api/me/authorized-apps/fulla-portal")
     assert_status "$code" "401" || return 1
     echo "    Correctly returned 401"
 }
@@ -739,7 +739,7 @@ run_test "Test 33: GET /api/me/webauthn/credentials - No auth (401)" test_33
 test_34() {
     local r
     r=$(curl -s -X POST "$BASE_URL/oauth2/device_authorization" \
-        -d "client_id=vue-client&scope=openid+profile") || true
+        -d "client_id=fulla-portal&scope=openid+profile") || true
     local dc
     dc=$(echo "$r" | jq -r '.device_code // empty')
     if [ -n "$dc" ]; then
@@ -841,7 +841,7 @@ run_test "Test 40: PUT /api/me/password - No auth (401)" test_40
 test_41() {
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/oauth2/token" \
-        -d "grant_type=authorization_code&code=already-used-or-expired-code-xyz&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client")
+        -d "grant_type=authorization_code&code=already-used-or-expired-code-xyz&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal")
     if [ "$code" = "400" ]; then
         echo "    Correctly rejected expired code: 400"
     else
@@ -853,7 +853,7 @@ run_test "Test 41: POST /oauth2/token - Expired auth code" test_41
 # Test 42: Introspect - Malformed token
 test_42() {
     # RFC 7662 §2.1: the introspection endpoint authenticates the calling
-    # CLIENT (not the resource owner). vue-client is PUBLIC (no secret) and
+    # CLIENT (not the resource owner). fulla-portal is PUBLIC (no secret) and
     # cannot authenticate here; use backend-svc (CONFIDENTIAL, secret
     # "test-secret") via HTTP Basic (F-017: client_secret_basic). The token
     # is a valid-format but nonexistent 43-char string (>= TOKEN_MIN_LEN 32)
@@ -875,16 +875,16 @@ test_43() {
     tok=$(get_user_token "$BASE_URL" "admin" "admin")
     [ -n "$tok" ] || { echo "    skipped: no token"; return 1; }
     # RFC 7009 §2.1: revoke requires the caller to be the token's owner. The
-    # token was issued to vue-client (PUBLIC); vue-client revokes it
+    # token was issued to fulla-portal (PUBLIC); fulla-portal revokes it
     # (client_id only, no secret — PUBLIC clients are exempt from auth at
     # the revocation endpoint).
     # Revoke once
     curl -s -X POST "$BASE_URL/oauth2/revoke" \
-        -d "token=$tok&client_id=vue-client" >/dev/null
+        -d "token=$tok&client_id=fulla-portal" >/dev/null
     # Revoke again (idempotent)
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-        "$BASE_URL/oauth2/revoke" -d "token=$tok&client_id=vue-client")
+        "$BASE_URL/oauth2/revoke" -d "token=$tok&client_id=fulla-portal")
     echo "    Second revocation: $code"
 }
 run_test "Test 43: POST /oauth2/revoke - Already revoked (idempotent)" test_43

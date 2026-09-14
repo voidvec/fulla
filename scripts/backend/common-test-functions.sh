@@ -22,7 +22,7 @@ C_NC='\033[0m'
 
 # ---------------------------------------------------------------------------
 # PKCE (RFC 7636) helpers — required since F-011/RFC 9700 §2.1.1 made PKCE
-# mandatory for PUBLIC clients. Both vue-client and admin-console are PUBLIC,
+# mandatory for PUBLIC clients. Both fulla-portal and fulla-admin-console are PUBLIC,
 # so every authorization-code login must carry code_challenge and every token
 # exchange must carry the matching code_verifier.
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ assert_status_in() {
 # get_user_token <base_url> <username> <password>
 # Returns access_token on stdout.
 # F-011/RFC 7636 (RFC 9700 §2.1.1): PKCE is mandatory for PUBLIC clients.
-# vue-client is PUBLIC, so the login MUST carry code_challenge (S256) and the
+# fulla-portal is PUBLIC, so the login MUST carry code_challenge (S256) and the
 # token exchange MUST carry the matching code_verifier. Without PKCE the login
 # redirects with error=invalid_request (code_challenge required).
 get_user_token() {
@@ -218,21 +218,21 @@ get_user_token() {
     challenge=$(pkce_s256_challenge "$verifier")
     local login_resp
     login_resp=$(curl -s -X POST "$base_url/oauth2/login" \
-        -d "username=$username&password=$password&client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=$state&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=$username&password=$password&client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback&scope=openid+profile&state=$state&code_challenge=$challenge&code_challenge_method=S256&json=true")
     local code
     code=$(echo "$login_resp" | jq -r '.code')
     [ -n "$code" ] && [ "$code" != "null" ] || return 1
     local tok_resp
-    # F-017: vue-client is seeded token_endpoint_auth_method='none' (PUBLIC);
+    # F-017: fulla-portal is seeded token_endpoint_auth_method='none' (PUBLIC);
     # the 'none' method REJECTS any client_secret, so none is sent. PKCE
     # code_verifier is the client-authentication substitute for PUBLIC clients.
     tok_resp=$(curl -s -X POST "$base_url/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=vue-client&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:5173/callback&client_id=fulla-portal&code_verifier=$verifier")
     echo "$tok_resp" | jq -r '.access_token'
 }
 
 # get_admin_token <base_url> <username> <password>
-# Gets admin-scoped token via admin-console client (also a PUBLIC client, so
+# Gets admin-scoped token via fulla-admin-console client (also a PUBLIC client, so
 # PKCE applies the same way as get_user_token).
 get_admin_token() {
     local base_url="$1" username="$2" password="$3"
@@ -242,13 +242,13 @@ get_admin_token() {
     challenge=$(pkce_s256_challenge "$verifier")
     local login_resp
     login_resp=$(curl -s -X POST "$base_url/oauth2/login" \
-        -d "username=$username&password=$password&client_id=admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=$state&code_challenge=$challenge&code_challenge_method=S256&json=true")
+        -d "username=$username&password=$password&client_id=fulla-admin-console&redirect_uri=http://localhost:5174/admin/callback&scope=openid+profile+admin&state=$state&code_challenge=$challenge&code_challenge_method=S256&json=true")
     local code
     code=$(echo "$login_resp" | jq -r '.code')
     [ -n "$code" ] && [ "$code" != "null" ] || return 1
     local tok_resp
     tok_resp=$(curl -s -X POST "$base_url/oauth2/token" \
-        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=admin-console&client_secret=&code_verifier=$verifier")
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://localhost:5174/admin/callback&client_id=fulla-admin-console&client_secret=&code_verifier=$verifier")
     echo "$tok_resp" | jq -r '.access_token'
 }
 

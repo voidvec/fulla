@@ -166,7 +166,7 @@ migration-created tables exist (the migration runs on a detached startup thread)
 The seed files are:
 
 - `dev_backend_client.sql` — the `backend-svc` CONFIDENTIAL client (S2 needs this)
-- `dev_vue_client.sql` — the `vue-client` PUBLIC client (M2 S4/S5/S6)
+- `dev_vue_client.sql` — the `fulla-portal` PUBLIC client (M2 S4/S5/S6)
 - `dev_admin_user.sql` — `admin/admin` (**smoke only; do not load-test** —
   progressive lockout at 5/10/15/20 failed logins, `AuthService.cc:149-157`)
 - `bench_users.sql` — **512 dedicated `bench_user_NNNN` users** (password
@@ -189,7 +189,7 @@ scenarios that need pre-seeded tokens:
   Seeded with `client_id=backend-svc`, `scope=openid profile`, far-future
   `expires_at`, user-scoped subjects (`bench_user_NNNN`).
 - **Refresh tokens** (20000) — for S5 (refresh_token). Each RT is **consumed
-  once** (V008 family rotation). Seeded with `client_id=vue-client` (has
+  once** (V008 family rotation). Seeded with `client_id=fulla-portal` (has
   `refresh_token` grant), unique `family_id` per token. Use `--reseed` in
   `run-scenario.sh` to refresh the pool before each concurrency level.
 - **PKCE pairs** (512) — for S4 (auth_code). wrk's Lua has no SHA256, so we
@@ -223,7 +223,7 @@ down -v`), so every `setup.sh` starts from the same schema + seed. Use
   (Phase 0.5) are not yet done.
 - **S4 login rate-limiting.** The token endpoint has a per-(IP, client_id)
   rate limit (30 failures / 60s, `config.json:184-187`). All VUs share the
-  same IP + `vue-client` client_id, so failures accumulate on one bucket. With
+  same IP + `fulla-portal` client_id, so failures accumulate on one bucket. With
   correct per-user rotation, failures should be ~0 — but if error_rate spikes
   at high concurrency, this is the likely cause (a real product characteristic,
   not a benchmark bug).

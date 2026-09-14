@@ -115,14 +115,14 @@ CREATE TABLE IF NOT EXISTS oauth2_refresh_tokens (
 **Client (Hash Structure)**:
 
 ```bash
-HSET oauth2:client:vue-client secret "42a121b66fb9f1d4f73125788f42eb6799110c6aeae5a9a12a2fed5307a0088d" salt "random_salt" redirect_uris "[\"http://localhost:5173/callback\"]"
+HSET oauth2:client:fulla-portal secret "42a121b66fb9f1d4f73125788f42eb6799110c6aeae5a9a12a2fed5307a0088d" salt "random_salt" redirect_uris "[\"http://localhost:5173/callback\"]"
 ```
 
 **Auth Code (String Value)**:
 
 ```json
 {
-  "client_id": "vue-client",
+  "client_id": "fulla-portal",
   "user_id": "admin",
   "scope": "openid",
   "redirect_uri": "http://localhost:5173/callback",

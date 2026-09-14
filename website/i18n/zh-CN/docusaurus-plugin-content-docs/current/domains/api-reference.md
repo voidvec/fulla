@@ -30,7 +30,7 @@
 | 参数名 | 必选 | 描述 | 示例 |
 |---|---|---|---|
 | `response_type` | 是 | 必须为 `code` | `code` |
-| `client_id` | 是 | 客户端 ID | `vue-client` |
+| `client_id` | 是 | 客户端 ID | `fulla-portal` |
 | `redirect_uri` | 是 | 回调地址 (需完全匹配) | `http://localhost:5173/callback` |
 | `scope` | 否 | 申请的权限范围 | `openid profile` |
 | `state` | 建议 | 防止 CSRF 的随机串 | `xyz123` |
@@ -78,7 +78,7 @@ Location: http://localhost:5173/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz12
 | `grant_type` | 是 | 必须为 `authorization_code` | `authorization_code` |
 | `code` | 是 | 上一步获取的 code | `SplxlOBeZQQYbYS6WxSbIA` |
 | `redirect_uri` | 是 | 必须与获取 code 时一致 | `http://localhost:5173/callback` |
-| `client_id` | 是 | 客户端 ID | `vue-client` |
+| `client_id` | 是 | 客户端 ID | `fulla-portal` |
 | `client_secret` | 是 | 客户端密钥 (用于验证) | `vue-secret` |
 
 ### 响应

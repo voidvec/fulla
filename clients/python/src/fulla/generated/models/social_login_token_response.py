@@ -13,7 +13,7 @@ T = TypeVar("T", bound="SocialLoginTokenResponse")
 class SocialLoginTokenResponse:
     """First-party token pair issued by a social login endpoint (/api/{github,google,wechat}/login) once the provider
     identity is linked to a local account (or auto-created on first login). Issued for the configured first-party client
-    (external_auth.social_token_client_id, default vue-client) with scope "openid profile email". Recorded as a
+    (external_auth.social_token_client_id, default fulla-portal) with scope "openid profile email". Recorded as a
     SOCIAL_LOGIN_TOKEN_ISSUED audit event (NOT a consent row) — an explicit social-consent interaction is a registered
     follow-up.
 

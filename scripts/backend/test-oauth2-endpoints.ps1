@@ -103,14 +103,14 @@ $discoveryIssuer = $null
 
 Test-Endpoint "Test 5: OAuth2 Login" {
     # F-011/RFC 7636 (RFC 9700 §2.1.1): PKCE mandatory for PUBLIC clients.
-    # vue-client is PUBLIC -> login must carry code_challenge; Test 6 must
+    # fulla-portal is PUBLIC -> login must carry code_challenge; Test 6 must
     # carry the matching code_verifier. The script-scope PKCE verifier is
     # set here and consumed by Test 6.
     $pkce = New-PkcePair
     $script:PkceVerifier = $pkce.verifier
     $body = @{
         username = 'admin'; password = 'admin'
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
         redirect_uri = 'http://127.0.0.1:5173/callback'
         scope = 'openid profile'
         state = 'test-state-12345678'
@@ -132,7 +132,7 @@ Test-Endpoint "Test 6: Token Exchange + id_token" {
         grant_type = 'authorization_code'
         code = $authCode
         redirect_uri = 'http://127.0.0.1:5173/callback'
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
         code_verifier = $script:PkceVerifier
     }
     $r = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body $body
@@ -163,13 +163,13 @@ Test-Endpoint "Test 7: UserInfo" {
 }
 
 # ========================================
-# Test 8: Admin Dashboard (F-010: requires admin scope -- use admin-console token)
+# Test 8: Admin Dashboard (F-010: requires admin scope -- use fulla-admin-console token)
 # ========================================
 Test-Endpoint "Test 8: Admin Dashboard" {
     # F-010: /api/admin/* now requires the `admin` scope on the access token
-    # (in addition to the RBAC admin role). The vue-client token from Test 6
+    # (in addition to the RBAC admin role). The fulla-portal token from Test 6
     # carries only `openid profile`, so it would 403 here -- obtain a proper
-    # admin-scoped token via the admin-console client instead.
+    # admin-scoped token via the fulla-admin-console client instead.
     $adminToken = Get-AdminToken -BaseUrl $BaseUrl
     if (-not $adminToken) { throw "no admin token" }
     $headers = @{ Authorization = "Bearer $adminToken" }
@@ -183,7 +183,7 @@ Test-Endpoint "Test 8: Admin Dashboard" {
 # ========================================
 Test-Endpoint "Test 8b: /api/admin without admin scope -> 403 insufficient_scope" {
     if (-not $accessToken) { throw "skipped: no token" }
-    # The vue-client token carries only `openid profile` (no admin scope) ->
+    # The fulla-portal token carries only `openid profile` (no admin scope) ->
     # F-010 rejects with 403 + WWW-Authenticate: Bearer error="insufficient_scope".
     $headers = @{ Authorization = "Bearer $accessToken" }
     try {
@@ -211,7 +211,7 @@ Test-Endpoint "Test 9: Token Refresh" {
     $body = @{
         grant_type = 'refresh_token'
         refresh_token = $refreshToken
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
     }
     $r = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body $body
     if (-not $r.access_token) { throw "no new access_token" }
@@ -229,10 +229,10 @@ Test-Endpoint "Test 9b: Token Refresh - Missing client_secret (401)" {
     if (-not $refreshToken) { throw "skipped: no refresh_token" }
     # F-003 (RFC 6749 §6 / §3.2.1): a CONFIDENTIAL client MUST authenticate
     # on the refresh_token grant; omitting the secret MUST yield 401
-    # invalid_client. PUBLIC clients (like vue-client) are exempt (RFC 6749
+    # invalid_client. PUBLIC clients (like fulla-portal) are exempt (RFC 6749
     # §10.2: client_id existence check only), so this test uses backend-svc
     # (CONFIDENTIAL) to exercise the F-003 secret requirement. The refresh
-    # token itself belongs to vue-client, so the secret check fires (401)
+    # token itself belongs to fulla-portal, so the secret check fires (401)
     # before any client_id<->token binding check.
     $body = @{
         grant_type = 'refresh_token'
@@ -284,7 +284,7 @@ Test-Endpoint "Test 11: Token Introspection" {
     # user Bearer token. No Authorization header is sent.
     # RFC 7662 §4 / TokenEndpointController.cc:428: ALL callers must supply a
     # client_secret (introspection is protected against token enumeration).
-    # vue-client is PUBLIC (no secret) and cannot call introspect; use
+    # fulla-portal is PUBLIC (no secret) and cannot call introspect; use
     # backend-svc (CONFIDENTIAL, secret "test-secret"). F-017: backend-svc is
     # seeded token_endpoint_auth_method=client_secret_basic, so authenticate
     # via HTTP Basic, not a body client_secret.
@@ -305,14 +305,14 @@ Test-Endpoint "Test 12: Token Revocation" {
     if (-not $accessToken) { throw "skipped: no token" }
     # RFC 7009 §2.1: revoke authenticates the calling client AND enforces token
     # ownership — only the token's issuing client may revoke it. The token was
-    # issued to vue-client (PUBLIC), so vue-client must be the caller. RFC 7009
+    # issued to fulla-portal (PUBLIC), so fulla-portal must be the caller. RFC 7009
     # §2.1 exempts PUBLIC clients from client_secret at the revocation endpoint
     # ("if the client is a public client, then it does not authenticate"), so
     # client_id alone authenticates a PUBLIC caller.
     $headers = @{ Authorization = "Bearer $accessToken" }
     $body = @{
         token = $accessToken
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
     }
     Invoke-WebRequest -Uri "$BaseUrl/oauth2/revoke" -Method Post -Body $body -UseBasicParsing | Out-Null
 
@@ -341,7 +341,7 @@ Test-Endpoint "Test 12b: Revoke refresh token -> refresh fails (C3/RFC 7009)" {
     $pkce = New-PkcePair
     $loginResp = Invoke-RestMethod -Uri "$BaseUrl/oauth2/login" -Method Post -Body @{
         username = 'admin'; password = 'admin'
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
         redirect_uri = 'http://127.0.0.1:5173/callback'
         scope = 'openid profile'; state = 't12b'
         code_challenge = $pkce.challenge; code_challenge_method = 'S256'
@@ -351,18 +351,18 @@ Test-Endpoint "Test 12b: Revoke refresh token -> refresh fails (C3/RFC 7009)" {
     $tokResp = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
         grant_type = 'authorization_code'; code = $loginResp.code
         redirect_uri = 'http://127.0.0.1:5173/callback'
-        client_id = 'vue-client'; code_verifier = $pkce.verifier
+        client_id = 'fulla-portal'; code_verifier = $pkce.verifier
     }
     if (-not $tokResp.refresh_token) { throw "no refresh_token" }
     # Rotate once to get a current (un-rotated) refresh token.
     $rotated = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
         grant_type = 'refresh_token'; refresh_token = $tokResp.refresh_token
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
     }
     if (-not $rotated.refresh_token) { throw "refresh rotation failed" }
 
-    # Revoke the refresh token (vue-client owns it; PUBLIC, client_id only).
-    Invoke-WebRequest -Uri "$BaseUrl/oauth2/revoke" -Method Post -Body @{ token = $rotated.refresh_token; client_id = 'vue-client' } -UseBasicParsing | Out-Null
+    # Revoke the refresh token (fulla-portal owns it; PUBLIC, client_id only).
+    Invoke-WebRequest -Uri "$BaseUrl/oauth2/revoke" -Method Post -Body @{ token = $rotated.refresh_token; client_id = 'fulla-portal' } -UseBasicParsing | Out-Null
 
     # RFC 7009 §2.1 + RFC 6749 §6: the revoked refresh token MUST NOT mint new
     # tokens. Expect an error (invalid_grant — reuse detected / revoked) and
@@ -372,7 +372,7 @@ Test-Endpoint "Test 12b: Revoke refresh token -> refresh fails (C3/RFC 7009)" {
     try {
         $refreshAfter = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
             grant_type = 'refresh_token'; refresh_token = $rotated.refresh_token
-            client_id = 'vue-client'
+            client_id = 'fulla-portal'
         } -ErrorAction Stop
         # Success path: the revoked token still minted -> C3 failure.
         $refreshAt = "$($refreshAfter.access_token)"
@@ -415,7 +415,7 @@ Test-Endpoint "Test 14: User Profile" {
     $pkce = New-PkcePair
     $loginBody = @{
         username = 'admin'; password = 'admin'
-        client_id = 'vue-client'
+        client_id = 'fulla-portal'
         redirect_uri = 'http://127.0.0.1:5173/callback'
         scope = 'openid profile'; state = 'test-state-12345678'
         code_challenge = $pkce.challenge; code_challenge_method = 'S256'
@@ -425,7 +425,7 @@ Test-Endpoint "Test 14: User Profile" {
     $tokenBody = @{
         grant_type = 'authorization_code'; code = $login.code
         redirect_uri = 'http://127.0.0.1:5173/callback'
-        client_id = 'vue-client'; code_verifier = $pkce.verifier
+        client_id = 'fulla-portal'; code_verifier = $pkce.verifier
     }
     $tok = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body $tokenBody
     $script:accessToken = $tok.access_token
@@ -487,7 +487,7 @@ Test-Endpoint "Test 17: Password Change" {
         $restorePkce = New-PkcePair
         $restoreLogin = Invoke-RestMethod -Uri "$BaseUrl/oauth2/login" -Method Post -Body @{
             username = 'admin'; password = 'NewPass123!'
-            client_id = 'vue-client'
+            client_id = 'fulla-portal'
             redirect_uri = 'http://127.0.0.1:5173/callback'
             scope = 'openid'; state = 'restore-pw-state1'
             code_challenge = $restorePkce.challenge; code_challenge_method = 'S256'
@@ -496,7 +496,7 @@ Test-Endpoint "Test 17: Password Change" {
         $restoreTok = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
             grant_type = 'authorization_code'; code = $restoreLogin.code
             redirect_uri = 'http://127.0.0.1:5173/callback'
-            client_id = 'vue-client'; code_verifier = $restorePkce.verifier
+            client_id = 'fulla-portal'; code_verifier = $restorePkce.verifier
         }
         $restoreHeaders = @{ Authorization = "Bearer $($restoreTok.access_token)"; "Content-Type" = "application/json" }
         Invoke-RestMethod -Uri "$BaseUrl/api/me/password" -Method Put -Body '{"old_password":"NewPass123!","new_password":"admin"}' -Headers $restoreHeaders | Out-Null
@@ -565,7 +565,7 @@ Test-Endpoint "Test 18: GET /.well-known/oauth-authorization-server" {
 # Test 19: OAuth2 Consent (without session)
 # ========================================
 Test-Endpoint "Test 19: POST /oauth2/consent - No session" {
-    $body = @{ client_id = "vue-client"; scope = "openid profile"; action = "approve" } | ConvertTo-Json
+    $body = @{ client_id = "fulla-portal"; scope = "openid profile"; action = "approve" } | ConvertTo-Json
     try {
         Invoke-RestMethod -Uri "$BaseUrl/oauth2/consent" -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
         throw "should have returned error (no session)"
@@ -767,7 +767,7 @@ Test-Endpoint "Test 26: DELETE /api/me/authorized-apps/:clientId - Non-existent 
 
 Test-Endpoint "Test 26b: DELETE /api/me/authorized-apps/:clientId - No auth (401)" {
     try {
-        Invoke-RestMethod -Uri "$BaseUrl/api/me/authorized-apps/vue-client" -Method Delete -ErrorAction Stop
+        Invoke-RestMethod -Uri "$BaseUrl/api/me/authorized-apps/fulla-portal" -Method Delete -ErrorAction Stop
         throw "should have returned 401"
     } catch {
         if ($_.Exception.Response.StatusCode -eq "Unauthorized") {
@@ -912,7 +912,7 @@ Test-Endpoint "Test 33: GET /api/me/webauthn/credentials - No auth (401)" {
 # Test 34-35: Device Authorization Flow (RFC 8628)
 # ========================================
 Test-Endpoint "Test 34: POST /oauth2/device_authorization" {
-    $body = @{ client_id = "vue-client"; scope = "openid profile" }
+    $body = @{ client_id = "fulla-portal"; scope = "openid profile" }
     try {
         $r = Invoke-RestMethod -Uri "$BaseUrl/oauth2/device_authorization" -Method Post -Body $body
         if (-not $r.device_code) { throw "missing device_code" }
@@ -1038,7 +1038,7 @@ Test-Endpoint "Test 41: POST /oauth2/token - Expired/used authorization code" {
             grant_type = 'authorization_code'
             code = 'already-used-or-expired-code-xyz'
             redirect_uri = 'http://127.0.0.1:5173/callback'
-            client_id = 'vue-client'
+            client_id = 'fulla-portal'
             client_secret = '123456'
         }
         Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body $body -ErrorAction Stop
@@ -1055,7 +1055,7 @@ Test-Endpoint "Test 41: POST /oauth2/token - Expired/used authorization code" {
 
 Test-Endpoint "Test 42: POST /oauth2/introspect - Malformed token" {
     # RFC 7662 §2.1: the introspection endpoint authenticates the calling
-    # CLIENT (not the resource owner). vue-client is PUBLIC (no secret) and
+    # CLIENT (not the resource owner). fulla-portal is PUBLIC (no secret) and
     # cannot authenticate here; use backend-svc (CONFIDENTIAL, secret
     # "test-secret") via HTTP Basic (F-017: client_secret_basic). The token
     # is a valid-format but nonexistent 50-char string (>= TOKEN_MIN_LEN 32)
@@ -1071,8 +1071,8 @@ Test-Endpoint "Test 42: POST /oauth2/introspect - Malformed token" {
 Test-Endpoint "Test 43: POST /oauth2/revoke - Already revoked token (idempotent)" {
     $tok = Get-UserToken -BaseUrl $BaseUrl -Username "admin" -Password $adminPassword
     # RFC 7009: client-credential auth via body only; no Bearer header needed.
-    # F-017: vue-client is PUBLIC (token_endpoint_auth_method='none'); no secret.
-    $body = @{ token = $tok; client_id = "vue-client" }
+    # F-017: fulla-portal is PUBLIC (token_endpoint_auth_method='none'); no secret.
+    $body = @{ token = $tok; client_id = "fulla-portal" }
     # Revoke once
     Invoke-WebRequest -Uri "$BaseUrl/oauth2/revoke" -Method Post -Body $body -UseBasicParsing | Out-Null
     # Revoke again - should succeed (idempotent)
