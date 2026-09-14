@@ -59,6 +59,16 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     void initAndStart(const Json::Value &config) override;
     void shutdown() override;
 
+    // ========== Client seed config (bootstrap/ClientSeeder) ==========
+
+    /** Clients declared in this plugin's config (keyed by client_id); empty
+     *  object when none are declared. Read by main.cc's startup seeder
+     *  (written once in initAndStart; happens-before the advice thread). */
+    const Json::Value &clientsSeedConfig() const
+    {
+        return clientsSeedConfig_;
+    }
+
     // ========== Service Accessors ==========
     // M3 Task 24 slice 2: these now return the NEW Domain-layer service
     // types. Grep-confirmed zero call sites use these two accessors
@@ -517,15 +527,6 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     Json::Value clientsSeedConfig_;
 
     void initStorage(const Json::Value &config);
-
-    // ========== Client seed config (bootstrap/ClientSeeder) ==========
-
-    /** Clients declared in this plugin's config (keyed by client_id); empty
-     *  object when none are declared. Read by main.cc's startup seeder. */
-    const Json::Value &clientsSeedConfig() const
-    {
-        return clientsSeedConfig_;
-    }
 
     // ========== Subject Mapping Methods ==========
 
