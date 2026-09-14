@@ -615,10 +615,10 @@ TEST(JwkManagerTest, VerifyJwt_ExpectedAudience_StringAndArrayForms)
     const long long now = std::time(nullptr);
 
     Json::Value stringAud = validClaims(600);
-    stringAud["aud"] = "vue-client";
+    stringAud["aud"] = "fulla-portal";
     const std::string stringJwt = jwk.signJwt(stringAud);
     EXPECT_EQ(
-      jwk.verifyJwt(stringJwt, kTestIssuer, now, "vue-client"),
+      jwk.verifyJwt(stringJwt, kTestIssuer, now, "fulla-portal"),
       JwkManager::JwtVerificationResult::Ok
     );
     EXPECT_EQ(
@@ -629,10 +629,10 @@ TEST(JwkManagerTest, VerifyJwt_ExpectedAudience_StringAndArrayForms)
     Json::Value arrayAud = validClaims(600);
     arrayAud["aud"] = Json::Value(Json::arrayValue);
     arrayAud["aud"].append("some-api");
-    arrayAud["aud"].append("vue-client");
+    arrayAud["aud"].append("fulla-portal");
     const std::string arrayJwt = jwk.signJwt(arrayAud);
     EXPECT_EQ(
-      jwk.verifyJwt(arrayJwt, kTestIssuer, now, "vue-client"),
+      jwk.verifyJwt(arrayJwt, kTestIssuer, now, "fulla-portal"),
       JwkManager::JwtVerificationResult::Ok
     );
     EXPECT_EQ(
@@ -647,7 +647,7 @@ TEST(JwkManagerTest, VerifyJwt_ExpectedAudience_StringAndArrayForms)
     // Absent aud fails closed when an audience is pinned.
     const std::string noAudJwt = jwk.signJwt(validClaims(600));
     EXPECT_EQ(
-      jwk.verifyJwt(noAudJwt, kTestIssuer, now, "vue-client"),
+      jwk.verifyJwt(noAudJwt, kTestIssuer, now, "fulla-portal"),
       JwkManager::JwtVerificationResult::AudienceMismatch
     );
     // ...but is accepted when no pin is requested (back-compat).
@@ -734,12 +734,12 @@ TEST(JwkManagerTest, VerifyAndDecode_Ok_ReturnsPayload_And_Rejection_SetsReason)
     const long long now = std::time(nullptr);
 
     Json::Value claims = validClaims(600);
-    claims["aud"] = "vue-client";
+    claims["aud"] = "fulla-portal";
     claims["custom"] = "carry-me";
     const std::string jwt = jwk.signJwt(claims);
 
     JwkManager::JwtVerificationResult reason = JwkManager::JwtVerificationResult::Ok;
-    auto payload = jwk.verifyAndDecode(jwt, kTestIssuer, now, "vue-client", &reason);
+    auto payload = jwk.verifyAndDecode(jwt, kTestIssuer, now, "fulla-portal", &reason);
     ASSERT_TRUE(payload.has_value());
     EXPECT_EQ(reason, JwkManager::JwtVerificationResult::Ok);
     EXPECT_EQ((*payload)["sub"].asString(), "user-123");

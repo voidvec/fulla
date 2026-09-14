@@ -4,7 +4,7 @@
 
 INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
 VALUES (
-    'admin-console',
+    'fulla-admin-console',
     'PUBLIC',
     'not-used-public-client',
     '',
@@ -15,7 +15,7 @@ VALUES (
 )
 ON CONFLICT (client_id) DO NOTHING;
 
--- Grant scopes to admin-console
+-- Grant scopes to fulla-admin-console
 INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'admin-console', name FROM oauth2_scopes WHERE name IN ('openid', 'profile', 'admin')
+SELECT 'fulla-admin-console', name FROM oauth2_scopes WHERE name IN ('openid', 'profile', 'admin')
 ON CONFLICT (client_id, scope_name) DO NOTHING;

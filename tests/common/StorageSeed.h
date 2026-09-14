@@ -84,8 +84,8 @@ inline void applyScript(
 // Runs (all idempotent):
 //   1. SchemaManager::migrate(db, FULLA_MIGRATIONS_DIR) -- applies any
 //      pending V*.sql migrations, tracked via the schema_migrations table.
-//   2. apps/server/seed/dev_*.sql -- the dev admin user, admin-console
-//      client, vue-client, backend client (each ON CONFLICT DO NOTHING).
+//   2. apps/server/seed/dev_*.sql -- the dev admin user, fulla-admin-console
+//      client, fulla-portal client, backend client (each ON CONFLICT DO NOTHING).
 //   3. Reset the admin user's login-lockout counters so a prior failed-login
 //      run (e.g. from a flaky or interrupted test) does not leave the admin
 //      account locked. Mirrors Reset-AdminAccount in
@@ -142,7 +142,7 @@ inline bool seedDatabase()
     const std::vector<std::string> seedFiles = {
         "dev_admin_user.sql",
         "dev_admin_console_client.sql",
-        "dev_vue_client.sql",
+        "dev_portal_client.sql",
         "dev_backend_client.sql",
     };
     for (const auto &fname : seedFiles)

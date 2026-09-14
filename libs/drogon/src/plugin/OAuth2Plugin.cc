@@ -44,6 +44,12 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
 {
     LOG_INFO << "OAuth2Plugin loading...";
 
+    // #204: remember the declared clients for the startup seeder
+    // (main.cc 5d -> bootstrap::ClientSeeder, postgres mode only).
+    clientsSeedConfig_ = config.isMember("clients")
+                           ? config["clients"]
+                           : Json::Value(Json::objectValue);
+
     // M3 Task 20 continuation (fulla-sdk-refactor): the explicit
     // OAuth2StandardController::initApiDocs() call that used to live here
     // was removed to break a circular dependency -- OAuth2StandardController

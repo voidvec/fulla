@@ -12,7 +12,7 @@
 //
 // Resolution rule:
 //   * client_id listed in custom_config.admin_console.client_ids (default:
-//     the seeded "admin-console" client) -> {admin_console.url}/admin/login
+//     the seeded "fulla-admin-console" client) -> {admin_console.url}/admin/login
 //   * everything else -> {frontend.url}/login
 // Both origins default to the dev vite servers (5174 admin / 5173 user).
 namespace fulla::drogon::utils
@@ -22,7 +22,7 @@ inline std::string mustChangePasswordRedirectUrl(const std::string &clientId)
 {
     auto customConfig = ::drogon::app().getCustomConfig();
 
-    bool isAdminConsole = (clientId == "admin-console");
+    bool isAdminConsole = (clientId == "fulla-admin-console");
     if (
       customConfig.isMember("admin_console") &&
       customConfig["admin_console"].isMember("client_ids") &&

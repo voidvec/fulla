@@ -510,7 +510,22 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     long long accessTokenTtl_{3600};
     long long refreshTokenTtl_{3600 * 24 * 30};
 
+    // #204: the "clients" object of the plugin config, captured during
+    // initAndStart() for the bootstrap::ClientSeeder startup pass (postgres
+    // mode). Happens-before safe: written in initAndStart(), read from the
+    // beginning-advice thread after the event loop starts.
+    Json::Value clientsSeedConfig_;
+
     void initStorage(const Json::Value &config);
+
+    // ========== Client seed config (bootstrap/ClientSeeder) ==========
+
+    /** Clients declared in this plugin's config (keyed by client_id); empty
+     *  object when none are declared. Read by main.cc's startup seeder. */
+    const Json::Value &clientsSeedConfig() const
+    {
+        return clientsSeedConfig_;
+    }
 
     // ========== Subject Mapping Methods ==========
 

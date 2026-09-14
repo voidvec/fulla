@@ -64,8 +64,8 @@ TEST(ScopeTest, OrderingForSortedContainers)
 
 TEST(ClientIdTest, ConstructsAndRejectsEmpty)
 {
-    ClientId id("vue-client");
-    EXPECT_EQ(id.value(), "vue-client");
+    ClientId id("fulla-portal");
+    EXPECT_EQ(id.value(), "fulla-portal");
     EXPECT_THROW(ClientId(""), std::invalid_argument);
 }
 
