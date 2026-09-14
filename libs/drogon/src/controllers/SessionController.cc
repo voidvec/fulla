@@ -1752,11 +1752,21 @@ void SessionController::changePasswordForced(
               updatedUser.setPasswordHash(newHash);
               updatedUser.setSalt("");
               updatedUser.setMustChangePassword(false);
+              // The email-verified login gate sits after this endpoint in the
+              // bootstrap-admin flow: an account whose mailbox is real but
+              // unverified (FULLA_BOOTSTRAP_ADMIN_EMAIL deployments) completes
+              // the forced change here and would then be locked out with no
+              // way to obtain a token. Deliver the verification email now —
+              // the gate releases as soon as the operator clicks the link.
+              const bool needsVerificationEmail =
+                !user.getValueOfEmail().empty() && !user.getValueOfEmailVerified();
+              const std::string verificationEmail = user.getValueOfEmail();
               try
               {
                   Mapper<Users>(db).update(
                     updatedUser,
-                    [sharedCb, req, db, sessSub, internalId](const size_t) {
+                    [sharedCb, req, db, sessSub, internalId,
+                      needsVerificationEmail, verificationEmail](const size_t) {
                         // Exemption (db-operations.md §3): security-critical
                         // batch revoke on password change (same as PUT
                         // /api/me/password). Dual key form (UserReadCache
@@ -1766,10 +1776,12 @@ void SessionController::changePasswordForced(
                         const std::string internalIdKey = std::to_string(internalId);
                         db->execSqlAsync(
                           "UPDATE oauth2_access_tokens SET revoked = true WHERE user_id = $1 OR user_id = $2",
-                          [sharedCb, req, db, sessSub, internalIdKey](const ::drogon::orm::Result &) {
+                          [sharedCb, req, db, sessSub, internalIdKey,
+                            needsVerificationEmail, verificationEmail](const ::drogon::orm::Result &) {
                               db->execSqlAsync(
                                 "UPDATE oauth2_refresh_tokens SET revoked = true WHERE user_id = $1 OR user_id = $2",
-                                [sharedCb, req, sessSub](const ::drogon::orm::Result &) {
+                                [sharedCb, req, sessSub, needsVerificationEmail,
+                                  verificationEmail](const ::drogon::orm::Result &) {
                                     // PR #157 review (MAJOR 1): demote the
                                     // session to anonymous — the response
                                     // promises "sign in again", and keeping
@@ -1806,9 +1818,22 @@ void SessionController::changePasswordForced(
                                       "user",
                                       sessSub
                                     );
+                                    if (needsVerificationEmail)
+                                    {
+                                        // Fire-and-forget (failures logged,
+                                        // never surfaced): the email-verified
+                                        // login gate needs the link, not this
+                                        // request's outcome.
+                                        services::EmailVerificationService::notifyNewRegistration(
+                                          verificationEmail
+                                        );
+                                    }
                                     Json::Value json;
-                                    json["message"] =
-                                      "Password changed successfully. Sign in again to continue.";
+                                    json["message"] = needsVerificationEmail
+                                      ? "Password changed successfully. A verification "
+                                        "email has been sent to your address — verify "
+                                        "it, then sign in."
+                                      : "Password changed successfully. Sign in again to continue.";
                                     (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
                                 },
                                 [sharedCb, req](const ::drogon::orm::DrogonDbException &e) {
