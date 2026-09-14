@@ -143,11 +143,16 @@
                     }
                 },
                 "clients": {
-                    "vue-client": {
+                    "fulla-portal": {
                         "client_type": "PUBLIC",
                         "secret": "123456",
                         "redirect_uri": "http://127.0.0.1:5173/callback,http://127.0.0.1:8080/callback",
                         "allowed_scopes": ["openid", "profile", "email"]
+                    },
+                    "fulla-admin-console": {
+                        "client_type": "PUBLIC",
+                        "redirect_uri": "http://127.0.0.1:5174/admin/callback,http://127.0.0.1:8081/admin/callback",
+                        "allowed_scopes": ["openid", "profile", "admin"]
                     }
                 },
                 "admin_users": {

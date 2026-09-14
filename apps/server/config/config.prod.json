@@ -217,10 +217,18 @@
                     // PUBLIC client authenticates with authorization code + PKCE and carries no
                     // secret; ConfigManager's production non-default-secret check skips PUBLIC
                     // clients for exactly this reason.
-                    "vue-client": {
+                    "fulla-portal": {
                         "client_type": "PUBLIC",
                         "redirect_uri": "http://127.0.0.1:5173/callback,http://127.0.0.1:8080/callback",
                         "allowed_scopes": ["openid", "profile", "email"]
+                    },
+                    "fulla-admin-console": {
+                        // PUBLIC client for the admin console SPA (PKCE, json-mode
+                        // login against /oauth2/login; the admin scope is gated by
+                        // the user’s admin RBAC role).
+                        "client_type": "PUBLIC",
+                        "redirect_uri": "http://127.0.0.1:5174/admin/callback,http://127.0.0.1:8081/admin/callback",
+                        "allowed_scopes": ["openid", "profile", "admin"]
                     }
                 },
                 "admin_users": {

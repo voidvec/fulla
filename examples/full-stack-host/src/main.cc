@@ -18,7 +18,7 @@
 //                                the body carries the template's <title>.
 //
 // Plus an authorization-code entry check: GET /oauth2/authorize for the
-// config-seeded vue-client, while unauthenticated, redirects to the login
+// config-seeded fulla-portal, while unauthenticated, redirects to the login
 // screen -- proving the client seeded from config is accepted by the flow.
 //
 // Storage is memory-backed (config's storage_type=memory), so the smoke is
@@ -163,7 +163,7 @@ int main()
     // (3) View rendering: /login renders apps/server/views/login.csp.
     {
         auto [result, resp] = httpGet(
-          "/login?client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback"
+          "/login?client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback"
           "&response_type=code&scope=openid"
         );
         check(result == ReqResult::Ok && resp != nullptr, "GET /login reachable");
@@ -179,14 +179,14 @@ int main()
     }
 
     // (4) Authorization-code entry: unauthenticated /oauth2/authorize for the
-    // config-seeded vue-client redirects to the login screen.
+    // config-seeded fulla-portal redirects to the login screen.
     // F-014 (RFC 8252 §7.3): redirect_uri uses a loopback IP literal
     // (127.0.0.1) which is allowed over plain http. F-011 (RFC 9700 §2.1.1):
     // PKCE is now required by default for the authorization_code grant, so the
     // authorize request carries a code_challenge (S256 of a fixed verifier).
     {
         auto [result, resp] = httpGet(
-          "/oauth2/authorize?client_id=vue-client&redirect_uri=http://127.0.0.1:5173/callback"
+          "/oauth2/authorize?client_id=fulla-portal&redirect_uri=http://127.0.0.1:5173/callback"
           "&response_type=code&scope=openid&state=smoke-state-123"
           "&code_challenge=smoke-challenge-fixed-43chars-long-padding__&code_challenge_method=S256"
         );
