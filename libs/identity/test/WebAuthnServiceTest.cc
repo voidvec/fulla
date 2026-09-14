@@ -51,7 +51,7 @@ TEST(WebAuthnServiceTest, BeginRegistration_GeneratesChallengeAndRpInfo)
     ASSERT_TRUE(result.has_value());
     EXPECT_FALSE(result->challenge.empty());
     EXPECT_EQ(result->rpId, "localhost");
-    EXPECT_EQ(result->rpName, "OAuth2 Server");
+    EXPECT_EQ(result->rpName, "Fulla");
     EXPECT_EQ(result->timeoutMs, 60000);
 }
 

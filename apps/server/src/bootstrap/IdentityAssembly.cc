@@ -98,7 +98,7 @@ void wireIdentityServices()
     auto webAuthnRepo =
       std::make_shared<fulla::storage::postgres::PostgresWebAuthnRepository>(dbClient);
     std::string rpId = "localhost";
-    std::string rpName = "OAuth2 Server";
+    std::string rpName = "Fulla";
     std::vector<std::string> rpOrigins;  // #142: strict origin allowlist
     if (customConfig.isMember("webauthn"))
     {

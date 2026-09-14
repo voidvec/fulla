@@ -50,7 +50,7 @@ class SmtpEmailService : public IEmailService
         int port = 465;
         std::string username;  // full email: xxx@163.com
         std::string password;  // authorization code
-        std::string fromName = "OAuth2 Platform";
+        std::string fromName = "Fulla";
         bool useSsl = true;
     };
 

@@ -326,7 +326,7 @@ void GitHubController::fetchGitHubUserInfo(
     auto userReq = ::drogon::HttpRequest::newHttpRequest();
     userReq->setPath("/user");
     userReq->addHeader("Authorization", "Bearer " + accessToken);
-    userReq->addHeader("User-Agent", "OAuth2Server");
+    userReq->addHeader("User-Agent", "fulla-server");
     userReq->addHeader("Accept", "application/json");
 
     apiClient->sendRequest(
