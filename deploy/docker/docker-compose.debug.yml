@@ -38,7 +38,7 @@ services:
 
   # Linux debug environment
   debug-env:
-    image: fulla-backend-debug:v1.0.1
+    image: fulla-backend-debug:v1.2.0
     container_name: fulla-backend-debug
     volumes:
       # Mount the entire project directory

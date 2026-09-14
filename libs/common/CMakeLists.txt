@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.16)
 # repo root's shared CMake modules to already be included.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 if(NOT DEFINED FULLA_PROJECT_VERSION)
-    set(FULLA_PROJECT_VERSION 1.0.0)
+    set(FULLA_PROJECT_VERSION 1.2.0)
 endif()
 if(NOT COMMAND oauth2_apply_compat)
     include(Compatibility)

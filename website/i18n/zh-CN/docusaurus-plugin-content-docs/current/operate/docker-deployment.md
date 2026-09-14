@@ -232,7 +232,7 @@ docker-compose up -d --build
 ## 调试环境（挂载源码 / GDB）
 
 ```bash
-docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.0.0 .
+docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.2.0 .
 docker compose -f deploy/docker/docker-compose.debug.yml up -d
 docker compose -f deploy/docker/docker-compose.debug.yml run --rm debug-env bash
 ```

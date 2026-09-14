@@ -9,6 +9,31 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.2.0] - 2026-09-14
+
+### Security
+
+This release lands the P0 batch of the 2026-09 line-by-line backend security/correctness audit (46 findings, independently re-verified; the remaining hardening items continue in follow-up PRs).
+
+- **One database migration ships with this release and applies automatically on startup**: V032 adds an `oauth2_codes.nonce` column (idempotent `ADD COLUMN IF NOT EXISTS`) — see the nonce fix below.
+- **OIDC nonce was silently dropped (audit P0-1)**: controllers threaded the authorize-request `nonce` into code generation, but no repository wrote it and the column did not exist — `id_token.nonce` was always empty (OIDC Core §3.1.3.7), breaking replay detection for code-flow relying parties. The nonce is now persisted at code issuance and echoed in the exchanged ID token, round-tripped through both the Postgres and the Redis grant repositories.
+- **Logout/revocation left refresh tokens alive (audit P0-2)**: the cascade inside `revokeAccessToken` matched the incoming access-token hash against the wrong column (the refresh tokens' own hash), so it never hit — access-token revocation and logout left the paired refresh token usable for up to 30 days. The cascade now joins on `access_token` and additionally kills the whole rotation family, so a rotated refresh token dies together with the (possibly stale) access token presented at logout.
+- **Password reset revoked nothing for social/MFA sessions (audit P0-3)**: the reset flow revoked tokens by internal user id while login/MFA/social token rows are keyed by the public subject — the response claimed all sessions were revoked while every public-sub-keyed token stayed valid. Revocation is now dual-keyed (public_sub OR internal id, same shape as account deletion) and outstanding password-reset tokens for the user are consumed.
+- **Authorization codes could be minted past the `/oauth2/authorize` boundary (audit P0-4)**: the login/consent/MFA/device paths generated codes without checking that the client exists, the redirect_uri is registered, and the scopes are within the client allowlist — an authenticated open redirect. A shared issuance guard now runs on all four paths; `code_challenge` format is validated per RFC 7636 §4.2; MFA verify maps guard failures to its frozen generic 401 contract (anti-enumeration).
+- **Standalone-Redis grant storage dropped PKCE material (audit P0-5)**: the Redis-backed code store lost the code_verifier pair, nonce, and auth context, and skipped redirect_uri matching when the request side was empty; its semantics are now aligned with the Postgres store.
+- **Static file serving no longer echoes credentials (audit P1-15)**: `GET /config.json` served the server's own configuration — including DB/Redis credentials in dev and prod layouts. `allow_all` is disabled and `file_types` narrowed to innocuous assets in all shipped configs.
+- **Companion hardening (audit P1/P2)**: the exception handler no longer echoes arbitrary CORS origins with credentials (and emits `Vary: Origin`); bearer tokens in URL query parameters are rejected per RFC 9700; the login failure limiter keys on the TCP peer unless `auth.rate_limit_trust_forwarded_for` is explicitly enabled; failed logins burn one PBKDF2 pass to equalize timing across miss/locked/policy-rejection paths; CSPRNG failure no longer mints deterministic tokens; `mfa_token` carries the public subject instead of the internal id; RSA keys under 2048 bits are rejected; userinfo returns 401 instead of a fabricated 200 for an unresolvable subject; cross-client code exchange returns `invalid_grant`; refresh-token introspection no longer fabricates `iat`/`nbf`; an unrecognized `token_endpoint_auth_method` fails closed.
+
+### Added
+
+- **Verification email on self-registration + unauthenticated resend (#198)**: self-registered users previously could not obtain the verification email without first signing in — a deadlock whenever the next step requires a verified address. Registration now sends the email immediately, and a new rate-limited `POST /api/verify-email/resend-by-email` endpoint resends it given only the address; responses are generic to prevent address enumeration (the endpoint is disabled under memory storage).
+
+### Changed
+
+- **Prod config hardening**: `auth.rate_limit_trust_forwarded_for: true` (nginx fronts the prod layout and sets `X-Forwarded-For`); Hodor `sub_limits` now also covers `/oauth2/mfa/verify` and the new resend endpoint.
+- **Dev seed scope drift**: the seeded portal client granted scopes via `is_default` (openid + profile) while advertising `openid profile email` — exposed by the new strict scope allowlist. The seed now grants the three advertised scopes explicitly; **existing dev databases need the seed re-applied (or the `email` scope row inserted)**.
+- **Deploy templates**: the prod compose `migrate` service now builds the migration image locally instead of pulling a release image (which lagged brand-new migrations), `FULLA_BOOTSTRAP_ADMIN_PASSWORD` passes through to the migrate job, and `AUTO_MIGRATE=false` is the documented default in the env example (the stack runs the dedicated one-shot migrate job instead).
+
 ## [1.1.1] - 2026-09-10
 
 ### Changed
