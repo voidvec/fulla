@@ -9,6 +9,30 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.3.0] - 2026-09-14
+
+### Changed
+
+- **⚠️ Breaking (client identity) — the first-party OAuth2 clients are renamed**: `vue-client` → **`fulla-portal`** (user portal) and `admin-console` → **`fulla-admin-console`** (admin console). The old names described the UI framework instead of the product, and the admin console's client had never been declared in any shipped config. Deployments upgrading from ≤ 1.2.0 must rename the existing rows once so consents and tokens keep pointing at a live client (run before or right after starting the new version — the startup seeder fills in whatever is still missing):
+>
+> ```sql
+> UPDATE oauth2_clients SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-portal' WHERE client_id = 'vue-client';
+> UPDATE oauth2_clients SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
+> ```
+>
+> Frontend deployments compiled with `VITE_CLIENT_ID=vue-client` must rebuild with the new id (the Docker images ship `fulla-portal` by default).
+- **⚠️ Breaking (environment variables) — `FULLA_VUE_CLIENT_SECRET` / `FULLA_VUE_REDIRECT_URI` renamed to `FULLA_PORTAL_CLIENT_SECRET` / `FULLA_PORTAL_REDIRECT_URI`**, with the old names still honored as deprecated aliases (both map to the same config paths, so an un-migrated `.env` keeps working). New: `FULLA_ADMIN_CONSOLE_REDIRECT_URI` registers the admin console's production redirect URI.
+
+### Added
+
+- **Startup seeding of config-declared OAuth2 clients (#204)**: production had no path from the plugin config's `clients` block to the database (the dev seed SQL is DEV-ONLY), so a freshly deployed server passed credential and email-verified checks at login and then failed code issuance with `3001 VALIDATION_INVALID_INPUT` — the client-existence guard, logging nothing at ERROR level; the admin console's client was missing from every config entirely. A startup seeder now inserts config-declared clients (both first-party clients ship declared in all configs) into `oauth2_clients` / `oauth2_client_scopes` idempotently (`ON CONFLICT DO NOTHING` — config seeds the initial state, admin-API edits stay authoritative across restarts; PUBLIC clients get a random unused secret hash, CONFIDENTIAL plaintext is salted-hashed per the F-002 rule). Production deployments no longer need any manual client SQL.
+
+### Fixed
+
+- **Registration no longer leaves users guessing about email verification**: the success screen used to flash "Account created successfully" for two seconds and auto-redirect to the login form — which rejects unverified accounts — while discarding the backend's "check your email" note. The page now stays put, names the address the verification email was sent to, and links to login explicitly.
+
 ## [1.2.0] - 2026-09-14
 
 ### Security
