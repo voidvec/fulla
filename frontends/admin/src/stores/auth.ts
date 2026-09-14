@@ -71,7 +71,7 @@ export interface AdminLoginResult {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  // Registered redirect_uri for the admin-console client (seed); passed as the
+  // Registered redirect_uri for the fulla-admin-console client (seeded at startup); passed as the
   // login/token parameter — the json login flow never actually redirects here.
   const REDIRECT_URI = window.location.origin + '/admin/callback'
 
@@ -129,7 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
       const loginResp = await axios.post('/oauth2/login', new URLSearchParams({
         username,
         password,
-        client_id: 'admin-console',
+        client_id: 'fulla-admin-console',
         redirect_uri: REDIRECT_URI,
         scope: 'openid profile admin',
         state: crypto.randomUUID(),
@@ -168,7 +168,7 @@ export const useAuthStore = defineStore('auth', () => {
         grant_type: 'authorization_code',
         code,
         redirect_uri: REDIRECT_URI,
-        client_id: 'admin-console',
+        client_id: 'fulla-admin-console',
         code_verifier: pkce.verifier,
       }), {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -203,7 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
     const params = new URLSearchParams({
       mfa_token: mfaToken,
       code,
-      client_id: 'admin-console',
+      client_id: 'fulla-admin-console',
       redirect_uri: REDIRECT_URI,
     })
     if (codeVerifier) params.set('code_verifier', codeVerifier)
@@ -270,7 +270,7 @@ export const useAuthStore = defineStore('auth', () => {
           // Narrowed by the refreshToken.value guard above, but the closure
           // re-reads the ref (nullable) -- pin the value for the body.
           refresh_token: refreshToken.value ?? '',
-          client_id: 'admin-console',
+          client_id: 'fulla-admin-console',
         }), {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
@@ -317,7 +317,7 @@ export const useAuthStore = defineStore('auth', () => {
         requests.push(fetch('/oauth2/revoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: refresh, client_id: 'admin-console' }),
+          body: new URLSearchParams({ token: refresh, client_id: 'fulla-admin-console' }),
           keepalive: true,
         }))
       }

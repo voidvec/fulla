@@ -16,7 +16,7 @@ export const ADMIN_USER = {
 
 export const MOCK_CLIENTS = [
   {
-    client_id: 'vue-client',
+    client_id: 'fulla-portal',
     name: 'Vue Frontend',
     client_type: 'PUBLIC',
     redirect_uris: 'http://localhost:8080/callback',
@@ -56,13 +56,13 @@ export const MOCK_SCOPES = [
 
 export const MOCK_LOGS = [
   { id: 1, action: 'login_success', actor_type: 'user', actor_id: '550e8400-e29b-41d4-a716-446655440000', outcome: 'success', ip: '127.0.0.1', timestamp: '2026-05-21T10:00:00Z' },
-  { id: 2, action: 'token_issued', actor_type: 'client', actor_id: 'vue-client', outcome: 'success', ip: '127.0.0.1', timestamp: '2026-05-21T10:00:01Z' },
+  { id: 2, action: 'token_issued', actor_type: 'client', actor_id: 'fulla-portal', outcome: 'success', ip: '127.0.0.1', timestamp: '2026-05-21T10:00:01Z' },
   { id: 3, action: 'login_failure', actor_type: 'user', actor_id: '660e8400-e29b-41d4-a716-446655440001', outcome: 'failure', ip: '192.168.1.100', timestamp: '2026-05-21T09:55:00Z' },
 ]
 
 export const MOCK_CLIENT_DETAIL = {
   status: 'success',
-  client_id: 'vue-client',
+  client_id: 'fulla-portal',
   name: 'Vue Frontend',
   client_type: 'PUBLIC',
   redirect_uris: 'http://localhost:8080/callback',
@@ -72,9 +72,9 @@ export const MOCK_CLIENT_DETAIL = {
 }
 
 export const MOCK_TOKENS = [
-  { token_prefix: 'a1b2c3d4', client_id: 'vue-client', user_id: 'admin', scope: 'openid profile', created_at: '2026-05-21T10:00:00Z', expires_at: '2026-05-21T11:00:00Z' },
+  { token_prefix: 'a1b2c3d4', client_id: 'fulla-portal', user_id: 'admin', scope: 'openid profile', created_at: '2026-05-21T10:00:00Z', expires_at: '2026-05-21T11:00:00Z' },
   { token_prefix: 'e5f6g7h8', client_id: 'api-service', user_id: '', scope: 'admin', created_at: '2026-05-21T09:30:00Z', expires_at: '2026-05-21T10:30:00Z' },
-  { token_prefix: 'i9j0k1l2', client_id: 'vue-client', user_id: 'testuser', scope: 'openid', created_at: '2026-05-21T09:00:00Z', expires_at: '2026-05-21T10:00:00Z' },
+  { token_prefix: 'i9j0k1l2', client_id: 'fulla-portal', user_id: 'testuser', scope: 'openid', created_at: '2026-05-21T09:00:00Z', expires_at: '2026-05-21T10:00:00Z' },
 ]
 
 export const MOCK_OIDC_KEYS = {
@@ -270,7 +270,7 @@ export async function setupAuthenticatedMocks(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ status: 'success', message: 'Client updated successfully', client_id: 'vue-client' }),
+        body: JSON.stringify({ status: 'success', message: 'Client updated successfully', client_id: 'fulla-portal' }),
       })
     } else {
       await route.continue()

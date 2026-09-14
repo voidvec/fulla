@@ -115,7 +115,7 @@ test.describe('Authentication', () => {
     const body = request.postData() || ''
     expect(body).toContain('mfa_token=mfa-token-123')
     expect(body).toContain('code=123456')
-    expect(body).toContain('client_id=admin-console')
+    expect(body).toContain('client_id=fulla-admin-console')
     expect(body).toContain('code_verifier=')
 
     await expect(page).toHaveURL(/\/admin\/?$|\/admin\/dashboard/)

@@ -140,14 +140,14 @@ test.describe('Bulk token revocation (gap-fix P1 tests)', () => {
     })
     await page.click('button:has-text("Revoke All by App")')
     const revokeRequest = page.waitForRequest('**/api/admin/tokens/revoke-by-client')
-    await page.locator('button:has-text("vue-client")').click()
+    await page.locator('button:has-text("fulla-portal")').click()
 
     // The custom confirm dialog guards the destructive action; the request
     // fires only after Confirm.
     await page.click('button:has-text("Confirm")')
     const request = await revokeRequest
     expect(request.method()).toBe('POST')
-    expect(request.postDataJSON()).toEqual({ client_id: 'vue-client' })
+    expect(request.postDataJSON()).toEqual({ client_id: 'fulla-portal' })
     // Gap-fix: the success banner reports the backend count.
     await expect(page.getByTestId('tokens-success')).toContainText('Revoked 5 token')
   })

@@ -2,7 +2,7 @@ import http, { setTokens, clearTokens, getAccessToken } from './http'
 import { generatePkcePair } from '../utils/pkce'
 import type { LoginResult, TokenResponse } from '../types'
 
-const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'vue-client'
+const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin + '/callback'
 
 /**

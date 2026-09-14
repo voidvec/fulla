@@ -50,7 +50,7 @@ test.describe('Forced password change (admin console)', () => {
   })
 
   test('?must_change_password=1 shows the change form without a login round-trip', async ({ page }) => {
-    // The server's authorize gate 302s flagged admin-console users here.
+    // The server's authorize gate 302s flagged fulla-admin-console users here.
     await page.goto('/admin/login?must_change_password=1')
     await expect(page.locator('#old-password-field')).toBeVisible()
     await expect(page.locator('input[type="text"]')).toBeHidden()

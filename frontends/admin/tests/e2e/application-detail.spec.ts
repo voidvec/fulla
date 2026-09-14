@@ -10,7 +10,7 @@ test.describe('Application Detail Page', () => {
     await page.waitForURL('**/admin/applications')
     // Click the client name link to go to detail
     await page.click('a:has-text("Vue Frontend")')
-    await page.waitForURL('**/admin/applications/vue-client')
+    await page.waitForURL('**/admin/applications/fulla-portal')
   })
 
   test('displays application title and back link', async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe('Application Detail Page', () => {
   test('Info tab shows client details', async ({ page }) => {
     // Info tab is active by default
     await expect(page.locator('text=Client ID')).toBeVisible()
-    await expect(page.locator('[data-testid="client-id-chip"]')).toContainText('vue-client')
+    await expect(page.locator('[data-testid="client-id-chip"]')).toContainText('fulla-portal')
     await expect(page.locator('text=PUBLIC')).toBeVisible()
     await expect(page.locator('input[placeholder="Application name"]')).toHaveValue('Vue Frontend')
   })
