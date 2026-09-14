@@ -244,6 +244,9 @@
         }
     ],
     "custom_config": {
+        "mfa": {
+            "totp_issuer": "Fulla"
+        },
         "metadata": {
             "issuer": "https://auth.example.com"
         },

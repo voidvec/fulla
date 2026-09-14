@@ -540,6 +540,7 @@ curl -k https://localhost/admin/
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth 回调 URI | config 中的 localhost 值 |
 | `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal 密钥（旧名别名：`FULLA_VUE_CLIENT_SECRET`） | 123456 |
 | `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth 回调 URI | config 中的 localhost 值 |
+| `FULLA_MFA_TOTP_ISSUER` | 认证器应用中 TOTP 条目显示的发行方名称 | `Fulla` |
 | `FULLA_AUTO_MIGRATE` | 自动执行数据库迁移 | false（改用一次性 `migrate` 服务） |
 | `DETAILED_VALIDATION_ERRORS` | 是否返回字段级校验错误（生产建议 false） | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth（可选） | (空) |

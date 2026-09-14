@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.2.0
+// version: 1.3.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>
@@ -59,6 +59,7 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
 {"custom_config.external_auth.wechat.appid", "FULLA_WECHAT_APPID", false},
 {"custom_config.external_auth.wechat.secret", "FULLA_WECHAT_SECRET", false},
 {"listeners.0.port", "FULLA_LISTEN_PORT", true},
+{"custom_config.mfa.totp_issuer", "FULLA_MFA_TOTP_ISSUER", false},
 {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
 "FULLA_PORTAL_CLIENT_SECRET",
 false},
@@ -2882,6 +2883,8 @@ using Client = fulla::oauth2::model::OAuth2Client;
 OAuth2Plugin() = default;
 void initAndStart(const Json::Value &config) override;
 void shutdown() override;
+const Json::Value &clientsSeedConfig() const
+;
 std::shared_ptr<fulla::oauth2::protocol::TokenService> getTokenService() const
 ;
 std::shared_ptr<fulla::oauth2::protocol::ClientService> getClientService() const
@@ -3056,8 +3059,6 @@ long long accessTokenTtl_{3600};
 long long refreshTokenTtl_{3600 * 24 * 30};
 Json::Value clientsSeedConfig_;
 void initStorage(const Json::Value &config);
-const Json::Value &clientsSeedConfig() const
-;
 void ensureSubjectMapping(
 const std::string &subject,
 const std::string &username,
@@ -4061,7 +4062,7 @@ MfaService(
 std::shared_ptr<IMfaRepository> mfaRepo,
 std::shared_ptr<fulla::common::ports::ICryptoProvider> crypto,
 std::shared_ptr<fulla::common::ports::IClock> clock,
-std::string issuerName = "OAuth2Server"
+std::string issuerName = "Fulla"
 );
 void setupSecret(
 int32_t userId,

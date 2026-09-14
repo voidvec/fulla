@@ -541,6 +541,7 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth callback URI | localhost value from config |
 | `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal secret (legacy alias: `FULLA_VUE_CLIENT_SECRET`) | 123456 |
 | `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth callback URI | localhost value from config |
+| `FULLA_MFA_TOTP_ISSUER` | Issuer name shown by authenticator apps for TOTP entries | `Fulla` |
 | `FULLA_AUTO_MIGRATE` | Run database migrations automatically | false (use the one-shot `migrate` service) |
 | `DETAILED_VALIDATION_ERRORS` | Whether to return field-level validation errors (false recommended in production) | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth (optional) | (empty) |
