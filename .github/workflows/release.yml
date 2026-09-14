@@ -360,8 +360,9 @@ jobs:
       - name: Splice curated breaking-change entries into the notes
         # git-cliff rebuilds notes from conventional commits and cannot carry
         # the curated migration guidance in CHANGELOG.md. The versioning
-        # policy (§ security-hardening gray zone) requires the
-        # "⚠️ Breaking (security hardening)" entries in release notes, so
+        # policy requires the "⚠️ Breaking (...)" entries (any category:
+        # security hardening, client identity, environment variables, ...)
+        # in release notes, so
         # extract every such bullet from the released CHANGELOG section and
         # insert it right under the version heading. A bullet may wrap over
         # several lines; the capture ends at the next bullet or heading.
@@ -371,7 +372,7 @@ jobs:
             BEGIN { p = 0; inb = 0; hdr = 0 }
             /^## \[/ { p = (index($0, "[" ver "]") == 4) ? 1 : 0; inb = 0 }
             p && /^### / { inb = 0 }
-            p && /^- /  { inb = ($0 ~ /Breaking \(security hardening\)/) ? 1 : 0 }
+            p && /^- /  { inb = ($0 ~ /Breaking \(/) ? 1 : 0 }
             p && inb {
               if (!hdr) { print ""; print "### ⚠️ Breaking (security hardening)"; print ""; hdr = 1 }
               print
