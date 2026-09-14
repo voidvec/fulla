@@ -215,13 +215,37 @@ void ensureAdminUser(const RunPtr &run)
                       // (same convention as every other creation path). Missing
                       // this made the first-boot insert fail on the constraint.
                       admin.setSalt("");
-                      admin.setEmail("admin@example.com");
-                      // The placeholder address cannot receive a verification
-                      // email, and the login flow's email-verified gate would
-                      // otherwise deadlock the bootstrap admin right after the
-                      // #145 forced password change (the operator's identity is
-                      // confirmed out-of-band by whoever runs the deploy).
-                      admin.setEmailVerified(true);
+                      // Bootstrap admin email policy: FULLA_BOOTSTRAP_ADMIN_EMAIL
+                      // points the account at a real, operator-owned mailbox. When
+                      // it is set AND real SMTP delivery is configured (same
+                      // HOST/USER/PASSWORD rule as utils/EmailService.cc), the row
+                      // is born UNVERIFIED — the #145 forced password change then
+                      // triggers the verification email, and the login flow's
+                      // email-verified gate holds until the operator clicks the
+                      // link. Without a deliverable mailbox (placeholder + no
+                      // SMTP), the row ships verified=true instead: nothing could
+                      // ever deliver a verification email, so the gate would
+                      // deadlock the administrator (prod rollout 2026-09-14).
+                      const char *envEmail = std::getenv("FULLA_BOOTSTRAP_ADMIN_EMAIL");
+                      const char *smtpHost = std::getenv("FULLA_SMTP_HOST");
+                      const char *smtpUser = std::getenv("FULLA_SMTP_USER");
+                      const char *smtpPass = std::getenv("FULLA_SMTP_PASSWORD");
+                      const bool realMailbox =
+                        envEmail && envEmail[0] != 0 && smtpHost && smtpHost[0] != 0 &&
+                        smtpUser && smtpUser[0] != 0 && smtpPass && smtpPass[0] != 0;
+                      if (realMailbox)
+                      {
+                          admin.setEmail(envEmail);
+                          admin.setEmailVerified(false);
+                          LOG_INFO << "Bootstrap: admin email set to " << envEmail
+                                   << " (unverified — a verification email will be"
+                                   << " sent after the first password change)";
+                      }
+                      else
+                      {
+                          admin.setEmail("admin@example.com");
+                          admin.setEmailVerified(true);
+                      }
                       // #145: force a password change at first login. Both the
                       // random password (printed to the log) and an
                       // operator-provided env password must be replaced by the
