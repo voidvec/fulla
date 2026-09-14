@@ -66,7 +66,7 @@ function(fulla_package)
     set(_export_set "${AP_PACKAGE}Targets")
     set(_version "${FULLA_PROJECT_VERSION}")
     if(NOT _version)
-        set(_version "1.2.0")
+        set(_version "1.3.0")
     endif()
 
     # Consumers get fulla::<export-name>, matching the in-tree ALIAS and

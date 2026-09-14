@@ -239,7 +239,7 @@ Container naming: `fulla-{service}[-debug]` (backend/frontend/postgres/redis); n
 ## Debug Environment (source mounts / GDB)
 
 ```bash
-docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.2.0 .
+docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.3.0 .
 docker compose -f deploy/docker/docker-compose.debug.yml up -d
 docker compose -f deploy/docker/docker-compose.debug.yml run --rm debug-env bash
 ```
