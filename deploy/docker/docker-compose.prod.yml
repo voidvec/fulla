@@ -46,7 +46,7 @@ services:
       args:
         # Vite build-time vars (inlined into the SPA bundle)
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-        VITE_CLIENT_ID: ${VITE_CLIENT_ID:-vue-client}
+        VITE_CLIENT_ID: ${VITE_CLIENT_ID:-fulla-portal}
         VITE_REDIRECT_URI: ${VITE_REDIRECT_URI:-}
         VITE_GITHUB_CLIENT_ID: ${VITE_GITHUB_CLIENT_ID:-}
     container_name: fulla-frontend
@@ -113,8 +113,9 @@ services:
       - FULLA_LISTEN_PORT=${FULLA_LISTEN_PORT:-5555}
       - FULLA_FRONTEND_URL=${FULLA_FRONTEND_URL}
       - FULLA_CORS_ALLOW_ORIGINS=${FULLA_CORS_ALLOW_ORIGINS}
-      - FULLA_VUE_REDIRECT_URI=${FULLA_VUE_REDIRECT_URI}
-      - FULLA_VUE_CLIENT_SECRET=${FULLA_VUE_CLIENT_SECRET}
+      - FULLA_PORTAL_REDIRECT_URI=${FULLA_PORTAL_REDIRECT_URI}
+      - FULLA_PORTAL_CLIENT_SECRET=${FULLA_PORTAL_CLIENT_SECRET}
+      - FULLA_ADMIN_CONSOLE_REDIRECT_URI=${FULLA_ADMIN_CONSOLE_REDIRECT_URI}
       - FULLA_GOOGLE_REDIRECT_URI=${FULLA_GOOGLE_REDIRECT_URI:-}
       # Migrations run via the `migrate` one-shot service (see header);
       # the app only self-checks the schema at startup.
@@ -182,7 +183,7 @@ services:
       - FULLA_REDIS_HOST=${FULLA_REDIS_HOST}
       - FULLA_REDIS_PORT=${FULLA_REDIS_PORT:-6379}
       - FULLA_REDIS_PASSWORD=${FULLA_REDIS_PASSWORD}
-      - FULLA_VUE_CLIENT_SECRET=${FULLA_VUE_CLIENT_SECRET}
+      - FULLA_PORTAL_CLIENT_SECRET=${FULLA_PORTAL_CLIENT_SECRET}
     volumes:
       - ../../deploy/keys:/app/keys:ro
     networks:
