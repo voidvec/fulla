@@ -231,7 +231,7 @@ struct OAuth2ControllerDocs
             stateParam.required = false;
 
             // PKCE (RFC 7636 / F-011): code_challenge is REQUIRED for PUBLIC
-            // clients (vue-client, admin-console) when require_pkce_for_public
+            // clients (fulla-portal, fulla-admin-console) when require_pkce_for_public
             // is enabled (default). The matching code_verifier goes on the
             // /oauth2/token exchange. Declared in the generated openapi.json
             // so client generators emit PKCE-aware clients.
@@ -777,7 +777,7 @@ void SessionController::login(
                     return;
                 }
                 // Form branch: route to the ORIGINATING portal's login page
-                // (admin-console -> admin_console.url; PR #157 review MAJOR 4).
+                // (fulla-admin-console -> admin_console.url; PR #157 review MAJOR 4).
                 auto resp = ::drogon::HttpResponse::newRedirectionResponse(
                   fulla::drogon::utils::mustChangePasswordRedirectUrl(clientId)
                 );

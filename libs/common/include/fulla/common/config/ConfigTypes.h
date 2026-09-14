@@ -39,10 +39,23 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
    // "[name=OAuth2Plugin]" resolves the plugin by its drogon "name" field,
    // independent of array ordering — each config file inserts a different set
    // of plugins (Hodor, AccessLogger) so a numeric index would be fragile.
-   {"plugins[name=OAuth2Plugin].config.clients.vue-client.secret",
+   // The startup client seeder (bootstrap/ClientSeeder) upserts these config
+   // client entries into oauth2_clients.
+   {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
+    "FULLA_PORTAL_CLIENT_SECRET",
+    false},
+   {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri",
+    "FULLA_PORTAL_REDIRECT_URI",
+    false},
+   {"plugins[name=OAuth2Plugin].config.clients.fulla-admin-console.redirect_uri",
+    "FULLA_ADMIN_CONSOLE_REDIRECT_URI",
+    false},
+   // Deprecated pre-1.3.0 names (vue-client era) — kept as aliases so an
+   // upgraded deployment's env file keeps working until it migrates.
+   {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
     "FULLA_VUE_CLIENT_SECRET",
     false},
-   {"plugins[name=OAuth2Plugin].config.clients.vue-client.redirect_uri",
+   {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri",
     "FULLA_VUE_REDIRECT_URI",
     false},
    {"custom_config.cors.allow_origins", "FULLA_CORS_ALLOW_ORIGINS", false, /*isStringList=*/true}};

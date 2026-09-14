@@ -58,7 +58,7 @@ using IClientRepositoryBase = ::fulla::oauth2::repository::IClientRepository;
  * getClient/validateClient logic (including the constant-time secret
  * comparison and PUBLIC-client secret-skip rule) and the client-parsing half
  * of the original initFromConfig (redirect_uri / allowed_scopes
- * single-or-array handling, the "vue-client" default-scopes backward
+ * single-or-array handling, the "fulla-portal" default-scopes backward
  * compatibility branch, and the client_type parsing with CONFIDENTIAL
  * fallback on invalid values).
  */

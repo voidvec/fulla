@@ -26,6 +26,7 @@
 #include <OrganizationController.h>  // #43: product-app org controller scope decls
 
 #include "bootstrap/AdminBootstrapper.h"
+#include "bootstrap/ClientSeeder.h"
 #include <fulla/drogon/validation/RuleSet.h>
 #include "bootstrap/ControllerRegistration.h"
 #include "bootstrap/CorsSetup.h"
@@ -395,6 +396,48 @@ int main(int argc, char *argv[])
                     );
                     if (result->get_future().get())
                         break;
+                }
+            }).detach();
+        });
+    }
+
+    // 5d. #204: seed the OAuth2 clients declared in the plugin config into
+    // oauth2_clients / oauth2_client_scopes (postgres mode). Production had
+    // no config->DB path for clients (the dev seed SQL is DEV-ONLY), so a
+    // fresh deployment passed credential + email-verified checks at login
+    // and then failed code issuance with 3001 (the P0-4 client-existence
+    // guard) — a validation-class failure that logs nothing at ERROR level.
+    // ON CONFLICT DO NOTHING keeps runtime/admin client edits authoritative
+    // across restarts. Memory mode initializes clients from config
+    // in-process and is skipped (no DB client).
+    {
+        drogon::app().registerBeginningAdvice([]() {
+            std::thread([]() {
+                auto plugin = drogon::app().getPlugin<fulla::drogon::OAuth2Plugin>();
+                if (!plugin || plugin->getStorageType() == "memory")
+                    return;
+                const auto &clients = plugin->clientsSeedConfig();
+                if (!clients.isObject() || clients.empty())
+                    return;
+                for (int attempt = 1; attempt <= 5; ++attempt)
+                {
+                    std::this_thread::sleep_for(
+                      std::chrono::seconds(2 * attempt)
+                    );
+                    auto result = std::make_shared<std::promise<bool>>();
+                    bootstrap::ClientSeeder::run(
+                      clients,
+                      [result](bool ok, const std::string &detail) {
+                          if (ok)
+                              LOG_INFO << "ClientSeeder: " << detail;
+                          else
+                              LOG_WARN << "ClientSeeder attempt: " << detail;
+                          result->set_value(ok);
+                      }
+                    );
+                    if (result->get_future().get())
+                        break;
+                    LOG_WARN << "ClientSeeder retry " << attempt << "/5 scheduled";
                 }
             }).detach();
         });

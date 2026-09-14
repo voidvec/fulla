@@ -33,7 +33,7 @@ void MemoryClientRepository::initFromConfig(const Json::Value &clientsConfig)
         // Parse client type. The canonical config key is "client_type" (every
         // apps/server/config/*.json uses it); bare "type" stays accepted for
         // pre-canonical configs. Surfaced by #69's refresh-grant e2e: with
-        // the old single-"type" read, a configured PUBLIC vue-client silently
+        // the old single-"type" read, a configured PUBLIC fulla-portal silently
         // defaulted to CONFIDENTIAL in memory mode and rejected public-style
         // (empty-secret) token requests with invalid_client.
         std::string clientTypeStr =
@@ -81,12 +81,12 @@ void MemoryClientRepository::initFromConfig(const Json::Value &clientsConfig)
             client.allowedScopes.push_back(clientData["allowed_scopes"].asString());
         }
         // If no allowed_scopes specified, add default scopes for backward compatibility
-        else if (clientId == "vue-client")
+        else if (clientId == "fulla-portal")
         {
             client.allowedScopes.push_back("openid");
             client.allowedScopes.push_back("profile");
             client.allowedScopes.push_back("email");
-            LOG_DEBUG << "MemoryClientRepository: Added default scopes for vue-client";
+            LOG_DEBUG << "MemoryClientRepository: Added default scopes for fulla-portal";
         }
 
         LOG_DEBUG << "MemoryClientRepository: Loaded client " << clientId << " with "

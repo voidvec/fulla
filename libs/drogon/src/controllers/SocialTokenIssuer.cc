@@ -17,7 +17,7 @@ namespace fulla::drogon::controllers
 namespace
 {
 // #70: the OAuth2 client the first-party social token pair is issued for.
-// Configurable (external_auth.social_token_client_id, default "vue-client" —
+// Configurable (external_auth.social_token_client_id, default "fulla-portal" —
 // the behavior GitHub login always had); must be a FIRST-PARTY client: the
 // issuance has no consent interaction, so pointing this at a third-party
 // client would hand it tokens nobody agreed to.
@@ -31,7 +31,7 @@ std::string socialTokenClientId()
         if (!v.empty())
             return v;
     }
-    return "vue-client";
+    return "fulla-portal";
 }
 
 void respondError(

@@ -4,7 +4,7 @@
 // for the shared Domain kernel. ClientId wraps the OAuth2 client_id string
 // (design.md §3.1's value-object list). No format grammar is imposed
 // beyond non-empty: RFC 6749 deliberately leaves client_id opaque to the
-// protocol, and the existing codebase's client_ids (e.g. "vue-client",
+// protocol, and the existing codebase's client_ids (e.g. "fulla-portal",
 // "backend-svc") are plain human-chosen slugs, not a generated format this
 // type should validate against.
 

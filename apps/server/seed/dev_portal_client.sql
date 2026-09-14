@@ -1,4 +1,5 @@
--- DEV ONLY: Sample OAuth2 client for Vue frontend development
+-- DEV SEED: sample OAuth2 client for the user portal (production seeds
+-- the same client from OAuth2Plugin config at startup; see #204)
 -- DO NOT use in production!
 
 -- U-6 (browser-e2e 2026-09-08): both loopback HOST spellings are registered.
@@ -8,7 +9,7 @@
 -- user out with a misleading "incorrect username or password".
 INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt, name, redirect_uris, allowed_grant_types, token_endpoint_auth_method)
 VALUES (
-    'vue-client',
+    'fulla-portal',
     'PUBLIC',
     '42a121b66fb9f1d4f73125788f42eb6799110c6aeae5a9a12a2fed5307a0088d',
     'random_salt',
@@ -19,15 +20,15 @@ VALUES (
 )
 ON CONFLICT (client_id) DO NOTHING;
 
--- Grant the vue-client its full advertised scope set.
+-- Grant the fulla-portal client its full advertised scope set.
 -- P0-4 audit companion: the issuance guard now enforces the client scope
 -- allowlist on every code path (login/MFA/consent/device), and the default
 -- scopes (is_default = openid+profile) do NOT include email — while both
--- config.json's clients.vue-client.allowed_scopes and the portal's default
+-- config's clients.fulla-portal.allowed_scopes and the portal's default
 -- scope string ("openid profile email") advertise it. Grant explicitly by
 -- name so the seed matches the declared contract.
 INSERT INTO oauth2_client_scopes (client_id, scope_name)
-SELECT 'vue-client', name
+SELECT 'fulla-portal', name
 FROM oauth2_scopes
 WHERE name IN ('openid', 'profile', 'email')
 ON CONFLICT (client_id, scope_name) DO NOTHING;

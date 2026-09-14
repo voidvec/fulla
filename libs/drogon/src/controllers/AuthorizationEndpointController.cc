@@ -470,7 +470,7 @@ void AuthorizationEndpointController::authorize(
                         return;
                     }
                     // #145: flagged accounts are routed to their portal's
-                    // login page (admin-console -> admin_console.url, other
+                    // login page (fulla-admin-console -> admin_console.url, other
                     // clients -> frontend.url; PR #157 review MAJOR 4), which
                     // renders the inline change-password form; no authorize
                     // context is carried (no return URL -> no open redirect).
