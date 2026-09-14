@@ -56,7 +56,7 @@ std::string loginCookie(const std::string &username, const std::string &password
     auto resp = sendPostForm(
       "/oauth2/login?json=true",
       "username=" + username + "&password=" + password +
-        "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+        "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
         "&scope=openid&state=p0143&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     if (!resp || !statusIs(resp, drogon::k200OK))
@@ -90,7 +90,7 @@ bool authorizeMintNonce(
         req->setMethod(::drogon::Get);
         req->setPath("/oauth2/authorize");
         req->setParameter("response_type", "code");
-        req->setParameter("client_id", "vue-client");
+        req->setParameter("client_id", "fulla-portal");
         req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
         req->setParameter("scope", "openid");
         req->setParameter("state", "p0143state");
@@ -167,7 +167,7 @@ bool authorizeMintNonce(
         return nullptr;
     return postWithCookie(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=p0143state&consent_csrf=" +
         csrf + "&action=approve",
       cookie2

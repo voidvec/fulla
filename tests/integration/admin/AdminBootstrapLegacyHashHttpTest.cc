@@ -51,7 +51,7 @@ bool loginExpect(const std::string &username, const std::string &password, drogo
     auto resp = sendPostForm(
       "/oauth2/login?json=true",
       "username=" + username + "&password=" + password +
-        "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+        "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
         "&scope=openid&state=p0103&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     return resp != nullptr && resp->getStatusCode() == want;

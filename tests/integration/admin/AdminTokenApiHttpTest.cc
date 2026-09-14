@@ -134,7 +134,7 @@ DROGON_TEST(Integration_P1_AdminToken_RevokeByUser_EmptyUserId_Returns400)
 
 // ---------------------------------------------------------------------------
 // revokeTokensByClient happy path: POST revoke-by-client against the seeded
-// admin-console client (which has no active tokens at rest after the login
+// fulla-admin-console client (which has no active tokens at rest after the login
 // flow's token was issued to the user, not the client) returns 200 with a
 // count. The handler revokes access + refresh tokens by client_id; with zero
 // matching rows the count is 0 but the response is still 200 success.
@@ -147,7 +147,7 @@ DROGON_TEST(Integration_P1_AdminToken_RevokeByClient_AdminConsole_Returns200)
     REQUIRE(token.has_value());
 
     Json::Value body;
-    body["client_id"] = "admin-console";
+    body["client_id"] = "fulla-admin-console";
     auto resp = sendPostJson("/api/admin/tokens/revoke-by-client", body, *token);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));

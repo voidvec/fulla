@@ -128,13 +128,13 @@ std::string userInternalId(const std::string &username)
     return p.get_future().get();
 }
 
-// Login form for the dedicated test user (vue-client, PKCE S256).
+// Login form for the dedicated test user (fulla-portal, PKCE S256).
 HttpResponsePtr loginUser()
 {
     return fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       std::string("username=") + kTestUser + "&password=" + oldPassword() +
-        "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+        "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
         "&scope=openid&state=pwdstate001&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
 }
@@ -154,7 +154,7 @@ std::string cookieOf(const HttpResponsePtr &resp)
 HttpResponsePtr authorize(
   const std::string &cookie,
   const std::string &prompt = "",
-  const std::string &clientId = "vue-client",
+  const std::string &clientId = "fulla-portal",
   const std::string &redirectUri = "http://127.0.0.1:5173/callback"
 )
 {
@@ -240,14 +240,14 @@ DROGON_TEST(Integration_P1_ForcedPasswordChange_Authorize_BlockedAndPromptNone)
     CHECK(silent->getHeader("Location").find("code=") == std::string::npos);
 
     // PR #157 review MAJOR 4: the redirect must follow the ORIGINATING
-    // portal — vue-client goes to the user portal (frontend.url), the
-    // admin-console client goes to the admin console (admin_console.url +
+    // portal — fulla-portal goes to the user portal (frontend.url), the
+    // fulla-admin-console client goes to the admin console (admin_console.url +
     // /admin/login), never a hardcoded origin.
     CHECK(
       silent->getHeader("Location").find("http://localhost:5173/login?must_change_password=1") !=
       std::string::npos
     );
-    auto adminSilent = authorize(cookie, "", "admin-console", "http://127.0.0.1:5174/admin/callback");
+    auto adminSilent = authorize(cookie, "", "fulla-admin-console", "http://127.0.0.1:5174/admin/callback");
     REQUIRE(adminSilent != nullptr);
     CHECK(adminSilent->getStatusCode() == k302Found);
     CHECK(
@@ -287,7 +287,7 @@ DROGON_TEST(Integration_P1_ForcedPasswordChange_Consent_Returns403)
     req->setMethod(Post);
     req->setPath("/oauth2/consent");
     req->setBody(
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
       "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=pwdstate001&consent_csrf=anything&action=approve"
     );
     req->setContentTypeCode(CT_APPLICATION_X_FORM);
@@ -361,7 +361,7 @@ DROGON_TEST(Integration_P0_ForcedPasswordChange_ChangeEndpoint_ValidationAndSucc
     auto relogin = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       std::string("username=") + kTestUser + "&password=" + newPassword() +
-        "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+        "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
         "&scope=openid&state=pwdstate002&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(relogin != nullptr);
@@ -384,7 +384,7 @@ DROGON_TEST(Integration_P1_ForcedPasswordChange_ChangeEndpoint_RequiresMarker)
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(resp != nullptr);
@@ -439,7 +439,7 @@ DROGON_TEST(Integration_P1_AdminUser_MustChangePassword_FieldRoundTrip)
     auto login = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=" + createdUser + "&password=" + createdPassword +
-        "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+        "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
         "&scope=openid&state=pwdstate003&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(login != nullptr);

@@ -21,7 +21,7 @@
 // ------
 // Each case drives the real HTTP endpoints over the loopback listener the test
 // binary itself runs (http://localhost:5555, see config.json):
-//   1. POST /oauth2/login for an MFA-enabled user as `vue-client` to obtain
+//   1. POST /oauth2/login for an MFA-enabled user as `fulla-portal` to obtain
 //      mfa_token (= std::to_string(internalId)).
 //   2. POST /oauth2/mfa/verify with the correct TOTP code but a buggy
 //      client_id/redirect_uri pair (unregistered / non-whitelisted / cross-client).
@@ -29,9 +29,9 @@
 //      access_token/refresh_token were issued.
 //
 // Registered clients in the seeded test DB (see sql/seed/dev_*_client.sql):
-//   vue-client      redirect_uris: http://localhost:5173/callback,
+//   fulla-portal      redirect_uris: http://localhost:5173/callback,
 //                                    http://localhost:8080/callback
-//   admin-console   redirect_uris: http://localhost:5174/admin/callback,
+//   fulla-admin-console   redirect_uris: http://localhost:5174/admin/callback,
 //                                    http://localhost:8081/admin/callback
 //
 // NOTE on the NULL-pending-binding edge case (Requirement 1.4): until Task 4.1
@@ -276,7 +276,7 @@ bool serverReachable()
 // ---------------------------------------------------------------------------
 // Test Case 1 (Requirement 1.1): Unregistered client_id is rejected.
 //
-// login as vue-client -> verifyLogin with client_id that does not exist in
+// login as fulla-portal -> verifyLogin with client_id that does not exist in
 // oauth2_clients. Expected (fixed): AUTH_INVALID_CREDENTIALS (401), no tokens.
 //
 // Exploration observation (unfixed code, postgres storage): the request fails
@@ -316,7 +316,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_UnregisteredClient)
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
@@ -345,8 +345,8 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_UnregisteredClient)
 // ---------------------------------------------------------------------------
 // Test Case 2 (Requirement 1.2): Non-whitelisted redirect_uri is rejected.
 //
-// login as vue-client -> verifyLogin with client_id=vue-client (registered) but
-// redirect_uri NOT in vue-client's whitelist. Expected (fixed): 401, no tokens.
+// login as fulla-portal -> verifyLogin with client_id=fulla-portal (registered) but
+// redirect_uri NOT in fulla-portal's whitelist. Expected (fixed): 401, no tokens.
 // On unfixed code: tokens ARE issued (counterexample) because verifyLogin never
 // calls validateRedirectUri, and consumeAuthCode's equality check compares the
 // request body against itself (self-referential).
@@ -377,11 +377,11 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_NonWhitelistedRedirec
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
-    auto resp = verifyMfa(mfaToken, code, "vue-client", "https://evil.example.invalid/cb");
+    auto resp = verifyMfa(mfaToken, code, "fulla-portal", "https://evil.example.invalid/cb");
     REQUIRE(resp != nullptr);
 
     CHECK(resp->getStatusCode() == k401Unauthorized);
@@ -400,11 +400,11 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_NonWhitelistedRedirec
 // ---------------------------------------------------------------------------
 // Test Case 3 (Requirement 1.3): Cross-client authorization confusion rejected.
 //
-// login as vue-client (records pending binding (vue-client, .../callback)) ->
-// verifyLogin with admin-console's OWN valid registered client_id and a
+// login as fulla-portal (records pending binding (fulla-portal, .../callback)) ->
+// verifyLogin with fulla-admin-console's OWN valid registered client_id and a
 // whitelisted redirect_uri. Both are independently registered/whitelisted, but
 // they differ from the first-factor login session. Expected (fixed): 401, no
-// tokens. On unfixed code: a token bound to admin-console is issued
+// tokens. On unfixed code: a token bound to fulla-admin-console is issued
 // (counterexample) — the actual P0-1 cross-client confusion.
 //
 // NOTE: this case only exhibits the bug-end-to-end after Task 4.1 writes the
@@ -438,13 +438,13 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_CrossClientConfusion)
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
-    // admin-console's own registered + whitelisted client_id/redirect_uri —
+    // fulla-admin-console's own registered + whitelisted client_id/redirect_uri —
     // independently valid, but NOT the pair the first-factor login used.
-    auto resp = verifyMfa(mfaToken, code, "admin-console", kAdminRedirectUri);
+    auto resp = verifyMfa(mfaToken, code, "fulla-admin-console", kAdminRedirectUri);
     REQUIRE(resp != nullptr);
 
     CHECK(resp->getStatusCode() == k401Unauthorized);
@@ -503,15 +503,15 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property1_NullPendingBindingRej
     // blocking sync DB call interleaves with the loopback requests.
     clearAdminPendingBinding();
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
-    auto resp = verifyMfa(mfaToken, code, "vue-client", kVueRedirectUri);
+    auto resp = verifyMfa(mfaToken, code, "fulla-portal", kVueRedirectUri);
     REQUIRE(resp != nullptr);
 
     // After Task 4.1, login would have re-populated the binding to
-    // (vue-client, .../callback), so this case becomes a *match* and tokens ARE
+    // (fulla-portal, .../callback), so this case becomes a *match* and tokens ARE
     // issued. To assert the genuine NULL-binding edge case the binding must
     // remain NULL after login — which is only the state on UNFIXED code (Task
     // 4.1 not yet writing the binding). Therefore this test documents the

@@ -45,10 +45,10 @@ using fulla::test::http::statusIs;
     } while (0)
 
 // ---------------------------------------------------------------------------
-// device_authorization happy path: POST with the seeded admin-console
+// device_authorization happy path: POST with the seeded fulla-admin-console
 // client_id returns 200 with the RFC 8628 device_code/user_code/
 // verification_uri fields. Covers the plugin->createDeviceCode -> success
-// branch. The admin-console client is PUBLIC and seeded, so no client secret
+// branch. The fulla-admin-console client is PUBLIC and seeded, so no client secret
 // is needed.
 // ---------------------------------------------------------------------------
 DROGON_TEST(Integration_P0_DeviceAuth_AdminConsoleClient_ReturnsDeviceCode)
@@ -57,7 +57,7 @@ DROGON_TEST(Integration_P0_DeviceAuth_AdminConsoleClient_ReturnsDeviceCode)
 
     auto resp = sendPostForm(
       "/oauth2/device_authorization",
-      "client_id=admin-console&scope=openid profile admin");
+      "client_id=fulla-admin-console&scope=openid profile admin");
     REQUIRE(resp != nullptr);
     // RFC 8628 §3.2: success is 200 (the device started the flow). Some servers
     // return 201; accept both. Assert the body shape regardless of which.
@@ -210,7 +210,7 @@ DROGON_TEST(Integration_P0_DeviceAuth_ApproveUnknownUserCode_Returns400_ServerSu
     // the process was gone.
     auto followUp = sendPostForm(
       "/oauth2/device_authorization",
-      "client_id=admin-console&scope=openid");
+      "client_id=fulla-admin-console&scope=openid");
     REQUIRE(followUp != nullptr);
     CHECK(
       (followUp->getStatusCode() == drogon::k200OK ||

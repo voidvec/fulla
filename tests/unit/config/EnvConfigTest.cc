@@ -57,8 +57,10 @@ DROGON_TEST(Unit_P1_Config_EnvInjection_Works)
         }
     }
 
-    // Check Vue Client Secret Override
-    const char *expectedSecret = std::getenv("FULLA_VUE_CLIENT_SECRET");
+    // Check Portal Client Secret Override (new primary name, legacy alias)
+    const char *expectedSecret = std::getenv("FULLA_PORTAL_CLIENT_SECRET");
+    if (!expectedSecret || expectedSecret[0] == 0)
+        expectedSecret = std::getenv("FULLA_VUE_CLIENT_SECRET");
     if (expectedSecret)
     {
         bool found = false;
@@ -69,7 +71,7 @@ DROGON_TEST(Unit_P1_Config_EnvInjection_Works)
                 if (plugin.get("name", "").asString() == "OAuth2Plugin")
                 {
                     std::string actual =
-                      plugin["config"]["clients"]["vue-client"]["secret"].asString();
+                      plugin["config"]["clients"]["fulla-portal"]["secret"].asString();
                     CHECK(actual == expectedSecret);
                     LOG_INFO << "Verified Client Secret: " << actual;
                     found = true;

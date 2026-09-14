@@ -132,7 +132,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_TokenRepository_Postgres_AccessTo
         return;
     auto repo = std::make_shared<PostgresTokenRepository>();
     repo->initFromConfig(Json::Value());
-    runTokenRepository_AccessTokenSaveGetRoundTripContract(TEST_CTX, repo, "vue-client");
+    runTokenRepository_AccessTokenSaveGetRoundTripContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_TokenRepository_Postgres_AccessTokenNotFound)
@@ -151,7 +151,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_TokenRepository_Redis_AccessToken
     if (!redis)
         return;
     auto repo = std::make_shared<fulla::storage::redis::RedisTokenRepository>("default");
-    runTokenRepository_AccessTokenSaveGetRoundTripContract(TEST_CTX, repo, "vue-client");
+    runTokenRepository_AccessTokenSaveGetRoundTripContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_TokenRepository_Redis_AccessTokenNotFound)
@@ -221,7 +221,7 @@ DROGON_TEST(
         return;
     auto repo = std::make_shared<PostgresTokenRepository>();
     repo->initFromConfig(Json::Value());
-    runTokenRepository_RefreshTokenSaveGetRoundTripContract(TEST_CTX, repo, "vue-client");
+    runTokenRepository_RefreshTokenSaveGetRoundTripContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_TokenRepository_Memory_RefreshTokenSaveGetRoundTrip)
@@ -245,7 +245,7 @@ DROGON_TEST(
 
     auto repo = std::make_shared<fulla::storage::redis::RedisTokenRepository>("default");
     const std::string rtToken = "contract-rt-noop-" + uniqueSuffix();
-    auto rt = makeRefreshToken(rtToken, "contract-at-for-rt-noop", "vue-client");
+    auto rt = makeRefreshToken(rtToken, "contract-at-for-rt-noop", "fulla-portal");
 
     waitForVoid([&](auto cb) { repo->saveRefreshToken(rt, std::move(cb)); });
 
@@ -282,7 +282,7 @@ DROGON_TEST(
     repo->initFromConfig(Json::Value());
 
     const std::string rtToken = "contract-rt-revoke-pg-" + uniqueSuffix();
-    auto rt = makeRefreshToken(rtToken, "contract-at-for-revoke-pg", "vue-client");
+    auto rt = makeRefreshToken(rtToken, "contract-at-for-revoke-pg", "fulla-portal");
     waitForVoid([&](auto cb) { repo->saveRefreshToken(rt, std::move(cb)); });
 
     waitForVoid([&](auto cb) { repo->revokeRefreshToken(rtToken, std::move(cb)); });
@@ -369,7 +369,7 @@ DROGON_TEST(
     repo->initFromConfig(Json::Value());
 
     const std::string token = "contract-at-expired-pg-" + uniqueSuffix();
-    auto at = makeAccessToken(token, "vue-client", /*ttlSeconds=*/-60);  // already expired
+    auto at = makeAccessToken(token, "fulla-portal", /*ttlSeconds=*/-60);  // already expired
 
     waitForVoid([&](auto cb) { repo->saveAccessToken(at, std::move(cb)); });
 
@@ -517,7 +517,7 @@ DROGON_TEST(
         return;
     auto repo = std::make_shared<PostgresTokenRepository>();
     repo->initFromConfig(Json::Value());
-    runTokenRepository_AtomicRevokeRefreshToken_ConcurrentCasContract(TEST_CTX, repo, "vue-client");
+    runTokenRepository_AtomicRevokeRefreshToken_ConcurrentCasContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(
@@ -561,7 +561,7 @@ DROGON_TEST(
     auto repo = std::make_shared<PostgresTokenRepository>();
     repo->initFromConfig(Json::Value());
     runTokenRepository_SaveTokenPair_HappyPathBothWritesSucceedContract(
-      TEST_CTX, repo, "vue-client"
+      TEST_CTX, repo, "fulla-portal"
     );
 }
 
@@ -606,7 +606,7 @@ DROGON_TEST(
           [cb](const ::drogon::orm::Result &) { cb(); },
           [cb](const ::drogon::orm::DrogonDbException &) { cb(); },
           atToken,
-          std::string("vue-client"),
+          std::string("fulla-portal"),
           std::string("pre-existing"),
           std::string("openid"),
           nowSeconds() + 300,
@@ -614,8 +614,8 @@ DROGON_TEST(
         );
     });
 
-    auto at = makeAccessToken(atToken, "vue-client");  // same PK: will collide
-    auto rt = makeRefreshToken(rtToken, atToken, "vue-client");
+    auto at = makeAccessToken(atToken, "fulla-portal");  // same PK: will collide
+    auto rt = makeRefreshToken(rtToken, atToken, "fulla-portal");
 
     // saveTokenPair's error path still invokes the callback and now reports
     // the failure via ok == false (SaveResultCallback contract) instead of

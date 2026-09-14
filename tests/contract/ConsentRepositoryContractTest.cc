@@ -108,7 +108,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_ConsentRepository_Postgres_SaveHa
     auto repo = std::make_shared<PostgresConsentRepository>();
     repo->initFromConfig(Json::Value());
     runConsentRepository_SaveHasRevokeRoundTripContract(
-      TEST_CTX, repo, user, "vue-client", "openid"
+      TEST_CTX, repo, user, "fulla-portal", "openid"
     );
 
     // Cleanup: consent rows first (defensive; ON DELETE CASCADE on the users
@@ -146,7 +146,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_ConsentRepository_Redis_SaveHasRe
 
     auto repo = std::make_shared<fulla::storage::redis::RedisConsentRepository>("default");
     runConsentRepository_SaveHasRevokeRoundTripContract(
-      TEST_CTX, repo, user, "vue-client", "contract-scope-" + uniqueSuffix()
+      TEST_CTX, repo, user, "fulla-portal", "contract-scope-" + uniqueSuffix()
     );
 }
 

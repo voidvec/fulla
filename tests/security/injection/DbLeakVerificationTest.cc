@@ -116,7 +116,7 @@ DROGON_TEST(Security_P0_DbLeak_ConnectionPoolBehavior_Verified)
         req->setContentTypeCode(drogon::CT_APPLICATION_X_FORM);
         req->setBody(
           "username=admin&password=admin&"
-          "client_id=vue-client&redirect_uri=http://localhost:5173/callback&"
+          "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback&"
           "scope=openid&state=test" +
           std::to_string(i)
         );

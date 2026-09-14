@@ -88,7 +88,7 @@ class PreservationInputGen
     std::string clientId()
     {
         static const std::vector<std::string> kClients =
-          {"test-client", "vue-client", "svc-client", "mobile-client"};
+          {"test-client", "fulla-portal", "svc-client", "mobile-client"};
         return kClients[pick(kClients.size())];
     }
 

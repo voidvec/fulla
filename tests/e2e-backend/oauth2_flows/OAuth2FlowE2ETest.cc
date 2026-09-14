@@ -114,7 +114,7 @@ DROGON_TEST(E2E_P0_OAuth2Flow_AuthCode_Works)
             auto req = HttpRequest::newHttpRequest();
             req->setMethod(Get);
             req->setParameter("response_type", "code");
-            req->setParameter("client_id", "vue-client");
+            req->setParameter("client_id", "fulla-portal");
             req->setParameter("redirect_uri", "http://localhost:5173/callback");
             req->setParameter("scope", "openid profile");
             req->setParameter("state", "test_state_123");
@@ -167,7 +167,7 @@ DROGON_TEST(E2E_P0_OAuth2Flow_AuthCode_Works)
             params["grant_type"] = "authorization_code";
             params["code"] = "test_code";
             params["redirect_uri"] = "http://localhost:5173/callback";
-            params["client_id"] = "vue-client";
+            params["client_id"] = "fulla-portal";
 
             std::promise<HttpResponsePtr> p;
             auto f = p.get_future();
@@ -452,7 +452,7 @@ DROGON_TEST(Integration_P1_RedirectUri_Validation_Works)
         params["grant_type"] = "authorization_code";
         params["code"] = "test_code";
         params["redirect_uri"] = "http://localhost:5173/callback";
-        params["client_id"] = "vue-client";
+        params["client_id"] = "fulla-portal";
 
         std::promise<HttpResponsePtr> p;
         auto f = p.get_future();
@@ -482,7 +482,7 @@ DROGON_TEST(Integration_P1_RedirectUri_Validation_Works)
         params["grant_type"] = "authorization_code";
         params["code"] = "test_code";
         params["redirect_uri"] = "http://malicious-site.com/callback";
-        params["client_id"] = "vue-client";
+        params["client_id"] = "fulla-portal";
 
         std::promise<HttpResponsePtr> p;
         auto f = p.get_future();

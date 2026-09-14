@@ -14,7 +14,7 @@
 // for this interface is backend-specific:
 //   - Postgres: relies on already-seeded rows (OAuth2Server/sql/seed/*.sql,
 //     applied by CI's "Initialize Database" step and by local dev setup):
-//     `vue-client` (PUBLIC) and `backend-svc` (CONFIDENTIAL, secret
+//     `fulla-portal` (PUBLIC) and `backend-svc` (CONFIDENTIAL, secret
 //     "test-secret"). No SQL INSERT is issued by this test file itself --
 //     doing so would duplicate migration/seed concerns and risks diverging
 //     from the real seed data other tests already depend on.
@@ -197,7 +197,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Postgres_NotFoun
     runClientRepository_NotFoundContract(TEST_CTX, repo);
 }
 
-// Fixture: OAuth2Server/sql/seed/dev_vue_client.sql -- `vue-client`, PUBLIC.
+// Fixture: OAuth2Server/sql/seed/dev_vue_client.sql -- `fulla-portal`, PUBLIC.
 DROGON_TEST(
   Integration_P0_Contract_Functional_ClientRepository_Postgres_PublicClientAcceptsAnySecret
 )
@@ -208,7 +208,7 @@ DROGON_TEST(
 
     auto repo = std::make_shared<PostgresClientRepository>();
     repo->initFromConfig(Json::Value());
-    runClientRepository_PublicClientAcceptsAnySecretContract(TEST_CTX, repo, "vue-client");
+    runClientRepository_PublicClientAcceptsAnySecretContract(TEST_CTX, repo, "fulla-portal");
 }
 
 // Fixture: OAuth2Server/sql/seed/dev_backend_client.sql -- `backend-svc`,
@@ -325,7 +325,7 @@ DROGON_TEST(
 // ===========================================================================
 // Coverage additions (P1) -- Memory backend initFromConfig parsing
 // branches the original tests did not exercise: redirect_uri as a single
-// string vs array, allowed_scopes single-string, the vue-client default-
+// string vs array, allowed_scopes single-string, the fulla-portal default-
 // scopes fallback, the invalid-type -> CONFIDENTIAL fallback, and a null
 // config being a no-op.
 // ===========================================================================
@@ -366,12 +366,12 @@ DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Memory_InitFromC
 {
     auto repo = std::make_shared<fulla::storage::memory::MemoryClientRepository>();
     Json::Value cfg;
-    // vue-client with NO allowed_scopes -> default scopes injected.
-    cfg["vue-client"]["type"] = "PUBLIC";
+    // fulla-portal with NO allowed_scopes -> default scopes injected.
+    cfg["fulla-portal"]["type"] = "PUBLIC";
     repo->initFromConfig(cfg);
 
     auto client = waitForValue<std::optional<OAuth2Client>>([&](auto cb) {
-        repo->getClient("vue-client", std::move(cb));
+        repo->getClient("fulla-portal", std::move(cb));
     });
     REQUIRE(client.has_value());
     REQUIRE(client->allowedScopes.size() == 3u);

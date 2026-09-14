@@ -168,7 +168,7 @@ DROGON_TEST(Unit_P0_ConfigManager_EnvOverride_VueRedirect_ByNameLookup)
     CHECK(fulla::common::config::ConfigManager::load(configPath, config) == true);
 
     auto redirect = fulla::common::config::ConfigManager::get<std::string>(
-      config, "plugins[name=OAuth2Plugin].config.clients.vue-client.redirect_uri"
+      config, "plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri"
     );
     CHECK(redirect == "https://prod.example.com/callback");
 
@@ -195,7 +195,7 @@ DROGON_TEST(Unit_P0_ConfigManager_EnvOverride_VueClientSecret_ByNameLookup)
     CHECK(fulla::common::config::ConfigManager::load(configPath, config) == true);
 
     auto secret = fulla::common::config::ConfigManager::get<std::string>(
-      config, "plugins[name=OAuth2Plugin].config.clients.vue-client.secret"
+      config, "plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret"
     );
     CHECK(secret == "prod-strong-vue-secret");
 
@@ -322,8 +322,8 @@ DROGON_TEST(Unit_P0_ConfigManager_Production_PublicClientSecretNotEnforced)
     // PUBLIC clients authenticate via PKCE, not the secret: the placeholder
     // must not brick a production boot (OAuth2Plugin's DB scan skips PUBLIC
     // rows for the same reason).
-    plugin["config"]["clients"]["vue-client"]["client_type"] = "PUBLIC";
-    plugin["config"]["clients"]["vue-client"]["secret"] = "123456";
+    plugin["config"]["clients"]["fulla-portal"]["client_type"] = "PUBLIC";
+    plugin["config"]["clients"]["fulla-portal"]["secret"] = "123456";
     config["plugins"].append(plugin);
     std::string errMsg;
     CHECK(fulla::common::config::ConfigManager::validate(config, errMsg) == true);

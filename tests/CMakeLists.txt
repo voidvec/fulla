@@ -50,6 +50,7 @@ set(SCHEMA_MGR_SRC "${FULLA_SERVER_SRC_DIR}/SchemaManager.cc")
 # test_main.cc does not use.
 set(BOOTSTRAP_SRC
     "${FULLA_SERVER_SRC_DIR}/bootstrap/AdminBootstrapper.cc"
+    "${FULLA_SERVER_SRC_DIR}/bootstrap/ClientSeeder.cc"
     "${FULLA_SERVER_SRC_DIR}/bootstrap/ControllerRegistration.cc"
     "${FULLA_SERVER_SRC_DIR}/bootstrap/IdentityAssembly.cc"
 )
