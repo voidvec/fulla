@@ -386,7 +386,7 @@ FULLA_SMTP_HOST=smtp.example.com
 FULLA_SMTP_PORT=465
 FULLA_SMTP_USER=noreply@example.com
 FULLA_SMTP_PASSWORD=<SMTP authorization code, not the mailbox login password>
-FULLA_SMTP_FROM_NAME=OAuth2 Platform
+FULLA_SMTP_FROM_NAME=Fulla
 FULLA_SMTP_SSL=true
 
 # Frontend build variables (injected at Vite build time)
@@ -551,7 +551,7 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_SMTP_PORT` | SMTP port | 465 |
 | `FULLA_SMTP_USER` | SMTP username (full email address) | (optional) |
 | `FULLA_SMTP_PASSWORD` | SMTP authorization code (not the mailbox login password) | (optional) |
-| `FULLA_SMTP_FROM_NAME` | Sender display name | OAuth2 Platform |
+| `FULLA_SMTP_FROM_NAME` | Sender display name | Fulla |
 | `FULLA_SMTP_SSL` | Whether to enable SSL | true |
 
 > **Email mode note**: real SMTP sending is enabled only when all three of `FULLA_SMTP_HOST` + `FULLA_SMTP_USER` + `FULLA_SMTP_PASSWORD` are non-empty; otherwise email is only written to the backend log. See "Email service (SMTP) configuration notes" above.

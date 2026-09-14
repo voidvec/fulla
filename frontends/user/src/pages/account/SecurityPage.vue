@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import http from '../../services/http'
 import { userService } from '../../services/userService'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
+import AppButton from '../../components/ui/AppButton.vue'
 import { getErrorMessage } from '../../services/messages'
 import { useAuthStore } from '../../stores/auth'
 import { base64UrlEncode, base64UrlDecode } from '../../utils/pkce'
@@ -638,14 +639,13 @@ onMounted(fetchProfile)
           {{ $t('account.security.social.empty') }}
         </div>
 
-        <button
+        <AppButton
           v-if="!unlinkingProvider"
           :disabled="linkingProvider !== ''"
-          class="inline-block px-4 py-2 bg-neutral-900 text-white rounded-ctl text-sm hover:bg-neutral-800 disabled:opacity-50"
           @click="beginSocialLink('github')"
         >
           {{ linkingProvider === 'github' ? $t('account.security.social.redirecting') : $t('account.security.social.linkGithub') }}
-        </button>
+        </AppButton>
       </AppCard>
 
       <!-- Delete Account -->
