@@ -16,7 +16,7 @@
 //   * config clients are seeded with PUBLIC/none + their scope grants;
 //   * a second run leaves the existing row untouched (no secret clobber,
 //     no duplicate grants) — runtime/admin edits stay authoritative.
-DROGON_TEST(ClientSeeder_P0_Config_Clients_Seeded_Idempotently)
+DROGON_TEST(Integration_P0_ClientSeeder_ConfigClients_Seeded_Idempotent)
 {
     // Memory-storage guard: clients there init from config in-process.
     auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
