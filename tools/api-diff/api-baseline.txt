@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.1.1
+// version: 1.2.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>
@@ -59,10 +59,19 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
 {"custom_config.external_auth.wechat.appid", "FULLA_WECHAT_APPID", false},
 {"custom_config.external_auth.wechat.secret", "FULLA_WECHAT_SECRET", false},
 {"listeners.0.port", "FULLA_LISTEN_PORT", true},
-{"plugins[name=OAuth2Plugin].config.clients.vue-client.secret",
+{"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
+"FULLA_PORTAL_CLIENT_SECRET",
+false},
+{"plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri",
+"FULLA_PORTAL_REDIRECT_URI",
+false},
+{"plugins[name=OAuth2Plugin].config.clients.fulla-admin-console.redirect_uri",
+"FULLA_ADMIN_CONSOLE_REDIRECT_URI",
+false},
+{"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
 "FULLA_VUE_CLIENT_SECRET",
 false},
-{"plugins[name=OAuth2Plugin].config.clients.vue-client.redirect_uri",
+{"plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri",
 "FULLA_VUE_REDIRECT_URI",
 false},
 {"custom_config.cors.allow_origins", "FULLA_CORS_ALLOW_ORIGINS", false, true}};
@@ -3045,7 +3054,10 @@ std::string issuer_;
 long long authCodeTtl_{600};
 long long accessTokenTtl_{3600};
 long long refreshTokenTtl_{3600 * 24 * 30};
+Json::Value clientsSeedConfig_;
 void initStorage(const Json::Value &config);
+const Json::Value &clientsSeedConfig() const
+;
 void ensureSubjectMapping(
 const std::string &subject,
 const std::string &username,
