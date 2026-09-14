@@ -385,7 +385,7 @@ FULLA_SMTP_HOST=smtp.example.com
 FULLA_SMTP_PORT=465
 FULLA_SMTP_USER=noreply@example.com
 FULLA_SMTP_PASSWORD=<SMTP 授权码，非邮箱登录密码>
-FULLA_SMTP_FROM_NAME=OAuth2 Platform
+FULLA_SMTP_FROM_NAME=Fulla
 FULLA_SMTP_SSL=true
 
 # 前端构建变量（Vite 构建期注入）
@@ -550,7 +550,7 @@ curl -k https://localhost/admin/
 | `FULLA_SMTP_PORT` | SMTP 端口 | 465 |
 | `FULLA_SMTP_USER` | SMTP 用户名（完整邮箱地址） | (可选) |
 | `FULLA_SMTP_PASSWORD` | SMTP 授权码（非邮箱登录密码） | (可选) |
-| `FULLA_SMTP_FROM_NAME` | 发件人显示名称 | OAuth2 Platform |
+| `FULLA_SMTP_FROM_NAME` | 发件人显示名称 | Fulla |
 | `FULLA_SMTP_SSL` | 是否启用 SSL | true |
 
 > **邮件模式说明**：仅当 `FULLA_SMTP_HOST` + `FULLA_SMTP_USER` + `FULLA_SMTP_PASSWORD` 三项均非空时启用真实 SMTP 发送；否则邮件只输出到后端日志。详见上文"邮件服务（SMTP）配置说明"。
