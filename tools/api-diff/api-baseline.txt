@@ -3335,7 +3335,7 @@ std::string host = "smtp.163.com";
 int port = 465;
 std::string username;
 std::string password;
-std::string fromName = "OAuth2 Platform";
+std::string fromName = "Fulla";
 bool useSsl = true;
 };
 explicit SmtpEmailService(const Config &config) : config_(config)
@@ -4467,7 +4467,7 @@ WebAuthnService(
 std::shared_ptr<IWebAuthnRepository> repo,
 std::shared_ptr<fulla::common::ports::ICryptoProvider> crypto,
 std::string rpId = "localhost",
-std::string rpName = "OAuth2 Server"
+std::string rpName = "Fulla"
 );
 void beginRegistration(
 std::function<void(std::optional<WebAuthnRegistrationChallenge>)> &&callback
