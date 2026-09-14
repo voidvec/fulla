@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
     {
         drogon::app().registerBeginningAdvice([]() {
             std::thread([]() {
-                auto plugin = drogon::app().getPlugin<fulla::drogon::OAuth2Plugin>();
+                auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
                 if (!plugin || plugin->getStorageType() == "memory")
                     return;
                 const auto &clients = plugin->clientsSeedConfig();
