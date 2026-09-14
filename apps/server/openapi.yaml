@@ -125,7 +125,7 @@ components:
         (/api/{github,google,wechat}/login) once the provider identity is
         linked to a local account (or auto-created on first login). Issued
         for the configured first-party client
-        (external_auth.social_token_client_id, default vue-client) with
+        (external_auth.social_token_client_id, default fulla-portal) with
         scope "openid profile email". Recorded as a SOCIAL_LOGIN_TOKEN_ISSUED
         audit event (NOT a consent row) — an explicit social-consent
         interaction is a registered follow-up.
@@ -662,7 +662,7 @@ components:
         code_challenge:
           type: string
           description: PKCE code challenge (RFC 7636). REQUIRED for PUBLIC
-            clients (vue-client, admin-console) when
+            clients (fulla-portal, fulla-admin-console) when
             auth.require_pkce_for_public is enabled (default true, F-011 /
             RFC 9700 §2.1.1). The matching code_verifier must be sent on the
             /oauth2/token exchange.
