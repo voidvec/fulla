@@ -154,11 +154,15 @@ DROGON_TEST(Integration_P0_AdminBootstrap_FreshAdmin_EnvPasswordCreatesPbkdf2Use
 
         auto db = drogon::app().getDbClient();
         auto rows = db->execSqlSync(
-          "SELECT password_hash FROM users WHERE username = 'admin'"
+          "SELECT password_hash, email_verified FROM users WHERE username = 'admin'"
         );
         REQUIRE(rows.size() == 1);
         CHECK(std::string(rows[0]["password_hash"].as<std::string>())
                 .find("$pbkdf2-sha256$") == 0);
+        // The bootstrap email is a placeholder that can never be verified:
+        // the login flow's email-verified gate must not deadlock the
+        // administrator after the #145 forced password change.
+        CHECK(rows[0]["email_verified"].as<bool>() == true);
 
         // The env credential works; the dev default does not.
         CHECK(loginExpect("admin", envPw, drogon::k200OK));
