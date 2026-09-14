@@ -77,7 +77,7 @@ DROGON_TEST(E2E_P0_AuthFlow_CompleteAuthorizationCodeFlow_Success)
       "POST",
       "/oauth2/login",
       "username=admin&password=admin&"
-      "client_id=vue-client&"
+      "client_id=fulla-portal&"
       "redirect_uri=http://localhost:5173/callback&"
       "scope=openid&state=test"
     );
@@ -102,7 +102,7 @@ DROGON_TEST(E2E_P1_ErrorHandling_InvalidGrantType_ReturnsError)
       "POST",
       "/oauth2/token",
       "grant_type=invalid_grant&code=test&"
-      "client_id=vue-client"
+      "client_id=fulla-portal"
     );
 
     CHECK(response.find("unsupported_grant_type") != std::string::npos);
@@ -151,7 +151,7 @@ DROGON_TEST(E2E_P1_ErrorHandling_InvalidCredentials_ReturnsError)
       "POST",
       "/oauth2/login",
       "username=wrong_user&password=wrong_pass&"
-      "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+      "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     CHECK((bool)(response.find("Invalid Credentials") != std::string::npos ||
@@ -170,7 +170,7 @@ DROGON_TEST(E2E_P2_Utf8Support_ChineseCharacters_Supported)
       "POST",
       "/oauth2/login",
       "username=管理�?password=admin&"
-      "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+      "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     // Should not crash and should return some response
@@ -187,7 +187,7 @@ DROGON_TEST(E2E_P2_Utf8Support_EmojiCharacters_Supported)
       "POST",
       "/oauth2/login",
       "username=user\xf0\x9f\x98\x80test&password=admin&"
-      "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+      "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     // Should not crash when processing emoji
@@ -203,7 +203,7 @@ DROGON_TEST(E2E_P2_Utf8Support_FourByteUtf8Sequences_Supported)
       "POST",
       "/oauth2/login",
       "username=user\xf0\x9f\x9a\x80rocket&password=admin&"
-      "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+      "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     // System should handle or reject gracefully, not crash
@@ -290,7 +290,7 @@ DROGON_TEST(E2E_P0_Token_InvalidAuthorizationCode_Denied)
       "/oauth2/token",
       "grant_type=authorization_code&"
       "code=invalid_code_12345&"
-      "client_id=vue-client&"
+      "client_id=fulla-portal&"
       "redirect_uri=http://localhost:5173/callback"
     );
 
@@ -308,7 +308,7 @@ DROGON_TEST(E2E_P0_Token_InvalidRefreshToken_Denied)
       "/oauth2/token",
       "grant_type=refresh_token&"
       "refresh_token=invalid_refresh_token&"
-      "client_id=vue-client&"
+      "client_id=fulla-portal&"
       "client_secret=123456"
     );
 
@@ -323,7 +323,7 @@ DROGON_TEST(E2E_P0_Token_MissingRefreshToken_Denied)
       "POST",
       "/oauth2/token",
       "grant_type=refresh_token&"
-      "client_id=vue-client&"
+      "client_id=fulla-portal&"
       "client_secret=123456"
     );
 
@@ -341,7 +341,7 @@ DROGON_TEST(E2E_P0_Token_RefreshWithoutClientAuth_Denied)
       "/oauth2/token",
       "grant_type=refresh_token&"
       "refresh_token=some_refresh_token&"
-      "client_id=vue-client"
+      "client_id=fulla-portal"
     );
 
     CHECK(response.find("invalid_client") != std::string::npos);
@@ -361,7 +361,7 @@ DROGON_TEST(E2E_P1_Input_LongUsername_Handled)
       "/oauth2/login",
       "username=" + longUsername +
         "&password=admin&"
-        "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+        "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     CHECK(response.find("Username exceeds maximum length") != std::string::npos);
@@ -377,7 +377,7 @@ DROGON_TEST(E2E_P1_Input_LongPassword_Handled)
       "/oauth2/login",
       "username=admin&password=" + longPassword +
         "&"
-        "client_id=vue-client&redirect_uri=http://localhost:5173/callback"
+        "client_id=fulla-portal&redirect_uri=http://localhost:5173/callback"
     );
 
     CHECK(response.find("Password exceeds maximum length") != std::string::npos);
@@ -403,7 +403,7 @@ DROGON_TEST(E2E_P1_RateLimit_DetectRateLimiting_Limited)
           "/oauth2/login",
           "username=test" + std::to_string(i) +
             "&password=test&"
-            "client_id=vue-client&"
+            "client_id=fulla-portal&"
             "redirect_uri=http://localhost:5173/callback"
         );
 

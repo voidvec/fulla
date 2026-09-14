@@ -240,11 +240,11 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property7_MatchingBindingIssues
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
-    auto resp = verifyMfa(mfaToken, code, "vue-client", kVueRedirectUri);
+    auto resp = verifyMfa(mfaToken, code, "fulla-portal", kVueRedirectUri);
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == k200OK);
 
@@ -288,11 +288,11 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property7_WrongTotpRejected)
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     // Deliberately wrong TOTP code.
-    auto resp = verifyMfa(mfaToken, "000000", "vue-client", kVueRedirectUri);
+    auto resp = verifyMfa(mfaToken, "000000", "fulla-portal", kVueRedirectUri);
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == k401Unauthorized);
 
@@ -322,7 +322,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property7_UnknownMfaTokenReject
 
     // Use an mfa_token that cannot resolve to any user id (users.id is SERIAL
     // starting at 1, so 999999999 does not exist).
-    auto resp = verifyMfa("999999999", "123456", "vue-client", kVueRedirectUri);
+    auto resp = verifyMfa("999999999", "123456", "fulla-portal", kVueRedirectUri);
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == k401Unauthorized);
 
@@ -361,13 +361,13 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property7_MissingFieldsRejected
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     // Missing mfa_token + code.
     {
         Json::Value body;
-        body["client_id"] = "vue-client";
+        body["client_id"] = "fulla-portal";
         body["redirect_uri"] = kVueRedirectUri;
         auto resp = postJson("/oauth2/mfa/verify", body);
         REQUIRE(resp != nullptr);
@@ -434,7 +434,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property7_NonMfaLoginUnchanged)
     Json::Value body;
     body["username"] = "admin";
     body["password"] = "admin";
-    body["client_id"] = "vue-client";
+    body["client_id"] = "fulla-portal";
     body["redirect_uri"] = kVueRedirectUri;
     body["scope"] = "openid profile email";
     // json=true requests the code/location JSON shape instead of a redirect.

@@ -45,7 +45,7 @@ DROGON_TEST(Integration_P1_Authorize_MissingState_Returns400)
     AUTHORIZE_SKIP_GUARD;
 
     auto resp = sendGet(
-      "/oauth2/authorize?response_type=code&client_id=admin-console"
+      "/oauth2/authorize?response_type=code&client_id=fulla-admin-console"
       "&redirect_uri=http://127.0.0.1:5174/admin/callback");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
@@ -62,7 +62,7 @@ DROGON_TEST(Integration_P1_Authorize_StateTooShort_Returns400)
     AUTHORIZE_SKIP_GUARD;
 
     auto resp = sendGet(
-      "/oauth2/authorize?response_type=code&client_id=admin-console"
+      "/oauth2/authorize?response_type=code&client_id=fulla-admin-console"
       "&redirect_uri=http://localhost:5174/admin/callback&state=short");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
@@ -110,7 +110,7 @@ DROGON_TEST(Integration_P1_Authorize_ValidRequest_NoSession_RedirectsToLogin)
     AUTHORIZE_SKIP_GUARD;
 
     auto resp = sendGet(
-      "/oauth2/authorize?response_type=code&client_id=admin-console"
+      "/oauth2/authorize?response_type=code&client_id=fulla-admin-console"
       "&redirect_uri=http://127.0.0.1:5174/admin/callback&scope=openid"
       "&state=validstate1234"
       "&code_challenge=authorize-http-test-challenge-fixed-padding__&code_challenge_method=S256");

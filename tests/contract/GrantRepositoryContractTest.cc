@@ -197,7 +197,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Postgres_SaveGetR
 
     auto repo = std::make_shared<PostgresGrantRepository>();
     repo->initFromConfig(Json::Value());
-    runGrantRepository_SaveGetRoundTripContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_SaveGetRoundTripContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Postgres_NotFoundReturnsNullopt)
@@ -222,7 +222,7 @@ DROGON_TEST(
     auto repo = std::make_shared<PostgresGrantRepository>();
     repo->initFromConfig(Json::Value());
     runGrantRepository_ConsumeAuthCode_CorrectRedirectUriSucceedsContract(
-      TEST_CTX, repo, "vue-client"
+      TEST_CTX, repo, "fulla-portal"
     );
 }
 
@@ -236,7 +236,7 @@ DROGON_TEST(
 
     auto repo = std::make_shared<PostgresGrantRepository>();
     repo->initFromConfig(Json::Value());
-    runGrantRepository_ConsumeAuthCode_WrongRedirectUriFailsContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_ConsumeAuthCode_WrongRedirectUriFailsContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Postgres_ConsumeAuthCode_SingleUse)
@@ -247,7 +247,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Postgres_ConsumeA
 
     auto repo = std::make_shared<PostgresGrantRepository>();
     repo->initFromConfig(Json::Value());
-    runGrantRepository_ConsumeAuthCode_SingleUseContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_ConsumeAuthCode_SingleUseContract(TEST_CTX, repo, "fulla-portal");
 }
 
 // ===========================================================================
@@ -261,7 +261,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Redis_SaveGetRoun
         return;
 
     auto repo = std::make_shared<fulla::storage::redis::RedisGrantRepository>("default");
-    runGrantRepository_SaveGetRoundTripContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_SaveGetRoundTripContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Redis_NotFoundReturnsNullopt)
@@ -284,7 +284,7 @@ DROGON_TEST(
 
     auto repo = std::make_shared<fulla::storage::redis::RedisGrantRepository>("default");
     runGrantRepository_ConsumeAuthCode_CorrectRedirectUriSucceedsContract(
-      TEST_CTX, repo, "vue-client"
+      TEST_CTX, repo, "fulla-portal"
     );
 }
 
@@ -297,7 +297,7 @@ DROGON_TEST(
         return;
 
     auto repo = std::make_shared<fulla::storage::redis::RedisGrantRepository>("default");
-    runGrantRepository_ConsumeAuthCode_WrongRedirectUriFailsContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_ConsumeAuthCode_WrongRedirectUriFailsContract(TEST_CTX, repo, "fulla-portal");
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Redis_ConsumeAuthCode_SingleUse)
@@ -307,7 +307,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_GrantRepository_Redis_ConsumeAuth
         return;
 
     auto repo = std::make_shared<fulla::storage::redis::RedisGrantRepository>("default");
-    runGrantRepository_ConsumeAuthCode_SingleUseContract(TEST_CTX, repo, "vue-client");
+    runGrantRepository_ConsumeAuthCode_SingleUseContract(TEST_CTX, repo, "fulla-portal");
 }
 
 // ===========================================================================

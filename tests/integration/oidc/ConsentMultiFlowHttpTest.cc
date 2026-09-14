@@ -46,7 +46,7 @@ std::string loginCookie(const std::string &username, const std::string &password
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=" + username + "&password=" + password +
-        "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+        "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
         "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     if (!resp || resp->getStatusCode() != k200OK)
@@ -77,7 +77,7 @@ bool authorizeMintNonce(
     req->setMethod(Get);
     req->setPath("/oauth2/authorize");
     req->setParameter("response_type", "code");
-    req->setParameter("client_id", "vue-client");
+    req->setParameter("client_id", "fulla-portal");
     req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
     req->setParameter("scope", "openid");
     req->setParameter("state", state);
@@ -115,7 +115,7 @@ HttpResponsePtr authorize(const std::string &cookie, const std::string &extraPar
     req->setMethod(Get);
     req->setPath("/oauth2/authorize");
     req->setParameter("response_type", "code");
-    req->setParameter("client_id", "vue-client");
+    req->setParameter("client_id", "fulla-portal");
     req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
     req->setParameter("scope", "openid");
     req->setParameter("state", "silentstate01");
@@ -204,7 +204,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_TwoConcurrentNonces_BothApprove)
     // First flow's consent still validates after the second mint.
     auto approve1 = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate1&consent_csrf=" +
         csrf1 + "&action=approve",
       cookieA
@@ -216,7 +216,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_TwoConcurrentNonces_BothApprove)
     // Second flow's consent validates too (its slot was not overwritten).
     auto approve2 = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate2&consent_csrf=" +
         csrf2 + "&action=approve",
       cookieB
@@ -251,7 +251,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_NonceCapEvictsOldest)
     // The 6th mint evicted the oldest -> its nonce is no longer consumable.
     auto evicted = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate01&consent_csrf=" +
         csrfOldest + "&action=approve",
       cookieOldest
@@ -262,7 +262,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_NonceCapEvictsOldest)
     // The newest nonce is still live.
     auto live = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate06&consent_csrf=" +
         csrfNewest + "&action=approve",
       cookieNewest
@@ -289,7 +289,7 @@ DROGON_TEST(Integration_P1_MfaPending_Consent_Returns401)
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(resp != nullptr);
@@ -316,7 +316,7 @@ DROGON_TEST(Integration_P1_MfaPending_Consent_Returns401)
 
     auto consent = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=g1&consent_csrf=anything&action=approve",
       cookie
     );
@@ -343,7 +343,7 @@ DROGON_TEST(Integration_P1_MfaPending_Authorize_BlockedAndPromptNone_LoginRequir
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(resp != nullptr);
@@ -394,7 +394,7 @@ DROGON_TEST(Integration_P1_MfaWrongCode_SessionNotElevated)
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(resp != nullptr);
@@ -417,7 +417,7 @@ DROGON_TEST(Integration_P1_MfaWrongCode_SessionNotElevated)
     auto wrong = post(
       "/oauth2/mfa/verify",
       "mfa_token=" + mfaToken + "&code=000000"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid",
       cookie
     );
@@ -459,7 +459,7 @@ DROGON_TEST(Integration_P0_MfaWrongCodeThenRelogin_IdTokenAmrStaysPwd)
     auto login1 = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     REQUIRE(login1 != nullptr);
@@ -478,7 +478,7 @@ DROGON_TEST(Integration_P0_MfaWrongCodeThenRelogin_IdTokenAmrStaysPwd)
     auto wrong = post(
       "/oauth2/mfa/verify",
       "mfa_token=" + mfaToken + "&code=000000"
-      "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+      "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
       "&scope=openid",
       cookie1
     );
@@ -493,7 +493,7 @@ DROGON_TEST(Integration_P0_MfaWrongCodeThenRelogin_IdTokenAmrStaysPwd)
     auto login2 = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=admin&password=admin"
-      "&client_id=vue-client&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+      "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
       "&scope=openid&state=g2&code_challenge=" + challenge + "&code_challenge_method=S256"
     );
     REQUIRE(login2 != nullptr);
@@ -507,7 +507,7 @@ DROGON_TEST(Integration_P0_MfaWrongCodeThenRelogin_IdTokenAmrStaysPwd)
     auto tokenResp = fulla::test::http::sendPostForm(
       "/oauth2/token",
       "grant_type=authorization_code&code=" + code +
-        "&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&client_id=vue-client&code_verifier=" +
+        "&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&client_id=fulla-portal&code_verifier=" +
         verifier
     );
     REQUIRE(tokenResp != nullptr);

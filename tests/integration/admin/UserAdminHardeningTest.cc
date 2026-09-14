@@ -327,7 +327,7 @@ DROGON_TEST(Integration_P0_AdminUser_Delete_RevokesRefreshToken)
     // The old refresh token must now be refused (revoked, durable).
     const std::string refreshForm =
       "grant_type=refresh_token&refresh_token=" + refreshToken +
-      "&client_id=vue-client&client_secret=123456";
+      "&client_id=fulla-portal&client_secret=123456";
     auto refreshResp = sendPostForm("/oauth2/token", refreshForm);
     REQUIRE(refreshResp != nullptr);
     CHECK(refreshResp->getStatusCode() != drogon::k200OK);

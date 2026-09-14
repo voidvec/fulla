@@ -26,9 +26,9 @@ std::shared_ptr<GrantRepo> makeSeededGrantRepo(const Json::Value &clientsConfig)
 Json::Value vueClientConfig()
 {
     Json::Value config;
-    config["vue-client"]["secret"] = "test-secret";
-    config["vue-client"]["redirect_uri"] = "http://localhost:5173/callback";
-    config["vue-client"]["client_type"] = "public";
+    config["fulla-portal"]["secret"] = "test-secret";
+    config["fulla-portal"]["redirect_uri"] = "http://localhost:5173/callback";
+    config["fulla-portal"]["client_type"] = "public";
     return config;
 }
 }  // namespace
@@ -41,7 +41,7 @@ DROGON_TEST(Unit_P1_RedirectUri_MemoryStorage_Works)
 
     AuthCode testCode;
     testCode.code = "test_memory_redirect";
-    testCode.clientId = "vue-client";
+    testCode.clientId = "fulla-portal";
     testCode.userId = "test_user";
     testCode.expiresAt = std::time(nullptr) + 3600;
     testCode.used = false;
@@ -134,7 +134,7 @@ DROGON_TEST(Unit_P1_RedirectUri_Atomicity_Works)
 
     AuthCode testCode;
     testCode.code = "test_atomic_" + std::string(4, 'y');
-    testCode.clientId = "vue-client";
+    testCode.clientId = "fulla-portal";
     testCode.userId = "test_user";
     testCode.expiresAt = std::time(nullptr) + 3600;
     testCode.used = false;
@@ -235,7 +235,7 @@ DROGON_TEST(Unit_P1_RedirectUri_EdgeCases_Works)
         {
             AuthCode testCode;
             testCode.code = "test_empty_redirect";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;
@@ -269,7 +269,7 @@ DROGON_TEST(Unit_P1_RedirectUri_EdgeCases_Works)
         {
             AuthCode testCode;
             testCode.code = "test_case_sensitive";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;
@@ -305,7 +305,7 @@ DROGON_TEST(Unit_P1_RedirectUri_EdgeCases_Works)
         {
             AuthCode testCode;
             testCode.code = "test_url_fragment";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;
@@ -359,7 +359,7 @@ DROGON_TEST(Unit_P1_RedirectUri_SecurityScenarios_Works)
         {
             AuthCode testCode;
             testCode.code = "test_open_redirect";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;
@@ -396,7 +396,7 @@ DROGON_TEST(Unit_P1_RedirectUri_SecurityScenarios_Works)
         {
             AuthCode testCode;
             testCode.code = "test_url_traversal";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;
@@ -433,7 +433,7 @@ DROGON_TEST(Unit_P1_RedirectUri_SecurityScenarios_Works)
         {
             AuthCode testCode;
             testCode.code = "test_null_byte";
-            testCode.clientId = "vue-client";
+            testCode.clientId = "fulla-portal";
             testCode.userId = "test_user";
             testCode.expiresAt = std::time(nullptr) + 3600;
             testCode.used = false;

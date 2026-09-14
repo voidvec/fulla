@@ -28,7 +28,7 @@ static std::string makeLoginRequest(const std::string &username, const std::stri
     req->setContentTypeCode(drogon::CT_APPLICATION_X_FORM);
     req->setBody(
       "username=" + username + "&password=" + password +
-      "&client_id=vue-client&redirect_uri=http://localhost:5173/"
+      "&client_id=fulla-portal&redirect_uri=http://localhost:5173/"
       "callback&scope=openid"
     );
 
@@ -46,7 +46,7 @@ static Json::Value makeTokenRequest(const std::string &code)
     req->setContentTypeCode(drogon::CT_APPLICATION_X_FORM);
     req->setBody(
       "grant_type=authorization_code&code=" + code +
-      "&client_id=vue-client&redirect_uri=http:"
+      "&client_id=fulla-portal&redirect_uri=http:"
       "//localhost:5173/callback"
     );
 
@@ -230,7 +230,7 @@ DROGON_TEST(Security_P0_Token_InvalidRefreshToken_Rejected)
     req->setContentTypeCode(drogon::CT_APPLICATION_X_FORM);
     req->setBody(
       "grant_type=refresh_token&refresh_token=invalid_token&"
-      "client_id=vue-client&client_secret=123456"
+      "client_id=fulla-portal&client_secret=123456"
     );
 
     auto [res, resp] = client->sendRequest(req);
@@ -298,7 +298,7 @@ DROGON_TEST(Security_P1_RateLimit_DetectRateLimiting_Limited)
         req->setMethod(drogon::Post);
         req->setPath("/oauth2/login");
         req->setContentTypeCode(drogon::CT_APPLICATION_X_FORM);
-        req->setBody("username=test" + std::to_string(i) + "&password=test&client_id=vue-client");
+        req->setBody("username=test" + std::to_string(i) + "&password=test&client_id=fulla-portal");
 
         auto [res, resp] = client->sendRequest(req);
 

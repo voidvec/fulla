@@ -252,12 +252,12 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property6_LoginPersistsPendingB
     // The login response (mfa_required) is only sent AFTER the UPDATE commits
     // (fail-closed design), so as soon as we have the mfa_token the pending
     // binding MUST be durable in the DB.
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     PendingBinding pb = readPendingBinding();
     REQUIRE(!pb.isNull);
-    CHECK(pb.clientId == "vue-client");
+    CHECK(pb.clientId == "fulla-portal");
     CHECK(pb.redirectUri == kVueRedirectUri);
 }
 
@@ -292,20 +292,20 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property6_LoginOverwritesPrevio
         }
     } guard;
 
-    // First login as vue-client.
-    REQUIRE(!loginForMfaToken("vue-client", kVueRedirectUri).empty());
+    // First login as fulla-portal.
+    REQUIRE(!loginForMfaToken("fulla-portal", kVueRedirectUri).empty());
     {
         PendingBinding pb = readPendingBinding();
         REQUIRE(!pb.isNull);
-        CHECK(pb.clientId == "vue-client");
+        CHECK(pb.clientId == "fulla-portal");
     }
 
     // Second login with a different client/redirect_uri overwrites the binding.
-    REQUIRE(!loginForMfaToken("vue-client", "http://127.0.0.1:8080/callback").empty());
+    REQUIRE(!loginForMfaToken("fulla-portal", "http://127.0.0.1:8080/callback").empty());
     {
         PendingBinding pb = readPendingBinding();
         REQUIRE(!pb.isNull);
-        CHECK(pb.clientId == "vue-client");
+        CHECK(pb.clientId == "fulla-portal");
         CHECK(pb.redirectUri == "http://127.0.0.1:8080/callback");
     }
 }
@@ -340,7 +340,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property5_PendingBindingCleared
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     // Pre-condition: binding is populated.
@@ -354,7 +354,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property5_PendingBindingCleared
     Json::Value body;
     body["mfa_token"] = mfaToken;
     body["code"] = code;
-    body["client_id"] = "vue-client";
+    body["client_id"] = "fulla-portal";
     body["redirect_uri"] = kVueRedirectUri;
     body["scope"] = "openid profile email";
     auto resp = postJson("/oauth2/mfa/verify", body);
@@ -407,25 +407,25 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_Property5_RejectedVerifyKeepsBi
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
-    // Rejected: wrong client (admin-console) with correct TOTP.
+    // Rejected: wrong client (fulla-admin-console) with correct TOTP.
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
     Json::Value body;
     body["mfa_token"] = mfaToken;
     body["code"] = code;
-    body["client_id"] = "admin-console";
+    body["client_id"] = "fulla-admin-console";
     body["redirect_uri"] = "http://127.0.0.1:5174/admin/callback";
     body["scope"] = "openid profile email";
     auto resp = postJson("/oauth2/mfa/verify", body);
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == k401Unauthorized);
 
-    // The binding must still be present (vue-client) — a later legitimate retry
-    // with vue-client can still succeed.
+    // The binding must still be present (fulla-portal) — a later legitimate retry
+    // with fulla-portal can still succeed.
     PendingBinding pb = readPendingBinding();
     CHECK(!pb.isNull);
-    CHECK(pb.clientId == "vue-client");
+    CHECK(pb.clientId == "fulla-portal");
     CHECK(pb.redirectUri == kVueRedirectUri);
 }

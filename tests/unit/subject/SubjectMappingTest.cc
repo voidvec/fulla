@@ -183,17 +183,17 @@ DROGON_TEST(Unit_P0_UserConsent_SaveAndCheckConsent_Works)
     bundle.initFromConfig(clientsConfig);
 
     // Save consent
-    consent->saveUserConsent(userRef(1), "vue-client", "openid", [&](bool success) {
+    consent->saveUserConsent(userRef(1), "fulla-portal", "openid", [&](bool success) {
         CHECK(success);
     });
 
     // Check consent exists
-    consent->hasUserConsent(userRef(1), "vue-client", "openid", [&](bool hasConsent) {
+    consent->hasUserConsent(userRef(1), "fulla-portal", "openid", [&](bool hasConsent) {
         CHECK(hasConsent);
     });
 
     // Check non-existent consent
-    consent->hasUserConsent(userRef(1), "vue-client", "admin", [&](bool hasConsent) {
+    consent->hasUserConsent(userRef(1), "fulla-portal", "admin", [&](bool hasConsent) {
         CHECK(!(hasConsent));
     });
 }
@@ -207,18 +207,18 @@ DROGON_TEST(Unit_P0_UserConsent_RevokeConsent_Works)
     bundle.initFromConfig(clientsConfig);
 
     // Save consent
-    consent->saveUserConsent(userRef(1), "vue-client", "profile", [&](bool) {});
+    consent->saveUserConsent(userRef(1), "fulla-portal", "profile", [&](bool) {});
 
     // Verify it exists
-    consent->hasUserConsent(userRef(1), "vue-client", "profile", [&](bool hasConsent) {
+    consent->hasUserConsent(userRef(1), "fulla-portal", "profile", [&](bool hasConsent) {
         CHECK(hasConsent);
     });
 
     // Revoke consent
-    consent->revokeUserConsent(userRef(1), "vue-client", "profile", [&]() {});
+    consent->revokeUserConsent(userRef(1), "fulla-portal", "profile", [&]() {});
 
     // Verify it's removed
-    consent->hasUserConsent(userRef(1), "vue-client", "profile", [&](bool hasConsent) {
+    consent->hasUserConsent(userRef(1), "fulla-portal", "profile", [&](bool hasConsent) {
         CHECK(!(hasConsent));
     });
 }
@@ -235,7 +235,7 @@ DROGON_TEST(Unit_P0_AuthorizationTransaction_SaveAndGetTransaction_Works)
 
     fulla::oauth2::model::AuthorizationTransaction transaction;
     transaction.transactionId = "txn123";
-    transaction.clientId = "vue-client";
+    transaction.clientId = "fulla-portal";
     transaction.subject = "local:alice";
     transaction.redirectUri = "http://localhost:5173/callback";
     transaction.state = "state123";
@@ -252,7 +252,7 @@ DROGON_TEST(Unit_P0_AuthorizationTransaction_SaveAndGetTransaction_Works)
     grant->getAuthorizationTransaction("txn123", [&](auto txnOpt) {
         CHECK(txnOpt);
         CHECK((txnOpt->transactionId) == ("txn123"));
-        CHECK((txnOpt->clientId) == ("vue-client"));
+        CHECK((txnOpt->clientId) == ("fulla-portal"));
         CHECK((txnOpt->subject) == ("local:alice"));
         CHECK(!(txnOpt->consumed));
     });
@@ -268,7 +268,7 @@ DROGON_TEST(Unit_P0_AuthorizationTransaction_MarkConsumed_Works)
 
     fulla::oauth2::model::AuthorizationTransaction transaction;
     transaction.transactionId = "txn456";
-    transaction.clientId = "vue-client";
+    transaction.clientId = "fulla-portal";
     transaction.subject = "local:bob";
     transaction.redirectUri = "http://localhost:5173/callback";
     transaction.state = "state456";
@@ -306,7 +306,7 @@ DROGON_TEST(Unit_P0_AuthorizationTransaction_DeleteTransaction_Works)
 
     fulla::oauth2::model::AuthorizationTransaction transaction;
     transaction.transactionId = "txn789";
-    transaction.clientId = "vue-client";
+    transaction.clientId = "fulla-portal";
     transaction.subject = "local:charlie";
     transaction.redirectUri = "http://localhost:5173/callback";
     transaction.state = "state789";

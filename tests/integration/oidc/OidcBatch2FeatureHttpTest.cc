@@ -59,7 +59,7 @@ DROGON_TEST(Integration_P1_OidcBatch2_PromptNone_NoSession_ReturnsLoginRequired)
     OIDC_BATCH2_SKIP_GUARD;
 
     auto resp = sendGet(
-      "/oauth2/authorize?response_type=code&client_id=vue-client"
+      "/oauth2/authorize?response_type=code&client_id=fulla-portal"
       "&redirect_uri=http://127.0.0.1:5173/callback&scope=openid"
       "&state=abcdef1234&prompt=none");
     REQUIRE(resp != nullptr);
@@ -82,7 +82,7 @@ DROGON_TEST(Integration_P1_OidcBatch2_PromptConsent_NoSession_RedirectsToLogin)
     OIDC_BATCH2_SKIP_GUARD;
 
     auto resp = sendGet(
-      "/oauth2/authorize?response_type=code&client_id=vue-client"
+      "/oauth2/authorize?response_type=code&client_id=fulla-portal"
       "&redirect_uri=http://127.0.0.1:5173/callback&scope=openid"
       "&state=abcdef1234&prompt=consent");
     REQUIRE(resp != nullptr);
@@ -314,7 +314,7 @@ DROGON_TEST(Integration_P1_OidcBatch2_EndSession_ForgedHint_Returns400)
     Json::Value claims;
     claims["iss"] = plugin->getIssuer();
     claims["sub"] = "00000000-0000-0000-0000-00000000078";
-    claims["aud"] = "admin-console";
+    claims["aud"] = "fulla-admin-console";
     claims["exp"] = static_cast<Json::Int64>(time(nullptr) + 600);
     const std::string forged = forger.signJwt(claims);
     REQUIRE(!forged.empty());

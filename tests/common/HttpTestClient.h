@@ -69,7 +69,7 @@ constexpr const char *kTestBaseUrl = "http://127.0.0.1:5555";
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
 // client.sql) and its registered redirect URI. The 2-step admin login recipe
 // (login -> token -> bearer) uses these for both legs.
-constexpr const char *kAdminClientId = "admin-console";
+constexpr const char *kAdminClientId = "fulla-admin-console";
 // F-014: the seed registers the loopback IP literal (RFC 8252 §7.3), not
 // "localhost" -- the authorize/login validators now reject the hostname form.
 constexpr const char *kAdminRedirectUri = "http://127.0.0.1:5174/admin/callback";

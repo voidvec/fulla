@@ -226,8 +226,11 @@ std::string loadConfigWithEnv(const std::string &configPath)
         }
     }
 
-    // Override Client Secret in OAuth2Plugin
-    if (const char *env = std::getenv("FULLA_VUE_CLIENT_SECRET"))
+    // Override Client Secret in OAuth2Plugin (new primary name, legacy alias)
+    const char *env = std::getenv("FULLA_PORTAL_CLIENT_SECRET");
+    if (!env || env[0] == 0)
+        env = std::getenv("FULLA_VUE_CLIENT_SECRET");
+    if (env != nullptr && env[0] != 0)
     {
         if (env[0] != '\0' && root["plugins"].isArray())
         {
@@ -237,10 +240,10 @@ std::string loadConfigWithEnv(const std::string &configPath)
                 {
                     if (
                       plugin.isMember("config") && plugin["config"].isMember("clients") &&
-                      plugin["config"]["clients"].isMember("vue-client")
+                      plugin["config"]["clients"].isMember("fulla-portal")
                     )
                     {
-                        plugin["config"]["clients"]["vue-client"]["secret"] = env;
+                        plugin["config"]["clients"]["fulla-portal"]["secret"] = env;
                     }
                     break;
                 }

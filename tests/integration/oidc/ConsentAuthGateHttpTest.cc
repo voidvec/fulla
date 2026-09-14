@@ -36,7 +36,7 @@ std::string loginCookie(const std::string &username, const std::string &password
     auto resp = fulla::test::http::sendPostForm(
       "/oauth2/login?json=true",
       "username=" + username + "&password=" + password +
-        "&client_id=admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+        "&client_id=fulla-admin-console&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
         "&scope=openid&state=g1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
     );
     if (!resp || resp->getStatusCode() != k200OK)
@@ -60,7 +60,7 @@ DROGON_TEST(Integration_P1_Consent_NoSession_Returns401)
         return;
     }
     auto resp = post("/oauth2/consent",
-                     "client_id=vue-client&user_id=1&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback&state=x&action=approve");
+                     "client_id=fulla-portal&user_id=1&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback&state=x&action=approve");
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == k401Unauthorized);
 }
@@ -76,7 +76,7 @@ DROGON_TEST(Integration_P1_Consent_UserMismatch_Returns403)
     REQUIRE(!cookie.empty());
     // user_id != session["userId"] (admin's internal id)
     auto resp = post("/oauth2/consent",
-                     "client_id=vue-client&user_id=999999&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback&state=x&consent_csrf=anything&action=approve",
+                     "client_id=fulla-portal&user_id=999999&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback&state=x&consent_csrf=anything&action=approve",
                      cookie);
     CHECK(resp->getStatusCode() == k403Forbidden);
 }
@@ -94,7 +94,7 @@ bool authorizeMintNonce(const std::string &cookieIn, std::string &csrf,
     req->setMethod(Get);
     req->setPath("/oauth2/authorize");
     req->setParameter("response_type", "code");
-    req->setParameter("client_id", "vue-client");
+    req->setParameter("client_id", "fulla-portal");
     req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
     req->setParameter("scope", "openid");
     req->setParameter("state", "consentstate01");
@@ -140,7 +140,7 @@ DROGON_TEST(Integration_P1_Consent_MissingNonce_Returns400)
     // absent -> Gate 3 rejects with 400 (NOT the gate-2 403 nor a 500).
     auto resp = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=consentstate01&action=approve",
       cookie2
     );
@@ -163,7 +163,7 @@ DROGON_TEST(Integration_P1_Consent_DenyUnregisteredUri_Returns400)
     // redirect) — 400 envelope instead.
     auto deny = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=https%3A%2F%2Fevil.example%2Fcb&state=consentstate01&consent_csrf=" +
         csrf + "&action=deny",
       cookie2
@@ -178,7 +178,7 @@ DROGON_TEST(Integration_P1_Consent_DenyUnregisteredUri_Returns400)
     REQUIRE(authorizeMintNonce(cookie, csrf2, userId2, cookie3));
     auto denyOk = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId2 +
+      "client_id=fulla-portal&user_id=" + userId2 +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=consentstate02&consent_csrf=" +
         csrf2 + "&action=deny",
       cookie3
@@ -204,7 +204,7 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     req->setMethod(Get);
     req->setPath("/oauth2/authorize");
     req->setParameter("response_type", "code");
-    req->setParameter("client_id", "vue-client");
+    req->setParameter("client_id", "fulla-portal");
     req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
     req->setParameter("scope", "openid");
     req->setParameter("state", "consentstate01");
@@ -246,7 +246,7 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     // Approve with the minted nonce -> 302 back to the client with a code.
     auto approve = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" + "&state=consentstate01&consent_csrf=" + csrf +
         "&action=approve",
       cookie
@@ -256,7 +256,7 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     // One-shot: replaying the same nonce must fail.
     auto replay = post(
       "/oauth2/consent",
-      "client_id=vue-client&user_id=" + userId +
+      "client_id=fulla-portal&user_id=" + userId +
         "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" + "&state=consentstate01&consent_csrf=" + csrf +
         "&action=approve",
       cookie

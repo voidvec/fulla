@@ -245,8 +245,10 @@ DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
     CHECK(h.accountRepo->linked.size() == 1);
 }
 
-// Missing code -> 400. Body must not contain the "code=" substring (same
-// parser quirk as Google's missing-code case above).
+// Missing code -> 400. Body must not contain the "code=" substring (same
+
+// parser quirk as Google's missing-code case above).
+
 DROGON_TEST(Integration_P1_WeChatLogin_MissingCode_Returns400)
 {
     SOCIAL_SKIP_GUARD;
@@ -471,7 +473,7 @@ std::optional<std::pair<std::string, std::string>> fakeGitHubLoginForTokens(
 // #69 core: a GitHub-issued refresh token is found by the refresh grant.
 // TokenService resolves the presented refresh token via hashToken before the
 // repository lookup — exactly the lookup that missed when the raw value was
-// stored (pre-fix: invalid_grant). Runs in every storage mode: vue-client is
+// stored (pre-fix: invalid_grant). Runs in every storage mode: fulla-portal is
 // a PUBLIC client available in both the memory seed and the PG seed, and the
 // refresh grant accepts an empty secret for it.
 DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_RefreshGrantWorks)
@@ -484,7 +486,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_RefreshGrantWorks)
 
     auto refreshed = sendPostForm(
       "/oauth2/token",
-      "grant_type=refresh_token&client_id=vue-client&client_secret=&refresh_token=" + tokens->second
+      "grant_type=refresh_token&client_id=fulla-portal&client_secret=&refresh_token=" + tokens->second
     );
     REQUIRE(refreshed != nullptr);
     CHECK(statusIs(refreshed, drogon::k200OK));
@@ -500,7 +502,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_RefreshGrantWorks)
 // /api/me/social/links list, and the refresh grant. Introspection
 // authenticates as the seeded CONFIDENTIAL backend-svc (client_secret_basic,
 // HTTP Basic) — the endpoint requires a non-empty secret, so the PUBLIC
-// admin-console cannot call it.
+// fulla-admin-console cannot call it.
 DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_AuthenticatedEndpointsWork)
 {
     SOCIAL_SKIP_GUARD;

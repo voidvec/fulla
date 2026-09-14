@@ -9,7 +9,7 @@
 // entirely for returning users.
 //
 // This test drives the REAL direct-issue path over live HTTP (Postgres mode):
-//   1. seed consent for admin x vue-client x openid (so authorize skips the
+//   1. seed consent for admin x fulla-portal x openid (so authorize skips the
 //      consent screen), log in via POST /oauth2/login to obtain the session
 //      cookie;
 //   2. GET /oauth2/authorize with a plain code_challenge + session cookie ->
@@ -91,7 +91,7 @@ bool serverReachable()
     return false;
 }
 
-// Insert the consent row the direct-issue branch needs (admin x vue-client x
+// Insert the consent row the direct-issue branch needs (admin x fulla-portal x
 // openid). Returns the number of rows actually inserted (0 = pre-existing),
 // -1 on error -- so the guard only deletes what this test created.
 long ensureAdminConsent()
@@ -102,7 +102,7 @@ long ensureAdminConsent()
     std::promise<long> p;
     db->execSqlAsync(
       "INSERT INTO oauth2_user_consents (internal_user_id, client_id, scope_name) "
-      "SELECT u.id, 'vue-client', 'openid' FROM users u WHERE u.username = 'admin' "
+      "SELECT u.id, 'fulla-portal', 'openid' FROM users u WHERE u.username = 'admin' "
       "ON CONFLICT (internal_user_id, client_id, scope_name) DO NOTHING",
       [&](const Result &r) { p.set_value(static_cast<long>(r.affectedRows())); },
       [&](const DrogonDbException &) { p.set_value(-1); }
@@ -117,7 +117,7 @@ void removeAdminConsent()
         return;
     std::promise<void> p;
     db->execSqlAsync(
-      "DELETE FROM oauth2_user_consents WHERE client_id = 'vue-client' "
+      "DELETE FROM oauth2_user_consents WHERE client_id = 'fulla-portal' "
       "AND scope_name = 'openid' AND internal_user_id = "
       "(SELECT id FROM users WHERE username = 'admin')",
       [&](const Result &) { p.set_value(); },
@@ -136,7 +136,7 @@ std::string loginAndGetSessionCookie()
     req->setPath("/oauth2/login");
     req->setContentTypeCode(CT_APPLICATION_X_FORM);
     req->setBody(
-      std::string("username=admin&password=admin&client_id=vue-client") +
+      std::string("username=admin&password=admin&client_id=fulla-portal") +
       "&redirect_uri=" + utils::urlEncodeComponent(kRedirectUri) + "&scope=openid&state=" + kState +
       "&response_type=code&json=true"
     );
@@ -152,7 +152,7 @@ HttpResponsePtr callAuthorize(const std::string &sessionCookie)
     req->setMethod(Get);
     req->setPath("/oauth2/authorize");
     req->setParameter("response_type", "code");
-    req->setParameter("client_id", "vue-client");
+    req->setParameter("client_id", "fulla-portal");
     req->setParameter("redirect_uri", kRedirectUri);
     req->setParameter("scope", "openid");
     req->setParameter("state", kState);
@@ -178,7 +178,7 @@ HttpResponsePtr exchangeToken(const std::string &code, const std::string &verifi
     req->setMethod(Post);
     req->setPath("/oauth2/token");
     req->setContentTypeCode(CT_APPLICATION_X_FORM);
-    std::string body = "grant_type=authorization_code&client_id=vue-client&code=" + code +
+    std::string body = "grant_type=authorization_code&client_id=fulla-portal&code=" + code +
                        "&redirect_uri=" + utils::urlEncodeComponent(kRedirectUri);
     if (!verifier.empty())
         body += "&code_verifier=" + std::string(verifier);
@@ -192,7 +192,7 @@ DROGON_TEST(Integration_P0_AuthorizeDirectIssue_PkcePassthrough_TokenEnforcesVer
     auto plugin = app().getPlugin<OAuth2Plugin>();
     if (!plugin || plugin->getStorageType() == "memory")
     {
-        // Fixture (admin user / vue-client / consent rows) is Postgres seed
+        // Fixture (admin user / fulla-portal / consent rows) is Postgres seed
         // data; memory mode has no equivalent direct-issue fixture.
         CHECK(true);
         return;

@@ -8,12 +8,12 @@
 // effects (no oauth2_codes / oauth2_access_tokens rows created for rejected
 // attempts; pending binding lifecycle).
 //
-//   Happy-path flow (Properties 4, 5, 6): login as vue-client -> verifyLogin
+//   Happy-path flow (Properties 4, 5, 6): login as fulla-portal -> verifyLogin
 //     with the same client/redirect_uri -> tokens issued with the frozen
 //     response shape -> pending binding cleared to NULL.
 //
-//   Cross-client rejection flow (Property 3): login as vue-client -> verifyLogin
-//     with admin-console's own valid client_id/redirect_uri -> rejected with
+//   Cross-client rejection flow (Property 3): login as fulla-portal -> verifyLogin
+//     with fulla-admin-console's own valid client_id/redirect_uri -> rejected with
 //     AUTH_INVALID_CREDENTIALS (401), and no oauth2_codes / oauth2_access_tokens
 //     rows are created for the rejected attempt.
 
@@ -198,7 +198,7 @@ long countRowsForUser(const std::string &table)
 
 // ---------------------------------------------------------------------------
 // Integration: Happy-path end-to-end flow (Properties 4, 5, 6).
-// login (vue-client) -> verifyLogin (matching binding) -> tokens issued with
+// login (fulla-portal) -> verifyLogin (matching binding) -> tokens issued with
 // the frozen response shape -> pending binding cleared.
 // ---------------------------------------------------------------------------
 DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_HappyPath_EndToEnd)
@@ -227,14 +227,14 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_HappyPath_EndToEnd)
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     std::string code = fulla::identity::totp::generateCode(fx.secret, totpNowSeconds());
     Json::Value body;
     body["mfa_token"] = mfaToken;
     body["code"] = code;
-    body["client_id"] = "vue-client";
+    body["client_id"] = "fulla-portal";
     body["redirect_uri"] = kVueRedirectUri;
     body["scope"] = "openid profile email";
     auto resp = postJson("/oauth2/mfa/verify", body);
@@ -256,7 +256,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_HappyPath_EndToEnd)
 
 // ---------------------------------------------------------------------------
 // Integration: Cross-client rejection flow (Property 3) — no rows created.
-// login (vue-client) -> verifyLogin (admin-console's own valid credentials) ->
+// login (fulla-portal) -> verifyLogin (fulla-admin-console's own valid credentials) ->
 // rejected with AUTH_INVALID_CREDENTIALS, and no new oauth2_codes /
 // oauth2_access_tokens rows are created for the rejected attempt.
 // ---------------------------------------------------------------------------
@@ -286,7 +286,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_CrossClient_NoRowsCreated)
         }
     } guard;
 
-    std::string mfaToken = loginForMfaToken("vue-client", kVueRedirectUri);
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
     REQUIRE(!mfaToken.empty());
 
     // Snapshot the existing access-token row count for the admin user.
@@ -297,7 +297,7 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_CrossClient_NoRowsCreated)
     Json::Value body;
     body["mfa_token"] = mfaToken;
     body["code"] = code;
-    body["client_id"] = "admin-console";
+    body["client_id"] = "fulla-admin-console";
     body["redirect_uri"] = kAdminRedirectUri;
     body["scope"] = "openid profile email";
     auto resp = postJson("/oauth2/mfa/verify", body);

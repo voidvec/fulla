@@ -55,7 +55,7 @@ DROGON_TEST(Integration_P1_OidcBatch3_ApiMe_TokenWithoutProfile_Returns403Insuff
     OIDC_BATCH3_SKIP_GUARD;
 
     // Request a token that carries ONLY openid (no profile/admin) -- the
-    // admin-console seed grants openid/profile/admin, but the SCOPE WE PASS
+    // fulla-admin-console seed grants openid/profile/admin, but the SCOPE WE PASS
     // to authorize is the gate, and the resulting token carries only what
     // was authorized.
     auto token = loginAsAdminWithScope("openid");
@@ -96,7 +96,7 @@ DROGON_TEST(Integration_P1_OidcBatch3_ApiAdmin_TokenWithoutAdminScope_Returns403
 // ---------------------------------------------------------------------------
 // F-010 positive control: the default admin token (openid profile admin) CAN
 // still reach /api/me and /api/admin/* -- the new scope gate does not lock
-// out the legitimate admin-console login chain. This guards against an
+// out the legitimate fulla-admin-console login chain. This guards against an
 // over-broad scope regex accidentally rejecting valid tokens.
 // ---------------------------------------------------------------------------
 DROGON_TEST(Integration_P1_OidcBatch3_AdminToken_StillReachesProtectedRoutes)
