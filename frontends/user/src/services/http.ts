@@ -47,7 +47,7 @@ export async function tryRestoreSession(): Promise<boolean> {
   if (!refreshToken) return false
 
   try {
-    const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'vue-client'
+    const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
     const resp = await axios.post('/oauth2/token', new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
@@ -115,7 +115,7 @@ http.interceptors.response.use(
     if (error.response?.status === 401 && refreshToken && !originalRequest._retry && !isNoAutoRefreshEndpoint(originalRequest.url)) {
       originalRequest._retry = true
       try {
-        const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'vue-client'
+        const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
         const resp = await axios.post('/oauth2/token', new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,

@@ -30,7 +30,7 @@ test.describe('Token Management', () => {
   })
 
   test('shows client IDs for tokens', async ({ page }) => {
-    await expect(page.locator('td:has-text("vue-client")').first()).toBeVisible()
+    await expect(page.locator('td:has-text("fulla-portal")').first()).toBeVisible()
     await expect(page.locator('td:has-text("api-service")')).toBeVisible()
   })
 
@@ -72,7 +72,7 @@ test.describe('Token Management', () => {
   test('shows Revoke All by App dropdown', async ({ page }) => {
     await page.click('button:has-text("Revoke All by App")')
     // Should show client IDs from current results
-    await expect(page.locator('.absolute:has-text("vue-client")')).toBeVisible()
+    await expect(page.locator('.absolute:has-text("fulla-portal")')).toBeVisible()
     await expect(page.locator('.absolute:has-text("api-service")')).toBeVisible()
   })
 
@@ -125,10 +125,10 @@ test.describe('Token Management', () => {
         await route.continue()
       }
     })
-    await page.fill('input[placeholder="Filter by client_id"]', 'vue-client')
+    await page.fill('input[placeholder="Filter by client_id"]', 'fulla-portal')
     await page.click('button:has-text("Apply")')
     await page.waitForTimeout(300)
-    expect(requestParams.client_id).toBe('vue-client')
+    expect(requestParams.client_id).toBe('fulla-portal')
   })
 
   test('filter by user_id sends correct params', async ({ page }) => {
