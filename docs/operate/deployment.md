@@ -607,6 +607,13 @@ echo "Save this password — you will need it to log in to the admin console."
 # PBKDF2 password printed ONCE to the container log):
 #   docker compose logs backend | grep Bootstrap
 # Or set it explicitly before first start: FULLA_BOOTSTRAP_ADMIN_PASSWORD=...
+# Optionally also set a real mailbox for the admin:
+#   FULLA_BOOTSTRAP_ADMIN_EMAIL=admin@your-domain.com
+# When a real mailbox AND working SMTP delivery are both configured, the
+# bootstrap admin is created UNVERIFIED — completing the forced first-login
+# password change sends the verification email, and sign-in stays blocked
+# until the link is clicked. Without them, the account ships with the
+# placeholder address and email_verified=true (no mailbox to verify).
 # Manual fallback (PBKDF2-SHA256, 310k iterations, same format as the
 # server). Note: the users.salt column stays empty — it is only used by the
 # retired legacy SHA-256 verification path; PBKDF2 embeds the salt in the

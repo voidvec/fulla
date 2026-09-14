@@ -386,6 +386,11 @@ FULLA_SMTP_PORT=465
 FULLA_SMTP_USER=noreply@example.com
 FULLA_SMTP_PASSWORD=<SMTP 授权码，非邮箱登录密码>
 FULLA_SMTP_FROM_NAME=Fulla
+
+# 可选：为 admin 配置真实邮箱（需与可用的 SMTP 发信同时配置）。
+# 两者都配置时，引导创建的 admin 为「未验证」状态——首登强制改密完成后
+# 会发送验证邮件，点击链接前无法登录。未配置时 admin 使用占位邮箱并
+# 直接置为已验证（避免死锁）。
 FULLA_SMTP_SSL=true
 
 # 前端构建变量（Vite 构建期注入）
