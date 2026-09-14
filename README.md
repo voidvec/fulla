@@ -234,7 +234,7 @@ docker compose -f deploy/docker/docker-compose.yml up -d --build
 - Backend API: `http://localhost:5555`
 
 > **Dev-only credentials (#112):** this compose file hardcodes weak passwords
-> (DB `123456`, Redis `redis_secret_pass`, vue-client `123456`, seeded
+> (DB `123456`, Redis `redis_secret_pass`, fulla-portal `123456`, seeded
 > `admin`/`admin`, stored as a PBKDF2 hash since #103) and the seed admin
 > account exists for evaluation only.
 > PostgreSQL (127.0.0.1:5433) and Redis (127.0.0.1:6380) are loopback-bound on

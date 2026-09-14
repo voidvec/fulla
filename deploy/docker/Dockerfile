@@ -96,7 +96,7 @@ FROM node:${NODE_VERSION} AS frontend-builder
 # Passed through from docker-compose.prod.yml build.args; default empty so the
 # SPA falls back to its in-code defaults when a var is not provided.
 ARG VITE_API_BASE_URL=
-ARG VITE_CLIENT_ID=vue-client
+ARG VITE_CLIENT_ID=fulla-portal
 ARG VITE_REDIRECT_URI=
 ARG VITE_GITHUB_CLIENT_ID=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
