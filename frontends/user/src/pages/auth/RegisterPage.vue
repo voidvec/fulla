@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
@@ -11,7 +10,6 @@ import AppInput from '../../components/ui/AppInput.vue'
 import { passwordStrength } from '../../utils/passwordStrength'
 
 const { t } = useI18n()
-const router = useRouter()
 const username = ref('')
 const email = ref('')
 const password = ref('')
@@ -50,8 +48,10 @@ async function handleRegister() {
       password: password.value,
       email: email.value,
     }))
+    // Stay on this page and tell the user to verify their email first — the
+    // login leg rejects unverified accounts, so an auto-redirect used to land
+    // them on a form that could only fail.
     success.value = true
-    setTimeout(() => router.push('/login'), 2000)
   } catch (e: unknown) {
     error.value = normalizeError(e)
   } finally {
@@ -88,9 +88,19 @@ async function handleRegister() {
       <p class="text-neutral-700 font-medium">
         {{ $t('auth.register.success') }}
       </p>
-      <p class="text-sm text-neutral-500">
-        {{ $t('common.redirectingToLogin') }}
+      <p
+        class="text-sm text-neutral-600 max-w-xs mx-auto"
+        data-testid="verify-email-notice"
+      >
+        {{ $t('auth.register.verifyEmailNotice', { email: email }) }}
       </p>
+      <router-link
+        to="/login"
+        class="inline-block text-sm text-brand-600 font-medium hover:text-brand-800"
+        data-testid="go-to-login"
+      >
+        {{ $t('common.goToLogin') }}
+      </router-link>
     </div>
 
     <AppAlert

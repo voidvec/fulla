@@ -102,6 +102,7 @@ export default {
       title: '创建账户',
       subtitle: '立即加入',
       success: '账户创建成功',
+      verifyEmailNotice: '验证邮件已发送至 {email}，请先完成邮箱验证再登录',
       usernameHint: '可选 —— 留空时将为您自动生成',
       passwordHint: '至少 8 个字符。使用 3–4 个随机单词组成的长密码短语效果更佳。',
       submit: '创建账户',
