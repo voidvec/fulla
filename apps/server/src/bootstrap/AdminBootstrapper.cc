@@ -216,6 +216,12 @@ void ensureAdminUser(const RunPtr &run)
                       // this made the first-boot insert fail on the constraint.
                       admin.setSalt("");
                       admin.setEmail("admin@example.com");
+                      // The placeholder address cannot receive a verification
+                      // email, and the login flow's email-verified gate would
+                      // otherwise deadlock the bootstrap admin right after the
+                      // #145 forced password change (the operator's identity is
+                      // confirmed out-of-band by whoever runs the deploy).
+                      admin.setEmailVerified(true);
                       // #145: force a password change at first login. Both the
                       // random password (printed to the log) and an
                       // operator-provided env password must be replaced by the
