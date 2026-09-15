@@ -23,7 +23,14 @@ const useAuthLayout = computed(() => route.meta.layout === 'auth')
      once; surfaces/semantic vars use literals so they never resolve
      through a remapped step. -->
 <style>
+/* Native controls (select option popups, date pickers, scrollbars)
+   follow color-scheme: without this the dark theme rendered them with
+   browser-default light styling (issue: dark-theme dropdowns). */
+html {
+  color-scheme: light;
+}
 html[data-theme="dark"] {
+  color-scheme: dark;
   /* Neutral ramp inversion (blueprint dark, hue 252 kept) */
   --color-neutral-50:  oklch(14.5% 0.005 252);
   --color-neutral-100: oklch(22% 0.006 252);
