@@ -9,6 +9,16 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.3.1] - 2026-09-15
+
+### Fixed
+
+- **TOTP entries in authenticator apps showed the internal codename**: adding MFA rendered the entry as `OAuth2Server:<opaque subject>` — the issuer defaulted to the internal codename and the setup endpoint passed the public subject as the account label. The issuer now defaults to `Fulla` (configurable via `custom_config.mfa.totp_issuer` or the `FULLA_MFA_TOTP_ISSUER` env override) and entries are labeled with the username. Existing authenticator entries keep working; re-adding the entry picks up the new name.
+- **The bootstrap admin was locked out of the console after the first password change**: the seeded placeholder email (`admin@example.com`) can never be verified and the login flow's email-verified gate sits after the forced password change — the first real login was rejected with `5001 AUTHZ_ACCESS_DENIED: email not verified`. The bootstrap admin now ships `email_verified=true` (the operator's identity is confirmed out-of-band by whoever runs the deploy). Existing v1.3.0 deployments: `UPDATE users SET email_verified=true WHERE username='admin';`
+- **A real but unverified mailbox completed the forced password change into a dead end**: the change now delivers the verification email (fire-and-forget) and the response says so, instead of a bare "sign in again". Pair it with the new `FULLA_BOOTSTRAP_ADMIN_EMAIL` variable: when a real admin mailbox and working SMTP delivery are both configured, the bootstrap admin is created unverified and the standard verification flow applies.
+- **User-facing names de-branded from the internal codenames**: the `/health` `service` field, the WebAuthn relying-party display name (passkey dialog) and the email sender display name default now read `Fulla`; the GitHub API User-Agent is `fulla-server`.
+- **The "Link GitHub Account" button was unreadable in dark theme**: it hardcoded light-theme colors that the dark theme's neutral remap turned into light-on-light; it now uses the themed primary button.
+
 ## [1.3.0] - 2026-09-14
 
 ### Changed
