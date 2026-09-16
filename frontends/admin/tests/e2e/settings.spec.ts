@@ -60,12 +60,14 @@ test.describe('Settings & Scopes', () => {
   })
 
   test('displays key metadata', async ({ page }) => {
+    // #110-B multi-key rendering: summary + per-key rows.
     await expect(page.locator('text=Key ID (kid)')).toBeVisible()
     await expect(page.locator('text=default-key-1')).toBeVisible()
     await expect(page.locator('text=Key Type (kty)')).toBeVisible()
     await expect(page.locator('text=RSA')).toBeVisible()
     await expect(page.locator('text=Algorithm (alg)')).toBeVisible()
     await expect(page.locator('text=RS256')).toBeVisible()
+    await expect(page.locator('text=(active)')).toBeVisible()
   })
 
   test('displays JWKS and Discovery URLs', async ({ page }) => {

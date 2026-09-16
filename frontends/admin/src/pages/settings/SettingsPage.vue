@@ -17,18 +17,28 @@ const errorText = computed(() => {
   return typeof e === 'string' ? e : getErrorMessage(e.code)
 })
 
-interface OidcKeyInfo {
+// #110-B contract: GET /api/admin/oidc/keys reports the live signing
+// keystore — every loaded key plus the rotation state — not a single flat
+// key. The legacy single-key path surfaces as one entry (kid "key-1").
+interface OidcKeyEntry {
   kid: string
   kty: string
   alg: string
   use: string
+  status: string
+}
+
+interface OidcKeysResponse {
+  status: string
   jwks_uri: string
   discovery_uri: string
-  key_status: string
+  keys: OidcKeyEntry[]
+  active_kid: string
+  key_count: number
   note: string
 }
 
-const oidcKeys = ref<OidcKeyInfo | null>(null)
+const oidcKeys = ref<OidcKeysResponse | null>(null)
 const oidcLoading = ref(true)
 const oidcErrorMessage = ref<NormalizedError | string | null>(null)
 const oidcErrorText = computed(() => {
@@ -243,38 +253,22 @@ onMounted(() => {
         v-else-if="oidcKeys"
         class="p-6 space-y-6"
       >
-        <!-- Key Metadata -->
-        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        <!-- Rotation summary -->
+        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
           <div>
             <dt class="text-sm font-medium text-neutral-500">
-              {{ $t('admin.settings.keyId') }}
+              {{ $t('admin.settings.keyCount') }}
             </dt>
             <dd class="mt-1">
-              <DData :value="oidcKeys.kid" />
+              <DData :value="String(oidcKeys.key_count)" />
             </dd>
           </div>
           <div>
             <dt class="text-sm font-medium text-neutral-500">
-              {{ $t('admin.settings.keyType') }}
+              {{ $t('admin.settings.activeKeyId') }}
             </dt>
             <dd class="mt-1">
-              <DData :value="oidcKeys.kty" />
-            </dd>
-          </div>
-          <div>
-            <dt class="text-sm font-medium text-neutral-500">
-              {{ $t('admin.settings.algorithm') }}
-            </dt>
-            <dd class="mt-1">
-              <DData :value="oidcKeys.alg" />
-            </dd>
-          </div>
-          <div>
-            <dt class="text-sm font-medium text-neutral-500">
-              {{ $t('admin.settings.usage') }}
-            </dt>
-            <dd class="mt-1">
-              <DData :value="oidcKeys.use" />
+              <DData :value="oidcKeys.active_kid" />
             </dd>
           </div>
           <div>
@@ -283,11 +277,52 @@ onMounted(() => {
             </dt>
             <dd class="mt-1">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-700">
-                {{ oidcKeys.key_status }}
+                {{ oidcKeys.status }}
               </span>
             </dd>
           </div>
         </dl>
+
+        <!-- Loaded keys -->
+        <div class="border-t pt-4">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-neutral-500">
+                <th class="py-2 pr-4 font-medium">{{ $t('admin.settings.keyId') }}</th>
+                <th class="py-2 pr-4 font-medium">{{ $t('admin.settings.keyType') }}</th>
+                <th class="py-2 pr-4 font-medium">{{ $t('admin.settings.algorithm') }}</th>
+                <th class="py-2 pr-4 font-medium">{{ $t('admin.settings.usage') }}</th>
+                <th class="py-2 pr-4 font-medium">{{ $t('admin.settings.status') }}</th>
+              </tr>
+            </thead>
+            <tbody class="text-neutral-700">
+              <tr
+                v-for="key in oidcKeys.keys"
+                :key="key.kid"
+                class="border-t"
+              >
+                <td class="py-2 pr-4 font-mono">
+                  {{ key.kid }}
+                  <span
+                    v-if="key.kid === oidcKeys.active_kid"
+                    class="ml-1 text-xs font-medium text-success-700"
+                  >({{ $t('admin.settings.activeKey') }})</span>
+                </td>
+                <td class="py-2 pr-4">{{ key.kty }}</td>
+                <td class="py-2 pr-4">{{ key.alg }}</td>
+                <td class="py-2 pr-4">{{ key.use }}</td>
+                <td class="py-2">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    :class="key.status === 'active' ? 'bg-success-100 text-success-700' : 'bg-neutral-100 text-neutral-700'"
+                  >
+                    {{ key.status }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <!-- URLs -->
         <div class="border-t pt-4 space-y-3">

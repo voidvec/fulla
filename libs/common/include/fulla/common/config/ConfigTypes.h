@@ -42,6 +42,9 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
    // The startup client seeder (bootstrap/ClientSeeder) upserts these config
    // client entries into oauth2_clients.
    {"custom_config.mfa.totp_issuer", "FULLA_MFA_TOTP_ISSUER", false},
+   {"custom_config.webauthn.rp_id", "FULLA_WEBAUTHN_RP_ID", false},
+   {"custom_config.webauthn.rp_name", "FULLA_WEBAUTHN_RP_NAME", false},
+   {"custom_config.webauthn.rp_origins", "FULLA_WEBAUTHN_RP_ORIGINS", false, /*isStringList=*/true},
    {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
     "FULLA_PORTAL_CLIENT_SECRET",
     false},

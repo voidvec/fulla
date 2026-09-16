@@ -79,13 +79,13 @@ export const MOCK_TOKENS = [
 
 export const MOCK_OIDC_KEYS = {
   status: 'success',
-  kid: 'default-key-1',
-  kty: 'RSA',
-  alg: 'RS256',
-  use: 'sig',
   jwks_uri: '/.well-known/jwks.json',
   discovery_uri: '/.well-known/openid-configuration',
-  key_status: 'active',
+  keys: [
+    { kid: 'default-key-1', kty: 'RSA', alg: 'RS256', use: 'sig', status: 'active' },
+  ],
+  active_kid: 'default-key-1',
+  key_count: 1,
   note: 'Key rotation is not yet implemented. Single signing key in use.',
 }
 
