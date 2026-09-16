@@ -121,14 +121,15 @@ if [ ! -f "$HOME/.conan2/profiles/default" ]; then
     echo -e "${YELLOW}[INFO] Initializing default conan profile...${NC}"
     conan profile detect
 fi
-# Linux: use the platform cmake (>= 3.21; the images install 3.28) instead of
-# letting tool_requires like libcbor's cmake/4.x build from source — the
-# recipe fetches its source tarball from GitHub, which 403s the shared
-# anonymous-IP pools of GitHub-hosted arm runners (broke the v1.3.1 arm64
-# image build). Idempotent append; non-Linux keeps prior behavior.
+# Linux: use the platform cmake instead of letting tool_requires like
+# libcbor's cmake/4.x build from source — the recipe fetches its source
+# tarball from GitHub, which 403s the shared anonymous-IP pools of
+# GitHub-hosted arm runners (broke the v1.3.1 arm64 image build).
+# platform_tool_requires demands an EXACT version: 3.28.3 is the apt
+# cmake in ubuntu:24.04 — bump it when the image's cmake bumps.
 if [[ "$OSTYPE" == linux* ]]; then
     if ! grep -q '^\[platform_tool_requires\]' "$HOME/.conan2/profiles/default" 2>/dev/null; then
-        printf '\n[platform_tool_requires]\ncmake/[>=3.21]\n' >> "$HOME/.conan2/profiles/default"
+        printf '\n[platform_tool_requires]\ncmake/3.28.3\n' >> "$HOME/.conan2/profiles/default"
     fi
 fi
 
