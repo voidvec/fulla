@@ -128,7 +128,7 @@ fi
 # image build). Idempotent append; non-Linux keeps prior behavior.
 if [[ "$OSTYPE" == linux* ]]; then
     if ! grep -q '^\[platform_tool_requires\]' "$HOME/.conan2/profiles/default" 2>/dev/null; then
-        printf '\n[platform_tool_requires]\ncmake\n' >> "$HOME/.conan2/profiles/default"
+        printf '\n[platform_tool_requires]\ncmake/[>=3.21]\n' >> "$HOME/.conan2/profiles/default"
     fi
 fi
 
