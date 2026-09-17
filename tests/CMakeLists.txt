@@ -65,6 +65,16 @@ set(ORGANIZATION_SRC
     "${FULLA_SERVER_SRC_DIR}/organization/OrganizationService.cc"
 )
 
+# v1.4.0: open platform + org membership controllers register through
+# ControllerRegistration.cc, so the test binary compiles them too (same
+# pattern as ORGANIZATION_SRC above).
+set(OPENPLATFORM_SRC
+    "${FULLA_SERVER_SRC_DIR}/openplatform/ApplicationController.cc"
+    "${FULLA_SERVER_SRC_DIR}/openplatform/ApplicationService.cc"
+    "${FULLA_SERVER_SRC_DIR}/organization/OrgMemberController.cc"
+    "${FULLA_SERVER_SRC_DIR}/organization/OrgMemberService.cc"
+)
+
 # Collect hierarchical test sources
 file(GLOB_RECURSE UNIT_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/unit/*.cc")
 file(GLOB_RECURSE INTEGRATION_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/*.cc")
@@ -104,6 +114,7 @@ add_executable(${PROJECT_NAME}
     ${SCHEMA_MGR_SRC}
     ${BOOTSTRAP_SRC}
     ${ORGANIZATION_SRC}
+    ${OPENPLATFORM_SRC}
 )
 
 drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/../apps/server/views
@@ -115,6 +126,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${FULLA_SERVER_SRC_DIR}
     ${FULLA_SERVER_SRC_DIR}/organization
+    ${FULLA_SERVER_SRC_DIR}/openplatform
 )
 
 # Link libraries

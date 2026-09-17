@@ -54,6 +54,8 @@ static void flushGcovIfInstrumented()
 // M5 Task 30: OrganizationController moved to the product app
 // (apps/server/src/organization/, namespace `organization`).
 #include <OrganizationController.h>
+#include <OrgMemberController.h>
+#include <ApplicationController.h>
 #include <fulla/drogon/controllers/ClientRegistrationController.h>
 #include <fulla/drogon/controllers/ApiDocController.h>
 #include <fulla/drogon/controllers/DeviceAuthController.h>
@@ -318,6 +320,8 @@ int main(int argc, char **argv)
     );
 #endif  // WITH_SOCIAL
     drogon::app().registerController(std::make_shared<::organization::OrganizationController>());
+    drogon::app().registerController(std::make_shared<::organization::OrgMemberController>());
+    drogon::app().registerController(std::make_shared<::openplatform::ApplicationController>());
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::ClientRegistrationController>()
     );
@@ -393,6 +397,8 @@ int main(int argc, char **argv)
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     // #43: OrganizationController (product-app level).
     ::organization::OrganizationController::initApiDocs();
+    ::organization::OrgMemberController::initApiDocs();
+    ::openplatform::ApplicationController::initApiDocs();
     // #43: build the resource-scope registry from the declared EndpointInfo.
     fulla::drogon::authz::ResourceScopeRegistry::buildFromEndpoints();
     // #43: catch-all prefix so all /api/me/* subpaths (MFA, WebAuthn, ...)
