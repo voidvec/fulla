@@ -28,9 +28,6 @@
 
 namespace openplatform
 {
-#include <cstdio>
-static void qaMark(const char *m) { fprintf(stderr, "[QA] %s\n", m); fflush(stderr); }
-
 using ResponseCallback = ApplicationService::ResponseCallback;
 
 namespace
