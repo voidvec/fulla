@@ -42,6 +42,8 @@ from .post_api_admin_organizations_response_200 import PostApiAdminOrganizations
 from .post_api_admin_roles_body import PostApiAdminRolesBody
 from .post_api_admin_scopes_body import PostApiAdminScopesBody
 from .post_api_admin_users_body import PostApiAdminUsersBody
+from .post_api_me_applications_body import PostApiMeApplicationsBody
+from .post_api_me_applications_body_client_type import PostApiMeApplicationsBodyClientType
 from .post_api_me_mfa_disable_body import PostApiMeMfaDisableBody
 from .post_api_me_mfa_setup_body import PostApiMeMfaSetupBody
 from .post_api_me_mfa_setup_response_200 import PostApiMeMfaSetupResponse200
@@ -123,6 +125,8 @@ __all__ = (
     "PostApiAdminRolesBody",
     "PostApiAdminScopesBody",
     "PostApiAdminUsersBody",
+    "PostApiMeApplicationsBody",
+    "PostApiMeApplicationsBodyClientType",
     "PostApiMeMfaDisableBody",
     "PostApiMeMfaSetupBody",
     "PostApiMeMfaSetupResponse200",

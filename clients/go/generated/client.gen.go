@@ -162,16 +162,16 @@ func (e TokenRequestGrantType) Valid() bool {
 
 // Defines values for PostApiAdminClientsJSONBodyClientType.
 const (
-	CONFIDENTIAL PostApiAdminClientsJSONBodyClientType = "CONFIDENTIAL"
-	PUBLIC       PostApiAdminClientsJSONBodyClientType = "PUBLIC"
+	PostApiAdminClientsJSONBodyClientTypeCONFIDENTIAL PostApiAdminClientsJSONBodyClientType = "CONFIDENTIAL"
+	PostApiAdminClientsJSONBodyClientTypePUBLIC       PostApiAdminClientsJSONBodyClientType = "PUBLIC"
 )
 
 // Valid indicates whether the value is a known member of the PostApiAdminClientsJSONBodyClientType enum.
 func (e PostApiAdminClientsJSONBodyClientType) Valid() bool {
 	switch e {
-	case CONFIDENTIAL:
+	case PostApiAdminClientsJSONBodyClientTypeCONFIDENTIAL:
 		return true
-	case PUBLIC:
+	case PostApiAdminClientsJSONBodyClientTypePUBLIC:
 		return true
 	default:
 		return false
@@ -190,6 +190,24 @@ func (e GetApiAdminUsersParamsLocked) Valid() bool {
 	case False:
 		return true
 	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostApiMeApplicationsJSONBodyClientType.
+const (
+	PostApiMeApplicationsJSONBodyClientTypeCONFIDENTIAL PostApiMeApplicationsJSONBodyClientType = "CONFIDENTIAL"
+	PostApiMeApplicationsJSONBodyClientTypePUBLIC       PostApiMeApplicationsJSONBodyClientType = "PUBLIC"
+)
+
+// Valid indicates whether the value is a known member of the PostApiMeApplicationsJSONBodyClientType enum.
+func (e PostApiMeApplicationsJSONBodyClientType) Valid() bool {
+	switch e {
+	case PostApiMeApplicationsJSONBodyClientTypeCONFIDENTIAL:
+		return true
+	case PostApiMeApplicationsJSONBodyClientTypePUBLIC:
 		return true
 	default:
 		return false
@@ -790,6 +808,21 @@ type PostApiGoogleLoginParams struct {
 	Code string `form:"code" json:"code"`
 }
 
+// PostApiMeApplicationsJSONBody defines parameters for PostApiMeApplications.
+type PostApiMeApplicationsJSONBody struct {
+	AllowedGrantTypes *[]string                                `json:"allowed_grant_types,omitempty"`
+	ClientType        *PostApiMeApplicationsJSONBodyClientType `json:"client_type,omitempty"`
+	Name              *string                                  `json:"name,omitempty"`
+
+	// OrgSlug Register under this organization (caller must be its owner/admin); omit for a personal application.
+	OrgSlug      *string   `json:"org_slug,omitempty"`
+	RedirectUris *[]string `json:"redirect_uris,omitempty"`
+	Scopes       *[]string `json:"scopes,omitempty"`
+}
+
+// PostApiMeApplicationsJSONBodyClientType defines parameters for PostApiMeApplications.
+type PostApiMeApplicationsJSONBodyClientType string
+
 // PostApiMeMfaDisableJSONBody defines parameters for PostApiMeMfaDisable.
 type PostApiMeMfaDisableJSONBody = map[string]interface{}
 
@@ -1032,6 +1065,9 @@ type PutApiAdminUsersUserIdJSONRequestBody PutApiAdminUsersUserIdJSONBody
 
 // PutApiAdminUsersUserIdRolesJSONRequestBody defines body for PutApiAdminUsersUserIdRoles for application/json ContentType.
 type PutApiAdminUsersUserIdRolesJSONRequestBody PutApiAdminUsersUserIdRolesJSONBody
+
+// PostApiMeApplicationsJSONRequestBody defines body for PostApiMeApplications for application/json ContentType.
+type PostApiMeApplicationsJSONRequestBody PostApiMeApplicationsJSONBody
 
 // PostApiMeMfaDisableJSONRequestBody defines body for PostApiMeMfaDisable for application/json ContentType.
 type PostApiMeMfaDisableJSONRequestBody = PostApiMeMfaDisableJSONBody
@@ -1337,6 +1373,13 @@ type ClientInterface interface {
 	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
 	PostApiAdminClientsClientIdResetSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiAdminClientsClientIdResume Resume Application
+	//
+	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+	PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiAdminClientsClientIdScopes Get Client Scopes
 	//
 	// Get the assigned scopes for an OAuth2 client.
@@ -1350,6 +1393,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
 	PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminClientsClientIdSuspend Suspend Application
+	//
+	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+	PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminDashboard Get Dashboard
 	//
@@ -1670,6 +1720,59 @@ type ClientInterface interface {
 	// Corresponds with GET /api/me (the `GetApiMe` operationId).
 	GetApiMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetApiMeApplications List My Applications
+	//
+	// List the caller's self-registered applications (personal plus org apps the caller can manage). Secrets are never included.
+	//
+	// Corresponds with GET /api/me/applications (the `GetApiMeApplications` operationId).
+	GetApiMeApplications(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplicationsWithBody Register Application (self-service)
+	//
+	// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+	PostApiMeApplicationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplications Register Application (self-service)
+	//
+	// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+	PostApiMeApplications(ctx context.Context, body PostApiMeApplicationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiMeApplicationsClientId Delete Application
+	//
+	// Soft-delete a self-registered application; it disappears from every flow immediately (authorization, token, introspection).
+	//
+	// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
+	DeleteApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchApiMeApplicationsClientId Update Application
+	//
+	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	//
+	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+	PatchApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplicationsClientIdRotateSecret Rotate Application Secret
+	//
+	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+	PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplicationsClientIdTransfer Transfer Application
+	//
+	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+	PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiMeAuthorizedApps List Authorized Apps
 	//
 	// List OAuth2 clients authorized by the current user.
@@ -1747,12 +1850,75 @@ type ClientInterface interface {
 	// Corresponds with POST /api/me/mfa/verify (the `PostApiMeMfaVerify` operationId).
 	PostApiMeMfaVerifyWithFormdataBody(ctx context.Context, body PostApiMeMfaVerifyFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeOrgInvitationsAccept Accept Organization Invitation
+	//
+	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+	//
+	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+	PostApiMeOrgInvitationsAccept(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiMeOrganizations List My Organizations
+	//
+	// List the current user's organization memberships, including the caller's org role (owner/admin/member).
+	//
+	// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
+	GetApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizations Create Organization (self-service)
+	//
+	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+	//
+	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+	PostApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiMeOrganizationsSlugInvitations List Pending Invitations
+	//
+	// List pending (unaccepted) invitations (org owner/admin).
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
+	GetApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugInvitations Invite Organization Member
+	//
+	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+	PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiMeOrganizationsSlugInvitationsInvitationId Revoke Invitation
+	//
+	// Revoke a pending invitation (org owner/admin).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/invitations/{invitationId} (the `DeleteApiMeOrganizationsSlugInvitationsInvitationId` operationId).
+	DeleteApiMeOrganizationsSlugInvitationsInvitationId(ctx context.Context, slug string, invitationId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiMeOrganizationsSlugMembers List Organization Members
+	//
+	// List members of an organization (any member may view).
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/members (the `GetApiMeOrganizationsSlugMembers` operationId).
+	GetApiMeOrganizationsSlugMembers(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiMeOrganizationsSlugMembersUserId Remove Organization Member
+	//
+	// Remove a member. Owner removes anyone except self; admins remove members only; members may only remove themselves (leave). The owner seat cannot be removed.
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
+	DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PutApiMePassword Change Password
 	//
 	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 	//
 	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
 	PutApiMePassword(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchApiMeProfile Update User Profile
+	//
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	//
+	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+	PatchApiMeProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeSocialLinks List Linked Social Accounts
 	//
@@ -2349,6 +2515,23 @@ func (c *Client) PostApiAdminClientsClientIdResetSecret(ctx context.Context, cli
 	return c.Client.Do(req)
 }
 
+// PostApiAdminClientsClientIdResume Resume Application
+//
+// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+//
+// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+func (c *Client) PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdResumeRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiAdminClientsClientIdScopes Get Client Scopes
 //
 // Get the assigned scopes for an OAuth2 client.
@@ -2373,6 +2556,23 @@ func (c *Client) GetApiAdminClientsClientIdScopes(ctx context.Context, clientId 
 // Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
 func (c *Client) PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutApiAdminClientsClientIdScopesRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminClientsClientIdSuspend Suspend Application
+//
+// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+//
+// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+func (c *Client) PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdSuspendRequest(c.Server, clientId)
 	if err != nil {
 		return nil, err
 	}
@@ -3112,6 +3312,129 @@ func (c *Client) GetApiMe(ctx context.Context, reqEditors ...RequestEditorFn) (*
 	return c.Client.Do(req)
 }
 
+// GetApiMeApplications List My Applications
+//
+// List the caller's self-registered applications (personal plus org apps the caller can manage). Secrets are never included.
+//
+// Corresponds with GET /api/me/applications (the `GetApiMeApplications` operationId).
+func (c *Client) GetApiMeApplications(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeApplicationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplicationsWithBody Register Application (self-service)
+//
+// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+func (c *Client) PostApiMeApplicationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplications Register Application (self-service)
+//
+// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+func (c *Client) PostApiMeApplications(ctx context.Context, body PostApiMeApplicationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiMeApplicationsClientId Delete Application
+//
+// Soft-delete a self-registered application; it disappears from every flow immediately (authorization, token, introspection).
+//
+// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
+func (c *Client) DeleteApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeApplicationsClientIdRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchApiMeApplicationsClientId Update Application
+//
+// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+//
+// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+func (c *Client) PatchApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeApplicationsClientIdRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplicationsClientIdRotateSecret Rotate Application Secret
+//
+// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+//
+// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+func (c *Client) PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdRotateSecretRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplicationsClientIdTransfer Transfer Application
+//
+// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+//
+// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+func (c *Client) PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdTransferRequest(c.Server, clientId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiMeAuthorizedApps List Authorized Apps
 //
 // List OAuth2 clients authorized by the current user.
@@ -3279,6 +3602,142 @@ func (c *Client) PostApiMeMfaVerifyWithFormdataBody(ctx context.Context, body Po
 	return c.Client.Do(req)
 }
 
+// PostApiMeOrgInvitationsAccept Accept Organization Invitation
+//
+// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+//
+// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+func (c *Client) PostApiMeOrgInvitationsAccept(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrgInvitationsAcceptRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiMeOrganizations List My Organizations
+//
+// List the current user's organization memberships, including the caller's org role (owner/admin/member).
+//
+// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
+func (c *Client) GetApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeOrganizationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizations Create Organization (self-service)
+//
+// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+//
+// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+func (c *Client) PostApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiMeOrganizationsSlugInvitations List Pending Invitations
+//
+// List pending (unaccepted) invitations (org owner/admin).
+//
+// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
+func (c *Client) GetApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeOrganizationsSlugInvitationsRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugInvitations Invite Organization Member
+//
+// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+//
+// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+func (c *Client) PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugInvitationsRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiMeOrganizationsSlugInvitationsInvitationId Revoke Invitation
+//
+// Revoke a pending invitation (org owner/admin).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/invitations/{invitationId} (the `DeleteApiMeOrganizationsSlugInvitationsInvitationId` operationId).
+func (c *Client) DeleteApiMeOrganizationsSlugInvitationsInvitationId(ctx context.Context, slug string, invitationId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeOrganizationsSlugInvitationsInvitationIdRequest(c.Server, slug, invitationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiMeOrganizationsSlugMembers List Organization Members
+//
+// List members of an organization (any member may view).
+//
+// Corresponds with GET /api/me/organizations/{slug}/members (the `GetApiMeOrganizationsSlugMembers` operationId).
+func (c *Client) GetApiMeOrganizationsSlugMembers(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeOrganizationsSlugMembersRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiMeOrganizationsSlugMembersUserId Remove Organization Member
+//
+// Remove a member. Owner removes anyone except self; admins remove members only; members may only remove themselves (leave). The owner seat cannot be removed.
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
+func (c *Client) DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeOrganizationsSlugMembersUserIdRequest(c.Server, slug, userId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PutApiMePassword Change Password
 //
 // Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
@@ -3286,6 +3745,23 @@ func (c *Client) PostApiMeMfaVerifyWithFormdataBody(ctx context.Context, body Po
 // Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
 func (c *Client) PutApiMePassword(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutApiMePasswordRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchApiMeProfile Update User Profile
+//
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+func (c *Client) PatchApiMeProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeProfileRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4482,6 +4958,40 @@ func NewPostApiAdminClientsClientIdResetSecretRequest(server string, clientId st
 	return req, nil
 }
 
+// NewPostApiAdminClientsClientIdResumeRequest constructs an http.Request for the PostApiAdminClientsClientIdResume method
+func NewPostApiAdminClientsClientIdResumeRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/clients/%s/resume", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetApiAdminClientsClientIdScopesRequest constructs an http.Request for the GetApiAdminClientsClientIdScopes method
 func NewGetApiAdminClientsClientIdScopesRequest(server string, clientId string) (*http.Request, error) {
 	var err error
@@ -4543,6 +5053,40 @@ func NewPutApiAdminClientsClientIdScopesRequest(server string, clientId string) 
 	}
 
 	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiAdminClientsClientIdSuspendRequest constructs an http.Request for the PostApiAdminClientsClientIdSuspend method
+func NewPostApiAdminClientsClientIdSuspendRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/clients/%s/suspend", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -5757,6 +6301,209 @@ func NewGetApiMeRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetApiMeApplicationsRequest constructs an http.Request for the GetApiMeApplications method
+func NewGetApiMeApplicationsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeApplicationsRequest calls the generic PostApiMeApplications builder with application/json body
+func NewPostApiMeApplicationsRequest(server string, body PostApiMeApplicationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeApplicationsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiMeApplicationsRequestWithBody constructs an http.Request for the PostApiMeApplications method, with any body, and a specified content type
+func NewPostApiMeApplicationsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteApiMeApplicationsClientIdRequest constructs an http.Request for the DeleteApiMeApplicationsClientId method
+func NewDeleteApiMeApplicationsClientIdRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchApiMeApplicationsClientIdRequest constructs an http.Request for the PatchApiMeApplicationsClientId method
+func NewPatchApiMeApplicationsClientIdRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeApplicationsClientIdRotateSecretRequest constructs an http.Request for the PostApiMeApplicationsClientIdRotateSecret method
+func NewPostApiMeApplicationsClientIdRotateSecretRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications/%s/rotate-secret", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeApplicationsClientIdTransferRequest constructs an http.Request for the PostApiMeApplicationsClientIdTransfer method
+func NewPostApiMeApplicationsClientIdTransferRequest(server string, clientId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clientId", clientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/applications/%s/transfer", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetApiMeAuthorizedAppsRequest constructs an http.Request for the GetApiMeAuthorizedApps method
 func NewGetApiMeAuthorizedAppsRequest(server string) (*http.Request, error) {
 	var err error
@@ -5949,6 +6696,271 @@ func NewPostApiMeMfaVerifyRequestWithBody(server string, contentType string, bod
 	return req, nil
 }
 
+// NewPostApiMeOrgInvitationsAcceptRequest constructs an http.Request for the PostApiMeOrgInvitationsAccept method
+func NewPostApiMeOrgInvitationsAcceptRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/org-invitations/accept")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiMeOrganizationsRequest constructs an http.Request for the GetApiMeOrganizations method
+func NewGetApiMeOrganizationsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsRequest constructs an http.Request for the PostApiMeOrganizations method
+func NewPostApiMeOrganizationsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiMeOrganizationsSlugInvitationsRequest constructs an http.Request for the GetApiMeOrganizationsSlugInvitations method
+func NewGetApiMeOrganizationsSlugInvitationsRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugInvitationsRequest constructs an http.Request for the PostApiMeOrganizationsSlugInvitations method
+func NewPostApiMeOrganizationsSlugInvitationsRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteApiMeOrganizationsSlugInvitationsInvitationIdRequest constructs an http.Request for the DeleteApiMeOrganizationsSlugInvitationsInvitationId method
+func NewDeleteApiMeOrganizationsSlugInvitationsInvitationIdRequest(server string, slug string, invitationId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "invitationId", invitationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/invitations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiMeOrganizationsSlugMembersRequest constructs an http.Request for the GetApiMeOrganizationsSlugMembers method
+func NewGetApiMeOrganizationsSlugMembersRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/members", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteApiMeOrganizationsSlugMembersUserIdRequest constructs an http.Request for the DeleteApiMeOrganizationsSlugMembersUserId method
+func NewDeleteApiMeOrganizationsSlugMembersUserIdRequest(server string, slug string, userId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "userId", userId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/members/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPutApiMePasswordRequest constructs an http.Request for the PutApiMePassword method
 func NewPutApiMePasswordRequest(server string) (*http.Request, error) {
 	var err error
@@ -5969,6 +6981,33 @@ func NewPutApiMePasswordRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchApiMeProfileRequest constructs an http.Request for the PatchApiMeProfile method
+func NewPatchApiMeProfileRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/profile")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -7639,6 +8678,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
 	PostApiAdminClientsClientIdResetSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error)
 
+	// PostApiAdminClientsClientIdResumeWithResponse Resume Application
+	//
+	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+	PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error)
+
 	// GetApiAdminClientsClientIdScopesWithResponse Get Client Scopes
 	//
 	// Get the assigned scopes for an OAuth2 client.
@@ -7656,6 +8704,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
 	PutApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error)
+
+	// PostApiAdminClientsClientIdSuspendWithResponse Suspend Application
+	//
+	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+	PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error)
 
 	// GetApiAdminDashboardWithResponse Get Dashboard
 	//
@@ -8026,6 +9083,69 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/me (the `GetApiMe` operationId).
 	GetApiMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeResponse, error)
 
+	// GetApiMeApplicationsWithResponse List My Applications
+	//
+	// List the caller's self-registered applications (personal plus org apps the caller can manage). Secrets are never included.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/applications (the `GetApiMeApplications` operationId).
+	GetApiMeApplicationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeApplicationsResponse, error)
+
+	// PostApiMeApplicationsWithBodyWithResponse Register Application (self-service)
+	//
+	// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+	PostApiMeApplicationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsResponse, error)
+
+	// PostApiMeApplicationsWithResponse Register Application (self-service)
+	//
+	// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+	PostApiMeApplicationsWithResponse(ctx context.Context, body PostApiMeApplicationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsResponse, error)
+
+	// DeleteApiMeApplicationsClientIdWithResponse Delete Application
+	//
+	// Soft-delete a self-registered application; it disappears from every flow immediately (authorization, token, introspection).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
+	DeleteApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*DeleteApiMeApplicationsClientIdResponse, error)
+
+	// PatchApiMeApplicationsClientIdWithResponse Update Application
+	//
+	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+	PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error)
+
+	// PostApiMeApplicationsClientIdRotateSecretWithResponse Rotate Application Secret
+	//
+	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+	PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error)
+
+	// PostApiMeApplicationsClientIdTransferWithResponse Transfer Application
+	//
+	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+	PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error)
+
 	// GetApiMeAuthorizedAppsWithResponse List Authorized Apps
 	//
 	// List OAuth2 clients authorized by the current user.
@@ -8107,6 +9227,78 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/me/mfa/verify (the `PostApiMeMfaVerify` operationId).
 	PostApiMeMfaVerifyWithFormdataBodyWithResponse(ctx context.Context, body PostApiMeMfaVerifyFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeMfaVerifyResponse, error)
 
+	// PostApiMeOrgInvitationsAcceptWithResponse Accept Organization Invitation
+	//
+	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+	PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error)
+
+	// GetApiMeOrganizationsWithResponse List My Organizations
+	//
+	// List the current user's organization memberships, including the caller's org role (owner/admin/member).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
+	GetApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsResponse, error)
+
+	// PostApiMeOrganizationsWithResponse Create Organization (self-service)
+	//
+	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+	PostApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error)
+
+	// GetApiMeOrganizationsSlugInvitationsWithResponse List Pending Invitations
+	//
+	// List pending (unaccepted) invitations (org owner/admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
+	GetApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugInvitationsResponse, error)
+
+	// PostApiMeOrganizationsSlugInvitationsWithResponse Invite Organization Member
+	//
+	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+	PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error)
+
+	// DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse Revoke Invitation
+	//
+	// Revoke a pending invitation (org owner/admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/invitations/{invitationId} (the `DeleteApiMeOrganizationsSlugInvitationsInvitationId` operationId).
+	DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse(ctx context.Context, slug string, invitationId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse, error)
+
+	// GetApiMeOrganizationsSlugMembersWithResponse List Organization Members
+	//
+	// List members of an organization (any member may view).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/members (the `GetApiMeOrganizationsSlugMembers` operationId).
+	GetApiMeOrganizationsSlugMembersWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugMembersResponse, error)
+
+	// DeleteApiMeOrganizationsSlugMembersUserIdWithResponse Remove Organization Member
+	//
+	// Remove a member. Owner removes anyone except self; admins remove members only; members may only remove themselves (leave). The owner seat cannot be removed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
+	DeleteApiMeOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugMembersUserIdResponse, error)
+
 	// PutApiMePasswordWithResponse Change Password
 	//
 	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
@@ -8115,6 +9307,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
 	PutApiMePasswordWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error)
+
+	// PatchApiMeProfileWithResponse Update User Profile
+	//
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+	PatchApiMeProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error)
 
 	// GetApiMeSocialLinksWithResponse List Linked Social Accounts
 	//
@@ -8885,6 +10086,40 @@ func (r PostApiAdminClientsClientIdResetSecretResponse) ContentType() string {
 	return ""
 }
 
+type PostApiAdminClientsClientIdResumeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminClientsClientIdResumeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminClientsClientIdResumeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminClientsClientIdResumeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminClientsClientIdResumeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetApiAdminClientsClientIdScopesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8947,6 +10182,40 @@ func (r PutApiAdminClientsClientIdScopesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutApiAdminClientsClientIdScopesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAdminClientsClientIdSuspendResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminClientsClientIdSuspendResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminClientsClientIdSuspendResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminClientsClientIdSuspendResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminClientsClientIdSuspendResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -10304,6 +11573,210 @@ func (r GetApiMeResponse) ContentType() string {
 	return ""
 }
 
+type GetApiMeApplicationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeApplicationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeApplicationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeApplicationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeApplicationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeApplicationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeApplicationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeApplicationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeApplicationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeApplicationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiMeApplicationsClientIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeApplicationsClientIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeApplicationsClientIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeApplicationsClientIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeApplicationsClientIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchApiMeApplicationsClientIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchApiMeApplicationsClientIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchApiMeApplicationsClientIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchApiMeApplicationsClientIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchApiMeApplicationsClientIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeApplicationsClientIdRotateSecretResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeApplicationsClientIdTransferResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeApplicationsClientIdTransferResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeApplicationsClientIdTransferResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeApplicationsClientIdTransferResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeApplicationsClientIdTransferResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetApiMeAuthorizedAppsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10549,6 +12022,278 @@ func (r PostApiMeMfaVerifyResponse) ContentType() string {
 	return ""
 }
 
+type PostApiMeOrgInvitationsAcceptResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrgInvitationsAcceptResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrgInvitationsAcceptResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrgInvitationsAcceptResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrgInvitationsAcceptResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiMeOrganizationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeOrganizationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeOrganizationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeOrganizationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeOrganizationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiMeOrganizationsSlugInvitationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeOrganizationsSlugInvitationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeOrganizationsSlugInvitationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeOrganizationsSlugInvitationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeOrganizationsSlugInvitationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugInvitationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugInvitationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugInvitationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugInvitationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiMeOrganizationsSlugMembersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeOrganizationsSlugMembersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeOrganizationsSlugMembersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeOrganizationsSlugMembersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeOrganizationsSlugMembersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiMeOrganizationsSlugMembersUserIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PutApiMePasswordResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10577,6 +12322,40 @@ func (r PutApiMePasswordResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutApiMePasswordResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchApiMeProfileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchApiMeProfileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchApiMeProfileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchApiMeProfileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchApiMeProfileResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12462,6 +14241,21 @@ func (c *ClientWithResponses) PostApiAdminClientsClientIdResetSecretWithResponse
 	return ParsePostApiAdminClientsClientIdResetSecretResponse(rsp)
 }
 
+// PostApiAdminClientsClientIdResumeWithResponse Resume Application
+//
+// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+func (c *ClientWithResponses) PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdResume(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClientsClientIdResumeResponse(rsp)
+}
+
 // GetApiAdminClientsClientIdScopesWithResponse Get Client Scopes
 //
 // Get the assigned scopes for an OAuth2 client.
@@ -12490,6 +14284,21 @@ func (c *ClientWithResponses) PutApiAdminClientsClientIdScopesWithResponse(ctx c
 		return nil, err
 	}
 	return ParsePutApiAdminClientsClientIdScopesResponse(rsp)
+}
+
+// PostApiAdminClientsClientIdSuspendWithResponse Suspend Application
+//
+// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+func (c *ClientWithResponses) PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdSuspend(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClientsClientIdSuspendResponse(rsp)
 }
 
 // GetApiAdminDashboardWithResponse Get Dashboard
@@ -13107,6 +14916,111 @@ func (c *ClientWithResponses) GetApiMeWithResponse(ctx context.Context, reqEdito
 	return ParseGetApiMeResponse(rsp)
 }
 
+// GetApiMeApplicationsWithResponse List My Applications
+//
+// List the caller's self-registered applications (personal plus org apps the caller can manage). Secrets are never included.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/applications (the `GetApiMeApplications` operationId).
+func (c *ClientWithResponses) GetApiMeApplicationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeApplicationsResponse, error) {
+	rsp, err := c.GetApiMeApplications(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeApplicationsResponse(rsp)
+}
+
+// PostApiMeApplicationsWithBodyWithResponse Register Application (self-service)
+//
+// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsResponse, error) {
+	rsp, err := c.PostApiMeApplicationsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsResponse(rsp)
+}
+
+// PostApiMeApplicationsWithResponse Register Application (self-service)
+//
+// Register an OAuth2/OIDC application (RP self-registration; v1.4.0 open platform). Gated by the open_platform config (enabled, require_org, per-user/per-org quotas, 24h creation rate limit, the self_service scope allowlist and the grant-type whitelist). The client secret (CONFIDENTIAL) is returned exactly once.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications (the `PostApiMeApplications` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsWithResponse(ctx context.Context, body PostApiMeApplicationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsResponse, error) {
+	rsp, err := c.PostApiMeApplications(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsResponse(rsp)
+}
+
+// DeleteApiMeApplicationsClientIdWithResponse Delete Application
+//
+// Soft-delete a self-registered application; it disappears from every flow immediately (authorization, token, introspection).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
+func (c *ClientWithResponses) DeleteApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*DeleteApiMeApplicationsClientIdResponse, error) {
+	rsp, err := c.DeleteApiMeApplicationsClientId(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeApplicationsClientIdResponse(rsp)
+}
+
+// PatchApiMeApplicationsClientIdWithResponse Update Application
+//
+// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+func (c *ClientWithResponses) PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error) {
+	rsp, err := c.PatchApiMeApplicationsClientId(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiMeApplicationsClientIdResponse(rsp)
+}
+
+// PostApiMeApplicationsClientIdRotateSecretWithResponse Rotate Application Secret
+//
+// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdRotateSecret(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsClientIdRotateSecretResponse(rsp)
+}
+
+// PostApiMeApplicationsClientIdTransferWithResponse Transfer Application
+//
+// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdTransfer(ctx, clientId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsClientIdTransferResponse(rsp)
+}
+
 // GetApiMeAuthorizedAppsWithResponse List Authorized Apps
 //
 // List OAuth2 clients authorized by the current user.
@@ -13242,6 +15156,126 @@ func (c *ClientWithResponses) PostApiMeMfaVerifyWithFormdataBodyWithResponse(ctx
 	return ParsePostApiMeMfaVerifyResponse(rsp)
 }
 
+// PostApiMeOrgInvitationsAcceptWithResponse Accept Organization Invitation
+//
+// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+func (c *ClientWithResponses) PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error) {
+	rsp, err := c.PostApiMeOrgInvitationsAccept(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrgInvitationsAcceptResponse(rsp)
+}
+
+// GetApiMeOrganizationsWithResponse List My Organizations
+//
+// List the current user's organization memberships, including the caller's org role (owner/admin/member).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
+func (c *ClientWithResponses) GetApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsResponse, error) {
+	rsp, err := c.GetApiMeOrganizations(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeOrganizationsResponse(rsp)
+}
+
+// PostApiMeOrganizationsWithResponse Create Organization (self-service)
+//
+// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizations(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsResponse(rsp)
+}
+
+// GetApiMeOrganizationsSlugInvitationsWithResponse List Pending Invitations
+//
+// List pending (unaccepted) invitations (org owner/admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
+func (c *ClientWithResponses) GetApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugInvitationsResponse, error) {
+	rsp, err := c.GetApiMeOrganizationsSlugInvitations(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeOrganizationsSlugInvitationsResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugInvitationsWithResponse Invite Organization Member
+//
+// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugInvitations(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugInvitationsResponse(rsp)
+}
+
+// DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse Revoke Invitation
+//
+// Revoke a pending invitation (org owner/admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/invitations/{invitationId} (the `DeleteApiMeOrganizationsSlugInvitationsInvitationId` operationId).
+func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse(ctx context.Context, slug string, invitationId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse, error) {
+	rsp, err := c.DeleteApiMeOrganizationsSlugInvitationsInvitationId(ctx, slug, invitationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse(rsp)
+}
+
+// GetApiMeOrganizationsSlugMembersWithResponse List Organization Members
+//
+// List members of an organization (any member may view).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/organizations/{slug}/members (the `GetApiMeOrganizationsSlugMembers` operationId).
+func (c *ClientWithResponses) GetApiMeOrganizationsSlugMembersWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugMembersResponse, error) {
+	rsp, err := c.GetApiMeOrganizationsSlugMembers(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeOrganizationsSlugMembersResponse(rsp)
+}
+
+// DeleteApiMeOrganizationsSlugMembersUserIdWithResponse Remove Organization Member
+//
+// Remove a member. Owner removes anyone except self; admins remove members only; members may only remove themselves (leave). The owner seat cannot be removed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
+func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugMembersUserIdResponse, error) {
+	rsp, err := c.DeleteApiMeOrganizationsSlugMembersUserId(ctx, slug, userId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp)
+}
+
 // PutApiMePasswordWithResponse Change Password
 //
 // Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
@@ -13255,6 +15289,21 @@ func (c *ClientWithResponses) PutApiMePasswordWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParsePutApiMePasswordResponse(rsp)
+}
+
+// PatchApiMeProfileWithResponse Update User Profile
+//
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+func (c *ClientWithResponses) PatchApiMeProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error) {
+	rsp, err := c.PatchApiMeProfile(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiMeProfileResponse(rsp)
 }
 
 // GetApiMeSocialLinksWithResponse List Linked Social Accounts
@@ -14166,6 +16215,22 @@ func ParsePostApiAdminClientsClientIdResetSecretResponse(rsp *http.Response) (*P
 	return response, nil
 }
 
+// ParsePostApiAdminClientsClientIdResumeResponse parses an HTTP response from a PostApiAdminClientsClientIdResumeWithResponse call
+func ParsePostApiAdminClientsClientIdResumeResponse(rsp *http.Response) (*PostApiAdminClientsClientIdResumeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminClientsClientIdResumeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParseGetApiAdminClientsClientIdScopesResponse parses an HTTP response from a GetApiAdminClientsClientIdScopesWithResponse call
 func ParseGetApiAdminClientsClientIdScopesResponse(rsp *http.Response) (*GetApiAdminClientsClientIdScopesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14191,6 +16256,22 @@ func ParsePutApiAdminClientsClientIdScopesResponse(rsp *http.Response) (*PutApiA
 	}
 
 	response := &PutApiAdminClientsClientIdScopesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAdminClientsClientIdSuspendResponse parses an HTTP response from a PostApiAdminClientsClientIdSuspendWithResponse call
+func ParsePostApiAdminClientsClientIdSuspendResponse(rsp *http.Response) (*PostApiAdminClientsClientIdSuspendResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminClientsClientIdSuspendResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -14967,6 +17048,102 @@ func ParseGetApiMeResponse(rsp *http.Response) (*GetApiMeResponse, error) {
 	return response, nil
 }
 
+// ParseGetApiMeApplicationsResponse parses an HTTP response from a GetApiMeApplicationsWithResponse call
+func ParseGetApiMeApplicationsResponse(rsp *http.Response) (*GetApiMeApplicationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeApplicationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeApplicationsResponse parses an HTTP response from a PostApiMeApplicationsWithResponse call
+func ParsePostApiMeApplicationsResponse(rsp *http.Response) (*PostApiMeApplicationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeApplicationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiMeApplicationsClientIdResponse parses an HTTP response from a DeleteApiMeApplicationsClientIdWithResponse call
+func ParseDeleteApiMeApplicationsClientIdResponse(rsp *http.Response) (*DeleteApiMeApplicationsClientIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeApplicationsClientIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePatchApiMeApplicationsClientIdResponse parses an HTTP response from a PatchApiMeApplicationsClientIdWithResponse call
+func ParsePatchApiMeApplicationsClientIdResponse(rsp *http.Response) (*PatchApiMeApplicationsClientIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchApiMeApplicationsClientIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeApplicationsClientIdRotateSecretResponse parses an HTTP response from a PostApiMeApplicationsClientIdRotateSecretWithResponse call
+func ParsePostApiMeApplicationsClientIdRotateSecretResponse(rsp *http.Response) (*PostApiMeApplicationsClientIdRotateSecretResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeApplicationsClientIdRotateSecretResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeApplicationsClientIdTransferResponse parses an HTTP response from a PostApiMeApplicationsClientIdTransferWithResponse call
+func ParsePostApiMeApplicationsClientIdTransferResponse(rsp *http.Response) (*PostApiMeApplicationsClientIdTransferResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeApplicationsClientIdTransferResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParseGetApiMeAuthorizedAppsResponse parses an HTTP response from a GetApiMeAuthorizedAppsWithResponse call
 func ParseGetApiMeAuthorizedAppsResponse(rsp *http.Response) (*GetApiMeAuthorizedAppsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -15118,6 +17295,134 @@ func ParsePostApiMeMfaVerifyResponse(rsp *http.Response) (*PostApiMeMfaVerifyRes
 	return response, nil
 }
 
+// ParsePostApiMeOrgInvitationsAcceptResponse parses an HTTP response from a PostApiMeOrgInvitationsAcceptWithResponse call
+func ParsePostApiMeOrgInvitationsAcceptResponse(rsp *http.Response) (*PostApiMeOrgInvitationsAcceptResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrgInvitationsAcceptResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiMeOrganizationsResponse parses an HTTP response from a GetApiMeOrganizationsWithResponse call
+func ParseGetApiMeOrganizationsResponse(rsp *http.Response) (*GetApiMeOrganizationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeOrganizationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsResponse parses an HTTP response from a PostApiMeOrganizationsWithResponse call
+func ParsePostApiMeOrganizationsResponse(rsp *http.Response) (*PostApiMeOrganizationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiMeOrganizationsSlugInvitationsResponse parses an HTTP response from a GetApiMeOrganizationsSlugInvitationsWithResponse call
+func ParseGetApiMeOrganizationsSlugInvitationsResponse(rsp *http.Response) (*GetApiMeOrganizationsSlugInvitationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeOrganizationsSlugInvitationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugInvitationsResponse parses an HTTP response from a PostApiMeOrganizationsSlugInvitationsWithResponse call
+func ParsePostApiMeOrganizationsSlugInvitationsResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugInvitationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugInvitationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse parses an HTTP response from a DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse call
+func ParseDeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse(rsp *http.Response) (*DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiMeOrganizationsSlugMembersResponse parses an HTTP response from a GetApiMeOrganizationsSlugMembersWithResponse call
+func ParseGetApiMeOrganizationsSlugMembersResponse(rsp *http.Response) (*GetApiMeOrganizationsSlugMembersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeOrganizationsSlugMembersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse parses an HTTP response from a DeleteApiMeOrganizationsSlugMembersUserIdWithResponse call
+func ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp *http.Response) (*DeleteApiMeOrganizationsSlugMembersUserIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeOrganizationsSlugMembersUserIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParsePutApiMePasswordResponse parses an HTTP response from a PutApiMePasswordWithResponse call
 func ParsePutApiMePasswordResponse(rsp *http.Response) (*PutApiMePasswordResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -15127,6 +17432,22 @@ func ParsePutApiMePasswordResponse(rsp *http.Response) (*PutApiMePasswordRespons
 	}
 
 	response := &PutApiMePasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePatchApiMeProfileResponse parses an HTTP response from a PatchApiMeProfileWithResponse call
+func ParsePatchApiMeProfileResponse(rsp *http.Response) (*PatchApiMeProfileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchApiMeProfileResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

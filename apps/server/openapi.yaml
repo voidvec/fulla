@@ -955,6 +955,32 @@ paths:
       tags:
       - Admin
       - Clients
+  /api/admin/clients/{clientId}/resume:
+    post:
+      description: Lift a suspension on a self-registered application (open
+        platform governance). Admin-managed clients (no owners row) cannot be
+        suspended/resumed here.
+      operationId: post_api_admin_clients_{clientId}_resume
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Application resumed
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not a self-registered application
+      security:
+      - bearerAuth: []
+      summary: Resume Application
+      tags:
+      - Admin
+      - Clients
   /api/admin/clients/{clientId}/scopes:
     get:
       description: Get the assigned scopes for an OAuth2 client.
@@ -997,6 +1023,33 @@ paths:
       security:
       - bearerAuth: []
       summary: Update Client Scopes
+      tags:
+      - Admin
+      - Clients
+  /api/admin/clients/{clientId}/suspend:
+    post:
+      description: Suspend a self-registered application (abuse response).
+        While suspended the client validation fails, so no new authorization
+        codes or token exchanges succeed. Admin-managed clients (no owners
+        row) cannot be suspended here.
+      operationId: post_api_admin_clients_{clientId}_suspend
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Application suspended
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not a self-registered application
+      security:
+      - bearerAuth: []
+      summary: Suspend Application
       tags:
       - Admin
       - Clients
@@ -2072,6 +2125,182 @@ paths:
       summary: Revoke App Authorization
       tags:
       - User Profile
+  /api/me/applications:
+    get:
+      description: List the caller's self-registered applications (personal
+        plus org apps the caller can manage). Secrets are never included.
+      operationId: get_api_me_applications
+      responses:
+        '200':
+          description: Applications list
+        '401':
+          description: Unauthorized
+      security:
+      - bearerAuth: []
+      summary: List My Applications
+      tags:
+      - Applications
+    post:
+      description: Register an OAuth2/OIDC application (RP self-registration;
+        v1.4.0 open platform). Gated by the open_platform config (enabled,
+        require_org, per-user/per-org quotas, 24h creation rate limit, the
+        self_service scope allowlist and the grant-type whitelist). The
+        client secret (CONFIDENTIAL) is returned exactly once.
+      operationId: post_api_me_applications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                client_type:
+                  type: string
+                  enum: [PUBLIC, CONFIDENTIAL]
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                allowed_grant_types:
+                  type: array
+                  items:
+                    type: string
+                org_slug:
+                  type: string
+                  description: Register under this organization (caller must
+                    be its owner/admin); omit for a personal application.
+      responses:
+        '201':
+          description: Application created (client_secret present once)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Open platform disabled / org role missing
+        '409':
+          description: Quota exceeded
+        '429':
+          description: Creation rate limit reached
+      security:
+      - bearerAuth: []
+      summary: Register Application (self-service)
+      tags:
+      - Applications
+  /api/me/applications/{clientId}:
+    delete:
+      description: Soft-delete a self-registered application; it disappears
+        from every flow immediately (authorization, token, introspection).
+      operationId: delete_api_me_applications_{clientId}
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Application deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Caller cannot manage this application
+        '404':
+          description: Application not found
+      security:
+      - bearerAuth: []
+      summary: Delete Application
+      tags:
+      - Applications
+    patch:
+      description: Update name / redirect_uris / allowed_grant_types / scopes
+        of a self-registered application (personal apps are managed by the
+        creator, org apps by org owner/admin members). Absent keys are left
+        unchanged.
+      operationId: patch_api_me_applications_{clientId}
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Application updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Caller cannot manage this application
+        '404':
+          description: Application not found
+      security:
+      - bearerAuth: []
+      summary: Update Application
+      tags:
+      - Applications
+  /api/me/applications/{clientId}/rotate-secret:
+    post:
+      description: Rotate the client secret of a CONFIDENTIAL self-registered
+        application. The previous secret is invalidated immediately; the new
+        secret is returned exactly once.
+      operationId: post_api_me_applications_{clientId}_rotate-secret
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Secret rotated (client_secret present once)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Caller cannot manage this application
+        '404':
+          description: Application not found
+      security:
+      - bearerAuth: []
+      summary: Rotate Application Secret
+      tags:
+      - Applications
+  /api/me/applications/{clientId}/transfer:
+    post:
+      description: Move the management anchor. Send org_slug set to an
+        organization slug the caller manages, or org_slug null to move back
+        to personal. The client_id, existing consents and issued tokens are
+        preserved.
+      operationId: post_api_me_applications_{clientId}_transfer
+      parameters:
+      - description: Client ID
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Application transferred
+        '401':
+          description: Unauthorized
+        '403':
+          description: Caller cannot manage this application / target org role missing
+        '404':
+          description: Application or organization not found
+        '409':
+          description: Target organization quota exceeded
+      security:
+      - bearerAuth: []
+      summary: Transfer Application
+      tags:
+      - Applications
   /api/me/mfa/disable:
     post:
       description: Disable MFA (TOTP) for the authenticated user.
@@ -2200,6 +2429,204 @@ paths:
       summary: Verify MFA Setup
       tags:
       - MFA
+  /api/me/org-invitations/accept:
+    post:
+      description: Accept an organization invitation by token. The caller's
+        account email must match the invitation email (normalized); the
+        invitation is single-use and expires after 72h.
+      operationId: post_api_me_org-invitations_accept
+      responses:
+        '200':
+          description: Invitation accepted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Invitation issued to a different email address
+        '404':
+          description: Invalid or expired token
+        '409':
+          description: Invitation already accepted or caller already a member
+      security:
+      - bearerAuth: []
+      summary: Accept Organization Invitation
+      tags:
+      - Organization
+  /api/me/organizations:
+    get:
+      description: List the current user's organization memberships, including
+        the caller's org role (owner/admin/member).
+      operationId: get_api_me_organizations
+      responses:
+        '200':
+          description: Organization memberships
+        '401':
+          description: Unauthorized
+      security:
+      - bearerAuth: []
+      summary: List My Organizations
+      tags:
+      - Organization
+    post:
+      description: Create an organization (self-service, v1.4.0); the caller
+        becomes its owner. Slug rules match the admin endpoint; a reserved
+        slug list applies; per-user org quota defaults to 3.
+      operationId: post_api_me_organizations
+      responses:
+        '201':
+          description: Organization created
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid slug/name
+        '409':
+          description: Slug taken or org quota exceeded
+      security:
+      - bearerAuth: []
+      summary: Create Organization (self-service)
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/invitations:
+    get:
+      description: List pending (unaccepted) invitations (org owner/admin).
+      operationId: get_api_me_organizations_{slug}_invitations
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Pending invitations
+        '401':
+          description: Unauthorized
+        '403':
+          description: Owner or admin role required
+        '404':
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: List Pending Invitations
+      tags:
+      - Organization
+    post:
+      description: Create a single-use 72h invitation (org owner/admin). The
+        token is returned once and must be delivered out-of-band; email
+        delivery is not part of v1.4.0.
+      operationId: post_api_me_organizations_{slug}_invitations
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: Invitation created (token present once)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Owner or admin role required
+        '404':
+          description: Organization not found
+        '409':
+          description: A pending invitation for this email already exists
+      security:
+      - bearerAuth: []
+      summary: Invite Organization Member
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/invitations/{invitationId}:
+    delete:
+      description: Revoke a pending invitation (org owner/admin).
+      operationId: delete_api_me_organizations_{slug}_invitations_{invitationId}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Invitation ID
+        in: path
+        name: invitationId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Invitation revoked
+        '401':
+          description: Unauthorized
+        '403':
+          description: Owner or admin role required
+        '404':
+          description: Invitation not found
+      security:
+      - bearerAuth: []
+      summary: Revoke Invitation
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/members:
+    get:
+      description: List members of an organization (any member may view).
+      operationId: get_api_me_organizations_{slug}_members
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Members list
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not a member of this organization
+        '404':
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: List Organization Members
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/members/{userId}:
+    delete:
+      description: Remove a member. Owner removes anyone except self; admins
+        remove members only; members may only remove themselves (leave). The
+        owner seat cannot be removed.
+      operationId: delete_api_me_organizations_{slug}_members_{userId}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Internal user ID
+        in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Member removed
+        '401':
+          description: Unauthorized
+        '403':
+          description: Insufficient role for this removal
+        '404':
+          description: Organization or membership not found
+      security:
+      - bearerAuth: []
+      summary: Remove Organization Member
+      tags:
+      - Organization
   /api/me/password:
     put:
       description: Change the current user's password. A successful change also
@@ -2219,6 +2646,28 @@ paths:
       security:
       - bearerAuth: []
       summary: Change Password
+      tags:
+      - User Profile
+  /api/me/profile:
+    patch:
+      description: Update the current user's editable profile fields (v1.4.0
+        profile minimal set). Body keys are optional; an absent key leaves the
+        field unchanged, an empty string clears it. display_name is trimmed
+        and capped at 100 chars; avatar_url must be an https URL of at most
+        2048 chars (served verbatim, never fetched server-side).
+      operationId: patch_api_me_profile
+      responses:
+        '200':
+          description: Profile updated
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid input
+        '404':
+          description: User not found
+      security:
+      - bearerAuth: []
+      summary: Update User Profile
       tags:
       - User Profile
   /api/me/social/links:
