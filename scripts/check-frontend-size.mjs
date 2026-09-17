@@ -16,9 +16,12 @@ import { join, resolve } from 'node:path'
 
 // Raw-bytes baselines recorded 2026-09-08 with @intlify/unplugin-vue-i18n
 // precompilation active (issue #159; see docs/contribute/frontend-i18n.md).
+// Re-baselined 2026-09-17 for v1.4.0: two new lazy-loaded portal pages
+// (My Applications, My Organizations), the editable profile form, bilingual
+// catalogs for both, and two nav entries (PR #218).
 const BUDGETS = {
-  user: { total: 335132, main: 133849 },
-  admin: { total: 397157, main: 143119 },
+  user: { total: 384474, main: 146535 },
+  admin: { total: 398585, main: 143475 },
 }
 const HEADROOM = 1.1
 
