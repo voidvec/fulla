@@ -9,7 +9,7 @@ VALUES (
     'not-used-public-client',
     '',
     'Admin Console',
-    'http://127.0.0.1:5174/admin/callback,http://127.0.0.1:8081/admin/callback',
+    'http://127.0.0.1:5174/admin/callback,http://localhost:5174/admin/callback,http://127.0.0.1:8081/admin/callback,http://localhost:8081/admin/callback',
     'authorization_code,refresh_token',
     'none'
 )

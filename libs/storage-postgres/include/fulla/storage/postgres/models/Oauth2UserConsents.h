@@ -156,14 +156,14 @@ class Oauth2UserConsents
     std::string toString() const;
     Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
     /// Relationship interfaces
-    Oauth2Clients getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr) const;
-    void getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr,
-                          const std::function<void(Oauth2Clients)> &rcb,
-                          const drogon::orm::ExceptionCallback &ecb) const;
     Users getUsers(const drogon::orm::DbClientPtr &clientPtr) const;
     void getUsers(const drogon::orm::DbClientPtr &clientPtr,
                   const std::function<void(Users)> &rcb,
                   const drogon::orm::ExceptionCallback &ecb) const;
+    Oauth2Clients getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr) const;
+    void getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr,
+                          const std::function<void(Oauth2Clients)> &rcb,
+                          const drogon::orm::ExceptionCallback &ecb) const;
     Oauth2Scopes getOauth2Scopes(const drogon::orm::DbClientPtr &clientPtr) const;
     void getOauth2Scopes(const drogon::orm::DbClientPtr &clientPtr,
                          const std::function<void(Oauth2Scopes)> &rcb,

@@ -401,6 +401,18 @@ VITE_REDIRECT_URI=https://your-domain.com/callback
 VITE_GITHUB_CLIENT_ID=
 ```
 
+#### 启用 GitHub 登录（可选）
+
+1. 创建 GitHub OAuth App：GitHub → Settings → Developer settings →
+   **OAuth Apps** → *New OAuth App*。Homepage URL：`https://your-domain.com`；
+   Authorization callback URL：`https://your-domain.com/callback/github`。
+2. 在 `.env.docker` 填入 client ID 与 client secret：
+   `FULLA_GITHUB_CLIENT_ID`、`FULLA_GITHUB_CLIENT_SECRET`，以及登录页按钮所需的
+   `VITE_GITHUB_CLIENT_ID`（同一 ID；它会在构建期编译进 SPA 产物）。
+3. 重建并重启：`docker compose build frontend && docker compose up -d`
+   （后端凭据重启即可生效，但登录页按钮需要重建前端镜像）。
+4. 账号绑定与按钮无关：已登录用户随时可在门户 → 安全设置里关联 GitHub。
+
 > **重要耦合**：`FULLA_ENV=production` 与 `FULLA_ISSUER=https://...` 必须同时设置。仅设 production 而不配 HTTPS issuer 会导致后端启动校验失败（`ConfigManager` 的 prod-mode 校验拒绝非 https issuer）。同理 DB/Redis 密码不能是默认的 `123456` / `password`，否则 prod 校验也会拒绝启动。
 
 生成强密码：

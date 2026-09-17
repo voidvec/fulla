@@ -29,37 +29,56 @@ echo Setting up %FULLA_DB_NAME% database ^(role %FULLA_DB_USER%@%FULLA_DB_HOST%:
 set "PGPASSWORD=%FULLA_DB_PASSWORD%"
 set PGCLIENTENCODING=UTF8
 
+echo Probing login as "%FULLA_DB_USER%"@%FULLA_DB_HOST%:%FULLA_DB_PORT%...
+set "PROBE_ERR=%TEMP%\fulla_probe.err"
+psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d postgres -c "SELECT 1;" >nul 2>"%PROBE_ERR%"
+if not errorlevel 1 goto probe_ok
+echo [Error] Cannot log into PostgreSQL as "%FULLA_DB_USER%"@%FULLA_DB_HOST%:%FULLA_DB_PORT%.
+type "%PROBE_ERR%"
+echo.
+echo NOTE: over TCP, PostgreSQL reports a wrong password and a MISSING ROLE
+echo with the same "password authentication failed" error (anti-enumeration).
+echo On a fresh install the role is usually missing. Fix (check in order):
+echo.
+echo  a. role missing - create it once from a superuser shell (the password
+echo     below is the FULLA_DB_PASSWORD default/dev value; CREATEDB is what
+echo     the script needs):
+echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "CREATE ROLE %FULLA_DB_USER% LOGIN PASSWORD '%FULLA_DB_PASSWORD%' CREATEDB;"
+echo     (docker: docker exec ^<pg-container^> psql -U postgres -c "CREATE ROLE %FULLA_DB_USER% LOGIN PASSWORD '...' CREATEDB;")
+echo.
+echo  b. wrong password - set FULLA_DB_PASSWORD to this role's real password.
+echo.
+echo  c. server unreachable / connection refused - start PostgreSQL
+echo     (Services: postgresql-x64-17) or point FULLA_DB_HOST/FULLA_DB_PORT at it.
+echo.
+echo Then re-run this script.
+if exist "%PROBE_ERR%" del "%PROBE_ERR%"
+exit /b 1
+:probe_ok
+if exist "%PROBE_ERR%" del "%PROBE_ERR%"
+
 echo Dropping existing database...
-psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d postgres -c "DROP DATABASE IF EXISTS %FULLA_DB_NAME%;" >nul 2>&1
+psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d postgres -c "DROP DATABASE IF EXISTS %FULLA_DB_NAME%;" 2>nul
 
 echo Creating new database...
-psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d postgres -c "CREATE DATABASE %FULLA_DB_NAME%;"
-if errorlevel 1 (
-    echo [Error] Failed to create database "%FULLA_DB_NAME%" as role "%FULLA_DB_USER%".
-    echo Match the psql message above to its fix ^(run the fix from a
-    echo superuser shell, then re-run this script^):
-    echo.
-    echo  1^) "database ... already exists" -- the silent DROP step failed,
-    echo     usually an open connection ^(running fulla-server, psql, IDE^)
-    echo     holds it open:
-    echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "DROP DATABASE %FULLA_DB_NAME% WITH (FORCE);"
-    echo.
-    echo  2^) "permission denied to create database" -- the role lacks
-    echo     CREATEDB ^(DROP only needs ownership^):
-    echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "ALTER ROLE %FULLA_DB_USER% CREATEDB;"
-    echo     ^(docker: docker exec ^<pg-container^> psql -U postgres -c "ALTER ROLE %FULLA_DB_USER% CREATEDB;"^)
-    echo.
-    echo  3^) "role ... does not exist" -- create it once with the same
-    echo     password FULLA_DB_PASSWORD points at:
-    echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "CREATE ROLE %FULLA_DB_USER% LOGIN PASSWORD '<choose-a-password>';"
-    echo.
-    echo  4^) "password authentication failed" -- set FULLA_DB_PASSWORD to
-    echo     this role's real password.
-    echo.
-    echo  5^) "could not connect" / "Connection refused" -- start PostgreSQL
-    echo     or point FULLA_DB_HOST/FULLA_DB_PORT at it.
-    exit /b 1
-)
+set "CREATE_ERR=%TEMP%\fulla_create.err"
+psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d postgres -c "CREATE DATABASE %FULLA_DB_NAME%;" >nul 2>"%CREATE_ERR%"
+if not errorlevel 1 goto create_ok
+echo [Error] Failed to create database "%FULLA_DB_NAME%" as role "%FULLA_DB_USER%".
+type "%CREATE_ERR%"
+echo Match the message above to its fix (run from a superuser shell, then
+echo re-run this script):
+echo.
+echo  1) "database ... already exists" -- the silent DROP step failed,
+echo     usually an open connection (running fulla-server, psql, IDE):
+echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "DROP DATABASE %FULLA_DB_NAME% WITH (FORCE);"
+echo.
+echo  2) "permission denied to create database" -- the role lacks CREATEDB:
+echo       psql -U postgres -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -c "ALTER ROLE %FULLA_DB_USER% CREATEDB;"
+if exist "%CREATE_ERR%" del "%CREATE_ERR%"
+exit /b 1
+:create_ok
+if exist "%CREATE_ERR%" del "%CREATE_ERR%"
 
 REM Apply migrations
 if exist "%MIGRATIONS_DIR%" (
@@ -81,7 +100,7 @@ REM Apply seed data (dev/test only; explicit list - benchmark-only seeds live
 REM in benchmarks\fulla\seed and never land in a dev/test database)
 if exist "%SEED_DIR%" (
     echo Applying seed data from %SEED_DIR%...
-    for %%f in ("dev_admin_user.sql" "dev_admin_console_client.sql" "dev_backend_client.sql" "dev_vue_client.sql") do (
+    for %%f in ("dev_admin_user.sql" "dev_admin_console_client.sql" "dev_portal_client.sql" "dev_backend_client.sql") do (
         echo   Applying %%~nxf...
         psql -U %FULLA_DB_USER% -h %FULLA_DB_HOST% -p %FULLA_DB_PORT% -d %FULLA_DB_NAME% -f "%SEED_DIR%\%%~nxf"
         if errorlevel 1 (

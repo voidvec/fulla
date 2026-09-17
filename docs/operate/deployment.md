@@ -394,8 +394,25 @@ FULLA_SMTP_SSL=true
 VITE_API_BASE_URL=
 VITE_CLIENT_ID=fulla-portal
 VITE_REDIRECT_URI=https://your-domain.com/callback
+# Set to enable the "Continue with GitHub" button on the login page
+# (baked into the SPA bundle at image build time):
 VITE_GITHUB_CLIENT_ID=
 ```
+
+#### Enabling GitHub login (optional)
+
+1. Create a GitHub OAuth App: GitHub → Settings → Developer settings →
+   **OAuth Apps** → *New OAuth App*. Homepage URL: `https://your-domain.com`;
+   Authorization callback URL: `https://your-domain.com/callback/github`.
+2. Fill `.env.docker` with the client ID and client secret:
+   `FULLA_GITHUB_CLIENT_ID`, `FULLA_GITHUB_CLIENT_SECRET`, and — for the
+   login-page button — `VITE_GITHUB_CLIENT_ID` (same ID; it is compiled
+   into the SPA bundle).
+3. Rebuild and restart: `docker compose build frontend && docker compose up -d`
+   (the backend alone can pick the credentials up from a restart, but the
+   login-page button needs the frontend rebuild).
+4. Account linking is independent of the button: an authenticated user can
+   connect GitHub from Portal → Security at any time.
 
 > **Critical coupling**: `FULLA_ENV=production` and `FULLA_ISSUER=https://...` must be set together. Setting production without an HTTPS issuer makes backend startup validation fail (the prod-mode check in `ConfigManager` rejects non-https issuers). Likewise, the DB/Redis passwords must not be the defaults `123456` / `password`, or the prod validation will also refuse to start.
 

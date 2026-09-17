@@ -26,6 +26,18 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $result = 0
 
+# Locate psql: PATH first, then the Windows installer default dirs (the
+# PostgreSQL installer does not add its bin dir to PATH by default). The
+# endpoint test scripts use psql for account/lockout resets between cases.
+if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
+    $pgDir = Get-ChildItem "C:\Program Files\PostgreSQL" -Directory -ErrorAction SilentlyContinue |
+             Sort-Object Name -Descending | Select-Object -First 1
+    if ($pgDir -and (Test-Path (Join-Path $pgDir.FullName "bin\psql.exe"))) {
+        $env:PATH = "$(Join-Path $pgDir.FullName 'bin');$env:PATH"
+        Write-Host "[endpoint-wrapper] psql found in $($pgDir.FullName)\bin"
+    }
+}
+
 # Kill any stale server instance on the fixed port.
 Stop-Process -Name "fulla-server" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1

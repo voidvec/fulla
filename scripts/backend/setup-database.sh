@@ -15,7 +15,8 @@ SEED_DIR="$FULLA_SERVER_ABS_DIR/$SQL_SEED_REL_DIR"
 
 # Check for psql
 if ! command -v psql &>/dev/null; then
-    echo "[Error] psql not found in PATH."
+    echo "[Error] psql not found in PATH. Install PostgreSQL or add its bin"
+    echo "        dir (e.g. /usr/lib/postgresql/17/bin) to PATH."
     exit 1
 fi
 
@@ -56,10 +57,10 @@ if [ "$PROBE_RC" != "0" ]; then
     echo "[Error] Cannot log into PostgreSQL as \"$DB_USER\"@$DB_HOST:$DB_PORT:" >&2
     echo "        $PROBE_ERR" >&2
     # The server deliberately answers a wrong password and a missing role
-    # with the SAME error (anti-enumeration) -- the fix text covers both.
+    # with the SAME error (anti-enumeration) -- on a fresh install the role
+    # is usually missing, so the fix text covers both and leads with it.
     echo "        Fix (check in order):" >&2
-    echo "        a. wrong password -> set FULLA_DB_PASSWORD to this role's real password;" >&2
-    echo "        b. role missing   -> create it once from a superuser shell (use the" >&2
+    echo "        a. role missing (fresh install) -> create it once from a superuser shell (use the" >&2
     echo "           same password you set in FULLA_DB_PASSWORD):" >&2
     echo "             sudo -u postgres psql -c \"CREATE ROLE $DB_USER LOGIN PASSWORD '<choose-a-password>';\"" >&2
     echo "           (docker: docker exec <pg-container> psql -U postgres -c \"CREATE ROLE $DB_USER LOGIN PASSWORD '<choose-a-password>';\" )" >&2
@@ -140,7 +141,7 @@ fi
 # benchmarks/fulla/seed and must never land in a dev/test database)
 if [ -d "$SEED_DIR" ]; then
     echo "Applying seed data from $SEED_DIR..."
-    for f in dev_admin_user.sql dev_admin_console_client.sql dev_backend_client.sql dev_vue_client.sql; do
+    for f in dev_admin_user.sql dev_admin_console_client.sql dev_portal_client.sql dev_backend_client.sql; do
         [ -f "$SEED_DIR/$f" ] || continue
         echo "  Applying $f..."
         psql -U "$DB_USER" -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -f "$SEED_DIR/$f"

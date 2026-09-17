@@ -127,7 +127,7 @@
 - `dev_admin_user.sql`：开发环境管理员用户
 - `dev_admin_console_client.sql`：管理控制台 OAuth2 客户端
 - `dev_backend_client.sql`：后端服务 OAuth2 客户端
-- `dev_vue_client.sql`：Vue 前端 OAuth2 客户端
+- `dev_portal_client.sql`：门户前端 OAuth2 客户端
 - `bench_users.sql`：性能测试用户数据
 
 ### OpenAPI 文档（`openapi.yaml` + `docs/api/openapi.json`）

@@ -197,7 +197,7 @@ DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Postgres_NotFoun
     runClientRepository_NotFoundContract(TEST_CTX, repo);
 }
 
-// Fixture: OAuth2Server/sql/seed/dev_vue_client.sql -- `fulla-portal`, PUBLIC.
+// Fixture: apps/server/seed/dev_portal_client.sql -- `fulla-portal`, PUBLIC.
 DROGON_TEST(
   Integration_P0_Contract_Functional_ClientRepository_Postgres_PublicClientAcceptsAnySecret
 )

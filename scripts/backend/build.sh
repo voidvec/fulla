@@ -125,15 +125,17 @@ fi
 # libcbor's cmake/4.x build from source — the recipe fetches its source
 # tarball from GitHub, which 403s the shared anonymous-IP pools of
 # GitHub-hosted arm runners (broke the v1.3.1 arm64 image build).
-# platform_tool_requires demands an EXACT version: 3.28.3 is the apt
-# cmake in ubuntu:24.04 — bump it when the image's cmake bumps.
+# platform_tool_requires demands an EXACT version: detect the system one.
 if [[ "$OSTYPE" == linux* ]]; then
     if ! grep -q '^\[platform_tool_requires\]' "$HOME/.conan2/profiles/default" 2>/dev/null; then
-        printf '\n[platform_tool_requires]\ncmake/3.28.3\n' >> "$HOME/.conan2/profiles/default"
+        sys_cmake_ver="$(cmake --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+        if [ -n "$sys_cmake_ver" ]; then
+            printf '\n[platform_tool_requires]\ncmake/%s\n' "$sys_cmake_ver" >> "$HOME/.conan2/profiles/default"
+        fi
     fi
 fi
 
-CONAN_ARGS=(install . --output-folder="build/$PRESET" -s build_type="$BUILD_TYPE" -s compiler.cppstd=17 --build=missing)
+CONAN_ARGS=(install . --output-folder="build/$PRESET" -s build_type="$BUILD_TYPE" -s compiler.cppstd=17 --build=missing --lockfile-partial)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     CONAN_ARGS+=(-s arch=armv8)
 fi

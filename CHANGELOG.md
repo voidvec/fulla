@@ -18,6 +18,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 - **A real but unverified mailbox completed the forced password change into a dead end**: the change now delivers the verification email (fire-and-forget) and the response says so, instead of a bare "sign in again". Pair it with the new `FULLA_BOOTSTRAP_ADMIN_EMAIL` variable: when a real admin mailbox and working SMTP delivery are both configured, the bootstrap admin is created unverified and the standard verification flow applies.
 - **User-facing names de-branded from the internal codenames**: the `/health` `service` field, the WebAuthn relying-party display name (passkey dialog) and the email sender display name default now read `Fulla`; the GitHub API User-Agent is `fulla-server`.
 - **The "Link GitHub Account" button was unreadable in dark theme**: it hardcoded light-theme colors that the dark theme's neutral remap turned into light-on-light; it now uses the themed primary button.
+- **Developer setup scripts on a fresh Windows machine**: `setup_database.bat` / `full_test.bat` failed at "psql not found in PATH" (the PostgreSQL installer does not add its bin dir; the scripts now discover it from the installer default locations), and once connected, the missing-role case reported misleading guidance (over TCP, a missing role and a wrong password are indistinguishable by design — the fresh-install fix, `CREATE ROLE ... CREATEDB`, now leads the triage).
+- **The arm64 docker image build failed on the conan cmake bootstrap**: the cmake recipe downloads its source from GitHub, which 403s the shared anonymous-IP pools of GitHub-hosted arm runners; the build now pins the platform cmake (`[platform_tool_requires]` + `--lockfile-partial`).
 
 ## [1.3.0] - 2026-09-14
 
