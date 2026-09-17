@@ -24,6 +24,8 @@
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
 #include <fulla/drogon/authz/ResourceScopeRegistry.h>
 #include <OrganizationController.h>  // #43: product-app org controller scope decls
+#include <OrgMemberController.h>    // v1.4.0: org membership routes
+#include <ApplicationController.h>  // v1.4.0: open platform routes
 
 #include "bootstrap/AdminBootstrapper.h"
 #include "bootstrap/ClientSeeder.h"
@@ -287,6 +289,8 @@ int main(int argc, char *argv[])
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     // #43: OrganizationController (product-app level, namespace `organization`).
     ::organization::OrganizationController::initApiDocs();
+    ::organization::OrgMemberController::initApiDocs();
+    ::openplatform::ApplicationController::initApiDocs();
     bootstrap::setupOpenApi();
 
     // #43: build the resource-scope registry from the EndpointInfo set now

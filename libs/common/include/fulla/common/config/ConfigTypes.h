@@ -45,6 +45,17 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
    {"custom_config.webauthn.rp_id", "FULLA_WEBAUTHN_RP_ID", false},
    {"custom_config.webauthn.rp_name", "FULLA_WEBAUTHN_RP_NAME", false},
    {"custom_config.webauthn.rp_origins", "FULLA_WEBAUTHN_RP_ORIGINS", false, /*isStringList=*/true},
+   // v1.4.0 open platform switches (fail-closed; the block exists in every
+   // shipped config so these overrides actually land — v1.3.2 lesson).
+   {"custom_config.open_platform.enabled", "FULLA_OPEN_PLATFORM_ENABLED", true},
+   {"custom_config.open_platform.require_org", "FULLA_OPEN_PLATFORM_REQUIRE_ORG", true},
+   {"custom_config.open_platform.max_apps_per_user", "FULLA_OPEN_PLATFORM_MAX_APPS_PER_USER", true},
+   {"custom_config.open_platform.max_org_apps", "FULLA_OPEN_PLATFORM_MAX_ORG_APPS", true},
+   {"custom_config.open_platform.max_orgs_per_user", "FULLA_OPEN_PLATFORM_MAX_ORGS_PER_USER", true},
+   {"custom_config.open_platform.max_redirect_uris", "FULLA_OPEN_PLATFORM_MAX_REDIRECT_URIS", true},
+   {"custom_config.open_platform.creation_rate_limit_per_day",
+    "FULLA_OPEN_PLATFORM_CREATION_RATE_PER_DAY",
+    true},
    {"plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret",
     "FULLA_PORTAL_CLIENT_SECRET",
     false},
