@@ -1021,6 +1021,13 @@ void OAuth2Plugin::getUserInfo(
           // verified from unverified email addresses. UserData carries this
           // from the users row (Task 39 widened the identity repository).
           userInfo["email_verified"] = data->emailVerified;
+          // V033 profile minimal set: only emit when set (consumers keying on
+          // presence, not emptiness — consistent with the username handling
+          // in TokenEndpointController's userinfo claims builder).
+          if (!data->displayName.empty())
+              userInfo["display_name"] = data->displayName;
+          if (!data->avatarUrl.empty())
+              userInfo["picture"] = data->avatarUrl;
           cb(userInfo);
         };
 

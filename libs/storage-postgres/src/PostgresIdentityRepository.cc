@@ -47,6 +47,22 @@ UserData toUserData(const Users &row)
     catch (...)
     {
     }
+    // V033 profile columns (nullable; getValueOf throws on NULL in some
+    // drogon builds, so keep the same defensive shape as the flags above).
+    try
+    {
+        data.displayName = row.getValueOfDisplayName();
+    }
+    catch (...)
+    {
+    }
+    try
+    {
+        data.avatarUrl = row.getValueOfAvatarUrl();
+    }
+    catch (...)
+    {
+    }
     try
     {
         data.lockedUntil = row.getValueOfLockedUntil();
@@ -490,7 +506,14 @@ void PostgresIdentityRepository::getUserInfoWithRoles(
                         Json::Value json;
                         json["sub"] = user.getValueOfPublicSub();
                         std::string dn = user.getValueOfUsername();
-                        json["name"] = dn.empty() ? user.getValueOfEmail() : dn;
+                        {
+                            // V033: display_name preferred for `name` when set.
+                            std::string dp = user.getValueOfDisplayName();
+                            json["name"] = !dp.empty() ? dp
+                                                        : (dn.empty() ? user.getValueOfEmail() : dn);
+                            if (!user.getValueOfAvatarUrl().empty())
+                                json["picture"] = user.getValueOfAvatarUrl();
+                        }
                         json["email"] = user.getValueOfEmail();
                         json["roles"] = Json::Value(Json::arrayValue);
                         (*sharedCb)(json);
@@ -507,7 +530,14 @@ void PostgresIdentityRepository::getUserInfoWithRoles(
                           Json::Value json;
                           json["sub"] = user.getValueOfPublicSub();
                           std::string dn = user.getValueOfUsername();
-                          json["name"] = dn.empty() ? user.getValueOfEmail() : dn;
+                          {
+                              // V033: display_name preferred for `name` when set.
+                              std::string dp = user.getValueOfDisplayName();
+                              json["name"] =
+                                !dp.empty() ? dp : (dn.empty() ? user.getValueOfEmail() : dn);
+                              if (!user.getValueOfAvatarUrl().empty())
+                                  json["picture"] = user.getValueOfAvatarUrl();
+                          }
                           json["email"] = user.getValueOfEmail();
                           Json::Value rj(Json::arrayValue);
                           for (const auto &r : roles)
@@ -519,7 +549,14 @@ void PostgresIdentityRepository::getUserInfoWithRoles(
                           Json::Value json;
                           json["sub"] = user.getValueOfPublicSub();
                           std::string dn = user.getValueOfUsername();
-                          json["name"] = dn.empty() ? user.getValueOfEmail() : dn;
+                          {
+                              // V033: display_name preferred for `name` when set.
+                              std::string dp = user.getValueOfDisplayName();
+                              json["name"] =
+                                !dp.empty() ? dp : (dn.empty() ? user.getValueOfEmail() : dn);
+                              if (!user.getValueOfAvatarUrl().empty())
+                                  json["picture"] = user.getValueOfAvatarUrl();
+                          }
                           json["email"] = user.getValueOfEmail();
                           json["roles"] = Json::Value(Json::arrayValue);
                           (*sharedCb)(json);
@@ -530,7 +567,13 @@ void PostgresIdentityRepository::getUserInfoWithRoles(
                     Json::Value json;
                     json["sub"] = user.getValueOfPublicSub();
                     std::string dn = user.getValueOfUsername();
-                    json["name"] = dn.empty() ? user.getValueOfEmail() : dn;
+                    {
+                        // V033: display_name preferred for `name` when set.
+                        std::string dp = user.getValueOfDisplayName();
+                        json["name"] = !dp.empty() ? dp : (dn.empty() ? user.getValueOfEmail() : dn);
+                        if (!user.getValueOfAvatarUrl().empty())
+                            json["picture"] = user.getValueOfAvatarUrl();
+                    }
                     json["email"] = user.getValueOfEmail();
                     json["roles"] = Json::Value(Json::arrayValue);
                     (*sharedCb)(json);

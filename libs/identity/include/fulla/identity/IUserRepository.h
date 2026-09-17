@@ -25,6 +25,11 @@ struct UserData
     bool mustChangePassword = false;  // #145: forced first-login password change flag
     int64_t lockedUntil = 0;
     int failedLoginCount = 0;
+    // V033 profile minimal set (empty = not set). displayName feeds the OIDC
+    // `name` claim (preferred over username) and avatarUrl the `picture`
+    // claim; both are only emitted when non-empty.
+    std::string displayName;
+    std::string avatarUrl;
 };
 
 /**
