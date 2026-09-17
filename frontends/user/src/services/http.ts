@@ -38,27 +38,55 @@ export function clearTokens() {
 export function getAccessToken() { return accessToken }
 export function getRefreshToken() { return refreshToken }
 
+// Cross-tab sync: the refresh token rotates on every silent refresh, and a
+// second tab keeps its stale copy in this module variable. Presenting a
+// rotated-out token trips the server's reuse detection, which revokes the
+// whole token family and logs out every tab. The `storage` event fires in
+// every OTHER tab whenever localStorage changes, so each tab tracks the
+// newest token written by whichever tab refreshed last.
+window.addEventListener('storage', (e) => {
+  if (e.key === 'refresh_token') {
+    refreshToken = e.newValue
+  }
+})
+
+// Single-flight refresh: the auth store (page boot), the OAuth callback
+// pages, and the 401 interceptor all need to refresh, and the security page
+// fires several protected requests concurrently. Without a shared in-flight
+// promise, N concurrent 401s each POST /oauth2/token with the SAME refresh
+// token -- the first rotates it, the rest trip reuse detection and the
+// server cascade-revokes the family (observed in production 2026-09-17:
+// family with exactly two tokens, second presentation 13s after the first).
+let refreshInFlight: Promise<boolean> | null = null
+
+function refreshTokens(): Promise<boolean> {
+  if (!refreshInFlight) {
+    if (!refreshToken) return Promise.resolve(false)
+    const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
+    refreshInFlight = axios.post('/oauth2/token', new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    })).then((resp) => {
+      setTokens(resp.data.access_token, resp.data.refresh_token)
+      return true
+    }).catch(() => {
+      clearTokens()
+      return false
+    }).finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
+}
+
 /**
  * Attempt to restore session from refresh_token on page load.
  * Returns true if session was restored.
  */
 export async function tryRestoreSession(): Promise<boolean> {
   if (accessToken) return true
-  if (!refreshToken) return false
-
-  try {
-    const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
-    const resp = await axios.post('/oauth2/token', new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: CLIENT_ID,
-    }))
-    setTokens(resp.data.access_token, resp.data.refresh_token)
-    return true
-  } catch {
-    clearTokens()
-    return false
-  }
+  return refreshTokens()
 }
 
 // Request interceptor: attach Bearer token
@@ -114,25 +142,20 @@ http.interceptors.response.use(
     const originalRequest = error.config
     if (error.response?.status === 401 && refreshToken && !originalRequest._retry && !isNoAutoRefreshEndpoint(originalRequest.url)) {
       originalRequest._retry = true
-      try {
-        const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
-        const resp = await axios.post('/oauth2/token', new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: CLIENT_ID,
-        }))
-        setTokens(resp.data.access_token, resp.data.refresh_token)
-        originalRequest.headers.Authorization = `Bearer ${resp.data.access_token}`
-        return http(originalRequest)
-      } catch {
-        // Token refresh failed: clear the session, surface a consistent
-        // localized "session expired" message via the Frontend_Error_Module,
-        // and navigate to the login view (Requirement 10.4, 10.5).
-        clearTokens()
+      // Shared single-flight refresh (see refreshTokens above): concurrent
+      // 401s must produce exactly one /oauth2/token call per token value.
+      const refreshed = await refreshTokens()
+      if (!refreshed) {
+        // Token refresh failed: surface a consistent localized "session
+        // expired" message via the Frontend_Error_Module and navigate to
+        // the login view (Requirement 10.4, 10.5). Token state was already
+        // cleared by refreshTokens.
         const normalized: NormalizedError = sessionExpiredError()
         redirectToLogin()
         return Promise.reject(normalized)
       }
+      originalRequest.headers.Authorization = `Bearer ${getAccessToken()}`
+      return http(originalRequest)
     }
     // All other errors: reject the raw axios error untouched so each view (or
     // the auth store) parses it once through the Frontend_Error_Module via
