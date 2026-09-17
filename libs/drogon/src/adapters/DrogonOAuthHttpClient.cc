@@ -59,6 +59,13 @@ void DrogonOAuthHttpClient::postForm(
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(path);
+        // GitHub's token endpoint answers form-encoded unless the request
+        // asks for JSON (the fallback path in GitHubController::exchangeCodeForToken
+        // sends the same header); getJsonObject() below cannot parse the
+        // form-encoded default. GitHub's REST API also rejects requests
+        // without a User-Agent.
+        req->addHeader("Accept", "application/json");
+        req->addHeader("User-Agent", "fulla-server");
         for (const auto &[key, value] : params)
             req->setParameter(key, value);
 
@@ -106,6 +113,8 @@ void DrogonOAuthHttpClient::getWithBearerToken(
         req->setPath(path);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
+        req->addHeader("Accept", "application/json");
+        req->addHeader("User-Agent", "fulla-server");
 
         client->sendRequest(
           req,
