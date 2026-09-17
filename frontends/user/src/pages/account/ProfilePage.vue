@@ -47,7 +47,38 @@ async function resendVerification() {
   }
 }
 
-onMounted(fetchProfile)
+// v1.4.0 profile minimal set: editable display_name + avatar_url.
+const editDisplayName = ref('')
+const editAvatarUrl = ref('')
+const savingProfile = ref(false)
+
+function startProfileEdit() {
+  editDisplayName.value = profile.value?.display_name || ''
+  editAvatarUrl.value = profile.value?.avatar_url || ''
+}
+
+async function saveProfile() {
+  savingProfile.value = true
+  error.value = null
+  try {
+    await http.patch('/api/me/profile', {
+      display_name: editDisplayName.value.trim(),
+      avatar_url: editAvatarUrl.value.trim(),
+    })
+    success.value = t('account.profile.saved')
+    setTimeout(() => { success.value = '' }, 3000)
+    await fetchProfile()
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+onMounted(() => {
+  startProfileEdit()
+  fetchProfile()
+})
 </script>
 
 <template>
@@ -134,6 +165,46 @@ onMounted(fetchProfile)
             >{{ role }}</AppBadge>
           </div>
         </div>
+      </div>
+
+      <div class="border-t border-neutral-100 pt-6">
+        <h2 class="text-sm font-semibold text-neutral-900 mb-3">
+          {{ $t('account.profile.editTitle') }}
+        </h2>
+        <form
+          class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end"
+          @submit.prevent="saveProfile"
+        >
+          <div>
+            <label class="block text-sm font-medium text-neutral-500">{{ $t('account.profile.displayName') }}</label>
+            <input
+              v-model="editDisplayName"
+              maxlength="100"
+              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-500">{{ $t('account.profile.avatarUrl') }}</label>
+            <input
+              v-model="editAvatarUrl"
+              placeholder="https://"
+              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            >
+          </div>
+          <div>
+            <button
+              type="submit"
+              :disabled="savingProfile"
+              class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700
+                     disabled:opacity-50 transition-colors
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            >
+              {{ $t('account.profile.save') }}
+            </button>
+          </div>
+        </form>
       </div>
     </AppCard>
   </div>

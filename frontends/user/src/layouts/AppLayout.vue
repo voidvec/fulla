@@ -28,6 +28,8 @@ const navItems = computed(() => [
   { name: t('nav.profile'), path: '/profile', icon: 'profile' },
   { name: t('nav.security'), path: '/security', icon: 'security' },
   { name: t('nav.authorizedApps'), path: '/authorized-apps', icon: 'apps' },
+  { name: t('nav.applications'), path: '/apps', icon: 'apps' },
+  { name: t('nav.organizations'), path: '/organizations', icon: 'dashboard' },
 ])
 </script>
 

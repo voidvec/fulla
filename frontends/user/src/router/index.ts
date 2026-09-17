@@ -86,6 +86,9 @@ const router = createRouter({
         { path: 'profile', name: 'profile', component: () => import('../pages/account/ProfilePage.vue') },
         { path: 'security', name: 'security', component: () => import('../pages/account/SecurityPage.vue') },
         { path: 'authorized-apps', name: 'authorized-apps', component: () => import('../pages/account/AuthorizedAppsPage.vue') },
+        // v1.4.0: open platform + organizations (self-service).
+        { path: 'apps', name: 'applications', component: () => import('../pages/account/ApplicationsPage.vue') },
+        { path: 'organizations', name: 'organizations', component: () => import('../pages/account/OrganizationsPage.vue') },
       ],
     },
   ],
