@@ -413,6 +413,17 @@ VITE_GITHUB_CLIENT_ID=
    （后端凭据重启即可生效，但登录页按钮需要重建前端镜像）。
 4. 账号绑定与按钮无关：已登录用户随时可在门户 → 安全设置里关联 GitHub。
 
+#### 启用通行密钥（WebAuthn，可选）
+
+`FULLA_WEBAUTHN_RP_ORIGINS` 为空时通行密钥保持关闭（#142 fail-closed）。启用步骤：
+
+1. 在 `.env.docker` 设置 `FULLA_WEBAUTHN_RP_ID=your-domain.com`（凭据绑定的
+   可注册域名，父域名也可以）、`FULLA_WEBAUTHN_RP_ORIGINS=https://your-domain.com`
+   （门户的完整 origin，多个用逗号分隔），可选 `FULLA_WEBAUTHN_RP_NAME`
+   （通行密钥对话框显示名，默认 `Fulla`）。
+2. 重启后端：`docker compose up -d backend`。
+3. 用户在门户 → 安全设置里把通行密钥添加为第二因子。
+
 > **重要耦合**：`FULLA_ENV=production` 与 `FULLA_ISSUER=https://...` 必须同时设置。仅设 production 而不配 HTTPS issuer 会导致后端启动校验失败（`ConfigManager` 的 prod-mode 校验拒绝非 https issuer）。同理 DB/Redis 密码不能是默认的 `123456` / `password`，否则 prod 校验也会拒绝启动。
 
 生成强密码：
@@ -558,6 +569,9 @@ curl -k https://localhost/admin/
 | `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal 密钥（旧名别名：`FULLA_VUE_CLIENT_SECRET`） | 123456 |
 | `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth 回调 URI | config 中的 localhost 值 |
 | `FULLA_MFA_TOTP_ISSUER` | 认证器应用中 TOTP 条目显示的发行方名称 | `Fulla` |
+| `FULLA_WEBAUTHN_RP_ID` | WebAuthn RP ID（可注册域名） | （空 = 通行密钥关闭） |
+| `FULLA_WEBAUTHN_RP_NAME` | 通行密钥对话框显示名 | `Fulla` |
+| `FULLA_WEBAUTHN_RP_ORIGINS` | WebAuthn origin 允许列表（逗号分隔） | （空 = 通行密钥关闭） |
 | `FULLA_AUTO_MIGRATE` | 自动执行数据库迁移 | false（改用一次性 `migrate` 服务） |
 | `DETAILED_VALIDATION_ERRORS` | 是否返回字段级校验错误（生产建议 false） | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth（可选） | (空) |

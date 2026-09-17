@@ -38,7 +38,7 @@
 
 ```bash
 # 1) 解包
-tar xzf fulla-sdk-1.3.1-linux-x86_64.tar.gz   # -> fulla-sdk-1.3.1-linux-x86_64/
+tar xzf fulla-sdk-1.3.2-linux-x86_64.tar.gz   # -> fulla-sdk-1.3.2-linux-x86_64/
 
 # 2) 用仓库的 conanfile.py 解析依赖（生成 toolchain + 各依赖的 CMake config）
 conan install <fulla-repo> --output-folder=deps --build=missing \
@@ -48,7 +48,7 @@ conan install <fulla-repo> --output-folder=deps --build=missing \
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=$PWD/deps/conan_toolchain.cmake \
-  -DCMAKE_PREFIX_PATH=$PWD/fulla-sdk-1.3.1-linux-x86_64
+  -DCMAKE_PREFIX_PATH=$PWD/fulla-sdk-1.3.2-linux-x86_64
 cmake --build build -j
 ```
 
@@ -93,7 +93,7 @@ target_link_libraries(my-engine PRIVATE fulla::oauth2 fulla::storage::memory)
 ## 5. 镜像使用
 
 ```bash
-docker pull ghcr.io/voidvec/fulla-backend:1.3.1
+docker pull ghcr.io/voidvec/fulla-backend:1.3.2
 ```
 
 三镜像与 `deploy/docker/docker-compose.yml` 的构建目标一一对应
@@ -110,7 +110,7 @@ docker pull ghcr.io/voidvec/fulla-backend:1.3.1
    `git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md`
    （配置见根目录 `cliff.toml`；发布工作流只生成 Release notes，
    不会从 tag ref 回推提交）。
-3. 打严格 SemVer tag：`git tag v1.3.1 && git push origin v1.3.1`。带后缀
+3. 打严格 SemVer tag：`git tag v1.3.2 && git push origin v1.3.2`。带后缀
    的 tag（如 `v1.0.0-rc1`）**不会**触发发布。
 4. `release.yml` 自动执行：tag/版本一致性校验 → SDK 打包 + 安装树消费
    冒烟 → amd64/arm64 原生构建三镜像 → 多架构 manifest（`<ver>` +

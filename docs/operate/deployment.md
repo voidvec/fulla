@@ -414,6 +414,19 @@ VITE_GITHUB_CLIENT_ID=
 4. Account linking is independent of the button: an authenticated user can
    connect GitHub from Portal → Security at any time.
 
+#### Enabling passkeys (WebAuthn, optional)
+
+Passkeys stay disabled (fail-closed, #142) while `FULLA_WEBAUTHN_RP_ORIGINS`
+is empty. To enable:
+
+1. In `.env.docker`, set `FULLA_WEBAUTHN_RP_ID=your-domain.com` (the
+   registrable domain the credential is scoped to — a parent domain also
+   works), `FULLA_WEBAUTHN_RP_ORIGINS=https://your-domain.com` (the exact
+   portal origin; comma-separate several), and optionally
+   `FULLA_WEBAUTHN_RP_NAME` (passkey dialog display name, default `Fulla`).
+2. Restart the backend: `docker compose up -d backend`.
+3. Users add a passkey from Portal → Security as a second factor.
+
 > **Critical coupling**: `FULLA_ENV=production` and `FULLA_ISSUER=https://...` must be set together. Setting production without an HTTPS issuer makes backend startup validation fail (the prod-mode check in `ConfigManager` rejects non-https issuers). Likewise, the DB/Redis passwords must not be the defaults `123456` / `password`, or the prod validation will also refuse to start.
 
 Generate strong passwords:
@@ -559,6 +572,9 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_PORTAL_CLIENT_SECRET` | fulla-portal secret (legacy alias: `FULLA_VUE_CLIENT_SECRET`) | 123456 |
 | `FULLA_ADMIN_CONSOLE_REDIRECT_URI` | fulla-admin-console OAuth callback URI | localhost value from config |
 | `FULLA_MFA_TOTP_ISSUER` | Issuer name shown by authenticator apps for TOTP entries | `Fulla` |
+| `FULLA_WEBAUTHN_RP_ID` | WebAuthn relying-party ID (registrable domain) | (empty = passkeys disabled) |
+| `FULLA_WEBAUTHN_RP_NAME` | Passkey dialog display name | `Fulla` |
+| `FULLA_WEBAUTHN_RP_ORIGINS` | WebAuthn origin allowlist (comma-separated) | (empty = passkeys disabled) |
 | `FULLA_AUTO_MIGRATE` | Run database migrations automatically | false (use the one-shot `migrate` service) |
 | `DETAILED_VALIDATION_ERRORS` | Whether to return field-level validation errors (false recommended in production) | false |
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth (optional) | (empty) |

@@ -9,6 +9,16 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.3.2] - 2026-09-17
+
+### Added
+
+- **Production switch for passkeys (WebAuthn)**: the `FULLA_WEBAUTHN_RP_ID` / `FULLA_WEBAUTHN_RP_NAME` / `FULLA_WEBAUTHN_RP_ORIGINS` env overrides now actually reach a docker deployment — the production compose file passes them through, and the prod config ships a `webauthn` block with an empty `rp_origins`, so passkeys stay fail-closed (#142) until the operator sets `FULLA_WEBAUTHN_RP_ID` + `FULLA_WEBAUTHN_RP_ORIGINS`. Previously the env rows existed but overrode nothing: env overrides only land on config paths that exist, and the prod config had the block commented out.
+
+### Fixed
+
+- **`full-test.sh` on a fresh Linux environment died at "drogon_ctl not found"**: the ORM-regeneration step needs `drogon_ctl`, which only appears in the Conan cache after the first build. `env_common.sh` now discovers it (PATH → build output → Conan cache, the same pattern `build.sh` and CI already use), and `full-test.sh` bootstraps itself with a one-time build pass when nothing is installed yet.
+
 ## [1.3.1] - 2026-09-15
 
 ### Fixed

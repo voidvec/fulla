@@ -116,6 +116,10 @@ services:
       - FULLA_PORTAL_REDIRECT_URI=${FULLA_PORTAL_REDIRECT_URI}
       - FULLA_PORTAL_CLIENT_SECRET=${FULLA_PORTAL_CLIENT_SECRET}
       - FULLA_ADMIN_CONSOLE_REDIRECT_URI=${FULLA_ADMIN_CONSOLE_REDIRECT_URI}
+      # WebAuthn / passkeys (#142): fail-closed while RP_ORIGINS is empty
+      - FULLA_WEBAUTHN_RP_ID=${FULLA_WEBAUTHN_RP_ID:-}
+      - FULLA_WEBAUTHN_RP_NAME=${FULLA_WEBAUTHN_RP_NAME:-Fulla}
+      - FULLA_WEBAUTHN_RP_ORIGINS=${FULLA_WEBAUTHN_RP_ORIGINS:-}
       - FULLA_GOOGLE_REDIRECT_URI=${FULLA_GOOGLE_REDIRECT_URI:-}
       # Migrations run via the `migrate` one-shot service (see header);
       # the app only self-checks the schema at startup.

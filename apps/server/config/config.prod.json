@@ -293,13 +293,14 @@
             "url": "https://app.example.com",
             "register_path": "/register"
         },
-        // #142 WebAuthn - REQUIRED before enabling passkeys in production:
-    // "webauthn": {
-    //     "rp_id": "auth.example.com",
-    //     "rp_name": "Example Auth",
-    //     "rp_origins": ["https://auth.example.com"]
-    // },
-    // finish endpoints fail closed while rp_origins is unconfigured.
+        // #142 WebAuthn: env overrides only land on config paths that exist,
+        // so the block must be present. rp_origins stays empty = fail-closed;
+        // set FULLA_WEBAUTHN_RP_ID + FULLA_WEBAUTHN_RP_ORIGINS to enable.
+        "webauthn": {
+            "rp_id": "",
+            "rp_name": "Fulla",
+            "rp_origins": []
+        },
     "external_auth": {
             "github": {
                 "client_id": "OVERRIDE_VIA_FULLA_GITHUB_CLIENT_ID",

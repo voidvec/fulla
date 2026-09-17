@@ -448,4 +448,4 @@ AGPL-3.0 — see [LICENSE](LICENSE). Prior releases (v1.0.0) remain MIT.
 
 ---
 
-**Project Status**: Production Ready | **Version**: v1.3.1
+**Project Status**: Production Ready | **Version**: v1.3.2
