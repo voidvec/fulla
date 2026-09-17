@@ -85,14 +85,6 @@ bool createVerifiedUser(const std::string &username,
     return done.get_future().get();
 }
 
-std::optional<std::string> loginToken(const std::string &username, const std::string &password)
-{
-    auto tokens = loginAsUserTokens(username, password, "openid profile email");
-    if (!tokens)
-        return std::nullopt;
-    return tokens->get("access_token", "").asString();
-}
-
 // Same 2-step PKCE flow as loginAsUserTokens, but with response dumps so a
 // login failure in these flows is diagnosable (rate limiter, verification
 // gate, MFA, ...).
