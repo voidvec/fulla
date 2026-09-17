@@ -80,6 +80,12 @@ void UserSelfServiceController::initApiDocsImpl()
 {
     openapi::OpenApiGenerator::addEndpoint(
       selfServiceEp("/api/me", "GET", "Get User Profile", "Get current user's profile information."));
+    openapi::OpenApiGenerator::addEndpoint(selfServiceEp(
+      "/api/me/profile", "PATCH", "Update User Profile",
+      "Update the current user's editable profile fields. Body (JSON, both "
+      "keys optional; an absent key leaves the field unchanged, an empty "
+      "string clears it): display_name (<=100 chars), avatar_url (https-only, "
+      "<=2048 chars)."));
     openapi::OpenApiGenerator::addEndpoint(
       selfServiceEp("/api/me", "DELETE", "Delete Account", "Soft-delete the current user's account."));
     openapi::OpenApiGenerator::addEndpoint(
@@ -150,6 +156,9 @@ void UserSelfServiceController::getProfile(
                   json["email_verified"] = user.getValueOfEmailVerified();
                   json["mfa_enabled"] = user.getValueOfMfaEnabled();
                   json["must_change_password"] = user.getValueOfMustChangePassword();
+                  // V033 profile minimal set (empty string = not set).
+                  json["display_name"] = user.getValueOfDisplayName();
+                  json["avatar_url"] = user.getValueOfAvatarUrl();
                   auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
                   (*sharedCb)(resp);
               },
@@ -171,6 +180,187 @@ void UserSelfServiceController::getProfile(
     catch (...)
     {
         respondError(req, sharedCb, "DB_CONNECTION_ERROR", "getProfile: database unavailable");
+    }
+}
+
+// V033 profile minimal set: update the editable profile fields. Absent JSON
+// keys leave the field unchanged; an explicit empty string clears the field.
+// display_name: trimmed, <=100 chars (multi-language, no charset whitelist).
+// avatar_url: https-only and <=2048 chars; served verbatim to clients, never
+// fetched server-side (no SSRF surface).
+void UserSelfServiceController::updateProfile(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    std::string userId = req->getAttributes()->get<std::string>("userId");
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody)
+    {
+        respondError(req, sharedCb, "VALIDATION_INVALID_INPUT", "updateProfile: JSON body required");
+        return;
+    }
+
+    constexpr size_t kMaxDisplayName = 100;
+    constexpr size_t kMaxAvatarUrl = 2048;
+
+    bool hasDisplayName = (*jsonBody).isMember("display_name");
+    bool hasAvatarUrl = (*jsonBody).isMember("avatar_url");
+    if (!hasDisplayName && !hasAvatarUrl)
+    {
+        respondError(
+          req,
+          sharedCb,
+          "VALIDATION_INVALID_INPUT",
+          "updateProfile: at least one of display_name / avatar_url is required"
+        );
+        return;
+    }
+
+    std::string displayName;
+    if (hasDisplayName)
+    {
+        if (!(*jsonBody)["display_name"].isString())
+        {
+            respondError(
+              req, sharedCb, "VALIDATION_INVALID_INPUT", "updateProfile: display_name must be a string"
+            );
+            return;
+        }
+        displayName = (*jsonBody)["display_name"].asString();
+        // Trim leading/trailing whitespace, then enforce the length cap.
+        const auto first = displayName.find_first_not_of(" \t\r\n");
+        const auto last = displayName.find_last_not_of(" \t\r\n");
+        displayName = (first == std::string::npos) ? ""
+                                                   : displayName.substr(first, last - first + 1);
+        if (displayName.size() > kMaxDisplayName)
+        {
+            respondError(
+              req,
+              sharedCb,
+              "VALIDATION_INVALID_INPUT",
+              "updateProfile: display_name must be at most 100 characters"
+            );
+            return;
+        }
+    }
+
+    std::string avatarUrl;
+    if (hasAvatarUrl)
+    {
+        if (!(*jsonBody)["avatar_url"].isString())
+        {
+            respondError(
+              req, sharedCb, "VALIDATION_INVALID_INPUT", "updateProfile: avatar_url must be a string"
+            );
+            return;
+        }
+        avatarUrl = (*jsonBody)["avatar_url"].asString();
+        if (!avatarUrl.empty())
+        {
+            if (avatarUrl.rfind("https://", 0) != 0)
+            {
+                respondError(
+                  req,
+                  sharedCb,
+                  "VALIDATION_INVALID_INPUT",
+                  "updateProfile: avatar_url must be an https:// URL"
+                );
+                return;
+            }
+            if (avatarUrl.size() > kMaxAvatarUrl)
+            {
+                respondError(
+                  req,
+                  sharedCb,
+                  "VALIDATION_INVALID_INPUT",
+                  "updateProfile: avatar_url must be at most 2048 characters"
+                );
+                return;
+            }
+        }
+    }
+
+    try
+    {
+        auto db = ::drogon::app().getDbClient();
+        Criteria crit(Users::Cols::_public_sub, CompareOperator::EQ, userId);
+        Criteria deletedCrit(Users::Cols::_deleted_at, CompareOperator::IsNull);
+        try
+        {
+            Mapper<Users>(db).findBy(
+              crit && deletedCrit,
+              [sharedCb, req, userId, db, hasDisplayName, hasAvatarUrl, displayName,
+               avatarUrl](const std::vector<Users> &users) {
+                  if (users.empty())
+                  {
+                      respondError(
+                        req,
+                        sharedCb,
+                        "VALIDATION_RESOURCE_NOT_FOUND",
+                        "updateProfile: user not found"
+                      );
+                      return;
+                  }
+                  Users updatedUser = users[0];
+                  if (hasDisplayName)
+                      updatedUser.setDisplayName(displayName);
+                  if (hasAvatarUrl)
+                      updatedUser.setAvatarUrl(avatarUrl);
+                  try
+                  {
+                      Mapper<Users>(db).update(
+                        updatedUser,
+                        [sharedCb, req, userId](const std::size_t) {
+                            ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                              ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
+                              "profile_updated",
+                              "success",
+                              req,
+                              userId,
+                              "user",
+                              userId
+                            );
+                            Json::Value json;
+                            json["message"] = "Profile updated";
+                            auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                            (*sharedCb)(resp);
+                        },
+                        [req, sharedCb](const DrogonDbException &e) {
+                            respondError(
+                              req,
+                              sharedCb,
+                              "DB_QUERY_ERROR",
+                              std::string("updateProfile failed: ") + e.base().what()
+                            );
+                        }
+                      );
+                  }
+                  catch (...)
+                  {
+                      respondError(
+                        req, sharedCb, "DB_QUERY_ERROR", "updateProfile: Mapper construction failed"
+                      );
+                  }
+              },
+              [req, sharedCb](const DrogonDbException &e) {
+                  respondError(
+                    req, sharedCb, "DB_QUERY_ERROR", std::string("updateProfile failed: ") + e.base().what()
+                  );
+              }
+            );
+        }
+        catch (...)
+        {
+            respondError(req, sharedCb, "DB_QUERY_ERROR", "updateProfile: Mapper construction failed");
+        }
+    }
+    catch (...)
+    {
+        respondError(req, sharedCb, "DB_CONNECTION_ERROR", "updateProfile: database unavailable");
     }
 }
 

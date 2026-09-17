@@ -2022,10 +2022,23 @@ void TokenEndpointController::userInfo(
                     dbUserInfo->isMember("username") ? (*dbUserInfo)["username"].asString() : "";
                   std::string email =
                     dbUserInfo->isMember("email") ? (*dbUserInfo)["email"].asString() : "";
-                  userInfo["name"] = uname.empty() ? email : uname;  // OpenID Connect 'name' claim
+                  // V033: display_name (when set) takes precedence for the
+                  // OIDC `name` claim, then username, then email (the
+                  // username is optional in the email-first model) so strict
+                  // OIDC clients never see an empty/missing name.
+                  std::string displayName = dbUserInfo->isMember("display_name")
+                                              ? (*dbUserInfo)["display_name"].asString()
+                                              : "";
+                  userInfo["name"] = !displayName.empty() ? displayName
+                                     : (!uname.empty() ? uname : email);
                   if (!uname.empty())
                   {
                       userInfo["username"] = uname;
+                  }
+                  if (dbUserInfo->isMember("picture") &&
+                      !(*dbUserInfo)["picture"].asString().empty())
+                  {
+                      userInfo["picture"] = (*dbUserInfo)["picture"].asString();
                   }
                   if (!email.empty())
                   {

@@ -31,6 +31,12 @@ class UserSelfServiceController : public ::drogon::HttpController<UserSelfServic
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
     ADD_METHOD_TO(
+      UserSelfServiceController::updateProfile,
+      "/api/me/profile",
+      ::drogon::Patch,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
       UserSelfServiceController::changePassword,
       "/api/me/password",
       ::drogon::Put,
@@ -91,6 +97,10 @@ class UserSelfServiceController : public ::drogon::HttpController<UserSelfServic
     METHOD_LIST_END
 
     void getProfile(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+    void updateProfile(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
     );
