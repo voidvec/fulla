@@ -72,6 +72,8 @@ class Users
         static const std::string _mfa_pending_redirect_uri;
         static const std::string _deleted_at;
         static const std::string _must_change_password;
+        static const std::string _display_name;
+        static const std::string _avatar_url;
     };
 
     static const int primaryKeyNumber;
@@ -298,8 +300,28 @@ class Users
     ///Set the value of the column must_change_password
     void setMustChangePassword(const bool &pMustChangePassword) noexcept;
 
+    /**  For column display_name  */
+    ///Get the value of the column display_name, returns the default value if the column is null
+    const std::string &getValueOfDisplayName() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getDisplayName() const noexcept;
+    ///Set the value of the column display_name
+    void setDisplayName(const std::string &pDisplayName) noexcept;
+    void setDisplayName(std::string &&pDisplayName) noexcept;
+    void setDisplayNameToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 19;  }
+    /**  For column avatar_url  */
+    ///Get the value of the column avatar_url, returns the default value if the column is null
+    const std::string &getValueOfAvatarUrl() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getAvatarUrl() const noexcept;
+    ///Set the value of the column avatar_url
+    void setAvatarUrl(const std::string &pAvatarUrl) noexcept;
+    void setAvatarUrl(std::string &&pAvatarUrl) noexcept;
+    void setAvatarUrlToNull() noexcept;
+
+
+    static size_t getColumnNumber() noexcept {  return 21;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -372,6 +394,8 @@ class Users
     std::shared_ptr<std::string> mfaPendingRedirectUri_;
     std::shared_ptr<::trantor::Date> deletedAt_;
     std::shared_ptr<bool> mustChangePassword_;
+    std::shared_ptr<std::string> displayName_;
+    std::shared_ptr<std::string> avatarUrl_;
     struct MetaData
     {
         const std::string colName_;
@@ -383,7 +407,7 @@ class Users
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[19]={ false };
+    bool dirtyFlag_[21]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -500,6 +524,16 @@ class Users
         if(!dirtyFlag_[18])
         {
             needSelection=true;
+        }
+        if(dirtyFlag_[19])
+        {
+            sql += "display_name,";
+            ++parametersCount;
+        }
+        if(dirtyFlag_[20])
+        {
+            sql += "avatar_url,";
+            ++parametersCount;
         }
         needSelection=true;
         if(parametersCount > 0)
@@ -635,6 +669,16 @@ class Users
         else
         {
             sql +="default,";
+        }
+        if(dirtyFlag_[19])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        if(dirtyFlag_[20])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
         }
         if(parametersCount > 0)
         {

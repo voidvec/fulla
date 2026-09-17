@@ -24,7 +24,10 @@
         "email_verification_tokens",
         "password_reset_tokens",
         "oauth2_device_codes",
-        "webauthn_credentials"
+        "webauthn_credentials",
+        "organization_members",
+        "organization_invitations",
+        "oauth2_client_owners"
     ],
     "relationships": {
         "enabled": true,
