@@ -83,9 +83,38 @@ resolve_cmake_preset() {
 export -f resolve_cmake_preset
 
 # Relocated Docker assets (repo-structure-refactor moved these out of the root
-# into deploy/docker/). Scripts must reference them via these variables instead
+# into deploy/docker/). Scripts must reference them via the variables below instead
 # of bare `docker-compose` / `-f Dockerfile`, which assumed root-level files.
 COMPOSE_FILE="$PROJECT_DIR/$COMPOSE_FILE_REL"
 DOCKERFILE="$PROJECT_DIR/$DOCKERFILE_REL"
 export COMPOSE_FILE
 export DOCKERFILE
+
+# Locate drogon_ctl and prepend its bin/ dir to PATH. Sources, in order:
+#   1. already on PATH;
+#   2. the build output folder -- CMakeDeps' Drogon-*-data.cmake records the
+#      resolved package folder (same pattern as build.sh and CI workflows);
+#   3. any Conan cache package that ships the binary (covers presets built
+#      under a different name).
+# None of these exist before the first build.sh run installs the drogon
+# package, so callers should surface that remedy on failure.
+ensure_drogon_ctl() {
+    command -v drogon_ctl &>/dev/null && return 0
+    local data_file drogon_folder cached
+    data_file="$(find "$BUILD_ABS_DIR" -maxdepth 2 -name 'Drogon-*-data.cmake' 2>/dev/null | head -n1)"
+    if [ -n "$data_file" ]; then
+        drogon_folder=$(grep -oE 'set\(drogon_PACKAGE_FOLDER_[A-Z]+ "[^"]+"' "$data_file" | sed -E 's/.*"([^"]+)"/\1/' | head -n1)
+        if [ -n "$drogon_folder" ] && [ -x "$drogon_folder/bin/drogon_ctl" ]; then
+            export PATH="$drogon_folder/bin:$PATH"
+            return 0
+        fi
+    fi
+    cached="$(find "$HOME/.conan2/p" -type f -name drogon_ctl -perm -u+x 2>/dev/null | head -n1)"
+    if [ -n "$cached" ]; then
+        export PATH="$(dirname "$cached"):$PATH"
+        return 0
+    fi
+    echo "[Error] drogon_ctl not found in PATH, build output, or Conan cache." >&2
+    return 1
+}
+export -f ensure_drogon_ctl

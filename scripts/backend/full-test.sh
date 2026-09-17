@@ -74,6 +74,16 @@ bash "$SCRIPT_DIR/setup-database.sh"
 echo "[SUCCESS] Database initialized"
 echo ""
 
+# Step 1.5: drogon_ctl for Step 2's ORM regen only exists after the drogon
+# package is installed. On a fresh environment neither PATH nor the Conan
+# cache has it yet, so bootstrap with one build pass; Step 3's build then
+# reduces to a fast incremental no-op.
+if ! ensure_drogon_ctl 2>/dev/null; then
+    echo "[Info] Fresh environment (drogon_ctl not installed yet) -- running a one-time build first."
+    bash "$SCRIPT_DIR/build.sh" "$BUILD_ARG" || { echo "[FAILED] Bootstrap build failed"; exit 1; }
+    ensure_drogon_ctl || exit 1
+fi
+
 # Step 2: Regenerate ORM Models
 echo "========================================"
 echo "Step 2: Regenerating ORM models"

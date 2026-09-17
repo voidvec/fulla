@@ -4,9 +4,10 @@ set -euo pipefail
 
 source "$(dirname "$0")/env_common.sh"
 
-# Check for drogon_ctl
-if ! command -v drogon_ctl &>/dev/null; then
-    echo "[Error] drogon_ctl not found in PATH."
+# drogon_ctl comes from the Conan drogon package that build.sh installs;
+# discover it from PATH / build output / Conan cache (env_common.sh).
+if ! ensure_drogon_ctl; then
+    echo "[Hint] Run scripts/backend/build.sh once to install the drogon package, then retry." >&2
     exit 1
 fi
 
