@@ -25,11 +25,16 @@ file(GLOB BOOTSTRAP_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/bootstrap/*.cc")
 # compilation model as bootstrap/ -- globbed into the server executable.
 file(GLOB ORGANIZATION_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/organization/*.cc")
 
+# v1.4.0: open platform (self-service application registration) + org
+# membership live at product level for the same §5.4 reason.
+file(GLOB OPENPLATFORM_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/openplatform/*.cc")
+
 add_executable(${PROJECT_NAME}
     src/main.cc
     src/SchemaManager.cc
     ${BOOTSTRAP_SRC}
     ${ORGANIZATION_SRC}
+    ${OPENPLATFORM_SRC}
 )
 
 # Views
@@ -55,6 +60,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE fulla::drogon CURL::libcurl)
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/organization
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/openplatform
 )
 
 # Silence MSVC C4996 for std::getenv (bootstrap/MigrationRunner). PRIVATE:

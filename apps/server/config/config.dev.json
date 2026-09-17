@@ -242,6 +242,15 @@
                 "http://localhost:5173"
             ]
         },
+        "open_platform": {
+            "enabled": true,
+            "require_org": false,
+            "max_apps_per_user": 5,
+            "max_org_apps": 10,
+            "max_orgs_per_user": 3,
+            "max_redirect_uris": 20,
+            "creation_rate_limit_per_day": 5
+        },
         "external_auth": {
             "github": {
                 "client_id": "YOUR_GITHUB_CLIENT_ID",

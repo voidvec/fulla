@@ -12,6 +12,8 @@
 // M5 Task 30: OrganizationController moved to the product app
 // (apps/server/src/organization/, namespace `organization`).
 #include <OrganizationController.h>
+#include <OrgMemberController.h>
+#include <ApplicationController.h>
 #include <fulla/drogon/controllers/ClientRegistrationController.h>
 #include <fulla/drogon/controllers/ApiDocController.h>
 #include <fulla/drogon/controllers/DeviceAuthController.h>
@@ -59,6 +61,8 @@ void registerAllControllers()
     );
 #endif  // WITH_SOCIAL
     drogon::app().registerController(std::make_shared<::organization::OrganizationController>());
+    drogon::app().registerController(std::make_shared<::organization::OrgMemberController>());
+    drogon::app().registerController(std::make_shared<::openplatform::ApplicationController>());
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::ClientRegistrationController>()
     );

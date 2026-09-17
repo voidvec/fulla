@@ -301,6 +301,19 @@
             "rp_name": "Fulla",
             "rp_origins": []
         },
+        // v1.4.0 open platform: self-service application registration.
+        // enabled=false keeps current behavior (only admins create clients);
+        // set FULLA_OPEN_PLATFORM_ENABLED=true to allow end-user "My
+        // Applications" registrations under the documented quotas.
+        "open_platform": {
+            "enabled": false,
+            "require_org": false,
+            "max_apps_per_user": 5,
+            "max_org_apps": 10,
+            "max_orgs_per_user": 3,
+            "max_redirect_uris": 20,
+            "creation_rate_limit_per_day": 5
+        },
     "external_auth": {
             "github": {
                 "client_id": "OVERRIDE_VIA_FULLA_GITHUB_CLIENT_ID",
