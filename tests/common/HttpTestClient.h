@@ -281,6 +281,37 @@ inline ::drogon::HttpResponsePtr sendPutJson(
     }
 }
 
+// v1.4.0: PATCH counterpart of sendPutJson (same shape/timeout semantics).
+inline ::drogon::HttpResponsePtr sendPatchJson(
+  const std::string &path,
+  const Json::Value &json,
+  const std::string &bearerToken = "",
+  double timeout = 30.0)
+{
+    try
+    {
+        auto client =
+          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Patch);
+        req->setPath(path);
+        req->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
+        Json::StreamWriterBuilder wb;
+        req->setBody(Json::writeString(wb, json));
+        if (!bearerToken.empty())
+            req->addHeader("Authorization", "Bearer " + bearerToken);
+        auto [result, resp] = client->sendRequest(req, timeout);
+        if (result != ::drogon::ReqResult::Ok || resp == nullptr)
+            return nullptr;
+        return resp;
+    }
+    catch (const std::exception &e)
+    {
+        LOG_WARN << "sendPatchJson(" << path << ") failed: " << e.what();
+        return nullptr;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Response body parsing
 // ---------------------------------------------------------------------------

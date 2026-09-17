@@ -44,6 +44,12 @@ add_executable(${PROJECT_NAME}
     "${SERVER_SRC_DIR}/bootstrap/IdentityAssembly.cc"
     "${SERVER_SRC_DIR}/organization/OrganizationController.cc"
     "${SERVER_SRC_DIR}/organization/OrganizationService.cc"
+    # v1.4.0: open platform + org membership (registered through
+    # ControllerRegistration.cc, so compiled here too).
+    "${SERVER_SRC_DIR}/organization/OrgMemberController.cc"
+    "${SERVER_SRC_DIR}/organization/OrgMemberService.cc"
+    "${SERVER_SRC_DIR}/openplatform/ApplicationController.cc"
+    "${SERVER_SRC_DIR}/openplatform/ApplicationService.cc"
 )
 
 # Compile the product views (login.csp/consent.csp) into the binary, so the
@@ -55,6 +61,7 @@ drogon_create_views(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${SERVER_SRC_DIR}"
     "${SERVER_SRC_DIR}/organization"
+    "${SERVER_SRC_DIR}/openplatform"
 )
 
 # fulla::drogon carries the whole PUBLIC closure; Drogon::Drogon +
