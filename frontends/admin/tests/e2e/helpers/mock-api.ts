@@ -29,6 +29,25 @@ export const MOCK_CLIENTS = [
     redirect_uris: 'https://api.example.com/callback',
     allowed_grant_types: 'client_credentials',
   },
+  // v1.4.0 open platform: a self-registered app (owners row present).
+  {
+    client_id: 'app_community1',
+    name: 'Community Tool',
+    client_type: 'CONFIDENTIAL',
+    redirect_uris: 'https://community.example/callback',
+    allowed_grant_types: 'authorization_code',
+    self_registered: true,
+    owner: {
+      creator_user_id: 7,
+      creator_name: 'Ada Lovelace',
+      org_id: null,
+      status: 'active',
+    },
+  },
+]
+
+export const MOCK_ORGS = [
+  { id: 1, slug: 'acme', name: 'ACME Inc.', logo_uri: '', primary_color: '', issuer_override: '' },
 ]
 
 export const MOCK_USERS = [
@@ -232,7 +251,7 @@ export async function setupAuthenticatedMocks(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ clients: MOCK_CLIENTS }),
+        body: JSON.stringify({ clients: MOCK_CLIENTS, total: MOCK_CLIENTS.length }),
       })
     } else if (route.request().method() === 'POST') {
       await route.fulfill({
@@ -253,8 +272,9 @@ export async function setupAuthenticatedMocks(page: Page) {
   // Delete client / Get client detail / Update client
   await page.route('**/api/admin/clients/*', async (route) => {
     const url = route.request().url()
-    // Skip if it's a sub-resource like /scopes or /reset-secret
-    if (url.includes('/scopes') || url.includes('/reset-secret')) {
+    // Skip if it's a sub-resource like /scopes, /reset-secret, /suspend or /resume
+    if (url.includes('/scopes') || url.includes('/reset-secret') ||
+        url.includes('/suspend') || url.includes('/resume')) {
       await route.continue()
       return
     }
@@ -277,9 +297,50 @@ export async function setupAuthenticatedMocks(page: Page) {
     }
   })
 
-  // Reset secret
-  await page.route('**/api/admin/clients/*/reset-secret', async (route) => {
+  // v1.4.0: open platform governance (suspend/resume self-registered apps).
+  await page.route('**/api/admin/clients/*/suspend', async (route) => {
     await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ client_id: 'app_community1', status: 'suspended' }),
+    })
+  })
+  await page.route('**/api/admin/clients/*/resume', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ client_id: 'app_community1', status: 'active' }),
+    })
+  })
+
+  // v1.4.0: organizations admin listing/creation.
+  await page.route('**/api/admin/organizations', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ organizations: MOCK_ORGS, total: MOCK_ORGS.length }),
+      })
+    } else if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 2, slug: 'new-org', name: 'New Org', message: 'Organization created' }),
+      })
+    } else {
+      await route.continue()
+    }
+  })
+  await page.route('**/api/admin/organizations/*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_ORGS[0]),
+    })
+  })
+
+  // Reset secret
+  await page.route('**/api/admin/clients/*/reset-secret', async (route) => {    await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ client_secret: process.env.E2E_MOCK_RS ?? 'new-secret-after-reset-xyz789' }), // matches applications.spec expectation
