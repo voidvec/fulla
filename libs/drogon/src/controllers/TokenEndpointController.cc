@@ -1873,7 +1873,7 @@ void TokenEndpointController::token(
     // leave dispatchGrant empty when the inline callback dereferences it.
     plugin->getClient(
       clientId,
-      [plugin, req, clientId, clientSecret, authHeader, dispatchCb, dispatchGrant](
+      [plugin, req, clientId, clientSecret, authHeader, grantType, dispatchCb, dispatchGrant](
         std::optional<fulla::oauth2::model::OAuth2Client> client
       ) mutable {
           if (client)
@@ -1895,6 +1895,52 @@ void TokenEndpointController::token(
                   resp->setStatusCode(::drogon::k401Unauthorized);
                   (*dispatchCb)(resp);
                   return;
+              }
+
+              // #220 (RFC 6749 §3.2.1): enforce the client's registered grant
+              // list before dispatching. Empty list = legacy row, unrestricted.
+              // refresh_token is implied by an authorization_code or device_code
+              // registration: those flows mint refresh tokens unconditionally
+              // at issuance, so rejecting the follow-up refresh would brick a
+              // legitimately issued token. client_credentials/device_code/
+              // authorization_code are matched strictly against the list.
+              if (!client->allowedGrantTypes.empty() && !grantType.empty())
+              {
+                  bool grantAllowed = false;
+                  for (const auto &registered : client->allowedGrantTypes)
+                  {
+                      if (registered == grantType ||
+                          (grantType == "refresh_token" &&
+                           (registered == "authorization_code" ||
+                            registered == "urn:ietf:params:oauth:grant-type:device_code")))
+                      {
+                          grantAllowed = true;
+                          break;
+                      }
+                  }
+                  if (!grantAllowed)
+                  {
+                      Json::Value error;
+                      error["error"] = "unauthorized_client";
+                      error["error_description"] =
+                        "Client is not registered for grant_type: " + grantType;
+                      auto resp = ::drogon::HttpResponse::newHttpJsonResponse(error);
+                      resp->setStatusCode(
+                        fulla::common::error::OAuth2ErrorHandler::getHttpStatusCode(
+                          "unauthorized_client"
+                        )
+                      );
+                      if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
+                          m->incrementCounter(
+                            "oauth2_requests_total",
+                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
+                            static_cast<double>(
+                              static_cast<int>(resp->getStatusCode())
+                            )
+                          );
+                      (*dispatchCb)(resp);
+                      return;
+                  }
               }
           }
           // Enforcement passed (or no client resolved / legacy NULL method):

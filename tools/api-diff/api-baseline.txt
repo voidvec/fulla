@@ -5088,6 +5088,7 @@ std::string salt;
 std::vector<std::string> redirectUris;
 std::vector<std::string> allowedScopes;
 std::string tokenEndpointAuthMethod;
+std::vector<std::string> allowedGrantTypes;
 };
 struct OAuth2AuthCode
 {

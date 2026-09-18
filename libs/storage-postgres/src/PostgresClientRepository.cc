@@ -114,6 +114,20 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                       client.redirectUris.push_back(uri);
                   }
 
+                  // #220: comma-joined column, same storage convention as
+                  // redirect_uris. Empty (NULL column) stays empty = the token
+                  // endpoint's grant gate treats it as unrestricted (legacy rows).
+                  std::string grants = row.getValueOfAllowedGrantTypes();
+                  if (!grants.empty())
+                  {
+                      std::stringstream gs(grants);
+                      std::string grant;
+                      while (std::getline(gs, grant, ','))
+                      {
+                          client.allowedGrantTypes.push_back(grant);
+                      }
+                  }
+
                   // Fetch allowed scopes from oauth2_client_scopes table
                   LOG_DEBUG << "Postgres getClient: Fetching allowed scopes for " << client.clientId;
                   row.getScope(

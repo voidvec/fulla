@@ -62,6 +62,12 @@ struct OAuth2Client
     // Basic->body fallback (NULL column); explicit values are enforced at
     // token/introspect/revoke (client_secret_basic | client_secret_post | none).
     std::string tokenEndpointAuthMethod;
+    // #220 (RFC 6749 §3.2.1): the client's registered grant types. Empty =
+    // legacy/unregistered row, all grants allowed (grandfathered); non-empty
+    // lists are enforced at the token endpoint's grant dispatch gate, where
+    // refresh_token is implied by an authorization_code or device_code
+    // registration (those flows mint refresh tokens unconditionally).
+    std::vector<std::string> allowedGrantTypes;
 };
 
 /**

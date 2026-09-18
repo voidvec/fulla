@@ -50,6 +50,13 @@ std::string serializeClient(const OAuth2Client &c)
         allowedScopes.append(s);
     json["allowedScopes"] = allowedScopes;
 
+    // #220: registered grant types. Older cache entries lack the member and
+    // deserialize to an empty list = unrestricted (legacy semantics).
+    Json::Value allowedGrantTypes(Json::arrayValue);
+    for (const auto &g : c.allowedGrantTypes)
+        allowedGrantTypes.append(g);
+    json["allowedGrantTypes"] = allowedGrantTypes;
+
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "";
     return Json::writeString(builder, json);
@@ -100,6 +107,11 @@ bool deserializeClient(const std::string &jsonStr, OAuth2Client &out)
     {
         for (const auto &sc : root["allowedScopes"])
             out.allowedScopes.push_back(sc.asString());
+    }
+    if (root.isMember("allowedGrantTypes") && root["allowedGrantTypes"].isArray())
+    {
+        for (const auto &g : root["allowedGrantTypes"])
+            out.allowedGrantTypes.push_back(g.asString());
     }
     return true;
 }

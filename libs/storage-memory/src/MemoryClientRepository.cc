@@ -2,6 +2,8 @@
 #include <fulla/common/utils/ConstantTimeCompare.h>
 #include <drogon/drogon.h>
 
+#include <sstream>
+
 namespace fulla::storage::memory
 {
 
@@ -87,6 +89,26 @@ void MemoryClientRepository::initFromConfig(const Json::Value &clientsConfig)
             client.allowedScopes.push_back("profile");
             client.allowedScopes.push_back("email");
             LOG_DEBUG << "MemoryClientRepository: Added default scopes for fulla-portal";
+        }
+
+        // #220: registered grant types. Accepts a comma-joined string (the
+        // column convention) or an array. Absent = empty list = unrestricted
+        // (legacy semantics, matches the Postgres NULL-column behavior).
+        if (clientData["allowed_grant_types"].isArray())
+        {
+            for (const auto &grant : clientData["allowed_grant_types"])
+            {
+                client.allowedGrantTypes.push_back(grant.asString());
+            }
+        }
+        else if (clientData["allowed_grant_types"].isString())
+        {
+            std::stringstream gs(clientData["allowed_grant_types"].asString());
+            std::string grant;
+            while (std::getline(gs, grant, ','))
+            {
+                client.allowedGrantTypes.push_back(grant);
+            }
         }
 
         LOG_DEBUG << "MemoryClientRepository: Loaded client " << clientId << " with "
