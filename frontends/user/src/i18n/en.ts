@@ -28,6 +28,7 @@ export default {
   },
   common: {
     loading: 'Loading...',
+    dismiss: 'Dismiss',
     cancel: 'Cancel',
     backToLogin: 'Back to Login',
     goToLogin: 'Go to Login',

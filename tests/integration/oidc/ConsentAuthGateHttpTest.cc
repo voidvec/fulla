@@ -247,7 +247,7 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     auto approve = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" + "&state=consentstate01&consent_csrf=" + csrf +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" + "&state=consentstate01&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" + csrf +
         "&action=approve",
       cookie
     );

@@ -18,10 +18,12 @@ import { join, resolve } from 'node:path'
 // precompilation active (issue #159; see docs/contribute/frontend-i18n.md).
 // Re-baselined 2026-09-17 for v1.4.0: two new lazy-loaded portal pages
 // (My Applications, My Organizations), the editable profile form, bilingual
-// catalogs for both, and two nav entries (PR #218).
+// catalogs for both, and two nav entries (PR #218). Re-measured 2026-09-18
+// after the review fixes (admin governance UI + orgs page; CI-build numbers
+// — the local build measured ~9KB lower).
 const BUDGETS = {
-  user: { total: 384474, main: 146535 },
-  admin: { total: 398585, main: 143475 },
+  user: { total: 385441, main: 146739 },
+  admin: { total: 407951, main: 146452 },
 }
 const HEADROOM = 1.1
 

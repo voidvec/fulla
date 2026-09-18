@@ -77,6 +77,8 @@ async function rotateSecret(app: any) {
     oneTimeSecretFor.value = app.client_id
     success.value = t('account.applications.rotated', { app: app.name || app.client_id })
     setTimeout(() => { success.value = '' }, 3000)
+    // M11 (review): the list still shows the pre-rotation state — refresh.
+    await fetchApps()
   } catch (e: unknown) {
     error.value = normalizeError(e)
   }
@@ -141,6 +143,12 @@ onMounted(fetchApps)
         {{ $t('account.applications.secretOnce') }}
       </p>
       <DData :value="oneTimeSecret" />
+      <button
+        class="mt-2 text-sm underline text-neutral-400 hover:text-neutral-600"
+        @click="oneTimeSecret = ''; oneTimeSecretFor = ''"
+      >
+        {{ $t('common.dismiss') }}
+      </button>
     </AppCard>
 
     <AppCard

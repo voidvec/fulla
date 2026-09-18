@@ -168,7 +168,7 @@ bool authorizeMintNonce(
     return postWithCookie(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=p0143state&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=p0143state&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
         csrf + "&action=approve",
       cookie2
     );

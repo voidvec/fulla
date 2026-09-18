@@ -38,9 +38,11 @@
 #include <thread>
 #include <vector>
 
-// src-internal registries under test (relative include — same precedent as
-// UserReadCacheTest.cc; deliberately NOT on the public include tree).
-#include "../../libs/drogon/src/ClientCacheInvalidator.h"
+// ClientCacheInvalidator was promoted to the public include tree in v1.4.0
+// (the open-platform governance write paths share the invariant);
+// UserReadCache remains src-internal (relative include, UserReadCacheTest
+// precedent).
+#include <fulla/drogon/utils/ClientCacheInvalidator.h>
 #include "../../libs/drogon/src/UserReadCache.h"
 
 namespace

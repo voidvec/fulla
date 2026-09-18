@@ -67,18 +67,27 @@ async function createOrg() {
   }
 }
 
+// M11 (review): one members panel is shared across orgs — a late response
+// for org A must never render into org B's panel. Sequence-guard every
+// expansion and reset the per-panel state on switch.
+let membersRequestSeq = 0
+
 async function toggleMembers(slug: string) {
   if (expandedSlug.value === slug) {
     expandedSlug.value = ''
     return
   }
+  const seq = ++membersRequestSeq
   expandedSlug.value = slug
   members.value = []
+  inviteEmail.value = ''
+  lastInviteToken.value = ''
   try {
     const resp = await http.get(`/api/me/organizations/${slug}/members`)
+    if (seq !== membersRequestSeq || expandedSlug.value !== slug) return
     members.value = resp.data?.members || []
   } catch (e: unknown) {
-    error.value = normalizeError(e)
+    if (seq === membersRequestSeq) error.value = normalizeError(e)
   }
 }
 
@@ -324,6 +333,12 @@ onMounted(fetchOrgs)
             class="text-xs text-neutral-500 break-all"
           >
             {{ $t('account.organizations.inviteToken') }}: {{ lastInviteToken }}
+            <button
+              class="ml-2 underline text-neutral-400 hover:text-neutral-600"
+              @click="lastInviteToken = ''"
+            >
+              {{ $t('common.dismiss') }}
+            </button>
           </p>
         </div>
       </AppCard>
