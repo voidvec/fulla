@@ -108,6 +108,25 @@ async function resetSecret(clientId: string) {
   }
 }
 
+// v1.4.0 open platform governance: suspend/resume self-registered apps.
+// The status lives on the owners row; admin-seeded clients have none.
+async function setSuspended(client: any, suspended: boolean) {
+  const action = suspended ? 'suspend' : 'resume'
+  if (!confirm(t(`admin.applications.${action}Confirm`, { name: client.name || client.client_id }))) return
+  try {
+    await axios.post(`/api/admin/clients/${client.client_id}/${action}`)
+    await fetchClients()
+  } catch (e: unknown) {
+    showError(normalizeError(e))
+  }
+}
+
+function ownerLabel(client: any): string {
+  if (!client.owner) return ''
+  if (client.owner.org_name) return client.owner.org_name
+  return client.owner.creator_name || `#${client.owner.creator_user_id}`
+}
+
 onMounted(fetchClients)
 </script>
 
@@ -164,6 +183,9 @@ onMounted(fetchClients)
               {{ $t('common.type') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+              {{ $t('admin.applications.owner') }}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
               {{ $t('common.actions') }}
             </th>
           </tr>
@@ -193,6 +215,22 @@ onMounted(fetchClients)
                 {{ client.client_type }}
               </span>
             </td>
+            <td class="px-6 py-3 text-sm">
+              <template v-if="client.owner">
+                <span
+                  class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-success-50 text-success-700 border border-success-200 mr-1.5"
+                  :title="$t('admin.applications.selfRegistered')"
+                >{{ $t('admin.applications.selfRegisteredShort') }}</span>
+                <span
+                  class="text-neutral-700"
+                  :class="client.owner.status === 'suspended' ? 'line-through text-neutral-400' : ''"
+                >{{ ownerLabel(client) }}</span>
+              </template>
+              <span
+                v-else
+                class="text-xs text-neutral-400"
+              >{{ $t('admin.applications.adminManaged') }}</span>
+            </td>
             <td class="px-6 py-3 text-sm space-x-2">
               <button
                 v-if="client.client_type === 'CONFIDENTIAL'"
@@ -200,6 +238,20 @@ onMounted(fetchClients)
                 @click="resetSecret(client.client_id)"
               >
                 {{ $t('admin.applications.resetSecret') }}
+              </button>
+              <button
+                v-if="client.owner && client.owner.status !== 'suspended'"
+                class="px-2 py-1 rounded text-warning-600 hover:bg-warning-50 font-medium transition-colors"
+                @click="setSuspended(client, true)"
+              >
+                {{ $t('admin.applications.suspend') }}
+              </button>
+              <button
+                v-if="client.owner && client.owner.status === 'suspended'"
+                class="px-2 py-1 rounded text-success-600 hover:bg-success-50 font-medium transition-colors"
+                @click="setSuspended(client, false)"
+              >
+                {{ $t('admin.applications.resume') }}
               </button>
               <button
                 class="px-2 py-1 rounded text-error-600 hover:bg-error-50 hover:text-error-700 font-medium transition-colors"

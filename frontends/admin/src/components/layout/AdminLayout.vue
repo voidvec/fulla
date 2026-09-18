@@ -35,6 +35,7 @@ const navSections = computed(() => [
     label: t('nav.management'),
     items: [
       { name: t('nav.applications'), path: '/applications', icon: 'apps' },
+      { name: t('nav.organizations'), path: '/organizations', icon: 'roles' },
       { name: t('nav.users'), path: '/users', icon: 'users' },
       { name: t('nav.roles'), path: '/roles', icon: 'roles' },
       { name: t('nav.scopes'), path: '/scopes', icon: 'scopes' },
