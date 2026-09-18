@@ -27,6 +27,7 @@ export default {
   },
   common: {
     loading: '加载中…',
+    dismiss: '关闭',
     cancel: '取消',
     backToLogin: '返回登录',
     goToLogin: '前往登录',

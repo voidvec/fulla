@@ -158,7 +158,14 @@ DROGON_TEST(Integration_P1_OpenPlatform_Profile_PatchRoundTrip)
 {
     OPENPLATFORM_SKIP_GUARD;
 
-    auto token = fulla::test::http::loginAsAdmin();
+    // Review M12: run against a THROWAWAY user, not the seeded admin — the
+    // old version mutated admin's profile and relied on restoring it at the
+    // end (order-coupled shared state).
+    const std::string suffix = uniqueSuffix();
+    const std::string userP = "qa_profile_" + suffix;
+    const std::string passP = randomPassword();
+    REQUIRE(createVerifiedUser(userP, userP + "@qa.example", passP));
+    auto token = loginTokenVerbose(userP, passP);
     REQUIRE(token.has_value());
 
     // 1) set both fields
@@ -196,6 +203,26 @@ DROGON_TEST(Integration_P1_OpenPlatform_Profile_PatchRoundTrip)
     REQUIRE(parseJsonBody(me2, me2Body));
     CHECK(me2Body["display_name"].asString().empty());
     CHECK(me2Body["avatar_url"].asString().empty());
+
+    // 4) dirty-only semantics (C5 companion): CJK code points count as one
+    // each (cap is 100 code points, not bytes).
+    Json::Value cjk;
+    cjk["display_name"] = "中文昵称";  // 4 code points
+    auto cjkResp = sendPatchJson("/api/me/profile", cjk, *token);
+    REQUIRE(cjkResp != nullptr);
+    CHECK(statusIs(cjkResp, drogon::k200OK));
+
+    // cleanup the throwaway user
+    {
+        auto db = ::drogon::app().getDbClient();
+        std::promise<bool> cleaned;
+        db->execSqlAsync(
+          "DELETE FROM users WHERE username = $1",
+          [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
+          [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
+          userP);
+        CHECK(cleaned.get_future().get());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -374,12 +401,39 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
     const std::string confClientId = confBody["client_id"].asString();
     CHECK(!confBody["client_secret"].asString().empty());
 
-    // 4) list contains both
+    // 4) list contains both (asserted — review flagged the old no-op parse)
     auto listResp = sendGet("/api/me/applications", *tokenA);
     REQUIRE(listResp != nullptr);
     CHECK(statusIs(listResp, drogon::k200OK));
     Json::Value listBody;
     REQUIRE(parseJsonBody(listResp, listBody));
+    bool listHasPublic = false;
+    bool listHasConf = false;
+    for (const auto &app : listBody["applications"])
+    {
+        if (app["client_id"].asString() == publicClientId)
+            listHasPublic = true;
+        if (app["client_id"].asString() == confClientId)
+            listHasConf = true;
+    }
+    CHECK(listHasPublic);
+    CHECK(listHasConf);
+
+    // 4b) Cross-user IDOR (review C1): user B operating user A's personal
+    // app is denied WITH a response (the old code silently hung).
+    const std::string userB = "qa_app_b_" + suffix;
+    const std::string passB = randomPassword();
+    REQUIRE(createVerifiedUser(userB, userB + "@qa.example", passB));
+    auto tokenB = loginTokenVerbose(userB, passB);
+    REQUIRE(tokenB.has_value());
+    auto idorRotate =
+      sendPostJson("/api/me/applications/" + confClientId + "/rotate-secret",
+                   Json::Value(Json::objectValue), *tokenB);
+    REQUIRE(idorRotate != nullptr);
+    CHECK(statusIs(idorRotate, drogon::k403Forbidden));
+    auto idorDelete = sendDelete("/api/me/applications/" + confClientId, *tokenB);
+    REQUIRE(idorDelete != nullptr);
+    CHECK(statusIs(idorDelete, drogon::k403Forbidden));
 
     // 5) rotate the CONFIDENTIAL secret
     auto rotateResp =
@@ -391,7 +445,9 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
     REQUIRE(parseJsonBody(rotateResp, rotateBody));
     CHECK(!rotateBody["client_secret"].asString().empty());
 
-    // 6) admin suspend, then resume (governance)
+    // 6) admin suspend — then verify governance actually bites (review M12):
+    // the suspended client fails token validation, and the owner's
+    // management writes are frozen (M5). Resume afterwards.
     auto adminToken = fulla::test::http::loginAsAdmin();
     REQUIRE(adminToken.has_value());
     auto suspendResp =
@@ -399,6 +455,23 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
                    Json::Value(Json::objectValue), *adminToken);
     REQUIRE(suspendResp != nullptr);
     CHECK(statusIs(suspendResp, drogon::k200OK));
+    // 6a) client validation fails: a token exchange for the suspended
+    // CONFIDENTIAL client is rejected (invalid_client family).
+    {
+        const std::string tokenForm =
+          "grant_type=client_credentials&client_id=" + confClientId +
+          "&client_secret=definitely-wrong&scope=openid";
+        auto suspendedToken =
+          fulla::test::http::sendPostForm("/oauth2/token", tokenForm);
+        REQUIRE(suspendedToken != nullptr);
+        CHECK(suspendedToken->getStatusCode() == drogon::k401Unauthorized);
+    }
+    // 6b) the owner cannot rotate while suspended (M5).
+    auto frozenRotate =
+      sendPostJson("/api/me/applications/" + confClientId + "/rotate-secret",
+                   Json::Value(Json::objectValue), *tokenA);
+    REQUIRE(frozenRotate != nullptr);
+    CHECK(statusIs(frozenRotate, drogon::k403Forbidden));
     auto resumeResp =
       sendPostJson("/api/admin/clients/" + confClientId + "/resume",
                    Json::Value(Json::objectValue), *adminToken);
@@ -425,9 +498,9 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
     auto db = ::drogon::app().getDbClient();
     std::promise<bool> cleaned;
     db->execSqlAsync(
-      "DELETE FROM users WHERE username = $1",
+      "DELETE FROM users WHERE username IN ($1, $2)",
       [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
       [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
-      userA);
+      userA, userB);
     CHECK(cleaned.get_future().get());
 }

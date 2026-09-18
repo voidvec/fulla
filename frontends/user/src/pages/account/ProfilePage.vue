@@ -30,6 +30,10 @@ async function fetchProfile() {
   try {
     const resp = await http.get('/api/me')
     profile.value = resp.data
+    // C5 (review): populate the edit form AFTER the profile resolves — the
+    // old onMounted ordering read a still-null profile, so the inputs always
+    // started empty.
+    startProfileEdit()
   } catch {
     error.value = t('account.profile.loadFailed')
   } finally {
@@ -58,13 +62,25 @@ function startProfileEdit() {
 }
 
 async function saveProfile() {
+  // C5 (review): send only DIRTY fields — the backend treats an empty
+  // string as "clear", so unconditionally PATCHing both keys silently wiped
+  // whichever field the user never touched.
+  const body: Record<string, string> = {}
+  const originalName = profile.value?.display_name || ''
+  const originalAvatar = profile.value?.avatar_url || ''
+  const nextName = editDisplayName.value.trim()
+  const nextAvatar = editAvatarUrl.value.trim()
+  if (nextName !== originalName) body.display_name = nextName
+  if (nextAvatar !== originalAvatar) body.avatar_url = nextAvatar
+  if (Object.keys(body).length === 0) {
+    success.value = t('account.profile.saved')
+    setTimeout(() => { success.value = '' }, 3000)
+    return
+  }
   savingProfile.value = true
   error.value = null
   try {
-    await http.patch('/api/me/profile', {
-      display_name: editDisplayName.value.trim(),
-      avatar_url: editAvatarUrl.value.trim(),
-    })
+    await http.patch('/api/me/profile', body)
     success.value = t('account.profile.saved')
     setTimeout(() => { success.value = '' }, 3000)
     await fetchProfile()
@@ -75,10 +91,7 @@ async function saveProfile() {
   }
 }
 
-onMounted(() => {
-  startProfileEdit()
-  fetchProfile()
-})
+onMounted(fetchProfile)
 </script>
 
 <template>
