@@ -1304,6 +1304,30 @@ void SessionController::consent(
         return;
     }
 
+    // M4 (review): PKCE enforcement — the login path has CHECK 4, but a
+    // direct consent POST without a code_challenge minted a challenge-free
+    // code, skipping RFC 9700's mandate. With self-registered PUBLIC apps
+    // (v1.4.0 open platform) that became an exploitable hole; mirror login.
+    {
+        const auto &customCfg = ::drogon::app().getCustomConfig();
+        bool requirePkce = true;
+        if (
+          customCfg.isMember("auth") &&
+          customCfg["auth"].isMember("require_pkce_for_public")
+        )
+        {
+            requirePkce = customCfg["auth"]["require_pkce_for_public"].asBool();
+        }
+        if (requirePkce && codeChallenge.empty())
+        {
+            respondError(
+              req, std::move(callback), "VALIDATION_INVALID_INPUT",
+              "consent: PKCE (code_challenge) is required"
+            );
+            return;
+        }
+    }
+
     // P0-4: consent approve mints an authorization code and previously
     // skipped the redirect_uri registration check the deny branch already
     // had (comment acknowledged it as follow-up), plus the client scope

@@ -231,18 +231,36 @@ void UserSelfServiceController::updateProfile(
             return;
         }
         displayName = (*jsonBody)["display_name"].asString();
-        // Trim leading/trailing whitespace, then enforce the length cap.
+        // Trim leading/trailing whitespace, then validate.
         const auto first = displayName.find_first_not_of(" \t\r\n");
         const auto last = displayName.find_last_not_of(" \t\r\n");
         displayName = (first == std::string::npos) ? ""
                                                    : displayName.substr(first, last - first + 1);
-        if (displayName.size() > kMaxDisplayName)
+        // Review minor: the cap counts CODE POINTS, not bytes (a byte cap
+        // truncates CJK names to ~33 chars), and control characters are
+        // rejected outright (displayName propagates into the `name` claim,
+        // consent screens and emails).
+        size_t codePoints = 0;
+        bool hasControl = false;
+        for (const char c : displayName)
+        {
+            if (static_cast<unsigned char>(c) < 0x20 || c == '\x7F')
+            {
+                hasControl = true;
+                break;
+            }
+            // Count UTF-8 leading bytes only (0xxxxxxx / 11xxxxxx).
+            if ((static_cast<unsigned char>(c) & 0xC0) != 0x80)
+                ++codePoints;
+        }
+        if (hasControl || codePoints > kMaxDisplayName)
         {
             respondError(
               req,
               sharedCb,
               "VALIDATION_INVALID_INPUT",
-              "updateProfile: display_name must be at most 100 characters"
+              "updateProfile: display_name must be at most 100 characters "
+              "(counted as code points) without control characters"
             );
             return;
         }
