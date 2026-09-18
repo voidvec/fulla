@@ -5,34 +5,63 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_envelope import ErrorEnvelope
+from ...models.post_api_me_org_invitations_accept_body import PostApiMeOrgInvitationsAcceptBody
+from ...models.post_api_me_org_invitations_accept_response_200 import PostApiMeOrgInvitationsAcceptResponse200
 from ...types import Response
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    body: PostApiMeOrgInvitationsAcceptBody,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/me/org-invitations/accept",
     }
 
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200 | None:
     if response.status_code == 200:
-        return None
+        response_200 = PostApiMeOrgInvitationsAcceptResponse200.from_dict(response.json())
+
+        return response_200
+
+    if response.status_code == 400:
+        response_400 = ErrorEnvelope.from_dict(response.json())
+
+        return response_400
 
     if response.status_code == 401:
-        return None
+        response_401 = ErrorEnvelope.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 403:
-        return None
+        response_403 = ErrorEnvelope.from_dict(response.json())
+
+        return response_403
 
     if response.status_code == 404:
-        return None
+        response_404 = ErrorEnvelope.from_dict(response.json())
+
+        return response_404
 
     if response.status_code == 409:
-        return None
+        response_409 = ErrorEnvelope.from_dict(response.json())
+
+        return response_409
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -40,7 +69,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -52,21 +83,27 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+    body: PostApiMeOrgInvitationsAcceptBody,
+) -> Response[ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200]:
     """Accept Organization Invitation
 
      Accept an organization invitation by token. The caller's account email must match the invitation
     email (normalized); the invitation is single-use and expires after 72h.
+
+    Args:
+        body (PostApiMeOrgInvitationsAcceptBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        Response[ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -75,25 +112,87 @@ def sync_detailed(
     return _build_response(client=client, response=response)
 
 
-async def asyncio_detailed(
+def sync(
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+    body: PostApiMeOrgInvitationsAcceptBody,
+) -> ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200 | None:
     """Accept Organization Invitation
 
      Accept an organization invitation by token. The caller's account email must match the invitation
     email (normalized); the invitation is single-use and expires after 72h.
+
+    Args:
+        body (PostApiMeOrgInvitationsAcceptBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200
     """
 
-    kwargs = _get_kwargs()
+    return sync_detailed(
+        client=client,
+        body=body,
+    ).parsed
+
+
+async def asyncio_detailed(
+    *,
+    client: AuthenticatedClient,
+    body: PostApiMeOrgInvitationsAcceptBody,
+) -> Response[ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200]:
+    """Accept Organization Invitation
+
+     Accept an organization invitation by token. The caller's account email must match the invitation
+    email (normalized); the invitation is single-use and expires after 72h.
+
+    Args:
+        body (PostApiMeOrgInvitationsAcceptBody):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200]
+    """
+
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    *,
+    client: AuthenticatedClient,
+    body: PostApiMeOrgInvitationsAcceptBody,
+) -> ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200 | None:
+    """Accept Organization Invitation
+
+     Accept an organization invitation by token. The caller's account email must match the invitation
+    email (normalized); the invitation is single-use and expires after 72h.
+
+    Args:
+        body (PostApiMeOrgInvitationsAcceptBody):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        ErrorEnvelope | PostApiMeOrgInvitationsAcceptResponse200
+    """
+
+    return (
+        await asyncio_detailed(
+            client=client,
+            body=body,
+        )
+    ).parsed

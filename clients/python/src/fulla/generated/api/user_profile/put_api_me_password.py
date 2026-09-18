@@ -5,16 +5,27 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import Response
+from ...models.put_api_me_password_body import PutApiMePasswordBody
+from ...types import UNSET, Response, Unset
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    body: PutApiMePasswordBody | Unset = UNSET,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "put",
         "url": "/api/me/password",
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -49,12 +60,16 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
+    body: PutApiMePasswordBody | Unset = UNSET,
 ) -> Response[Any]:
     """Change Password
 
      Change the current user's password. A successful change also clears the must_change_password flag
     (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available)
     use POST /oauth2/password/change instead.
+
+    Args:
+        body (PutApiMePasswordBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -64,7 +79,9 @@ def sync_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -76,12 +93,16 @@ def sync_detailed(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
+    body: PutApiMePasswordBody | Unset = UNSET,
 ) -> Response[Any]:
     """Change Password
 
      Change the current user's password. A successful change also clears the must_change_password flag
     (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available)
     use POST /oauth2/password/change instead.
+
+    Args:
+        body (PutApiMePasswordBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -91,7 +112,9 @@ async def asyncio_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 

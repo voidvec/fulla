@@ -207,6 +207,32 @@ def run_checks(
     return failures
 
 
+def check_write_ops_have_request_body(openapi_yaml: Path) -> List[str]:
+    """Structural rule (v1.4.0 review C6): every /api/ write operation
+    (post/put/patch) in openapi.yaml must declare a requestBody — an
+    operation without one generates SDKs whose calls are rejected
+    server-side ("JSON body required" or equivalent). Action-style
+    operations declare an optional empty-object body.
+    """
+    doc = parse_endpoints._load_yaml(openapi_yaml.read_text(encoding="utf-8"))
+    failures: List[str] = []
+    for path, item in (doc.get("paths") or {}).items():
+        if not isinstance(path, str) or not path.startswith("/api/"):
+            continue
+        if not isinstance(item, dict):
+            continue
+        for method in ("post", "put", "patch"):
+            op = item.get(method)
+            if isinstance(op, dict) and "requestBody" not in op:
+                failures.append(
+                    f"  {method.upper()} {path} has no requestBody "
+                    f"(SDK callers cannot send a body)"
+                )
+    if failures:
+        failures.insert(0, "[structure] /api/ write operations without requestBody")
+    return failures
+
+
 # ---------------------------------------------------------------------------
 # Self-test (fixtures under tools/openapi-governance/fixtures/)
 # ---------------------------------------------------------------------------
@@ -321,6 +347,7 @@ def _main() -> int:
         return 2
 
     failures = run_checks(routes, docs, yaml_ops, yaml_version, cmake_version)
+    failures.extend(check_write_ops_have_request_body(openapi_yaml))
     if failures:
         print("[spec-governance] FAIL: OpenAPI governance drift detected")
         for ln in failures:

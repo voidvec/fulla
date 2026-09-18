@@ -6,6 +6,8 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_envelope import ErrorEnvelope
+from ...models.get_api_me_organizations_slug_members_response_200 import GetApiMeOrganizationsSlugMembersResponse200
 from ...types import Response
 
 
@@ -23,18 +25,28 @@ def _get_kwargs(
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200 | None:
     if response.status_code == 200:
-        return None
+        response_200 = GetApiMeOrganizationsSlugMembersResponse200.from_dict(response.json())
+
+        return response_200
 
     if response.status_code == 401:
-        return None
+        response_401 = ErrorEnvelope.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 403:
-        return None
+        response_403 = ErrorEnvelope.from_dict(response.json())
+
+        return response_403
 
     if response.status_code == 404:
-        return None
+        response_404 = ErrorEnvelope.from_dict(response.json())
+
+        return response_404
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -42,7 +54,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -55,7 +69,7 @@ def sync_detailed(
     slug: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200]:
     """List Organization Members
 
      List members of an organization (any member may view).
@@ -68,7 +82,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        Response[ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200]
     """
 
     kwargs = _get_kwargs(
@@ -82,11 +96,11 @@ def sync_detailed(
     return _build_response(client=client, response=response)
 
 
-async def asyncio_detailed(
+def sync(
     slug: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200 | None:
     """List Organization Members
 
      List members of an organization (any member may view).
@@ -99,7 +113,33 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200
+    """
+
+    return sync_detailed(
+        slug=slug,
+        client=client,
+    ).parsed
+
+
+async def asyncio_detailed(
+    slug: str,
+    *,
+    client: AuthenticatedClient,
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200]:
+    """List Organization Members
+
+     List members of an organization (any member may view).
+
+    Args:
+        slug (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200]
     """
 
     kwargs = _get_kwargs(
@@ -109,3 +149,31 @@ async def asyncio_detailed(
     response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    slug: str,
+    *,
+    client: AuthenticatedClient,
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200 | None:
+    """List Organization Members
+
+     List members of an organization (any member may view).
+
+    Args:
+        slug (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        ErrorEnvelope | GetApiMeOrganizationsSlugMembersResponse200
+    """
+
+    return (
+        await asyncio_detailed(
+            slug=slug,
+            client=client,
+        )
+    ).parsed

@@ -933,6 +933,13 @@ paths:
       - Clients
   /api/admin/clients/{clientId}/reset-secret:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Reset the secret of a specific OAuth2 client.
       operationId: post_api_admin_clients_{clientId}_reset-secret
       parameters:
@@ -968,12 +975,35 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
-          description: Application resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    client_id:
+                      type: string
+                    status:
+                      type: string
+          description: Success
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Not a self-registered application
       security:
       - bearerAuth: []
@@ -1004,6 +1034,13 @@ paths:
       - Admin
       - Clients
     put:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Update the assigned scopes for an OAuth2 client.
       operationId: put_api_admin_clients_{clientId}_scopes
       parameters:
@@ -1040,12 +1077,35 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
-          description: Application suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    client_id:
+                      type: string
+                    status:
+                      type: string
+          description: Success
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Not a self-registered application
       security:
       - bearerAuth: []
@@ -1554,6 +1614,13 @@ paths:
       - Tokens
   /api/admin/tokens/revoke-by-client:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Revoke all tokens issued to a specific client.
       operationId: post_api_admin_tokens_revoke-by-client
       responses:
@@ -1571,6 +1638,13 @@ paths:
       - Tokens
   /api/admin/tokens/revoke-by-user:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Revoke all tokens issued for a specific user.
       operationId: post_api_admin_tokens_revoke-by-user
       responses:
@@ -1862,6 +1936,13 @@ paths:
       - Users
   /api/admin/users/{userId}/disable:
     put:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Disable a specific user account.
       operationId: put_api_admin_users_{userId}_disable
       parameters:
@@ -1888,6 +1969,13 @@ paths:
       - Users
   /api/admin/users/{userId}/enable:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Enable a disabled user account by resetting lockout state.
       operationId: post_api_admin_users_{userId}_enable
       parameters:
@@ -1986,6 +2074,13 @@ paths:
       - Users
   /api/github/login:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Exchange GitHub authorization code for user information. This endpoint
         handles the server-side OAuth2 flow with GitHub.
       operationId: post_api_github_login
@@ -2015,6 +2110,13 @@ paths:
       - GitHub
   /api/google/login:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Exchange Google authorization code for user information. This endpoint
         handles the server-side OAuth2 flow with Google Identity Platform.
       operationId: post_api_google_login
@@ -2132,8 +2234,49 @@ paths:
       operationId: get_api_me_applications
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        client_id:
+                          type: string
+                        name:
+                          type: string
+                        client_type:
+                          type: string
+                          enum: [PUBLIC, CONFIDENTIAL]
+                        status:
+                          type: string
+                          enum: [active, suspended]
+                        org_id:
+                          type: integer
+                          nullable: true
+                        creator_user_id:
+                          type: integer
+                        redirect_uris:
+                          type: array
+                          items:
+                            type: string
+                        allowed_grant_types:
+                          type: array
+                          items:
+                            type: string
+                        created_at:
+                          type: string
+                  total:
+                    type: integer
           description: Applications list
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
       security:
       - bearerAuth: []
@@ -2177,14 +2320,53 @@ paths:
                     be its owner/admin); omit for a personal application.
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_id:
+                    type: string
+                  client_type:
+                    type: string
+                    enum: [PUBLIC, CONFIDENTIAL]
+                  client_secret:
+                    type: string
+                    description: Present exactly once for CONFIDENTIAL apps.
+                  org_id:
+                    type: integer
+                  message:
+                    type: string
           description: Application created (client_secret present once)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid input (scope/grant/redirect validation)
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Open platform disabled / org role missing
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Quota exceeded
         '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Creation rate limit reached
       security:
       - bearerAuth: []
@@ -2205,12 +2387,31 @@ paths:
           type: string
       responses:
         '200':
-          description: Application deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    message:
+                      type: string
+          description: Success
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Caller cannot manage this application
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Application not found
       security:
       - bearerAuth: []
@@ -2230,14 +2431,62 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                allowed_grant_types:
+                  type: array
+                  items:
+                    type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
       responses:
         '200':
-          description: Application updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    message:
+                      type: string
+          description: Success
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid input
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
-          description: Caller cannot manage this application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Caller cannot manage this application (or it is suspended)
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Application not found
       security:
       - bearerAuth: []
@@ -2257,14 +2506,50 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_id:
+                    type: string
+                  client_secret:
+                    type: string
+                    description: Present exactly once.
+                  message:
+                    type: string
           description: Secret rotated (client_secret present once)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PUBLIC clients have no secret
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
-          description: Caller cannot manage this application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Caller cannot manage this application (or it is suspended)
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Application not found
       security:
       - bearerAuth: []
@@ -2285,17 +2570,61 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_slug]
+              properties:
+                org_slug:
+                  type: string
+                  nullable: true
+                  description: Target organization slug, or null to transfer
+                    back to personal ownership.
       responses:
         '200':
-          description: Application transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    message:
+                      type: string
+                    org_id:
+                      type: integer
+          description: Success
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid input
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Caller cannot manage this application / target org role missing
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Application or organization not found
         '409':
-          description: Target organization quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Quota exceeded
       security:
       - bearerAuth: []
       summary: Transfer Application
@@ -2435,16 +2764,59 @@ paths:
         account email must match the invitation email (normalized); the
         invitation is single-use and expires after 72h.
       operationId: post_api_me_org-invitations_accept
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organization_id:
+                    type: integer
+                  role:
+                    type: string
+                  message:
+                    type: string
           description: Invitation accepted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Missing token or expired invitation
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
-          description: Invitation issued to a different email address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Issued to a different email address, or email not verified
         '404':
-          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid token
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Invitation already accepted or caller already a member
       security:
       - bearerAuth: []
@@ -2458,8 +2830,37 @@ paths:
       operationId: get_api_me_organizations
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organizations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        slug:
+                          type: string
+                        name:
+                          type: string
+                        logo_uri:
+                          type: string
+                        primary_color:
+                          type: string
+                        role:
+                          type: string
+                          enum: [owner, admin, member]
+                  total:
+                    type: integer
           description: Organization memberships
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
       security:
       - bearerAuth: []
@@ -2471,14 +2872,61 @@ paths:
         becomes its owner. Slug rules match the admin endpoint; a reserved
         slug list applies; per-user org quota defaults to 3.
       operationId: post_api_me_organizations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name]
+              properties:
+                slug:
+                  type: string
+                  pattern: '^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$'
+                name:
+                  type: string
+                  maxLength: 100
+                logo_uri:
+                  type: string
+                primary_color:
+                  type: string
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  role:
+                    type: string
+                  message:
+                    type: string
           description: Organization created
-        '401':
-          description: Unauthorized
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Invalid slug/name
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization self-service disabled (open_platform.enabled)
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Slug taken or org quota exceeded
       security:
       - bearerAuth: []
@@ -2498,12 +2946,44 @@ paths:
           type: string
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        email:
+                          type: string
+                        role:
+                          type: string
+                        expires_at:
+                          type: string
+                  total:
+                    type: integer
           description: Pending invitations
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Owner or admin role required
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Organization not found
       security:
       - bearerAuth: []
@@ -2522,17 +3002,73 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [member, admin]
+                  default: member
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  email:
+                    type: string
+                  role:
+                    type: string
+                  token:
+                    type: string
+                    description: Present exactly once; also delivered by
+                      email when SMTP is configured.
+                  expires_at:
+                    type: string
+                  message:
+                    type: string
           description: Invitation created (token present once)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid email or role
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Owner or admin role required
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Organization not found
         '409':
-          description: A pending invitation for this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: A pending invitation for this email already exists, or the pending-invitation cap was reached
       security:
       - bearerAuth: []
       summary: Invite Organization Member
@@ -2557,12 +3093,37 @@ paths:
           type: string
       responses:
         '200':
-          description: Invitation revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    message:
+                      type: string
+          description: Success
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid invitation id
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Owner or admin role required
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Invitation not found
       security:
       - bearerAuth: []
@@ -2582,12 +3143,45 @@ paths:
           type: string
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id:
+                          type: integer
+                        username:
+                          type: string
+                        display_name:
+                          type: string
+                        role:
+                          type: string
+                          enum: [owner, admin, member]
+                  total:
+                    type: integer
           description: Members list
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Not a member of this organization
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Organization not found
       security:
       - bearerAuth: []
@@ -2615,12 +3209,37 @@ paths:
           type: string
       responses:
         '200':
-          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    message:
+                      type: string
+          description: Success
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid user id
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
         '403':
-          description: Insufficient role for this removal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Insufficient role for this removal / owner seat is irremovable
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Organization or membership not found
       security:
       - bearerAuth: []
@@ -2629,6 +3248,13 @@ paths:
       - Organization
   /api/me/password:
     put:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Change the current user's password. A successful change also
         clears the must_change_password flag (#145) and revokes all existing
         tokens. For the forced first-login flow (no Bearer token available) use
@@ -2653,17 +3279,51 @@ paths:
       description: Update the current user's editable profile fields (v1.4.0
         profile minimal set). Body keys are optional; an absent key leaves the
         field unchanged, an empty string clears it. display_name is trimmed
-        and capped at 100 chars; avatar_url must be an https URL of at most
-        2048 chars (served verbatim, never fetched server-side).
+        and capped at 100 code points without control characters; avatar_url
+        must be an https URL of at most 2048 chars (served verbatim, never
+        fetched server-side).
       operationId: patch_api_me_profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                display_name:
+                  type: string
+                  maxLength: 100
+                avatar_url:
+                  type: string
+                  maxLength: 2048
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
           description: Profile updated
-        '401':
-          description: Unauthorized
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: Invalid input
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
           description: User not found
       security:
       - bearerAuth: []
@@ -2709,6 +3369,13 @@ paths:
       - User Profile
   /api/me/social/links/{provider}/authorize:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: 'Begin a social link flow (#71): mint a one-time state
         bound to (current user, provider) and return the provider authorize
         URL (with the state embedded) the SPA must redirect to. The link-back
@@ -2919,6 +3586,13 @@ paths:
       - WebAuthn
   /api/me/webauthn/register/begin:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: 'Start passkey registration (#142): ES256-only pubKeyCredParams,
         userVerification=required, user.id is the base64url of the internal
         user id bytes, excludeCredentials lists already-registered credentials,
@@ -2963,6 +3637,13 @@ paths:
       - WebAuthn
   /api/password-reset/confirm:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Confirm a password reset using the token sent via email.
       operationId: post_api_password-reset_confirm
       responses:
@@ -2975,6 +3656,13 @@ paths:
       - User Verification
   /api/password-reset/request:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Request a password reset link to be sent via email.
       operationId: post_api_password-reset_request
       responses:
@@ -2987,6 +3675,13 @@ paths:
       - User Verification
   /api/register:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Registers a new user account into the system.
       operationId: post_api_register
       parameters:
@@ -3037,6 +3732,13 @@ paths:
       - User Verification
   /api/verify-email/resend:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Resend the email verification link.
       operationId: post_api_verify-email_resend
       responses:
@@ -3077,6 +3779,13 @@ paths:
       - User Verification
   /api/wechat/login:
     post:
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional empty body (action-style operation).
       description: Exchange WeChat authorization code for user information. This endpoint
         handles the server-side OAuth2 flow with WeChat Open Platform.
       operationId: post_api_wechat_login

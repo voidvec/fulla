@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for HealthStatusStatus.
@@ -196,6 +197,42 @@ func (e GetApiAdminUsersParamsLocked) Valid() bool {
 	}
 }
 
+// Defines values for GetApiMeApplications200JSONResponseBodyApplicationsClientType.
+const (
+	GetApiMeApplications200JSONResponseBodyApplicationsClientTypeCONFIDENTIAL GetApiMeApplications200JSONResponseBodyApplicationsClientType = "CONFIDENTIAL"
+	GetApiMeApplications200JSONResponseBodyApplicationsClientTypePUBLIC       GetApiMeApplications200JSONResponseBodyApplicationsClientType = "PUBLIC"
+)
+
+// Valid indicates whether the value is a known member of the GetApiMeApplications200JSONResponseBodyApplicationsClientType enum.
+func (e GetApiMeApplications200JSONResponseBodyApplicationsClientType) Valid() bool {
+	switch e {
+	case GetApiMeApplications200JSONResponseBodyApplicationsClientTypeCONFIDENTIAL:
+		return true
+	case GetApiMeApplications200JSONResponseBodyApplicationsClientTypePUBLIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetApiMeApplications200JSONResponseBodyApplicationsStatus.
+const (
+	Active    GetApiMeApplications200JSONResponseBodyApplicationsStatus = "active"
+	Suspended GetApiMeApplications200JSONResponseBodyApplicationsStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the GetApiMeApplications200JSONResponseBodyApplicationsStatus enum.
+func (e GetApiMeApplications200JSONResponseBodyApplicationsStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Suspended:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostApiMeApplicationsJSONBodyClientType.
 const (
 	PostApiMeApplicationsJSONBodyClientTypeCONFIDENTIAL PostApiMeApplicationsJSONBodyClientType = "CONFIDENTIAL"
@@ -208,6 +245,84 @@ func (e PostApiMeApplicationsJSONBodyClientType) Valid() bool {
 	case PostApiMeApplicationsJSONBodyClientTypeCONFIDENTIAL:
 		return true
 	case PostApiMeApplicationsJSONBodyClientTypePUBLIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostApiMeApplications201JSONResponseBodyClientType.
+const (
+	PostApiMeApplications201JSONResponseBodyClientTypeCONFIDENTIAL PostApiMeApplications201JSONResponseBodyClientType = "CONFIDENTIAL"
+	PostApiMeApplications201JSONResponseBodyClientTypePUBLIC       PostApiMeApplications201JSONResponseBodyClientType = "PUBLIC"
+)
+
+// Valid indicates whether the value is a known member of the PostApiMeApplications201JSONResponseBodyClientType enum.
+func (e PostApiMeApplications201JSONResponseBodyClientType) Valid() bool {
+	switch e {
+	case PostApiMeApplications201JSONResponseBodyClientTypeCONFIDENTIAL:
+		return true
+	case PostApiMeApplications201JSONResponseBodyClientTypePUBLIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetApiMeOrganizations200JSONResponseBodyOrganizationsRole.
+const (
+	GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleAdmin  GetApiMeOrganizations200JSONResponseBodyOrganizationsRole = "admin"
+	GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleMember GetApiMeOrganizations200JSONResponseBodyOrganizationsRole = "member"
+	GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleOwner  GetApiMeOrganizations200JSONResponseBodyOrganizationsRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the GetApiMeOrganizations200JSONResponseBodyOrganizationsRole enum.
+func (e GetApiMeOrganizations200JSONResponseBodyOrganizationsRole) Valid() bool {
+	switch e {
+	case GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleAdmin:
+		return true
+	case GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleMember:
+		return true
+	case GetApiMeOrganizations200JSONResponseBodyOrganizationsRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostApiMeOrganizationsSlugInvitationsJSONBodyRole.
+const (
+	PostApiMeOrganizationsSlugInvitationsJSONBodyRoleAdmin  PostApiMeOrganizationsSlugInvitationsJSONBodyRole = "admin"
+	PostApiMeOrganizationsSlugInvitationsJSONBodyRoleMember PostApiMeOrganizationsSlugInvitationsJSONBodyRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the PostApiMeOrganizationsSlugInvitationsJSONBodyRole enum.
+func (e PostApiMeOrganizationsSlugInvitationsJSONBodyRole) Valid() bool {
+	switch e {
+	case PostApiMeOrganizationsSlugInvitationsJSONBodyRoleAdmin:
+		return true
+	case PostApiMeOrganizationsSlugInvitationsJSONBodyRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole.
+const (
+	GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleAdmin  GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole = "admin"
+	GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleMember GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole = "member"
+	GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleOwner  GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole enum.
+func (e GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole) Valid() bool {
+	switch e {
+	case GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleAdmin:
+		return true
+	case GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleMember:
+		return true
+	case GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRoleOwner:
 		return true
 	default:
 		return false
@@ -706,6 +821,18 @@ type PutApiAdminClientsClientIdJSONBody struct {
 	RedirectUris         *string `json:"redirect_uris,omitempty"`
 }
 
+// PostApiAdminClientsClientIdResetSecretJSONBody defines parameters for PostApiAdminClientsClientIdResetSecret.
+type PostApiAdminClientsClientIdResetSecretJSONBody = map[string]interface{}
+
+// PostApiAdminClientsClientIdResumeJSONBody defines parameters for PostApiAdminClientsClientIdResume.
+type PostApiAdminClientsClientIdResumeJSONBody = map[string]interface{}
+
+// PutApiAdminClientsClientIdScopesJSONBody defines parameters for PutApiAdminClientsClientIdScopes.
+type PutApiAdminClientsClientIdScopesJSONBody = map[string]interface{}
+
+// PostApiAdminClientsClientIdSuspendJSONBody defines parameters for PostApiAdminClientsClientIdSuspend.
+type PostApiAdminClientsClientIdSuspendJSONBody = map[string]interface{}
+
 // PostApiAdminOrganizationsJSONBody defines parameters for PostApiAdminOrganizations.
 type PostApiAdminOrganizationsJSONBody struct {
 	IssuerOverride *string `json:"issuer_override,omitempty"`
@@ -742,6 +869,12 @@ type PutApiAdminScopesScopeIdJSONBody struct {
 	MappedRole        *string `json:"mapped_role,omitempty"`
 	RequiresAdminRole *bool   `json:"requires_admin_role,omitempty"`
 }
+
+// PostApiAdminTokensRevokeByClientJSONBody defines parameters for PostApiAdminTokensRevokeByClient.
+type PostApiAdminTokensRevokeByClientJSONBody = map[string]interface{}
+
+// PostApiAdminTokensRevokeByUserJSONBody defines parameters for PostApiAdminTokensRevokeByUser.
+type PostApiAdminTokensRevokeByUserJSONBody = map[string]interface{}
 
 // GetApiAdminUsersParams defines parameters for GetApiAdminUsers.
 type GetApiAdminUsersParams struct {
@@ -791,10 +924,19 @@ type PutApiAdminUsersUserIdJSONBody struct {
 	Username           *string `json:"username,omitempty"`
 }
 
+// PutApiAdminUsersUserIdDisableJSONBody defines parameters for PutApiAdminUsersUserIdDisable.
+type PutApiAdminUsersUserIdDisableJSONBody = map[string]interface{}
+
+// PostApiAdminUsersUserIdEnableJSONBody defines parameters for PostApiAdminUsersUserIdEnable.
+type PostApiAdminUsersUserIdEnableJSONBody = map[string]interface{}
+
 // PutApiAdminUsersUserIdRolesJSONBody defines parameters for PutApiAdminUsersUserIdRoles.
 type PutApiAdminUsersUserIdRolesJSONBody struct {
 	Roles []string `json:"roles"`
 }
+
+// PostApiGithubLoginJSONBody defines parameters for PostApiGithubLogin.
+type PostApiGithubLoginJSONBody = map[string]interface{}
 
 // PostApiGithubLoginParams defines parameters for PostApiGithubLogin.
 type PostApiGithubLoginParams struct {
@@ -802,11 +944,20 @@ type PostApiGithubLoginParams struct {
 	Code string `form:"code" json:"code"`
 }
 
+// PostApiGoogleLoginJSONBody defines parameters for PostApiGoogleLogin.
+type PostApiGoogleLoginJSONBody = map[string]interface{}
+
 // PostApiGoogleLoginParams defines parameters for PostApiGoogleLogin.
 type PostApiGoogleLoginParams struct {
 	// Code Authorization code from Google OAuth2 callback (required)
 	Code string `form:"code" json:"code"`
 }
+
+// GetApiMeApplications200JSONResponseBodyApplicationsClientType defines parameters for GetApiMeApplications.
+type GetApiMeApplications200JSONResponseBodyApplicationsClientType string
+
+// GetApiMeApplications200JSONResponseBodyApplicationsStatus defines parameters for GetApiMeApplications.
+type GetApiMeApplications200JSONResponseBodyApplicationsStatus string
 
 // PostApiMeApplicationsJSONBody defines parameters for PostApiMeApplications.
 type PostApiMeApplicationsJSONBody struct {
@@ -822,6 +973,26 @@ type PostApiMeApplicationsJSONBody struct {
 
 // PostApiMeApplicationsJSONBodyClientType defines parameters for PostApiMeApplications.
 type PostApiMeApplicationsJSONBodyClientType string
+
+// PostApiMeApplications201JSONResponseBodyClientType defines parameters for PostApiMeApplications.
+type PostApiMeApplications201JSONResponseBodyClientType string
+
+// PatchApiMeApplicationsClientIdJSONBody defines parameters for PatchApiMeApplicationsClientId.
+type PatchApiMeApplicationsClientIdJSONBody struct {
+	AllowedGrantTypes *[]string `json:"allowed_grant_types,omitempty"`
+	Name              *string   `json:"name,omitempty"`
+	RedirectUris      *[]string `json:"redirect_uris,omitempty"`
+	Scopes            *[]string `json:"scopes,omitempty"`
+}
+
+// PostApiMeApplicationsClientIdRotateSecretJSONBody defines parameters for PostApiMeApplicationsClientIdRotateSecret.
+type PostApiMeApplicationsClientIdRotateSecretJSONBody = map[string]interface{}
+
+// PostApiMeApplicationsClientIdTransferJSONBody defines parameters for PostApiMeApplicationsClientIdTransfer.
+type PostApiMeApplicationsClientIdTransferJSONBody struct {
+	// OrgSlug Target organization slug, or null to transfer back to personal ownership.
+	OrgSlug *string `json:"org_slug"`
+}
 
 // PostApiMeMfaDisableJSONBody defines parameters for PostApiMeMfaDisable.
 type PostApiMeMfaDisableJSONBody = map[string]interface{}
@@ -840,6 +1011,43 @@ type PostApiMeMfaVerifyFormdataBody struct {
 	Code string `form:"code" json:"code"`
 }
 
+// PostApiMeOrgInvitationsAcceptJSONBody defines parameters for PostApiMeOrgInvitationsAccept.
+type PostApiMeOrgInvitationsAcceptJSONBody struct {
+	Token string `json:"token"`
+}
+
+// GetApiMeOrganizations200JSONResponseBodyOrganizationsRole defines parameters for GetApiMeOrganizations.
+type GetApiMeOrganizations200JSONResponseBodyOrganizationsRole string
+
+// PostApiMeOrganizationsJSONBody defines parameters for PostApiMeOrganizations.
+type PostApiMeOrganizationsJSONBody struct {
+	LogoUri      *string `json:"logo_uri,omitempty"`
+	Name         string  `json:"name"`
+	PrimaryColor *string `json:"primary_color,omitempty"`
+	Slug         string  `json:"slug"`
+}
+
+// PostApiMeOrganizationsSlugInvitationsJSONBody defines parameters for PostApiMeOrganizationsSlugInvitations.
+type PostApiMeOrganizationsSlugInvitationsJSONBody struct {
+	Email openapi_types.Email                                `json:"email"`
+	Role  *PostApiMeOrganizationsSlugInvitationsJSONBodyRole `json:"role,omitempty"`
+}
+
+// PostApiMeOrganizationsSlugInvitationsJSONBodyRole defines parameters for PostApiMeOrganizationsSlugInvitations.
+type PostApiMeOrganizationsSlugInvitationsJSONBodyRole string
+
+// GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole defines parameters for GetApiMeOrganizationsSlugMembers.
+type GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole string
+
+// PutApiMePasswordJSONBody defines parameters for PutApiMePassword.
+type PutApiMePasswordJSONBody = map[string]interface{}
+
+// PatchApiMeProfileJSONBody defines parameters for PatchApiMeProfile.
+type PatchApiMeProfileJSONBody struct {
+	AvatarUrl   *string `json:"avatar_url,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
+}
+
 // DeleteApiMeSocialLinksProviderParamsProvider defines parameters for DeleteApiMeSocialLinksProvider.
 type DeleteApiMeSocialLinksProviderParamsProvider string
 
@@ -855,8 +1063,23 @@ type PostApiMeSocialLinksProviderJSONBody struct {
 // PostApiMeSocialLinksProviderParamsProvider defines parameters for PostApiMeSocialLinksProvider.
 type PostApiMeSocialLinksProviderParamsProvider string
 
+// PostApiMeSocialLinksProviderAuthorizeJSONBody defines parameters for PostApiMeSocialLinksProviderAuthorize.
+type PostApiMeSocialLinksProviderAuthorizeJSONBody = map[string]interface{}
+
 // PostApiMeSocialLinksProviderAuthorizeParamsProvider defines parameters for PostApiMeSocialLinksProviderAuthorize.
 type PostApiMeSocialLinksProviderAuthorizeParamsProvider string
+
+// PostApiMeWebauthnRegisterBeginJSONBody defines parameters for PostApiMeWebauthnRegisterBegin.
+type PostApiMeWebauthnRegisterBeginJSONBody = map[string]interface{}
+
+// PostApiPasswordResetConfirmJSONBody defines parameters for PostApiPasswordResetConfirm.
+type PostApiPasswordResetConfirmJSONBody = map[string]interface{}
+
+// PostApiPasswordResetRequestJSONBody defines parameters for PostApiPasswordResetRequest.
+type PostApiPasswordResetRequestJSONBody = map[string]interface{}
+
+// PostApiRegisterJSONBody defines parameters for PostApiRegister.
+type PostApiRegisterJSONBody = map[string]interface{}
 
 // PostApiRegisterParams defines parameters for PostApiRegister.
 type PostApiRegisterParams struct {
@@ -870,10 +1093,16 @@ type PostApiRegisterParams struct {
 	Email *string `form:"email,omitempty" json:"email,omitempty"`
 }
 
+// PostApiVerifyEmailResendJSONBody defines parameters for PostApiVerifyEmailResend.
+type PostApiVerifyEmailResendJSONBody = map[string]interface{}
+
 // PostApiVerifyEmailResendByEmailJSONBody defines parameters for PostApiVerifyEmailResendByEmail.
 type PostApiVerifyEmailResendByEmailJSONBody struct {
 	Email string `json:"email"`
 }
+
+// PostApiWechatLoginJSONBody defines parameters for PostApiWechatLogin.
+type PostApiWechatLoginJSONBody = map[string]interface{}
 
 // PostApiWechatLoginParams defines parameters for PostApiWechatLogin.
 type PostApiWechatLoginParams struct {
@@ -1042,6 +1271,18 @@ type PostApiAdminClientsJSONRequestBody PostApiAdminClientsJSONBody
 // PutApiAdminClientsClientIdJSONRequestBody defines body for PutApiAdminClientsClientId for application/json ContentType.
 type PutApiAdminClientsClientIdJSONRequestBody PutApiAdminClientsClientIdJSONBody
 
+// PostApiAdminClientsClientIdResetSecretJSONRequestBody defines body for PostApiAdminClientsClientIdResetSecret for application/json ContentType.
+type PostApiAdminClientsClientIdResetSecretJSONRequestBody = PostApiAdminClientsClientIdResetSecretJSONBody
+
+// PostApiAdminClientsClientIdResumeJSONRequestBody defines body for PostApiAdminClientsClientIdResume for application/json ContentType.
+type PostApiAdminClientsClientIdResumeJSONRequestBody = PostApiAdminClientsClientIdResumeJSONBody
+
+// PutApiAdminClientsClientIdScopesJSONRequestBody defines body for PutApiAdminClientsClientIdScopes for application/json ContentType.
+type PutApiAdminClientsClientIdScopesJSONRequestBody = PutApiAdminClientsClientIdScopesJSONBody
+
+// PostApiAdminClientsClientIdSuspendJSONRequestBody defines body for PostApiAdminClientsClientIdSuspend for application/json ContentType.
+type PostApiAdminClientsClientIdSuspendJSONRequestBody = PostApiAdminClientsClientIdSuspendJSONBody
+
 // PostApiAdminOrganizationsJSONRequestBody defines body for PostApiAdminOrganizations for application/json ContentType.
 type PostApiAdminOrganizationsJSONRequestBody PostApiAdminOrganizationsJSONBody
 
@@ -1057,17 +1298,44 @@ type PostApiAdminScopesJSONRequestBody PostApiAdminScopesJSONBody
 // PutApiAdminScopesScopeIdJSONRequestBody defines body for PutApiAdminScopesScopeId for application/json ContentType.
 type PutApiAdminScopesScopeIdJSONRequestBody PutApiAdminScopesScopeIdJSONBody
 
+// PostApiAdminTokensRevokeByClientJSONRequestBody defines body for PostApiAdminTokensRevokeByClient for application/json ContentType.
+type PostApiAdminTokensRevokeByClientJSONRequestBody = PostApiAdminTokensRevokeByClientJSONBody
+
+// PostApiAdminTokensRevokeByUserJSONRequestBody defines body for PostApiAdminTokensRevokeByUser for application/json ContentType.
+type PostApiAdminTokensRevokeByUserJSONRequestBody = PostApiAdminTokensRevokeByUserJSONBody
+
 // PostApiAdminUsersJSONRequestBody defines body for PostApiAdminUsers for application/json ContentType.
 type PostApiAdminUsersJSONRequestBody PostApiAdminUsersJSONBody
 
 // PutApiAdminUsersUserIdJSONRequestBody defines body for PutApiAdminUsersUserId for application/json ContentType.
 type PutApiAdminUsersUserIdJSONRequestBody PutApiAdminUsersUserIdJSONBody
 
+// PutApiAdminUsersUserIdDisableJSONRequestBody defines body for PutApiAdminUsersUserIdDisable for application/json ContentType.
+type PutApiAdminUsersUserIdDisableJSONRequestBody = PutApiAdminUsersUserIdDisableJSONBody
+
+// PostApiAdminUsersUserIdEnableJSONRequestBody defines body for PostApiAdminUsersUserIdEnable for application/json ContentType.
+type PostApiAdminUsersUserIdEnableJSONRequestBody = PostApiAdminUsersUserIdEnableJSONBody
+
 // PutApiAdminUsersUserIdRolesJSONRequestBody defines body for PutApiAdminUsersUserIdRoles for application/json ContentType.
 type PutApiAdminUsersUserIdRolesJSONRequestBody PutApiAdminUsersUserIdRolesJSONBody
 
+// PostApiGithubLoginJSONRequestBody defines body for PostApiGithubLogin for application/json ContentType.
+type PostApiGithubLoginJSONRequestBody = PostApiGithubLoginJSONBody
+
+// PostApiGoogleLoginJSONRequestBody defines body for PostApiGoogleLogin for application/json ContentType.
+type PostApiGoogleLoginJSONRequestBody = PostApiGoogleLoginJSONBody
+
 // PostApiMeApplicationsJSONRequestBody defines body for PostApiMeApplications for application/json ContentType.
 type PostApiMeApplicationsJSONRequestBody PostApiMeApplicationsJSONBody
+
+// PatchApiMeApplicationsClientIdJSONRequestBody defines body for PatchApiMeApplicationsClientId for application/json ContentType.
+type PatchApiMeApplicationsClientIdJSONRequestBody PatchApiMeApplicationsClientIdJSONBody
+
+// PostApiMeApplicationsClientIdRotateSecretJSONRequestBody defines body for PostApiMeApplicationsClientIdRotateSecret for application/json ContentType.
+type PostApiMeApplicationsClientIdRotateSecretJSONRequestBody = PostApiMeApplicationsClientIdRotateSecretJSONBody
+
+// PostApiMeApplicationsClientIdTransferJSONRequestBody defines body for PostApiMeApplicationsClientIdTransfer for application/json ContentType.
+type PostApiMeApplicationsClientIdTransferJSONRequestBody PostApiMeApplicationsClientIdTransferJSONBody
 
 // PostApiMeMfaDisableJSONRequestBody defines body for PostApiMeMfaDisable for application/json ContentType.
 type PostApiMeMfaDisableJSONRequestBody = PostApiMeMfaDisableJSONBody
@@ -1081,14 +1349,50 @@ type PostApiMeMfaVerifyJSONRequestBody PostApiMeMfaVerifyJSONBody
 // PostApiMeMfaVerifyFormdataRequestBody defines body for PostApiMeMfaVerify for application/x-www-form-urlencoded ContentType.
 type PostApiMeMfaVerifyFormdataRequestBody PostApiMeMfaVerifyFormdataBody
 
+// PostApiMeOrgInvitationsAcceptJSONRequestBody defines body for PostApiMeOrgInvitationsAccept for application/json ContentType.
+type PostApiMeOrgInvitationsAcceptJSONRequestBody PostApiMeOrgInvitationsAcceptJSONBody
+
+// PostApiMeOrganizationsJSONRequestBody defines body for PostApiMeOrganizations for application/json ContentType.
+type PostApiMeOrganizationsJSONRequestBody PostApiMeOrganizationsJSONBody
+
+// PostApiMeOrganizationsSlugInvitationsJSONRequestBody defines body for PostApiMeOrganizationsSlugInvitations for application/json ContentType.
+type PostApiMeOrganizationsSlugInvitationsJSONRequestBody PostApiMeOrganizationsSlugInvitationsJSONBody
+
+// PutApiMePasswordJSONRequestBody defines body for PutApiMePassword for application/json ContentType.
+type PutApiMePasswordJSONRequestBody = PutApiMePasswordJSONBody
+
+// PatchApiMeProfileJSONRequestBody defines body for PatchApiMeProfile for application/json ContentType.
+type PatchApiMeProfileJSONRequestBody PatchApiMeProfileJSONBody
+
 // PostApiMeSocialLinksProviderJSONRequestBody defines body for PostApiMeSocialLinksProvider for application/json ContentType.
 type PostApiMeSocialLinksProviderJSONRequestBody PostApiMeSocialLinksProviderJSONBody
+
+// PostApiMeSocialLinksProviderAuthorizeJSONRequestBody defines body for PostApiMeSocialLinksProviderAuthorize for application/json ContentType.
+type PostApiMeSocialLinksProviderAuthorizeJSONRequestBody = PostApiMeSocialLinksProviderAuthorizeJSONBody
+
+// PostApiMeWebauthnRegisterBeginJSONRequestBody defines body for PostApiMeWebauthnRegisterBegin for application/json ContentType.
+type PostApiMeWebauthnRegisterBeginJSONRequestBody = PostApiMeWebauthnRegisterBeginJSONBody
 
 // PostApiMeWebauthnRegisterFinishJSONRequestBody defines body for PostApiMeWebauthnRegisterFinish for application/json ContentType.
 type PostApiMeWebauthnRegisterFinishJSONRequestBody = WebAuthnRegistrationCredential
 
+// PostApiPasswordResetConfirmJSONRequestBody defines body for PostApiPasswordResetConfirm for application/json ContentType.
+type PostApiPasswordResetConfirmJSONRequestBody = PostApiPasswordResetConfirmJSONBody
+
+// PostApiPasswordResetRequestJSONRequestBody defines body for PostApiPasswordResetRequest for application/json ContentType.
+type PostApiPasswordResetRequestJSONRequestBody = PostApiPasswordResetRequestJSONBody
+
+// PostApiRegisterJSONRequestBody defines body for PostApiRegister for application/json ContentType.
+type PostApiRegisterJSONRequestBody = PostApiRegisterJSONBody
+
+// PostApiVerifyEmailResendJSONRequestBody defines body for PostApiVerifyEmailResend for application/json ContentType.
+type PostApiVerifyEmailResendJSONRequestBody = PostApiVerifyEmailResendJSONBody
+
 // PostApiVerifyEmailResendByEmailJSONRequestBody defines body for PostApiVerifyEmailResendByEmail for application/json ContentType.
 type PostApiVerifyEmailResendByEmailJSONRequestBody PostApiVerifyEmailResendByEmailJSONBody
+
+// PostApiWechatLoginJSONRequestBody defines body for PostApiWechatLogin for application/json ContentType.
+type PostApiWechatLoginJSONRequestBody = PostApiWechatLoginJSONBody
 
 // PostOauth2DeviceApproveFormdataRequestBody defines body for PostOauth2DeviceApprove for application/x-www-form-urlencoded ContentType.
 type PostOauth2DeviceApproveFormdataRequestBody PostOauth2DeviceApproveFormdataBody
@@ -1366,19 +1670,41 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/admin/clients/{clientId} (the `PutApiAdminClientsClientId` operationId).
 	PutApiAdminClientsClientId(ctx context.Context, clientId string, body PutApiAdminClientsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiAdminClientsClientIdResetSecretWithBody Reset Client Secret
+	//
+	// Reset the secret of a specific OAuth2 client.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
+	PostApiAdminClientsClientIdResetSecretWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiAdminClientsClientIdResetSecret Reset Client Secret
 	//
 	// Reset the secret of a specific OAuth2 client.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
-	PostApiAdminClientsClientIdResetSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminClientsClientIdResetSecret(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResetSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminClientsClientIdResumeWithBody Resume Application
+	//
+	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+	PostApiAdminClientsClientIdResumeWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminClientsClientIdResume Resume Application
 	//
 	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
-	PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResumeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminClientsClientIdScopes Get Client Scopes
 	//
@@ -1387,19 +1713,41 @@ type ClientInterface interface {
 	// Corresponds with GET /api/admin/clients/{clientId}/scopes (the `GetApiAdminClientsClientIdScopes` operationId).
 	GetApiAdminClientsClientIdScopes(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PutApiAdminClientsClientIdScopesWithBody Update Client Scopes
+	//
+	// Update the assigned scopes for an OAuth2 client.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
+	PutApiAdminClientsClientIdScopesWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PutApiAdminClientsClientIdScopes Update Client Scopes
 	//
 	// Update the assigned scopes for an OAuth2 client.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
-	PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, body PutApiAdminClientsClientIdScopesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminClientsClientIdSuspendWithBody Suspend Application
+	//
+	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+	PostApiAdminClientsClientIdSuspendWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminClientsClientIdSuspend Suspend Application
 	//
 	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
-	PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, body PostApiAdminClientsClientIdSuspendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminDashboard Get Dashboard
 	//
@@ -1575,19 +1923,41 @@ type ClientInterface interface {
 	// Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
 	GetApiAdminTokens(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiAdminTokensRevokeByClientWithBody Revoke Tokens By Client
+	//
+	// Revoke all tokens issued to a specific client.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
+	PostApiAdminTokensRevokeByClientWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiAdminTokensRevokeByClient Revoke Tokens By Client
 	//
 	// Revoke all tokens issued to a specific client.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
-	PostApiAdminTokensRevokeByClient(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminTokensRevokeByClient(ctx context.Context, body PostApiAdminTokensRevokeByClientJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminTokensRevokeByUserWithBody Revoke Tokens By User
+	//
+	// Revoke all tokens issued for a specific user.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
+	PostApiAdminTokensRevokeByUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminTokensRevokeByUser Revoke Tokens By User
 	//
 	// Revoke all tokens issued for a specific user.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
-	PostApiAdminTokensRevokeByUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminTokensRevokeByUser(ctx context.Context, body PostApiAdminTokensRevokeByUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteApiAdminTokensTokenPrefix Revoke Token
 	//
@@ -1653,19 +2023,41 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId} (the `PutApiAdminUsersUserId` operationId).
 	PutApiAdminUsersUserId(ctx context.Context, userId int, body PutApiAdminUsersUserIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PutApiAdminUsersUserIdDisableWithBody Disable User
+	//
+	// Disable a specific user account.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
+	PutApiAdminUsersUserIdDisableWithBody(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PutApiAdminUsersUserIdDisable Disable User
 	//
 	// Disable a specific user account.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
-	PutApiAdminUsersUserIdDisable(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PutApiAdminUsersUserIdDisable(ctx context.Context, userId int, body PutApiAdminUsersUserIdDisableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminUsersUserIdEnableWithBody Enable User
+	//
+	// Enable a disabled user account by resetting lockout state.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
+	PostApiAdminUsersUserIdEnableWithBody(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminUsersUserIdEnable Enable User
 	//
 	// Enable a disabled user account by resetting lockout state.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
-	PostApiAdminUsersUserIdEnable(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAdminUsersUserIdEnable(ctx context.Context, userId int, body PostApiAdminUsersUserIdEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminUsersUserIdRoles Get User Roles
 	//
@@ -1692,19 +2084,41 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiGithubLoginWithBody GitHub OAuth2 Login
+	//
+	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+	PostApiGithubLoginWithBody(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiGithubLogin GitHub OAuth2 Login
 	//
 	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiGoogleLoginWithBody Google OAuth2 Login
+	//
+	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+	PostApiGoogleLoginWithBody(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGoogleLogin Google OAuth2 Login
 	//
 	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteApiMe Delete Account
 	//
@@ -1752,26 +2166,59 @@ type ClientInterface interface {
 	// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
 	DeleteApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PatchApiMeApplicationsClientIdWithBody Update Application
+	//
+	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+	PatchApiMeApplicationsClientIdWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PatchApiMeApplicationsClientId Update Application
 	//
 	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
-	PatchApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PatchApiMeApplicationsClientId(ctx context.Context, clientId string, body PatchApiMeApplicationsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplicationsClientIdRotateSecretWithBody Rotate Application Secret
+	//
+	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+	PostApiMeApplicationsClientIdRotateSecretWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiMeApplicationsClientIdRotateSecret Rotate Application Secret
 	//
 	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
-	PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdRotateSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeApplicationsClientIdTransferWithBody Transfer Application
+	//
+	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+	PostApiMeApplicationsClientIdTransferWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiMeApplicationsClientIdTransfer Transfer Application
 	//
 	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
-	PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdTransferJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeAuthorizedApps List Authorized Apps
 	//
@@ -1850,12 +2297,23 @@ type ClientInterface interface {
 	// Corresponds with POST /api/me/mfa/verify (the `PostApiMeMfaVerify` operationId).
 	PostApiMeMfaVerifyWithFormdataBody(ctx context.Context, body PostApiMeMfaVerifyFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeOrgInvitationsAcceptWithBody Accept Organization Invitation
+	//
+	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+	PostApiMeOrgInvitationsAcceptWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeOrgInvitationsAccept Accept Organization Invitation
 	//
 	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
-	PostApiMeOrgInvitationsAccept(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeOrgInvitationsAccept(ctx context.Context, body PostApiMeOrgInvitationsAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeOrganizations List My Organizations
 	//
@@ -1864,12 +2322,23 @@ type ClientInterface interface {
 	// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
 	GetApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeOrganizationsWithBody Create Organization (self-service)
+	//
+	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+	PostApiMeOrganizationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeOrganizations Create Organization (self-service)
 	//
 	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
-	PostApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeOrganizations(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeOrganizationsSlugInvitations List Pending Invitations
 	//
@@ -1878,12 +2347,23 @@ type ClientInterface interface {
 	// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
 	GetApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeOrganizationsSlugInvitationsWithBody Invite Organization Member
+	//
+	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+	PostApiMeOrganizationsSlugInvitationsWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeOrganizationsSlugInvitations Invite Organization Member
 	//
 	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
-	PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, body PostApiMeOrganizationsSlugInvitationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteApiMeOrganizationsSlugInvitationsInvitationId Revoke Invitation
 	//
@@ -1906,19 +2386,41 @@ type ClientInterface interface {
 	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
 	DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PutApiMePasswordWithBody Change Password
+	//
+	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
+	PutApiMePasswordWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PutApiMePassword Change Password
 	//
 	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
-	PutApiMePassword(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PutApiMePassword(ctx context.Context, body PutApiMePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchApiMeProfileWithBody Update User Profile
+	//
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+	PatchApiMeProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PatchApiMeProfile Update User Profile
 	//
-	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	//
+	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
-	PatchApiMeProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PatchApiMeProfile(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeSocialLinks List Linked Social Accounts
 	//
@@ -1952,12 +2454,23 @@ type ClientInterface interface {
 	// Corresponds with POST /api/me/social/links/{provider} (the `PostApiMeSocialLinksProvider` operationId).
 	PostApiMeSocialLinksProvider(ctx context.Context, provider PostApiMeSocialLinksProviderParamsProvider, body PostApiMeSocialLinksProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeSocialLinksProviderAuthorizeWithBody Begin Social Link (mint one-time state)
+	//
+	// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
+	PostApiMeSocialLinksProviderAuthorizeWithBody(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeSocialLinksProviderAuthorize Begin Social Link (mint one-time state)
 	//
 	// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
-	PostApiMeSocialLinksProviderAuthorize(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeSocialLinksProviderAuthorize(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, body PostApiMeSocialLinksProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeWebauthnCredentials List WebAuthn Credentials
 	//
@@ -1966,12 +2479,23 @@ type ClientInterface interface {
 	// Corresponds with GET /api/me/webauthn/credentials (the `GetApiMeWebauthnCredentials` operationId).
 	GetApiMeWebauthnCredentials(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiMeWebauthnRegisterBeginWithBody WebAuthn Register Begin
+	//
+	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
+	PostApiMeWebauthnRegisterBeginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeWebauthnRegisterBegin WebAuthn Register Begin
 	//
 	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
-	PostApiMeWebauthnRegisterBegin(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiMeWebauthnRegisterBegin(ctx context.Context, body PostApiMeWebauthnRegisterBeginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiMeWebauthnRegisterFinishWithBody WebAuthn Register Finish
 	//
@@ -1991,26 +2515,59 @@ type ClientInterface interface {
 	// Corresponds with POST /api/me/webauthn/register/finish (the `PostApiMeWebauthnRegisterFinish` operationId).
 	PostApiMeWebauthnRegisterFinish(ctx context.Context, body PostApiMeWebauthnRegisterFinishJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiPasswordResetConfirmWithBody Confirm Password Reset
+	//
+	// Confirm a password reset using the token sent via email.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
+	PostApiPasswordResetConfirmWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiPasswordResetConfirm Confirm Password Reset
 	//
 	// Confirm a password reset using the token sent via email.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
-	PostApiPasswordResetConfirm(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiPasswordResetConfirm(ctx context.Context, body PostApiPasswordResetConfirmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiPasswordResetRequestWithBody Request Password Reset
+	//
+	// Request a password reset link to be sent via email.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
+	PostApiPasswordResetRequestWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiPasswordResetRequest Request Password Reset
 	//
 	// Request a password reset link to be sent via email.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
-	PostApiPasswordResetRequest(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiPasswordResetRequest(ctx context.Context, body PostApiPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiRegisterWithBody Register new user
+	//
+	// Registers a new user account into the system.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/register (the `PostApiRegister` operationId).
+	PostApiRegisterWithBody(ctx context.Context, params *PostApiRegisterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiRegister Register new user
 	//
 	// Registers a new user account into the system.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/register (the `PostApiRegister` operationId).
-	PostApiRegister(ctx context.Context, params *PostApiRegisterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiRegister(ctx context.Context, params *PostApiRegisterParams, body PostApiRegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiVerifyEmail Verify Email
 	//
@@ -2019,12 +2576,23 @@ type ClientInterface interface {
 	// Corresponds with GET /api/verify-email (the `GetApiVerifyEmail` operationId).
 	GetApiVerifyEmail(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiVerifyEmailResendWithBody Resend Verification Email
+	//
+	// Resend the email verification link.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
+	PostApiVerifyEmailResendWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiVerifyEmailResend Resend Verification Email
 	//
 	// Resend the email verification link.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
-	PostApiVerifyEmailResend(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiVerifyEmailResend(ctx context.Context, body PostApiVerifyEmailResendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiVerifyEmailResendByEmailWithBody Resend Verification Email (by email address)
 	//
@@ -2044,12 +2612,23 @@ type ClientInterface interface {
 	// Corresponds with POST /api/verify-email/resend-by-email (the `PostApiVerifyEmailResendByEmail` operationId).
 	PostApiVerifyEmailResendByEmail(ctx context.Context, body PostApiVerifyEmailResendByEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiWechatLoginWithBody WeChat OAuth2 Login
+	//
+	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+	PostApiWechatLoginWithBody(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiWechatLogin WeChat OAuth2 Login
 	//
 	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
 	//
+	// Takes a body of the `application/json` content type.
+	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Health check
 	//
@@ -2498,13 +3077,53 @@ func (c *Client) PutApiAdminClientsClientId(ctx context.Context, clientId string
 	return c.Client.Do(req)
 }
 
+// PostApiAdminClientsClientIdResetSecretWithBody Reset Client Secret
+//
+// Reset the secret of a specific OAuth2 client.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
+func (c *Client) PostApiAdminClientsClientIdResetSecretWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdResetSecretRequestWithBody(c.Server, clientId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiAdminClientsClientIdResetSecret Reset Client Secret
 //
 // Reset the secret of a specific OAuth2 client.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
-func (c *Client) PostApiAdminClientsClientIdResetSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminClientsClientIdResetSecretRequest(c.Server, clientId)
+func (c *Client) PostApiAdminClientsClientIdResetSecret(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResetSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdResetSecretRequest(c.Server, clientId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminClientsClientIdResumeWithBody Resume Application
+//
+// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+func (c *Client) PostApiAdminClientsClientIdResumeWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdResumeRequestWithBody(c.Server, clientId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2519,9 +3138,11 @@ func (c *Client) PostApiAdminClientsClientIdResetSecret(ctx context.Context, cli
 //
 // Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
-func (c *Client) PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminClientsClientIdResumeRequest(c.Server, clientId)
+func (c *Client) PostApiAdminClientsClientIdResume(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResumeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdResumeRequest(c.Server, clientId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2549,13 +3170,53 @@ func (c *Client) GetApiAdminClientsClientIdScopes(ctx context.Context, clientId 
 	return c.Client.Do(req)
 }
 
+// PutApiAdminClientsClientIdScopesWithBody Update Client Scopes
+//
+// Update the assigned scopes for an OAuth2 client.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
+func (c *Client) PutApiAdminClientsClientIdScopesWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminClientsClientIdScopesRequestWithBody(c.Server, clientId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PutApiAdminClientsClientIdScopes Update Client Scopes
 //
 // Update the assigned scopes for an OAuth2 client.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
-func (c *Client) PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutApiAdminClientsClientIdScopesRequest(c.Server, clientId)
+func (c *Client) PutApiAdminClientsClientIdScopes(ctx context.Context, clientId string, body PutApiAdminClientsClientIdScopesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminClientsClientIdScopesRequest(c.Server, clientId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminClientsClientIdSuspendWithBody Suspend Application
+//
+// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+func (c *Client) PostApiAdminClientsClientIdSuspendWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdSuspendRequestWithBody(c.Server, clientId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2570,9 +3231,11 @@ func (c *Client) PutApiAdminClientsClientIdScopes(ctx context.Context, clientId 
 //
 // Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
-func (c *Client) PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminClientsClientIdSuspendRequest(c.Server, clientId)
+func (c *Client) PostApiAdminClientsClientIdSuspend(ctx context.Context, clientId string, body PostApiAdminClientsClientIdSuspendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClientsClientIdSuspendRequest(c.Server, clientId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2977,13 +3640,53 @@ func (c *Client) GetApiAdminTokens(ctx context.Context, reqEditors ...RequestEdi
 	return c.Client.Do(req)
 }
 
+// PostApiAdminTokensRevokeByClientWithBody Revoke Tokens By Client
+//
+// Revoke all tokens issued to a specific client.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
+func (c *Client) PostApiAdminTokensRevokeByClientWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminTokensRevokeByClientRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiAdminTokensRevokeByClient Revoke Tokens By Client
 //
 // Revoke all tokens issued to a specific client.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
-func (c *Client) PostApiAdminTokensRevokeByClient(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminTokensRevokeByClientRequest(c.Server)
+func (c *Client) PostApiAdminTokensRevokeByClient(ctx context.Context, body PostApiAdminTokensRevokeByClientJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminTokensRevokeByClientRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminTokensRevokeByUserWithBody Revoke Tokens By User
+//
+// Revoke all tokens issued for a specific user.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
+func (c *Client) PostApiAdminTokensRevokeByUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminTokensRevokeByUserRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2998,9 +3701,11 @@ func (c *Client) PostApiAdminTokensRevokeByClient(ctx context.Context, reqEditor
 //
 // Revoke all tokens issued for a specific user.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
-func (c *Client) PostApiAdminTokensRevokeByUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminTokensRevokeByUserRequest(c.Server)
+func (c *Client) PostApiAdminTokensRevokeByUser(ctx context.Context, body PostApiAdminTokensRevokeByUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminTokensRevokeByUserRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3155,13 +3860,53 @@ func (c *Client) PutApiAdminUsersUserId(ctx context.Context, userId int, body Pu
 	return c.Client.Do(req)
 }
 
+// PutApiAdminUsersUserIdDisableWithBody Disable User
+//
+// Disable a specific user account.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
+func (c *Client) PutApiAdminUsersUserIdDisableWithBody(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminUsersUserIdDisableRequestWithBody(c.Server, userId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PutApiAdminUsersUserIdDisable Disable User
 //
 // Disable a specific user account.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
-func (c *Client) PutApiAdminUsersUserIdDisable(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutApiAdminUsersUserIdDisableRequest(c.Server, userId)
+func (c *Client) PutApiAdminUsersUserIdDisable(ctx context.Context, userId int, body PutApiAdminUsersUserIdDisableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminUsersUserIdDisableRequest(c.Server, userId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminUsersUserIdEnableWithBody Enable User
+//
+// Enable a disabled user account by resetting lockout state.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
+func (c *Client) PostApiAdminUsersUserIdEnableWithBody(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminUsersUserIdEnableRequestWithBody(c.Server, userId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3176,9 +3921,11 @@ func (c *Client) PutApiAdminUsersUserIdDisable(ctx context.Context, userId int, 
 //
 // Enable a disabled user account by resetting lockout state.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
-func (c *Client) PostApiAdminUsersUserIdEnable(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiAdminUsersUserIdEnableRequest(c.Server, userId)
+func (c *Client) PostApiAdminUsersUserIdEnable(ctx context.Context, userId int, body PostApiAdminUsersUserIdEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminUsersUserIdEnableRequest(c.Server, userId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3244,13 +3991,53 @@ func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, bo
 	return c.Client.Do(req)
 }
 
+// PostApiGithubLoginWithBody GitHub OAuth2 Login
+//
+// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+func (c *Client) PostApiGithubLoginWithBody(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGithubLoginRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiGithubLogin GitHub OAuth2 Login
 //
 // Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *Client) PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGithubLoginRequest(c.Server, params)
+func (c *Client) PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGithubLoginRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiGoogleLoginWithBody Google OAuth2 Login
+//
+// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+func (c *Client) PostApiGoogleLoginWithBody(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGoogleLoginRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3265,9 +4052,11 @@ func (c *Client) PostApiGithubLogin(ctx context.Context, params *PostApiGithubLo
 //
 // Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *Client) PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGoogleLoginRequest(c.Server, params)
+func (c *Client) PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGoogleLoginRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3384,13 +4173,53 @@ func (c *Client) DeleteApiMeApplicationsClientId(ctx context.Context, clientId s
 	return c.Client.Do(req)
 }
 
+// PatchApiMeApplicationsClientIdWithBody Update Application
+//
+// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+func (c *Client) PatchApiMeApplicationsClientIdWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeApplicationsClientIdRequestWithBody(c.Server, clientId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PatchApiMeApplicationsClientId Update Application
 //
 // Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
-func (c *Client) PatchApiMeApplicationsClientId(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPatchApiMeApplicationsClientIdRequest(c.Server, clientId)
+func (c *Client) PatchApiMeApplicationsClientId(ctx context.Context, clientId string, body PatchApiMeApplicationsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeApplicationsClientIdRequest(c.Server, clientId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplicationsClientIdRotateSecretWithBody Rotate Application Secret
+//
+// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+func (c *Client) PostApiMeApplicationsClientIdRotateSecretWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdRotateSecretRequestWithBody(c.Server, clientId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3405,9 +4234,30 @@ func (c *Client) PatchApiMeApplicationsClientId(ctx context.Context, clientId st
 //
 // Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
-func (c *Client) PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeApplicationsClientIdRotateSecretRequest(c.Server, clientId)
+func (c *Client) PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdRotateSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdRotateSecretRequest(c.Server, clientId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeApplicationsClientIdTransferWithBody Transfer Application
+//
+// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+func (c *Client) PostApiMeApplicationsClientIdTransferWithBody(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdTransferRequestWithBody(c.Server, clientId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3422,9 +4272,11 @@ func (c *Client) PostApiMeApplicationsClientIdRotateSecret(ctx context.Context, 
 //
 // Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
-func (c *Client) PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeApplicationsClientIdTransferRequest(c.Server, clientId)
+func (c *Client) PostApiMeApplicationsClientIdTransfer(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdTransferJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeApplicationsClientIdTransferRequest(c.Server, clientId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3602,13 +4454,34 @@ func (c *Client) PostApiMeMfaVerifyWithFormdataBody(ctx context.Context, body Po
 	return c.Client.Do(req)
 }
 
+// PostApiMeOrgInvitationsAcceptWithBody Accept Organization Invitation
+//
+// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+func (c *Client) PostApiMeOrgInvitationsAcceptWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrgInvitationsAcceptRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeOrgInvitationsAccept Accept Organization Invitation
 //
 // Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
-func (c *Client) PostApiMeOrgInvitationsAccept(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeOrgInvitationsAcceptRequest(c.Server)
+func (c *Client) PostApiMeOrgInvitationsAccept(ctx context.Context, body PostApiMeOrgInvitationsAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrgInvitationsAcceptRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3636,13 +4509,34 @@ func (c *Client) GetApiMeOrganizations(ctx context.Context, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
+// PostApiMeOrganizationsWithBody Create Organization (self-service)
+//
+// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+func (c *Client) PostApiMeOrganizationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeOrganizations Create Organization (self-service)
 //
 // Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
-func (c *Client) PostApiMeOrganizations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeOrganizationsRequest(c.Server)
+func (c *Client) PostApiMeOrganizations(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3670,13 +4564,34 @@ func (c *Client) GetApiMeOrganizationsSlugInvitations(ctx context.Context, slug 
 	return c.Client.Do(req)
 }
 
+// PostApiMeOrganizationsSlugInvitationsWithBody Invite Organization Member
+//
+// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+func (c *Client) PostApiMeOrganizationsSlugInvitationsWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugInvitationsRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeOrganizationsSlugInvitations Invite Organization Member
 //
 // Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
-func (c *Client) PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeOrganizationsSlugInvitationsRequest(c.Server, slug)
+func (c *Client) PostApiMeOrganizationsSlugInvitations(ctx context.Context, slug string, body PostApiMeOrganizationsSlugInvitationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugInvitationsRequest(c.Server, slug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3738,13 +4653,53 @@ func (c *Client) DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
+// PutApiMePasswordWithBody Change Password
+//
+// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
+func (c *Client) PutApiMePasswordWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiMePasswordRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PutApiMePassword Change Password
 //
 // Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
-func (c *Client) PutApiMePassword(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutApiMePasswordRequest(c.Server)
+func (c *Client) PutApiMePassword(ctx context.Context, body PutApiMePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiMePasswordRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchApiMeProfileWithBody Update User Profile
+//
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+func (c *Client) PatchApiMeProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeProfileRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3757,11 +4712,13 @@ func (c *Client) PutApiMePassword(ctx context.Context, reqEditors ...RequestEdit
 
 // PatchApiMeProfile Update User Profile
 //
-// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Takes a body of the `application/json` content type.
 //
 // Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
-func (c *Client) PatchApiMeProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPatchApiMeProfileRequest(c.Server)
+func (c *Client) PatchApiMeProfile(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiMeProfileRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3844,13 +4801,34 @@ func (c *Client) PostApiMeSocialLinksProvider(ctx context.Context, provider Post
 	return c.Client.Do(req)
 }
 
+// PostApiMeSocialLinksProviderAuthorizeWithBody Begin Social Link (mint one-time state)
+//
+// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
+func (c *Client) PostApiMeSocialLinksProviderAuthorizeWithBody(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeSocialLinksProviderAuthorizeRequestWithBody(c.Server, provider, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeSocialLinksProviderAuthorize Begin Social Link (mint one-time state)
 //
 // Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
-func (c *Client) PostApiMeSocialLinksProviderAuthorize(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeSocialLinksProviderAuthorizeRequest(c.Server, provider)
+func (c *Client) PostApiMeSocialLinksProviderAuthorize(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, body PostApiMeSocialLinksProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeSocialLinksProviderAuthorizeRequest(c.Server, provider, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3878,13 +4856,34 @@ func (c *Client) GetApiMeWebauthnCredentials(ctx context.Context, reqEditors ...
 	return c.Client.Do(req)
 }
 
+// PostApiMeWebauthnRegisterBeginWithBody WebAuthn Register Begin
+//
+// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
+func (c *Client) PostApiMeWebauthnRegisterBeginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeWebauthnRegisterBeginRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeWebauthnRegisterBegin WebAuthn Register Begin
 //
 // Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
-func (c *Client) PostApiMeWebauthnRegisterBegin(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiMeWebauthnRegisterBeginRequest(c.Server)
+func (c *Client) PostApiMeWebauthnRegisterBegin(ctx context.Context, body PostApiMeWebauthnRegisterBeginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeWebauthnRegisterBeginRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3933,13 +4932,53 @@ func (c *Client) PostApiMeWebauthnRegisterFinish(ctx context.Context, body PostA
 	return c.Client.Do(req)
 }
 
+// PostApiPasswordResetConfirmWithBody Confirm Password Reset
+//
+// Confirm a password reset using the token sent via email.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
+func (c *Client) PostApiPasswordResetConfirmWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiPasswordResetConfirmRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiPasswordResetConfirm Confirm Password Reset
 //
 // Confirm a password reset using the token sent via email.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
-func (c *Client) PostApiPasswordResetConfirm(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiPasswordResetConfirmRequest(c.Server)
+func (c *Client) PostApiPasswordResetConfirm(ctx context.Context, body PostApiPasswordResetConfirmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiPasswordResetConfirmRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiPasswordResetRequestWithBody Request Password Reset
+//
+// Request a password reset link to be sent via email.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
+func (c *Client) PostApiPasswordResetRequestWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiPasswordResetRequestRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3954,9 +4993,30 @@ func (c *Client) PostApiPasswordResetConfirm(ctx context.Context, reqEditors ...
 //
 // Request a password reset link to be sent via email.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
-func (c *Client) PostApiPasswordResetRequest(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiPasswordResetRequestRequest(c.Server)
+func (c *Client) PostApiPasswordResetRequest(ctx context.Context, body PostApiPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiPasswordResetRequestRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiRegisterWithBody Register new user
+//
+// Registers a new user account into the system.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/register (the `PostApiRegister` operationId).
+func (c *Client) PostApiRegisterWithBody(ctx context.Context, params *PostApiRegisterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiRegisterRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3971,9 +5031,11 @@ func (c *Client) PostApiPasswordResetRequest(ctx context.Context, reqEditors ...
 //
 // Registers a new user account into the system.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/register (the `PostApiRegister` operationId).
-func (c *Client) PostApiRegister(ctx context.Context, params *PostApiRegisterParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiRegisterRequest(c.Server, params)
+func (c *Client) PostApiRegister(ctx context.Context, params *PostApiRegisterParams, body PostApiRegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiRegisterRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4001,13 +5063,34 @@ func (c *Client) GetApiVerifyEmail(ctx context.Context, reqEditors ...RequestEdi
 	return c.Client.Do(req)
 }
 
+// PostApiVerifyEmailResendWithBody Resend Verification Email
+//
+// Resend the email verification link.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
+func (c *Client) PostApiVerifyEmailResendWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiVerifyEmailResendRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiVerifyEmailResend Resend Verification Email
 //
 // Resend the email verification link.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
-func (c *Client) PostApiVerifyEmailResend(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiVerifyEmailResendRequest(c.Server)
+func (c *Client) PostApiVerifyEmailResend(ctx context.Context, body PostApiVerifyEmailResendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiVerifyEmailResendRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4056,13 +5139,34 @@ func (c *Client) PostApiVerifyEmailResendByEmail(ctx context.Context, body PostA
 	return c.Client.Do(req)
 }
 
+// PostApiWechatLoginWithBody WeChat OAuth2 Login
+//
+// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+func (c *Client) PostApiWechatLoginWithBody(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiWechatLoginRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiWechatLogin WeChat OAuth2 Login
 //
 // Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
 //
+// Takes a body of the `application/json` content type.
+//
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *Client) PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiWechatLoginRequest(c.Server, params)
+func (c *Client) PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiWechatLoginRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4924,8 +6028,19 @@ func NewPutApiAdminClientsClientIdRequestWithBody(server string, clientId string
 	return req, nil
 }
 
-// NewPostApiAdminClientsClientIdResetSecretRequest constructs an http.Request for the PostApiAdminClientsClientIdResetSecret method
-func NewPostApiAdminClientsClientIdResetSecretRequest(server string, clientId string) (*http.Request, error) {
+// NewPostApiAdminClientsClientIdResetSecretRequest calls the generic PostApiAdminClientsClientIdResetSecret builder with application/json body
+func NewPostApiAdminClientsClientIdResetSecretRequest(server string, clientId string, body PostApiAdminClientsClientIdResetSecretJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminClientsClientIdResetSecretRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPostApiAdminClientsClientIdResetSecretRequestWithBody constructs an http.Request for the PostApiAdminClientsClientIdResetSecret method, with any body, and a specified content type
+func NewPostApiAdminClientsClientIdResetSecretRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4950,16 +6065,29 @@ func NewPostApiAdminClientsClientIdResetSecretRequest(server string, clientId st
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiAdminClientsClientIdResumeRequest constructs an http.Request for the PostApiAdminClientsClientIdResume method
-func NewPostApiAdminClientsClientIdResumeRequest(server string, clientId string) (*http.Request, error) {
+// NewPostApiAdminClientsClientIdResumeRequest calls the generic PostApiAdminClientsClientIdResume builder with application/json body
+func NewPostApiAdminClientsClientIdResumeRequest(server string, clientId string, body PostApiAdminClientsClientIdResumeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminClientsClientIdResumeRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPostApiAdminClientsClientIdResumeRequestWithBody constructs an http.Request for the PostApiAdminClientsClientIdResume method, with any body, and a specified content type
+func NewPostApiAdminClientsClientIdResumeRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4984,10 +6112,12 @@ func NewPostApiAdminClientsClientIdResumeRequest(server string, clientId string)
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -5026,8 +6156,19 @@ func NewGetApiAdminClientsClientIdScopesRequest(server string, clientId string) 
 	return req, nil
 }
 
-// NewPutApiAdminClientsClientIdScopesRequest constructs an http.Request for the PutApiAdminClientsClientIdScopes method
-func NewPutApiAdminClientsClientIdScopesRequest(server string, clientId string) (*http.Request, error) {
+// NewPutApiAdminClientsClientIdScopesRequest calls the generic PutApiAdminClientsClientIdScopes builder with application/json body
+func NewPutApiAdminClientsClientIdScopesRequest(server string, clientId string, body PutApiAdminClientsClientIdScopesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminClientsClientIdScopesRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPutApiAdminClientsClientIdScopesRequestWithBody constructs an http.Request for the PutApiAdminClientsClientIdScopes method, with any body, and a specified content type
+func NewPutApiAdminClientsClientIdScopesRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5052,16 +6193,29 @@ func NewPutApiAdminClientsClientIdScopesRequest(server string, clientId string) 
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiAdminClientsClientIdSuspendRequest constructs an http.Request for the PostApiAdminClientsClientIdSuspend method
-func NewPostApiAdminClientsClientIdSuspendRequest(server string, clientId string) (*http.Request, error) {
+// NewPostApiAdminClientsClientIdSuspendRequest calls the generic PostApiAdminClientsClientIdSuspend builder with application/json body
+func NewPostApiAdminClientsClientIdSuspendRequest(server string, clientId string, body PostApiAdminClientsClientIdSuspendJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminClientsClientIdSuspendRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPostApiAdminClientsClientIdSuspendRequestWithBody constructs an http.Request for the PostApiAdminClientsClientIdSuspend method, with any body, and a specified content type
+func NewPostApiAdminClientsClientIdSuspendRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5086,10 +6240,12 @@ func NewPostApiAdminClientsClientIdSuspendRequest(server string, clientId string
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -5653,8 +6809,19 @@ func NewGetApiAdminTokensRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPostApiAdminTokensRevokeByClientRequest constructs an http.Request for the PostApiAdminTokensRevokeByClient method
-func NewPostApiAdminTokensRevokeByClientRequest(server string) (*http.Request, error) {
+// NewPostApiAdminTokensRevokeByClientRequest calls the generic PostApiAdminTokensRevokeByClient builder with application/json body
+func NewPostApiAdminTokensRevokeByClientRequest(server string, body PostApiAdminTokensRevokeByClientJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminTokensRevokeByClientRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiAdminTokensRevokeByClientRequestWithBody constructs an http.Request for the PostApiAdminTokensRevokeByClient method, with any body, and a specified content type
+func NewPostApiAdminTokensRevokeByClientRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5672,16 +6839,29 @@ func NewPostApiAdminTokensRevokeByClientRequest(server string) (*http.Request, e
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiAdminTokensRevokeByUserRequest constructs an http.Request for the PostApiAdminTokensRevokeByUser method
-func NewPostApiAdminTokensRevokeByUserRequest(server string) (*http.Request, error) {
+// NewPostApiAdminTokensRevokeByUserRequest calls the generic PostApiAdminTokensRevokeByUser builder with application/json body
+func NewPostApiAdminTokensRevokeByUserRequest(server string, body PostApiAdminTokensRevokeByUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminTokensRevokeByUserRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiAdminTokensRevokeByUserRequestWithBody constructs an http.Request for the PostApiAdminTokensRevokeByUser method, with any body, and a specified content type
+func NewPostApiAdminTokensRevokeByUserRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5699,10 +6879,12 @@ func NewPostApiAdminTokensRevokeByUserRequest(server string) (*http.Request, err
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -5998,8 +7180,19 @@ func NewPutApiAdminUsersUserIdRequestWithBody(server string, userId int, content
 	return req, nil
 }
 
-// NewPutApiAdminUsersUserIdDisableRequest constructs an http.Request for the PutApiAdminUsersUserIdDisable method
-func NewPutApiAdminUsersUserIdDisableRequest(server string, userId int) (*http.Request, error) {
+// NewPutApiAdminUsersUserIdDisableRequest calls the generic PutApiAdminUsersUserIdDisable builder with application/json body
+func NewPutApiAdminUsersUserIdDisableRequest(server string, userId int, body PutApiAdminUsersUserIdDisableJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminUsersUserIdDisableRequestWithBody(server, userId, "application/json", bodyReader)
+}
+
+// NewPutApiAdminUsersUserIdDisableRequestWithBody constructs an http.Request for the PutApiAdminUsersUserIdDisable method, with any body, and a specified content type
+func NewPutApiAdminUsersUserIdDisableRequestWithBody(server string, userId int, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6024,16 +7217,29 @@ func NewPutApiAdminUsersUserIdDisableRequest(server string, userId int) (*http.R
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiAdminUsersUserIdEnableRequest constructs an http.Request for the PostApiAdminUsersUserIdEnable method
-func NewPostApiAdminUsersUserIdEnableRequest(server string, userId int) (*http.Request, error) {
+// NewPostApiAdminUsersUserIdEnableRequest calls the generic PostApiAdminUsersUserIdEnable builder with application/json body
+func NewPostApiAdminUsersUserIdEnableRequest(server string, userId int, body PostApiAdminUsersUserIdEnableJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminUsersUserIdEnableRequestWithBody(server, userId, "application/json", bodyReader)
+}
+
+// NewPostApiAdminUsersUserIdEnableRequestWithBody constructs an http.Request for the PostApiAdminUsersUserIdEnable method, with any body, and a specified content type
+func NewPostApiAdminUsersUserIdEnableRequestWithBody(server string, userId int, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6058,10 +7264,12 @@ func NewPostApiAdminUsersUserIdEnableRequest(server string, userId int) (*http.R
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6147,8 +7355,19 @@ func NewPutApiAdminUsersUserIdRolesRequestWithBody(server string, userId int, co
 	return req, nil
 }
 
-// NewPostApiGithubLoginRequest constructs an http.Request for the PostApiGithubLogin method
-func NewPostApiGithubLoginRequest(server string, params *PostApiGithubLoginParams) (*http.Request, error) {
+// NewPostApiGithubLoginRequest calls the generic PostApiGithubLogin builder with application/json body
+func NewPostApiGithubLoginRequest(server string, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiGithubLoginRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPostApiGithubLoginRequestWithBody constructs an http.Request for the PostApiGithubLogin method, with any body, and a specified content type
+func NewPostApiGithubLoginRequestWithBody(server string, params *PostApiGithubLoginParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6189,16 +7408,29 @@ func NewPostApiGithubLoginRequest(server string, params *PostApiGithubLoginParam
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiGoogleLoginRequest constructs an http.Request for the PostApiGoogleLogin method
-func NewPostApiGoogleLoginRequest(server string, params *PostApiGoogleLoginParams) (*http.Request, error) {
+// NewPostApiGoogleLoginRequest calls the generic PostApiGoogleLogin builder with application/json body
+func NewPostApiGoogleLoginRequest(server string, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiGoogleLoginRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPostApiGoogleLoginRequestWithBody constructs an http.Request for the PostApiGoogleLogin method, with any body, and a specified content type
+func NewPostApiGoogleLoginRequestWithBody(server string, params *PostApiGoogleLoginParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6239,10 +7471,12 @@ func NewPostApiGoogleLoginRequest(server string, params *PostApiGoogleLoginParam
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6402,8 +7636,19 @@ func NewDeleteApiMeApplicationsClientIdRequest(server string, clientId string) (
 	return req, nil
 }
 
-// NewPatchApiMeApplicationsClientIdRequest constructs an http.Request for the PatchApiMeApplicationsClientId method
-func NewPatchApiMeApplicationsClientIdRequest(server string, clientId string) (*http.Request, error) {
+// NewPatchApiMeApplicationsClientIdRequest calls the generic PatchApiMeApplicationsClientId builder with application/json body
+func NewPatchApiMeApplicationsClientIdRequest(server string, clientId string, body PatchApiMeApplicationsClientIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchApiMeApplicationsClientIdRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPatchApiMeApplicationsClientIdRequestWithBody constructs an http.Request for the PatchApiMeApplicationsClientId method, with any body, and a specified content type
+func NewPatchApiMeApplicationsClientIdRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6428,16 +7673,29 @@ func NewPatchApiMeApplicationsClientIdRequest(server string, clientId string) (*
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiMeApplicationsClientIdRotateSecretRequest constructs an http.Request for the PostApiMeApplicationsClientIdRotateSecret method
-func NewPostApiMeApplicationsClientIdRotateSecretRequest(server string, clientId string) (*http.Request, error) {
+// NewPostApiMeApplicationsClientIdRotateSecretRequest calls the generic PostApiMeApplicationsClientIdRotateSecret builder with application/json body
+func NewPostApiMeApplicationsClientIdRotateSecretRequest(server string, clientId string, body PostApiMeApplicationsClientIdRotateSecretJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeApplicationsClientIdRotateSecretRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPostApiMeApplicationsClientIdRotateSecretRequestWithBody constructs an http.Request for the PostApiMeApplicationsClientIdRotateSecret method, with any body, and a specified content type
+func NewPostApiMeApplicationsClientIdRotateSecretRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6462,16 +7720,29 @@ func NewPostApiMeApplicationsClientIdRotateSecretRequest(server string, clientId
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiMeApplicationsClientIdTransferRequest constructs an http.Request for the PostApiMeApplicationsClientIdTransfer method
-func NewPostApiMeApplicationsClientIdTransferRequest(server string, clientId string) (*http.Request, error) {
+// NewPostApiMeApplicationsClientIdTransferRequest calls the generic PostApiMeApplicationsClientIdTransfer builder with application/json body
+func NewPostApiMeApplicationsClientIdTransferRequest(server string, clientId string, body PostApiMeApplicationsClientIdTransferJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeApplicationsClientIdTransferRequestWithBody(server, clientId, "application/json", bodyReader)
+}
+
+// NewPostApiMeApplicationsClientIdTransferRequestWithBody constructs an http.Request for the PostApiMeApplicationsClientIdTransfer method, with any body, and a specified content type
+func NewPostApiMeApplicationsClientIdTransferRequestWithBody(server string, clientId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6496,10 +7767,12 @@ func NewPostApiMeApplicationsClientIdTransferRequest(server string, clientId str
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6696,8 +7969,19 @@ func NewPostApiMeMfaVerifyRequestWithBody(server string, contentType string, bod
 	return req, nil
 }
 
-// NewPostApiMeOrgInvitationsAcceptRequest constructs an http.Request for the PostApiMeOrgInvitationsAccept method
-func NewPostApiMeOrgInvitationsAcceptRequest(server string) (*http.Request, error) {
+// NewPostApiMeOrgInvitationsAcceptRequest calls the generic PostApiMeOrgInvitationsAccept builder with application/json body
+func NewPostApiMeOrgInvitationsAcceptRequest(server string, body PostApiMeOrgInvitationsAcceptJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrgInvitationsAcceptRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrgInvitationsAcceptRequestWithBody constructs an http.Request for the PostApiMeOrgInvitationsAccept method, with any body, and a specified content type
+func NewPostApiMeOrgInvitationsAcceptRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6715,10 +7999,12 @@ func NewPostApiMeOrgInvitationsAcceptRequest(server string) (*http.Request, erro
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6750,8 +8036,19 @@ func NewGetApiMeOrganizationsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPostApiMeOrganizationsRequest constructs an http.Request for the PostApiMeOrganizations method
-func NewPostApiMeOrganizationsRequest(server string) (*http.Request, error) {
+// NewPostApiMeOrganizationsRequest calls the generic PostApiMeOrganizations builder with application/json body
+func NewPostApiMeOrganizationsRequest(server string, body PostApiMeOrganizationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsRequestWithBody constructs an http.Request for the PostApiMeOrganizations method, with any body, and a specified content type
+func NewPostApiMeOrganizationsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6769,10 +8066,12 @@ func NewPostApiMeOrganizationsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6811,8 +8110,19 @@ func NewGetApiMeOrganizationsSlugInvitationsRequest(server string, slug string) 
 	return req, nil
 }
 
-// NewPostApiMeOrganizationsSlugInvitationsRequest constructs an http.Request for the PostApiMeOrganizationsSlugInvitations method
-func NewPostApiMeOrganizationsSlugInvitationsRequest(server string, slug string) (*http.Request, error) {
+// NewPostApiMeOrganizationsSlugInvitationsRequest calls the generic PostApiMeOrganizationsSlugInvitations builder with application/json body
+func NewPostApiMeOrganizationsSlugInvitationsRequest(server string, slug string, body PostApiMeOrganizationsSlugInvitationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugInvitationsRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugInvitationsRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugInvitations method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugInvitationsRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6837,10 +8147,12 @@ func NewPostApiMeOrganizationsSlugInvitationsRequest(server string, slug string)
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6961,8 +8273,19 @@ func NewDeleteApiMeOrganizationsSlugMembersUserIdRequest(server string, slug str
 	return req, nil
 }
 
-// NewPutApiMePasswordRequest constructs an http.Request for the PutApiMePassword method
-func NewPutApiMePasswordRequest(server string) (*http.Request, error) {
+// NewPutApiMePasswordRequest calls the generic PutApiMePassword builder with application/json body
+func NewPutApiMePasswordRequest(server string, body PutApiMePasswordJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiMePasswordRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPutApiMePasswordRequestWithBody constructs an http.Request for the PutApiMePassword method, with any body, and a specified content type
+func NewPutApiMePasswordRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6980,16 +8303,29 @@ func NewPutApiMePasswordRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPatchApiMeProfileRequest constructs an http.Request for the PatchApiMeProfile method
-func NewPatchApiMeProfileRequest(server string) (*http.Request, error) {
+// NewPatchApiMeProfileRequest calls the generic PatchApiMeProfile builder with application/json body
+func NewPatchApiMeProfileRequest(server string, body PatchApiMeProfileJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchApiMeProfileRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPatchApiMeProfileRequestWithBody constructs an http.Request for the PatchApiMeProfile method, with any body, and a specified content type
+func NewPatchApiMeProfileRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7007,10 +8343,12 @@ func NewPatchApiMeProfileRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7123,8 +8461,19 @@ func NewPostApiMeSocialLinksProviderRequestWithBody(server string, provider Post
 	return req, nil
 }
 
-// NewPostApiMeSocialLinksProviderAuthorizeRequest constructs an http.Request for the PostApiMeSocialLinksProviderAuthorize method
-func NewPostApiMeSocialLinksProviderAuthorizeRequest(server string, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider) (*http.Request, error) {
+// NewPostApiMeSocialLinksProviderAuthorizeRequest calls the generic PostApiMeSocialLinksProviderAuthorize builder with application/json body
+func NewPostApiMeSocialLinksProviderAuthorizeRequest(server string, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, body PostApiMeSocialLinksProviderAuthorizeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeSocialLinksProviderAuthorizeRequestWithBody(server, provider, "application/json", bodyReader)
+}
+
+// NewPostApiMeSocialLinksProviderAuthorizeRequestWithBody constructs an http.Request for the PostApiMeSocialLinksProviderAuthorize method, with any body, and a specified content type
+func NewPostApiMeSocialLinksProviderAuthorizeRequestWithBody(server string, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7149,10 +8498,12 @@ func NewPostApiMeSocialLinksProviderAuthorizeRequest(server string, provider Pos
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7184,8 +8535,19 @@ func NewGetApiMeWebauthnCredentialsRequest(server string) (*http.Request, error)
 	return req, nil
 }
 
-// NewPostApiMeWebauthnRegisterBeginRequest constructs an http.Request for the PostApiMeWebauthnRegisterBegin method
-func NewPostApiMeWebauthnRegisterBeginRequest(server string) (*http.Request, error) {
+// NewPostApiMeWebauthnRegisterBeginRequest calls the generic PostApiMeWebauthnRegisterBegin builder with application/json body
+func NewPostApiMeWebauthnRegisterBeginRequest(server string, body PostApiMeWebauthnRegisterBeginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeWebauthnRegisterBeginRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiMeWebauthnRegisterBeginRequestWithBody constructs an http.Request for the PostApiMeWebauthnRegisterBegin method, with any body, and a specified content type
+func NewPostApiMeWebauthnRegisterBeginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7203,10 +8565,12 @@ func NewPostApiMeWebauthnRegisterBeginRequest(server string) (*http.Request, err
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7251,8 +8615,19 @@ func NewPostApiMeWebauthnRegisterFinishRequestWithBody(server string, contentTyp
 	return req, nil
 }
 
-// NewPostApiPasswordResetConfirmRequest constructs an http.Request for the PostApiPasswordResetConfirm method
-func NewPostApiPasswordResetConfirmRequest(server string) (*http.Request, error) {
+// NewPostApiPasswordResetConfirmRequest calls the generic PostApiPasswordResetConfirm builder with application/json body
+func NewPostApiPasswordResetConfirmRequest(server string, body PostApiPasswordResetConfirmJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiPasswordResetConfirmRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiPasswordResetConfirmRequestWithBody constructs an http.Request for the PostApiPasswordResetConfirm method, with any body, and a specified content type
+func NewPostApiPasswordResetConfirmRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7270,16 +8645,29 @@ func NewPostApiPasswordResetConfirmRequest(server string) (*http.Request, error)
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiPasswordResetRequestRequest constructs an http.Request for the PostApiPasswordResetRequest method
-func NewPostApiPasswordResetRequestRequest(server string) (*http.Request, error) {
+// NewPostApiPasswordResetRequestRequest calls the generic PostApiPasswordResetRequest builder with application/json body
+func NewPostApiPasswordResetRequestRequest(server string, body PostApiPasswordResetRequestJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiPasswordResetRequestRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiPasswordResetRequestRequestWithBody constructs an http.Request for the PostApiPasswordResetRequest method, with any body, and a specified content type
+func NewPostApiPasswordResetRequestRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7297,16 +8685,29 @@ func NewPostApiPasswordResetRequestRequest(server string) (*http.Request, error)
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPostApiRegisterRequest constructs an http.Request for the PostApiRegister method
-func NewPostApiRegisterRequest(server string, params *PostApiRegisterParams) (*http.Request, error) {
+// NewPostApiRegisterRequest calls the generic PostApiRegister builder with application/json body
+func NewPostApiRegisterRequest(server string, params *PostApiRegisterParams, body PostApiRegisterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiRegisterRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPostApiRegisterRequestWithBody constructs an http.Request for the PostApiRegister method, with any body, and a specified content type
+func NewPostApiRegisterRequestWithBody(server string, params *PostApiRegisterParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7367,10 +8768,12 @@ func NewPostApiRegisterRequest(server string, params *PostApiRegisterParams) (*h
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7402,8 +8805,19 @@ func NewGetApiVerifyEmailRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPostApiVerifyEmailResendRequest constructs an http.Request for the PostApiVerifyEmailResend method
-func NewPostApiVerifyEmailResendRequest(server string) (*http.Request, error) {
+// NewPostApiVerifyEmailResendRequest calls the generic PostApiVerifyEmailResend builder with application/json body
+func NewPostApiVerifyEmailResendRequest(server string, body PostApiVerifyEmailResendJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiVerifyEmailResendRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiVerifyEmailResendRequestWithBody constructs an http.Request for the PostApiVerifyEmailResend method, with any body, and a specified content type
+func NewPostApiVerifyEmailResendRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7421,10 +8835,12 @@ func NewPostApiVerifyEmailResendRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7469,8 +8885,19 @@ func NewPostApiVerifyEmailResendByEmailRequestWithBody(server string, contentTyp
 	return req, nil
 }
 
-// NewPostApiWechatLoginRequest constructs an http.Request for the PostApiWechatLogin method
-func NewPostApiWechatLoginRequest(server string, params *PostApiWechatLoginParams) (*http.Request, error) {
+// NewPostApiWechatLoginRequest calls the generic PostApiWechatLogin builder with application/json body
+func NewPostApiWechatLoginRequest(server string, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiWechatLoginRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPostApiWechatLoginRequestWithBody constructs an http.Request for the PostApiWechatLogin method, with any body, and a specified content type
+func NewPostApiWechatLoginRequestWithBody(server string, params *PostApiWechatLoginParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7511,10 +8938,12 @@ func NewPostApiWechatLoginRequest(server string, params *PostApiWechatLoginParam
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8669,23 +10098,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/clients/{clientId} (the `PutApiAdminClientsClientId` operationId).
 	PutApiAdminClientsClientIdWithResponse(ctx context.Context, clientId string, body PutApiAdminClientsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdResponse, error)
 
+	// PostApiAdminClientsClientIdResetSecretWithBodyWithResponse Reset Client Secret
+	//
+	// Reset the secret of a specific OAuth2 client.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
+	PostApiAdminClientsClientIdResetSecretWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error)
+
 	// PostApiAdminClientsClientIdResetSecretWithResponse Reset Client Secret
 	//
 	// Reset the secret of a specific OAuth2 client.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
-	PostApiAdminClientsClientIdResetSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error)
+	PostApiAdminClientsClientIdResetSecretWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResetSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error)
+
+	// PostApiAdminClientsClientIdResumeWithBodyWithResponse Resume Application
+	//
+	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+	PostApiAdminClientsClientIdResumeWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error)
 
 	// PostApiAdminClientsClientIdResumeWithResponse Resume Application
 	//
 	// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
-	PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error)
+	PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResumeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error)
 
 	// GetApiAdminClientsClientIdScopesWithResponse Get Client Scopes
 	//
@@ -8696,23 +10143,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/admin/clients/{clientId}/scopes (the `GetApiAdminClientsClientIdScopes` operationId).
 	GetApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*GetApiAdminClientsClientIdScopesResponse, error)
 
+	// PutApiAdminClientsClientIdScopesWithBodyWithResponse Update Client Scopes
+	//
+	// Update the assigned scopes for an OAuth2 client.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
+	PutApiAdminClientsClientIdScopesWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error)
+
 	// PutApiAdminClientsClientIdScopesWithResponse Update Client Scopes
 	//
 	// Update the assigned scopes for an OAuth2 client.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
-	PutApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error)
+	PutApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, body PutApiAdminClientsClientIdScopesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error)
+
+	// PostApiAdminClientsClientIdSuspendWithBodyWithResponse Suspend Application
+	//
+	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+	PostApiAdminClientsClientIdSuspendWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error)
 
 	// PostApiAdminClientsClientIdSuspendWithResponse Suspend Application
 	//
 	// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
-	PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error)
+	PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdSuspendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error)
 
 	// GetApiAdminDashboardWithResponse Get Dashboard
 	//
@@ -8912,23 +10377,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
 	GetApiAdminTokensWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminTokensResponse, error)
 
+	// PostApiAdminTokensRevokeByClientWithBodyWithResponse Revoke Tokens By Client
+	//
+	// Revoke all tokens issued to a specific client.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
+	PostApiAdminTokensRevokeByClientWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error)
+
 	// PostApiAdminTokensRevokeByClientWithResponse Revoke Tokens By Client
 	//
 	// Revoke all tokens issued to a specific client.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
-	PostApiAdminTokensRevokeByClientWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error)
+	PostApiAdminTokensRevokeByClientWithResponse(ctx context.Context, body PostApiAdminTokensRevokeByClientJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error)
+
+	// PostApiAdminTokensRevokeByUserWithBodyWithResponse Revoke Tokens By User
+	//
+	// Revoke all tokens issued for a specific user.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
+	PostApiAdminTokensRevokeByUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error)
 
 	// PostApiAdminTokensRevokeByUserWithResponse Revoke Tokens By User
 	//
 	// Revoke all tokens issued for a specific user.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
-	PostApiAdminTokensRevokeByUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error)
+	PostApiAdminTokensRevokeByUserWithResponse(ctx context.Context, body PostApiAdminTokensRevokeByUserJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error)
 
 	// DeleteApiAdminTokensTokenPrefixWithResponse Revoke Token
 	//
@@ -9002,23 +10485,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId} (the `PutApiAdminUsersUserId` operationId).
 	PutApiAdminUsersUserIdWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdResponse, error)
 
+	// PutApiAdminUsersUserIdDisableWithBodyWithResponse Disable User
+	//
+	// Disable a specific user account.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
+	PutApiAdminUsersUserIdDisableWithBodyWithResponse(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error)
+
 	// PutApiAdminUsersUserIdDisableWithResponse Disable User
 	//
 	// Disable a specific user account.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
-	PutApiAdminUsersUserIdDisableWithResponse(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error)
+	PutApiAdminUsersUserIdDisableWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdDisableJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error)
+
+	// PostApiAdminUsersUserIdEnableWithBodyWithResponse Enable User
+	//
+	// Enable a disabled user account by resetting lockout state.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
+	PostApiAdminUsersUserIdEnableWithBodyWithResponse(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error)
 
 	// PostApiAdminUsersUserIdEnableWithResponse Enable User
 	//
 	// Enable a disabled user account by resetting lockout state.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
-	PostApiAdminUsersUserIdEnableWithResponse(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error)
+	PostApiAdminUsersUserIdEnableWithResponse(ctx context.Context, userId int, body PostApiAdminUsersUserIdEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error)
 
 	// GetApiAdminUsersUserIdRolesWithResponse Get User Roles
 	//
@@ -9047,23 +10548,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRolesWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdRolesResponse, error)
 
+	// PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
+	//
+	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+	PostApiGithubLoginWithBodyWithResponse(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+
 	// PostApiGithubLoginWithResponse GitHub OAuth2 Login
 	//
 	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+	PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+
+	// PostApiGoogleLoginWithBodyWithResponse Google OAuth2 Login
+	//
+	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+	PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
 
 	// PostApiGoogleLoginWithResponse Google OAuth2 Login
 	//
 	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
+	PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
 
 	// DeleteApiMeWithResponse Delete Account
 	//
@@ -9119,32 +10638,59 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /api/me/applications/{clientId} (the `DeleteApiMeApplicationsClientId` operationId).
 	DeleteApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*DeleteApiMeApplicationsClientIdResponse, error)
 
+	// PatchApiMeApplicationsClientIdWithBodyWithResponse Update Application
+	//
+	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+	PatchApiMeApplicationsClientIdWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error)
+
 	// PatchApiMeApplicationsClientIdWithResponse Update Application
 	//
 	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
-	PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error)
+	PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, body PatchApiMeApplicationsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error)
+
+	// PostApiMeApplicationsClientIdRotateSecretWithBodyWithResponse Rotate Application Secret
+	//
+	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+	PostApiMeApplicationsClientIdRotateSecretWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error)
 
 	// PostApiMeApplicationsClientIdRotateSecretWithResponse Rotate Application Secret
 	//
 	// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
-	PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error)
+	PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdRotateSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error)
+
+	// PostApiMeApplicationsClientIdTransferWithBodyWithResponse Transfer Application
+	//
+	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+	PostApiMeApplicationsClientIdTransferWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error)
 
 	// PostApiMeApplicationsClientIdTransferWithResponse Transfer Application
 	//
 	// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
-	PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error)
+	PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdTransferJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error)
 
 	// GetApiMeAuthorizedAppsWithResponse List Authorized Apps
 	//
@@ -9227,14 +10773,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/me/mfa/verify (the `PostApiMeMfaVerify` operationId).
 	PostApiMeMfaVerifyWithFormdataBodyWithResponse(ctx context.Context, body PostApiMeMfaVerifyFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeMfaVerifyResponse, error)
 
+	// PostApiMeOrgInvitationsAcceptWithBodyWithResponse Accept Organization Invitation
+	//
+	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+	PostApiMeOrgInvitationsAcceptWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error)
+
 	// PostApiMeOrgInvitationsAcceptWithResponse Accept Organization Invitation
 	//
 	// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
-	PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error)
+	PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, body PostApiMeOrgInvitationsAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error)
 
 	// GetApiMeOrganizationsWithResponse List My Organizations
 	//
@@ -9245,14 +10800,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/me/organizations (the `GetApiMeOrganizations` operationId).
 	GetApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsResponse, error)
 
+	// PostApiMeOrganizationsWithBodyWithResponse Create Organization (self-service)
+	//
+	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+	PostApiMeOrganizationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error)
+
 	// PostApiMeOrganizationsWithResponse Create Organization (self-service)
 	//
 	// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
-	PostApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error)
+	PostApiMeOrganizationsWithResponse(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error)
 
 	// GetApiMeOrganizationsSlugInvitationsWithResponse List Pending Invitations
 	//
@@ -9263,14 +10827,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/me/organizations/{slug}/invitations (the `GetApiMeOrganizationsSlugInvitations` operationId).
 	GetApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugInvitationsResponse, error)
 
+	// PostApiMeOrganizationsSlugInvitationsWithBodyWithResponse Invite Organization Member
+	//
+	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+	PostApiMeOrganizationsSlugInvitationsWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error)
+
 	// PostApiMeOrganizationsSlugInvitationsWithResponse Invite Organization Member
 	//
 	// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
-	PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error)
+	PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugInvitationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error)
 
 	// DeleteApiMeOrganizationsSlugInvitationsInvitationIdWithResponse Revoke Invitation
 	//
@@ -9299,23 +10872,41 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
 	DeleteApiMeOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugMembersUserIdResponse, error)
 
+	// PutApiMePasswordWithBodyWithResponse Change Password
+	//
+	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
+	PutApiMePasswordWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error)
+
 	// PutApiMePasswordWithResponse Change Password
 	//
 	// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
-	PutApiMePasswordWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error)
+	PutApiMePasswordWithResponse(ctx context.Context, body PutApiMePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error)
+
+	// PatchApiMeProfileWithBodyWithResponse Update User Profile
+	//
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+	PatchApiMeProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error)
 
 	// PatchApiMeProfileWithResponse Update User Profile
 	//
-	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+	// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
-	PatchApiMeProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error)
+	PatchApiMeProfileWithResponse(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error)
 
 	// GetApiMeSocialLinksWithResponse List Linked Social Accounts
 	//
@@ -9353,14 +10944,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/me/social/links/{provider} (the `PostApiMeSocialLinksProvider` operationId).
 	PostApiMeSocialLinksProviderWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderParamsProvider, body PostApiMeSocialLinksProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderResponse, error)
 
+	// PostApiMeSocialLinksProviderAuthorizeWithBodyWithResponse Begin Social Link (mint one-time state)
+	//
+	// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
+	PostApiMeSocialLinksProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error)
+
 	// PostApiMeSocialLinksProviderAuthorizeWithResponse Begin Social Link (mint one-time state)
 	//
 	// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
-	PostApiMeSocialLinksProviderAuthorizeWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error)
+	PostApiMeSocialLinksProviderAuthorizeWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, body PostApiMeSocialLinksProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error)
 
 	// GetApiMeWebauthnCredentialsWithResponse List WebAuthn Credentials
 	//
@@ -9371,14 +10971,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/me/webauthn/credentials (the `GetApiMeWebauthnCredentials` operationId).
 	GetApiMeWebauthnCredentialsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeWebauthnCredentialsResponse, error)
 
+	// PostApiMeWebauthnRegisterBeginWithBodyWithResponse WebAuthn Register Begin
+	//
+	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
+	PostApiMeWebauthnRegisterBeginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error)
+
 	// PostApiMeWebauthnRegisterBeginWithResponse WebAuthn Register Begin
 	//
 	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
-	PostApiMeWebauthnRegisterBeginWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error)
+	PostApiMeWebauthnRegisterBeginWithResponse(ctx context.Context, body PostApiMeWebauthnRegisterBeginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error)
 
 	// PostApiMeWebauthnRegisterFinishWithBodyWithResponse WebAuthn Register Finish
 	//
@@ -9398,32 +11007,59 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/me/webauthn/register/finish (the `PostApiMeWebauthnRegisterFinish` operationId).
 	PostApiMeWebauthnRegisterFinishWithResponse(ctx context.Context, body PostApiMeWebauthnRegisterFinishJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterFinishResponse, error)
 
+	// PostApiPasswordResetConfirmWithBodyWithResponse Confirm Password Reset
+	//
+	// Confirm a password reset using the token sent via email.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
+	PostApiPasswordResetConfirmWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error)
+
 	// PostApiPasswordResetConfirmWithResponse Confirm Password Reset
 	//
 	// Confirm a password reset using the token sent via email.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
-	PostApiPasswordResetConfirmWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error)
+	PostApiPasswordResetConfirmWithResponse(ctx context.Context, body PostApiPasswordResetConfirmJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error)
+
+	// PostApiPasswordResetRequestWithBodyWithResponse Request Password Reset
+	//
+	// Request a password reset link to be sent via email.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
+	PostApiPasswordResetRequestWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error)
 
 	// PostApiPasswordResetRequestWithResponse Request Password Reset
 	//
 	// Request a password reset link to be sent via email.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
-	PostApiPasswordResetRequestWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error)
+	PostApiPasswordResetRequestWithResponse(ctx context.Context, body PostApiPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error)
+
+	// PostApiRegisterWithBodyWithResponse Register new user
+	//
+	// Registers a new user account into the system.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/register (the `PostApiRegister` operationId).
+	PostApiRegisterWithBodyWithResponse(ctx context.Context, params *PostApiRegisterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error)
 
 	// PostApiRegisterWithResponse Register new user
 	//
 	// Registers a new user account into the system.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/register (the `PostApiRegister` operationId).
-	PostApiRegisterWithResponse(ctx context.Context, params *PostApiRegisterParams, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error)
+	PostApiRegisterWithResponse(ctx context.Context, params *PostApiRegisterParams, body PostApiRegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error)
 
 	// GetApiVerifyEmailWithResponse Verify Email
 	//
@@ -9434,14 +11070,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/verify-email (the `GetApiVerifyEmail` operationId).
 	GetApiVerifyEmailWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiVerifyEmailResponse, error)
 
+	// PostApiVerifyEmailResendWithBodyWithResponse Resend Verification Email
+	//
+	// Resend the email verification link.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
+	PostApiVerifyEmailResendWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error)
+
 	// PostApiVerifyEmailResendWithResponse Resend Verification Email
 	//
 	// Resend the email verification link.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
-	PostApiVerifyEmailResendWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error)
+	PostApiVerifyEmailResendWithResponse(ctx context.Context, body PostApiVerifyEmailResendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error)
 
 	// PostApiVerifyEmailResendByEmailWithBodyWithResponse Resend Verification Email (by email address)
 	//
@@ -9461,14 +11106,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/verify-email/resend-by-email (the `PostApiVerifyEmailResendByEmail` operationId).
 	PostApiVerifyEmailResendByEmailWithResponse(ctx context.Context, body PostApiVerifyEmailResendByEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendByEmailResponse, error)
 
+	// PostApiWechatLoginWithBodyWithResponse WeChat OAuth2 Login
+	//
+	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+	PostApiWechatLoginWithBodyWithResponse(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
+
 	// PostApiWechatLoginWithResponse WeChat OAuth2 Login
 	//
 	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
+	PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
 
 	// GetHealthWithResponse Health check
 	//
@@ -10089,6 +11743,33 @@ func (r PostApiAdminClientsClientIdResetSecretResponse) ContentType() string {
 type PostApiAdminClientsClientIdResumeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId *string `json:"client_id,omitempty"`
+		Status   *string `json:"status,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiAdminClientsClientIdResumeResponse) GetJSON200() *struct {
+	ClientId *string `json:"client_id,omitempty"`
+	Status   *string `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiAdminClientsClientIdResumeResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiAdminClientsClientIdResumeResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -10191,6 +11872,33 @@ func (r PutApiAdminClientsClientIdScopesResponse) ContentType() string {
 type PostApiAdminClientsClientIdSuspendResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId *string `json:"client_id,omitempty"`
+		Status   *string `json:"status,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiAdminClientsClientIdSuspendResponse) GetJSON200() *struct {
+	ClientId *string `json:"client_id,omitempty"`
+	Status   *string `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiAdminClientsClientIdSuspendResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiAdminClientsClientIdSuspendResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -11576,6 +13284,46 @@ func (r GetApiMeResponse) ContentType() string {
 type GetApiMeApplicationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Applications *[]struct {
+			AllowedGrantTypes *[]string                                                      `json:"allowed_grant_types,omitempty"`
+			ClientId          *string                                                        `json:"client_id,omitempty"`
+			ClientType        *GetApiMeApplications200JSONResponseBodyApplicationsClientType `json:"client_type,omitempty"`
+			CreatedAt         *string                                                        `json:"created_at,omitempty"`
+			CreatorUserId     *int                                                           `json:"creator_user_id,omitempty"`
+			Name              *string                                                        `json:"name,omitempty"`
+			OrgId             *int                                                           `json:"org_id,omitempty"`
+			RedirectUris      *[]string                                                      `json:"redirect_uris,omitempty"`
+			Status            *GetApiMeApplications200JSONResponseBodyApplicationsStatus     `json:"status,omitempty"`
+		} `json:"applications,omitempty"`
+		Total *int `json:"total,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeApplicationsResponse) GetJSON200() *struct {
+	Applications *[]struct {
+		AllowedGrantTypes *[]string                                                      `json:"allowed_grant_types,omitempty"`
+		ClientId          *string                                                        `json:"client_id,omitempty"`
+		ClientType        *GetApiMeApplications200JSONResponseBodyApplicationsClientType `json:"client_type,omitempty"`
+		CreatedAt         *string                                                        `json:"created_at,omitempty"`
+		CreatorUserId     *int                                                           `json:"creator_user_id,omitempty"`
+		Name              *string                                                        `json:"name,omitempty"`
+		OrgId             *int                                                           `json:"org_id,omitempty"`
+		RedirectUris      *[]string                                                      `json:"redirect_uris,omitempty"`
+		Status            *GetApiMeApplications200JSONResponseBodyApplicationsStatus     `json:"status,omitempty"`
+	} `json:"applications,omitempty"`
+	Total *int `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetApiMeApplicationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
 }
 
 // GetBody returns the raw response body bytes
@@ -11610,6 +13358,64 @@ func (r GetApiMeApplicationsResponse) ContentType() string {
 type PostApiMeApplicationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *struct {
+		ClientId *string `json:"client_id,omitempty"`
+
+		// ClientSecret Present exactly once for CONFIDENTIAL apps.
+		ClientSecret *string                                             `json:"client_secret,omitempty"`
+		ClientType   *PostApiMeApplications201JSONResponseBodyClientType `json:"client_type,omitempty"`
+		Message      *string                                             `json:"message,omitempty"`
+		OrgId        *int                                                `json:"org_id,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *ErrorEnvelope
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON201() *struct {
+	ClientId *string `json:"client_id,omitempty"`
+
+	// ClientSecret Present exactly once for CONFIDENTIAL apps.
+	ClientSecret *string                                             `json:"client_secret,omitempty"`
+	ClientType   *PostApiMeApplications201JSONResponseBodyClientType `json:"client_type,omitempty"`
+	Message      *string                                             `json:"message,omitempty"`
+	OrgId        *int                                                `json:"org_id,omitempty"`
+} {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON429() *ErrorEnvelope {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -11644,6 +13450,38 @@ func (r PostApiMeApplicationsResponse) ContentType() string {
 type DeleteApiMeApplicationsClientIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteApiMeApplicationsClientIdResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteApiMeApplicationsClientIdResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteApiMeApplicationsClientIdResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteApiMeApplicationsClientIdResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -11678,6 +13516,45 @@ func (r DeleteApiMeApplicationsClientIdResponse) ContentType() string {
 type PatchApiMeApplicationsClientIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchApiMeApplicationsClientIdResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PatchApiMeApplicationsClientIdResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PatchApiMeApplicationsClientIdResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PatchApiMeApplicationsClientIdResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PatchApiMeApplicationsClientIdResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -11712,6 +13589,53 @@ func (r PatchApiMeApplicationsClientIdResponse) ContentType() string {
 type PostApiMeApplicationsClientIdRotateSecretResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId *string `json:"client_id,omitempty"`
+
+		// ClientSecret Present exactly once.
+		ClientSecret *string `json:"client_secret,omitempty"`
+		Message      *string `json:"message,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetJSON200() *struct {
+	ClientId *string `json:"client_id,omitempty"`
+
+	// ClientSecret Present exactly once.
+	ClientSecret *string `json:"client_secret,omitempty"`
+	Message      *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeApplicationsClientIdRotateSecretResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -11746,6 +13670,54 @@ func (r PostApiMeApplicationsClientIdRotateSecretResponse) ContentType() string 
 type PostApiMeApplicationsClientIdTransferResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+		OrgId   *int    `json:"org_id,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+	OrgId   *int    `json:"org_id,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeApplicationsClientIdTransferResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -12025,6 +13997,56 @@ func (r PostApiMeMfaVerifyResponse) ContentType() string {
 type PostApiMeOrgInvitationsAcceptResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message        *string `json:"message,omitempty"`
+		OrganizationId *int    `json:"organization_id,omitempty"`
+		Role           *string `json:"role,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON200() *struct {
+	Message        *string `json:"message,omitempty"`
+	OrganizationId *int    `json:"organization_id,omitempty"`
+	Role           *string `json:"role,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrgInvitationsAcceptResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -12059,6 +14081,40 @@ func (r PostApiMeOrgInvitationsAcceptResponse) ContentType() string {
 type GetApiMeOrganizationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Organizations *[]struct {
+			Id           *int                                                       `json:"id,omitempty"`
+			LogoUri      *string                                                    `json:"logo_uri,omitempty"`
+			Name         *string                                                    `json:"name,omitempty"`
+			PrimaryColor *string                                                    `json:"primary_color,omitempty"`
+			Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
+			Slug         *string                                                    `json:"slug,omitempty"`
+		} `json:"organizations,omitempty"`
+		Total *int `json:"total,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeOrganizationsResponse) GetJSON200() *struct {
+	Organizations *[]struct {
+		Id           *int                                                       `json:"id,omitempty"`
+		LogoUri      *string                                                    `json:"logo_uri,omitempty"`
+		Name         *string                                                    `json:"name,omitempty"`
+		PrimaryColor *string                                                    `json:"primary_color,omitempty"`
+		Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
+		Slug         *string                                                    `json:"slug,omitempty"`
+	} `json:"organizations,omitempty"`
+	Total *int `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetApiMeOrganizationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
 }
 
 // GetBody returns the raw response body bytes
@@ -12093,6 +14149,49 @@ func (r GetApiMeOrganizationsResponse) ContentType() string {
 type PostApiMeOrganizationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *struct {
+		Message *string `json:"message,omitempty"`
+		Role    *string `json:"role,omitempty"`
+		Slug    *string `json:"slug,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostApiMeOrganizationsResponse) GetJSON201() *struct {
+	Message *string `json:"message,omitempty"`
+	Role    *string `json:"role,omitempty"`
+	Slug    *string `json:"slug,omitempty"`
+} {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -12127,6 +14226,50 @@ func (r PostApiMeOrganizationsResponse) ContentType() string {
 type GetApiMeOrganizationsSlugInvitationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Invitations *[]struct {
+			Email     *string `json:"email,omitempty"`
+			ExpiresAt *string `json:"expires_at,omitempty"`
+			Id        *int    `json:"id,omitempty"`
+			Role      *string `json:"role,omitempty"`
+		} `json:"invitations,omitempty"`
+		Total *int `json:"total,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeOrganizationsSlugInvitationsResponse) GetJSON200() *struct {
+	Invitations *[]struct {
+		Email     *string `json:"email,omitempty"`
+		ExpiresAt *string `json:"expires_at,omitempty"`
+		Id        *int    `json:"id,omitempty"`
+		Role      *string `json:"role,omitempty"`
+	} `json:"invitations,omitempty"`
+	Total *int `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetApiMeOrganizationsSlugInvitationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetApiMeOrganizationsSlugInvitationsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetApiMeOrganizationsSlugInvitationsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -12161,6 +14304,66 @@ func (r GetApiMeOrganizationsSlugInvitationsResponse) ContentType() string {
 type PostApiMeOrganizationsSlugInvitationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *struct {
+		Email     *string `json:"email,omitempty"`
+		ExpiresAt *string `json:"expires_at,omitempty"`
+		Id        *int    `json:"id,omitempty"`
+		Message   *string `json:"message,omitempty"`
+		Role      *string `json:"role,omitempty"`
+
+		// Token Present exactly once; also delivered by email when SMTP is configured.
+		Token *string `json:"token,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON201() *struct {
+	Email     *string `json:"email,omitempty"`
+	ExpiresAt *string `json:"expires_at,omitempty"`
+	Id        *int    `json:"id,omitempty"`
+	Message   *string `json:"message,omitempty"`
+	Role      *string `json:"role,omitempty"`
+
+	// Token Present exactly once; also delivered by email when SMTP is configured.
+	Token *string `json:"token,omitempty"`
+} {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsSlugInvitationsResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -12195,6 +14398,45 @@ func (r PostApiMeOrganizationsSlugInvitationsResponse) ContentType() string {
 type DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -12229,6 +14471,50 @@ func (r DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse) ContentType
 type GetApiMeOrganizationsSlugMembersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Members *[]struct {
+			DisplayName *string                                                         `json:"display_name,omitempty"`
+			Role        *GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole `json:"role,omitempty"`
+			UserId      *int                                                            `json:"user_id,omitempty"`
+			Username    *string                                                         `json:"username,omitempty"`
+		} `json:"members,omitempty"`
+		Total *int `json:"total,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeOrganizationsSlugMembersResponse) GetJSON200() *struct {
+	Members *[]struct {
+		DisplayName *string                                                         `json:"display_name,omitempty"`
+		Role        *GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole `json:"role,omitempty"`
+		UserId      *int                                                            `json:"user_id,omitempty"`
+		Username    *string                                                         `json:"username,omitempty"`
+	} `json:"members,omitempty"`
+	Total *int `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetApiMeOrganizationsSlugMembersResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetApiMeOrganizationsSlugMembersResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetApiMeOrganizationsSlugMembersResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -12263,6 +14549,45 @@ func (r GetApiMeOrganizationsSlugMembersResponse) ContentType() string {
 type DeleteApiMeOrganizationsSlugMembersUserIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -12331,6 +14656,38 @@ func (r PutApiMePasswordResponse) ContentType() string {
 type PatchApiMeProfileResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchApiMeProfileResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PatchApiMeProfileResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PatchApiMeProfileResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PatchApiMeProfileResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetBody returns the raw response body bytes
@@ -14226,30 +16583,60 @@ func (c *ClientWithResponses) PutApiAdminClientsClientIdWithResponse(ctx context
 	return ParsePutApiAdminClientsClientIdResponse(rsp)
 }
 
-// PostApiAdminClientsClientIdResetSecretWithResponse Reset Client Secret
+// PostApiAdminClientsClientIdResetSecretWithBodyWithResponse Reset Client Secret
 //
 // Reset the secret of a specific OAuth2 client.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
-func (c *ClientWithResponses) PostApiAdminClientsClientIdResetSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error) {
-	rsp, err := c.PostApiAdminClientsClientIdResetSecret(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminClientsClientIdResetSecretWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdResetSecretWithBody(ctx, clientId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiAdminClientsClientIdResetSecretResponse(rsp)
 }
 
+// PostApiAdminClientsClientIdResetSecretWithResponse Reset Client Secret
+//
+// Reset the secret of a specific OAuth2 client.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/clients/{clientId}/reset-secret (the `PostApiAdminClientsClientIdResetSecret` operationId).
+func (c *ClientWithResponses) PostApiAdminClientsClientIdResetSecretWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResetSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResetSecretResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdResetSecret(ctx, clientId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClientsClientIdResetSecretResponse(rsp)
+}
+
+// PostApiAdminClientsClientIdResumeWithBodyWithResponse Resume Application
+//
+// Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
+func (c *ClientWithResponses) PostApiAdminClientsClientIdResumeWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdResumeWithBody(ctx, clientId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClientsClientIdResumeResponse(rsp)
+}
+
 // PostApiAdminClientsClientIdResumeWithResponse Resume Application
 //
 // Lift a suspension on a self-registered application (open platform governance). Admin-managed clients (no owners row) cannot be suspended/resumed here.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/clients/{clientId}/resume (the `PostApiAdminClientsClientIdResume` operationId).
-func (c *ClientWithResponses) PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error) {
-	rsp, err := c.PostApiAdminClientsClientIdResume(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminClientsClientIdResumeWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdResumeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdResumeResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdResume(ctx, clientId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14271,30 +16658,60 @@ func (c *ClientWithResponses) GetApiAdminClientsClientIdScopesWithResponse(ctx c
 	return ParseGetApiAdminClientsClientIdScopesResponse(rsp)
 }
 
-// PutApiAdminClientsClientIdScopesWithResponse Update Client Scopes
+// PutApiAdminClientsClientIdScopesWithBodyWithResponse Update Client Scopes
 //
 // Update the assigned scopes for an OAuth2 client.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
-func (c *ClientWithResponses) PutApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error) {
-	rsp, err := c.PutApiAdminClientsClientIdScopes(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PutApiAdminClientsClientIdScopesWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error) {
+	rsp, err := c.PutApiAdminClientsClientIdScopesWithBody(ctx, clientId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePutApiAdminClientsClientIdScopesResponse(rsp)
 }
 
+// PutApiAdminClientsClientIdScopesWithResponse Update Client Scopes
+//
+// Update the assigned scopes for an OAuth2 client.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/clients/{clientId}/scopes (the `PutApiAdminClientsClientIdScopes` operationId).
+func (c *ClientWithResponses) PutApiAdminClientsClientIdScopesWithResponse(ctx context.Context, clientId string, body PutApiAdminClientsClientIdScopesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminClientsClientIdScopesResponse, error) {
+	rsp, err := c.PutApiAdminClientsClientIdScopes(ctx, clientId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminClientsClientIdScopesResponse(rsp)
+}
+
+// PostApiAdminClientsClientIdSuspendWithBodyWithResponse Suspend Application
+//
+// Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
+func (c *ClientWithResponses) PostApiAdminClientsClientIdSuspendWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdSuspendWithBody(ctx, clientId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClientsClientIdSuspendResponse(rsp)
+}
+
 // PostApiAdminClientsClientIdSuspendWithResponse Suspend Application
 //
 // Suspend a self-registered application (abuse response). While suspended the client validation fails, so no new authorization codes or token exchanges succeed. Admin-managed clients (no owners row) cannot be suspended here.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/clients/{clientId}/suspend (the `PostApiAdminClientsClientIdSuspend` operationId).
-func (c *ClientWithResponses) PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error) {
-	rsp, err := c.PostApiAdminClientsClientIdSuspend(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminClientsClientIdSuspendWithResponse(ctx context.Context, clientId string, body PostApiAdminClientsClientIdSuspendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClientsClientIdSuspendResponse, error) {
+	rsp, err := c.PostApiAdminClientsClientIdSuspend(ctx, clientId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14631,30 +17048,60 @@ func (c *ClientWithResponses) GetApiAdminTokensWithResponse(ctx context.Context,
 	return ParseGetApiAdminTokensResponse(rsp)
 }
 
-// PostApiAdminTokensRevokeByClientWithResponse Revoke Tokens By Client
+// PostApiAdminTokensRevokeByClientWithBodyWithResponse Revoke Tokens By Client
 //
 // Revoke all tokens issued to a specific client.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
-func (c *ClientWithResponses) PostApiAdminTokensRevokeByClientWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error) {
-	rsp, err := c.PostApiAdminTokensRevokeByClient(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminTokensRevokeByClientWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error) {
+	rsp, err := c.PostApiAdminTokensRevokeByClientWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiAdminTokensRevokeByClientResponse(rsp)
 }
 
+// PostApiAdminTokensRevokeByClientWithResponse Revoke Tokens By Client
+//
+// Revoke all tokens issued to a specific client.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/tokens/revoke-by-client (the `PostApiAdminTokensRevokeByClient` operationId).
+func (c *ClientWithResponses) PostApiAdminTokensRevokeByClientWithResponse(ctx context.Context, body PostApiAdminTokensRevokeByClientJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByClientResponse, error) {
+	rsp, err := c.PostApiAdminTokensRevokeByClient(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminTokensRevokeByClientResponse(rsp)
+}
+
+// PostApiAdminTokensRevokeByUserWithBodyWithResponse Revoke Tokens By User
+//
+// Revoke all tokens issued for a specific user.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
+func (c *ClientWithResponses) PostApiAdminTokensRevokeByUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error) {
+	rsp, err := c.PostApiAdminTokensRevokeByUserWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminTokensRevokeByUserResponse(rsp)
+}
+
 // PostApiAdminTokensRevokeByUserWithResponse Revoke Tokens By User
 //
 // Revoke all tokens issued for a specific user.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/tokens/revoke-by-user (the `PostApiAdminTokensRevokeByUser` operationId).
-func (c *ClientWithResponses) PostApiAdminTokensRevokeByUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error) {
-	rsp, err := c.PostApiAdminTokensRevokeByUser(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminTokensRevokeByUserWithResponse(ctx context.Context, body PostApiAdminTokensRevokeByUserJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminTokensRevokeByUserResponse, error) {
+	rsp, err := c.PostApiAdminTokensRevokeByUser(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14781,30 +17228,60 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdWithResponse(ctx context.Con
 	return ParsePutApiAdminUsersUserIdResponse(rsp)
 }
 
-// PutApiAdminUsersUserIdDisableWithResponse Disable User
+// PutApiAdminUsersUserIdDisableWithBodyWithResponse Disable User
 //
 // Disable a specific user account.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
-func (c *ClientWithResponses) PutApiAdminUsersUserIdDisableWithResponse(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error) {
-	rsp, err := c.PutApiAdminUsersUserIdDisable(ctx, userId, reqEditors...)
+func (c *ClientWithResponses) PutApiAdminUsersUserIdDisableWithBodyWithResponse(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error) {
+	rsp, err := c.PutApiAdminUsersUserIdDisableWithBody(ctx, userId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePutApiAdminUsersUserIdDisableResponse(rsp)
 }
 
+// PutApiAdminUsersUserIdDisableWithResponse Disable User
+//
+// Disable a specific user account.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/users/{userId}/disable (the `PutApiAdminUsersUserIdDisable` operationId).
+func (c *ClientWithResponses) PutApiAdminUsersUserIdDisableWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdDisableJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdDisableResponse, error) {
+	rsp, err := c.PutApiAdminUsersUserIdDisable(ctx, userId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminUsersUserIdDisableResponse(rsp)
+}
+
+// PostApiAdminUsersUserIdEnableWithBodyWithResponse Enable User
+//
+// Enable a disabled user account by resetting lockout state.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
+func (c *ClientWithResponses) PostApiAdminUsersUserIdEnableWithBodyWithResponse(ctx context.Context, userId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error) {
+	rsp, err := c.PostApiAdminUsersUserIdEnableWithBody(ctx, userId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminUsersUserIdEnableResponse(rsp)
+}
+
 // PostApiAdminUsersUserIdEnableWithResponse Enable User
 //
 // Enable a disabled user account by resetting lockout state.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/admin/users/{userId}/enable (the `PostApiAdminUsersUserIdEnable` operationId).
-func (c *ClientWithResponses) PostApiAdminUsersUserIdEnableWithResponse(ctx context.Context, userId int, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error) {
-	rsp, err := c.PostApiAdminUsersUserIdEnable(ctx, userId, reqEditors...)
+func (c *ClientWithResponses) PostApiAdminUsersUserIdEnableWithResponse(ctx context.Context, userId int, body PostApiAdminUsersUserIdEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminUsersUserIdEnableResponse, error) {
+	rsp, err := c.PostApiAdminUsersUserIdEnable(ctx, userId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14856,30 +17333,60 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 	return ParsePutApiAdminUsersUserIdRolesResponse(rsp)
 }
 
-// PostApiGithubLoginWithResponse GitHub OAuth2 Login
+// PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 //
 // Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *ClientWithResponses) PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
-	rsp, err := c.PostApiGithubLogin(ctx, params, reqEditors...)
+func (c *ClientWithResponses) PostApiGithubLoginWithBodyWithResponse(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
+	rsp, err := c.PostApiGithubLoginWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiGithubLoginResponse(rsp)
 }
 
+// PostApiGithubLoginWithResponse GitHub OAuth2 Login
+//
+// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+func (c *ClientWithResponses) PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
+	rsp, err := c.PostApiGithubLogin(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiGithubLoginResponse(rsp)
+}
+
+// PostApiGoogleLoginWithBodyWithResponse Google OAuth2 Login
+//
+// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+func (c *ClientWithResponses) PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
+	rsp, err := c.PostApiGoogleLoginWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiGoogleLoginResponse(rsp)
+}
+
 // PostApiGoogleLoginWithResponse Google OAuth2 Login
 //
 // Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *ClientWithResponses) PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
-	rsp, err := c.PostApiGoogleLogin(ctx, params, reqEditors...)
+func (c *ClientWithResponses) PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
+	rsp, err := c.PostApiGoogleLogin(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14976,45 +17483,90 @@ func (c *ClientWithResponses) DeleteApiMeApplicationsClientIdWithResponse(ctx co
 	return ParseDeleteApiMeApplicationsClientIdResponse(rsp)
 }
 
-// PatchApiMeApplicationsClientIdWithResponse Update Application
+// PatchApiMeApplicationsClientIdWithBodyWithResponse Update Application
 //
 // Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
-func (c *ClientWithResponses) PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error) {
-	rsp, err := c.PatchApiMeApplicationsClientId(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PatchApiMeApplicationsClientIdWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error) {
+	rsp, err := c.PatchApiMeApplicationsClientIdWithBody(ctx, clientId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePatchApiMeApplicationsClientIdResponse(rsp)
 }
 
-// PostApiMeApplicationsClientIdRotateSecretWithResponse Rotate Application Secret
+// PatchApiMeApplicationsClientIdWithResponse Update Application
+//
+// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/me/applications/{clientId} (the `PatchApiMeApplicationsClientId` operationId).
+func (c *ClientWithResponses) PatchApiMeApplicationsClientIdWithResponse(ctx context.Context, clientId string, body PatchApiMeApplicationsClientIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiMeApplicationsClientIdResponse, error) {
+	rsp, err := c.PatchApiMeApplicationsClientId(ctx, clientId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiMeApplicationsClientIdResponse(rsp)
+}
+
+// PostApiMeApplicationsClientIdRotateSecretWithBodyWithResponse Rotate Application Secret
 //
 // Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
-func (c *ClientWithResponses) PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error) {
-	rsp, err := c.PostApiMeApplicationsClientIdRotateSecret(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdRotateSecretWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdRotateSecretWithBody(ctx, clientId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiMeApplicationsClientIdRotateSecretResponse(rsp)
 }
 
+// PostApiMeApplicationsClientIdRotateSecretWithResponse Rotate Application Secret
+//
+// Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications/{clientId}/rotate-secret (the `PostApiMeApplicationsClientIdRotateSecret` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdRotateSecretWithResponse(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdRotateSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdRotateSecretResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdRotateSecret(ctx, clientId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsClientIdRotateSecretResponse(rsp)
+}
+
+// PostApiMeApplicationsClientIdTransferWithBodyWithResponse Transfer Application
+//
+// Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdTransferWithBodyWithResponse(ctx context.Context, clientId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdTransferWithBody(ctx, clientId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeApplicationsClientIdTransferResponse(rsp)
+}
+
 // PostApiMeApplicationsClientIdTransferWithResponse Transfer Application
 //
 // Move the management anchor. Send org_slug set to an organization slug the caller manages, or org_slug null to move back to personal. The client_id, existing consents and issued tokens are preserved.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/applications/{clientId}/transfer (the `PostApiMeApplicationsClientIdTransfer` operationId).
-func (c *ClientWithResponses) PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error) {
-	rsp, err := c.PostApiMeApplicationsClientIdTransfer(ctx, clientId, reqEditors...)
+func (c *ClientWithResponses) PostApiMeApplicationsClientIdTransferWithResponse(ctx context.Context, clientId string, body PostApiMeApplicationsClientIdTransferJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeApplicationsClientIdTransferResponse, error) {
+	rsp, err := c.PostApiMeApplicationsClientIdTransfer(ctx, clientId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15156,15 +17708,30 @@ func (c *ClientWithResponses) PostApiMeMfaVerifyWithFormdataBodyWithResponse(ctx
 	return ParsePostApiMeMfaVerifyResponse(rsp)
 }
 
+// PostApiMeOrgInvitationsAcceptWithBodyWithResponse Accept Organization Invitation
+//
+// Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
+func (c *ClientWithResponses) PostApiMeOrgInvitationsAcceptWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error) {
+	rsp, err := c.PostApiMeOrgInvitationsAcceptWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrgInvitationsAcceptResponse(rsp)
+}
+
 // PostApiMeOrgInvitationsAcceptWithResponse Accept Organization Invitation
 //
 // Accept an organization invitation by token. The caller's account email must match the invitation email (normalized); the invitation is single-use and expires after 72h.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/org-invitations/accept (the `PostApiMeOrgInvitationsAccept` operationId).
-func (c *ClientWithResponses) PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error) {
-	rsp, err := c.PostApiMeOrgInvitationsAccept(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiMeOrgInvitationsAcceptWithResponse(ctx context.Context, body PostApiMeOrgInvitationsAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrgInvitationsAcceptResponse, error) {
+	rsp, err := c.PostApiMeOrgInvitationsAccept(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15186,15 +17753,30 @@ func (c *ClientWithResponses) GetApiMeOrganizationsWithResponse(ctx context.Cont
 	return ParseGetApiMeOrganizationsResponse(rsp)
 }
 
+// PostApiMeOrganizationsWithBodyWithResponse Create Organization (self-service)
+//
+// Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsResponse(rsp)
+}
+
 // PostApiMeOrganizationsWithResponse Create Organization (self-service)
 //
 // Create an organization (self-service, v1.4.0); the caller becomes its owner. Slug rules match the admin endpoint; a reserved slug list applies; per-user org quota defaults to 3.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
-func (c *ClientWithResponses) PostApiMeOrganizationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error) {
-	rsp, err := c.PostApiMeOrganizations(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiMeOrganizationsWithResponse(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizations(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15216,15 +17798,30 @@ func (c *ClientWithResponses) GetApiMeOrganizationsSlugInvitationsWithResponse(c
 	return ParseGetApiMeOrganizationsSlugInvitationsResponse(rsp)
 }
 
+// PostApiMeOrganizationsSlugInvitationsWithBodyWithResponse Invite Organization Member
+//
+// Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugInvitationsWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugInvitationsWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugInvitationsResponse(rsp)
+}
+
 // PostApiMeOrganizationsSlugInvitationsWithResponse Invite Organization Member
 //
 // Create a single-use 72h invitation (org owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/organizations/{slug}/invitations (the `PostApiMeOrganizationsSlugInvitations` operationId).
-func (c *ClientWithResponses) PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error) {
-	rsp, err := c.PostApiMeOrganizationsSlugInvitations(ctx, slug, reqEditors...)
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugInvitationsWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugInvitationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugInvitationsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugInvitations(ctx, slug, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15276,30 +17873,60 @@ func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugMembersUserIdWithRespo
 	return ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp)
 }
 
-// PutApiMePasswordWithResponse Change Password
+// PutApiMePasswordWithBodyWithResponse Change Password
 //
 // Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
-func (c *ClientWithResponses) PutApiMePasswordWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error) {
-	rsp, err := c.PutApiMePassword(ctx, reqEditors...)
+func (c *ClientWithResponses) PutApiMePasswordWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error) {
+	rsp, err := c.PutApiMePasswordWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePutApiMePasswordResponse(rsp)
 }
 
-// PatchApiMeProfileWithResponse Update User Profile
+// PutApiMePasswordWithResponse Change Password
 //
-// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 chars; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+// Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/me/password (the `PutApiMePassword` operationId).
+func (c *ClientWithResponses) PutApiMePasswordWithResponse(ctx context.Context, body PutApiMePasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiMePasswordResponse, error) {
+	rsp, err := c.PutApiMePassword(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiMePasswordResponse(rsp)
+}
+
+// PatchApiMeProfileWithBodyWithResponse Update User Profile
+//
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
-func (c *ClientWithResponses) PatchApiMeProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error) {
-	rsp, err := c.PatchApiMeProfile(ctx, reqEditors...)
+func (c *ClientWithResponses) PatchApiMeProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error) {
+	rsp, err := c.PatchApiMeProfileWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiMeProfileResponse(rsp)
+}
+
+// PatchApiMeProfileWithResponse Update User Profile
+//
+// Update the current user's editable profile fields (v1.4.0 profile minimal set). Body keys are optional; an absent key leaves the field unchanged, an empty string clears it. display_name is trimmed and capped at 100 code points without control characters; avatar_url must be an https URL of at most 2048 chars (served verbatim, never fetched server-side).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
+func (c *ClientWithResponses) PatchApiMeProfileWithResponse(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error) {
+	rsp, err := c.PatchApiMeProfile(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15366,15 +17993,30 @@ func (c *ClientWithResponses) PostApiMeSocialLinksProviderWithResponse(ctx conte
 	return ParsePostApiMeSocialLinksProviderResponse(rsp)
 }
 
+// PostApiMeSocialLinksProviderAuthorizeWithBodyWithResponse Begin Social Link (mint one-time state)
+//
+// Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
+func (c *ClientWithResponses) PostApiMeSocialLinksProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error) {
+	rsp, err := c.PostApiMeSocialLinksProviderAuthorizeWithBody(ctx, provider, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeSocialLinksProviderAuthorizeResponse(rsp)
+}
+
 // PostApiMeSocialLinksProviderAuthorizeWithResponse Begin Social Link (mint one-time state)
 //
 // Begin a social link flow (#71): mint a one-time state bound to (current user, provider) and return the provider authorize URL (with the state embedded) the SPA must redirect to. The link-back POST must present the same state; tokens are single-use with a short TTL. Fails closed (500) when linking or the state store (Redis) is not configured. Requires the `profile` scope.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/social/links/{provider}/authorize (the `PostApiMeSocialLinksProviderAuthorize` operationId).
-func (c *ClientWithResponses) PostApiMeSocialLinksProviderAuthorizeWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error) {
-	rsp, err := c.PostApiMeSocialLinksProviderAuthorize(ctx, provider, reqEditors...)
+func (c *ClientWithResponses) PostApiMeSocialLinksProviderAuthorizeWithResponse(ctx context.Context, provider PostApiMeSocialLinksProviderAuthorizeParamsProvider, body PostApiMeSocialLinksProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeSocialLinksProviderAuthorizeResponse, error) {
+	rsp, err := c.PostApiMeSocialLinksProviderAuthorize(ctx, provider, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15396,15 +18038,30 @@ func (c *ClientWithResponses) GetApiMeWebauthnCredentialsWithResponse(ctx contex
 	return ParseGetApiMeWebauthnCredentialsResponse(rsp)
 }
 
+// PostApiMeWebauthnRegisterBeginWithBodyWithResponse WebAuthn Register Begin
+//
+// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
+func (c *ClientWithResponses) PostApiMeWebauthnRegisterBeginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error) {
+	rsp, err := c.PostApiMeWebauthnRegisterBeginWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeWebauthnRegisterBeginResponse(rsp)
+}
+
 // PostApiMeWebauthnRegisterBeginWithResponse WebAuthn Register Begin
 //
 // Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/me/webauthn/register/begin (the `PostApiMeWebauthnRegisterBegin` operationId).
-func (c *ClientWithResponses) PostApiMeWebauthnRegisterBeginWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error) {
-	rsp, err := c.PostApiMeWebauthnRegisterBegin(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiMeWebauthnRegisterBeginWithResponse(ctx context.Context, body PostApiMeWebauthnRegisterBeginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeWebauthnRegisterBeginResponse, error) {
+	rsp, err := c.PostApiMeWebauthnRegisterBegin(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15441,45 +18098,90 @@ func (c *ClientWithResponses) PostApiMeWebauthnRegisterFinishWithResponse(ctx co
 	return ParsePostApiMeWebauthnRegisterFinishResponse(rsp)
 }
 
-// PostApiPasswordResetConfirmWithResponse Confirm Password Reset
+// PostApiPasswordResetConfirmWithBodyWithResponse Confirm Password Reset
 //
 // Confirm a password reset using the token sent via email.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
-func (c *ClientWithResponses) PostApiPasswordResetConfirmWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error) {
-	rsp, err := c.PostApiPasswordResetConfirm(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiPasswordResetConfirmWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error) {
+	rsp, err := c.PostApiPasswordResetConfirmWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiPasswordResetConfirmResponse(rsp)
 }
 
-// PostApiPasswordResetRequestWithResponse Request Password Reset
+// PostApiPasswordResetConfirmWithResponse Confirm Password Reset
+//
+// Confirm a password reset using the token sent via email.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/password-reset/confirm (the `PostApiPasswordResetConfirm` operationId).
+func (c *ClientWithResponses) PostApiPasswordResetConfirmWithResponse(ctx context.Context, body PostApiPasswordResetConfirmJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiPasswordResetConfirmResponse, error) {
+	rsp, err := c.PostApiPasswordResetConfirm(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiPasswordResetConfirmResponse(rsp)
+}
+
+// PostApiPasswordResetRequestWithBodyWithResponse Request Password Reset
 //
 // Request a password reset link to be sent via email.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
-func (c *ClientWithResponses) PostApiPasswordResetRequestWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error) {
-	rsp, err := c.PostApiPasswordResetRequest(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiPasswordResetRequestWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error) {
+	rsp, err := c.PostApiPasswordResetRequestWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePostApiPasswordResetRequestResponse(rsp)
 }
 
+// PostApiPasswordResetRequestWithResponse Request Password Reset
+//
+// Request a password reset link to be sent via email.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/password-reset/request (the `PostApiPasswordResetRequest` operationId).
+func (c *ClientWithResponses) PostApiPasswordResetRequestWithResponse(ctx context.Context, body PostApiPasswordResetRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiPasswordResetRequestResponse, error) {
+	rsp, err := c.PostApiPasswordResetRequest(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiPasswordResetRequestResponse(rsp)
+}
+
+// PostApiRegisterWithBodyWithResponse Register new user
+//
+// Registers a new user account into the system.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/register (the `PostApiRegister` operationId).
+func (c *ClientWithResponses) PostApiRegisterWithBodyWithResponse(ctx context.Context, params *PostApiRegisterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error) {
+	rsp, err := c.PostApiRegisterWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiRegisterResponse(rsp)
+}
+
 // PostApiRegisterWithResponse Register new user
 //
 // Registers a new user account into the system.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/register (the `PostApiRegister` operationId).
-func (c *ClientWithResponses) PostApiRegisterWithResponse(ctx context.Context, params *PostApiRegisterParams, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error) {
-	rsp, err := c.PostApiRegister(ctx, params, reqEditors...)
+func (c *ClientWithResponses) PostApiRegisterWithResponse(ctx context.Context, params *PostApiRegisterParams, body PostApiRegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiRegisterResponse, error) {
+	rsp, err := c.PostApiRegister(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15501,15 +18203,30 @@ func (c *ClientWithResponses) GetApiVerifyEmailWithResponse(ctx context.Context,
 	return ParseGetApiVerifyEmailResponse(rsp)
 }
 
+// PostApiVerifyEmailResendWithBodyWithResponse Resend Verification Email
+//
+// Resend the email verification link.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
+func (c *ClientWithResponses) PostApiVerifyEmailResendWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error) {
+	rsp, err := c.PostApiVerifyEmailResendWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiVerifyEmailResendResponse(rsp)
+}
+
 // PostApiVerifyEmailResendWithResponse Resend Verification Email
 //
 // Resend the email verification link.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/verify-email/resend (the `PostApiVerifyEmailResend` operationId).
-func (c *ClientWithResponses) PostApiVerifyEmailResendWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error) {
-	rsp, err := c.PostApiVerifyEmailResend(ctx, reqEditors...)
+func (c *ClientWithResponses) PostApiVerifyEmailResendWithResponse(ctx context.Context, body PostApiVerifyEmailResendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiVerifyEmailResendResponse, error) {
+	rsp, err := c.PostApiVerifyEmailResend(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15546,15 +18263,30 @@ func (c *ClientWithResponses) PostApiVerifyEmailResendByEmailWithResponse(ctx co
 	return ParsePostApiVerifyEmailResendByEmailResponse(rsp)
 }
 
+// PostApiWechatLoginWithBodyWithResponse WeChat OAuth2 Login
+//
+// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+func (c *ClientWithResponses) PostApiWechatLoginWithBodyWithResponse(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
+	rsp, err := c.PostApiWechatLoginWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiWechatLoginResponse(rsp)
+}
+
 // PostApiWechatLoginWithResponse WeChat OAuth2 Login
 //
 // Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *ClientWithResponses) PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
-	rsp, err := c.PostApiWechatLogin(ctx, params, reqEditors...)
+func (c *ClientWithResponses) PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
+	rsp, err := c.PostApiWechatLogin(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16228,6 +18960,33 @@ func ParsePostApiAdminClientsClientIdResumeResponse(rsp *http.Response) (*PostAp
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId *string `json:"client_id,omitempty"`
+			Status   *string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -16274,6 +19033,33 @@ func ParsePostApiAdminClientsClientIdSuspendResponse(rsp *http.Response) (*PostA
 	response := &PostApiAdminClientsClientIdSuspendResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId *string `json:"client_id,omitempty"`
+			Status   *string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -17061,6 +19847,36 @@ func ParseGetApiMeApplicationsResponse(rsp *http.Response) (*GetApiMeApplication
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Applications *[]struct {
+				AllowedGrantTypes *[]string                                                      `json:"allowed_grant_types,omitempty"`
+				ClientId          *string                                                        `json:"client_id,omitempty"`
+				ClientType        *GetApiMeApplications200JSONResponseBodyApplicationsClientType `json:"client_type,omitempty"`
+				CreatedAt         *string                                                        `json:"created_at,omitempty"`
+				CreatorUserId     *int                                                           `json:"creator_user_id,omitempty"`
+				Name              *string                                                        `json:"name,omitempty"`
+				OrgId             *int                                                           `json:"org_id,omitempty"`
+				RedirectUris      *[]string                                                      `json:"redirect_uris,omitempty"`
+				Status            *GetApiMeApplications200JSONResponseBodyApplicationsStatus     `json:"status,omitempty"`
+			} `json:"applications,omitempty"`
+			Total *int `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17075,6 +19891,59 @@ func ParsePostApiMeApplicationsResponse(rsp *http.Response) (*PostApiMeApplicati
 	response := &PostApiMeApplicationsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			ClientId *string `json:"client_id,omitempty"`
+
+			// ClientSecret Present exactly once for CONFIDENTIAL apps.
+			ClientSecret *string                                             `json:"client_secret,omitempty"`
+			ClientType   *PostApiMeApplications201JSONResponseBodyClientType `json:"client_type,omitempty"`
+			Message      *string                                             `json:"message,omitempty"`
+			OrgId        *int                                                `json:"org_id,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	}
 
 	return response, nil
@@ -17093,6 +19962,39 @@ func ParseDeleteApiMeApplicationsClientIdResponse(rsp *http.Response) (*DeleteAp
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17107,6 +20009,46 @@ func ParsePatchApiMeApplicationsClientIdResponse(rsp *http.Response) (*PatchApiM
 	response := &PatchApiMeApplicationsClientIdResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -17125,6 +20067,50 @@ func ParsePostApiMeApplicationsClientIdRotateSecretResponse(rsp *http.Response) 
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId *string `json:"client_id,omitempty"`
+
+			// ClientSecret Present exactly once.
+			ClientSecret *string `json:"client_secret,omitempty"`
+			Message      *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17139,6 +20125,54 @@ func ParsePostApiMeApplicationsClientIdTransferResponse(rsp *http.Response) (*Po
 	response := &PostApiMeApplicationsClientIdTransferResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+			OrgId   *int    `json:"org_id,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	}
 
 	return response, nil
@@ -17308,6 +20342,55 @@ func ParsePostApiMeOrgInvitationsAcceptResponse(rsp *http.Response) (*PostApiMeO
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message        *string `json:"message,omitempty"`
+			OrganizationId *int    `json:"organization_id,omitempty"`
+			Role           *string `json:"role,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17322,6 +20405,33 @@ func ParseGetApiMeOrganizationsResponse(rsp *http.Response) (*GetApiMeOrganizati
 	response := &GetApiMeOrganizationsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Organizations *[]struct {
+				Id           *int                                                       `json:"id,omitempty"`
+				LogoUri      *string                                                    `json:"logo_uri,omitempty"`
+				Name         *string                                                    `json:"name,omitempty"`
+				PrimaryColor *string                                                    `json:"primary_color,omitempty"`
+				Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
+				Slug         *string                                                    `json:"slug,omitempty"`
+			} `json:"organizations,omitempty"`
+			Total *int `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	}
 
 	return response, nil
@@ -17340,6 +20450,48 @@ func ParsePostApiMeOrganizationsResponse(rsp *http.Response) (*PostApiMeOrganiza
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+			Role    *string `json:"role,omitempty"`
+			Slug    *string `json:"slug,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17354,6 +20506,45 @@ func ParseGetApiMeOrganizationsSlugInvitationsResponse(rsp *http.Response) (*Get
 	response := &GetApiMeOrganizationsSlugInvitationsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Invitations *[]struct {
+				Email     *string `json:"email,omitempty"`
+				ExpiresAt *string `json:"expires_at,omitempty"`
+				Id        *int    `json:"id,omitempty"`
+				Role      *string `json:"role,omitempty"`
+			} `json:"invitations,omitempty"`
+			Total *int `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -17372,6 +20563,60 @@ func ParsePostApiMeOrganizationsSlugInvitationsResponse(rsp *http.Response) (*Po
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			Email     *string `json:"email,omitempty"`
+			ExpiresAt *string `json:"expires_at,omitempty"`
+			Id        *int    `json:"id,omitempty"`
+			Message   *string `json:"message,omitempty"`
+			Role      *string `json:"role,omitempty"`
+
+			// Token Present exactly once; also delivered by email when SMTP is configured.
+			Token *string `json:"token,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17386,6 +20631,46 @@ func ParseDeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse(rsp *http.
 	response := &DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -17404,6 +20689,45 @@ func ParseGetApiMeOrganizationsSlugMembersResponse(rsp *http.Response) (*GetApiM
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Members *[]struct {
+				DisplayName *string                                                         `json:"display_name,omitempty"`
+				Role        *GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole `json:"role,omitempty"`
+				UserId      *int                                                            `json:"user_id,omitempty"`
+				Username    *string                                                         `json:"username,omitempty"`
+			} `json:"members,omitempty"`
+			Total *int `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -17418,6 +20742,46 @@ func ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp *http.Response) 
 	response := &DeleteApiMeOrganizationsSlugMembersUserIdResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -17450,6 +20814,39 @@ func ParsePatchApiMeProfileResponse(rsp *http.Response) (*PatchApiMeProfileRespo
 	response := &PatchApiMeProfileResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil

@@ -5,16 +5,27 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import Response
+from ...models.post_api_me_webauthn_register_begin_body import PostApiMeWebauthnRegisterBeginBody
+from ...types import UNSET, Response, Unset
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    body: PostApiMeWebauthnRegisterBeginBody | Unset = UNSET,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/me/webauthn/register/begin",
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -43,6 +54,7 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
+    body: PostApiMeWebauthnRegisterBeginBody | Unset = UNSET,
 ) -> Response[Any]:
     """WebAuthn Register Begin
 
@@ -50,6 +62,10 @@ def sync_detailed(
     is the base64url of the internal user id bytes, excludeCredentials lists already-registered
     credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires
     webauthn.rp_origins to be configured.
+
+    Args:
+        body (PostApiMeWebauthnRegisterBeginBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -59,7 +75,9 @@ def sync_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -71,6 +89,7 @@ def sync_detailed(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
+    body: PostApiMeWebauthnRegisterBeginBody | Unset = UNSET,
 ) -> Response[Any]:
     """WebAuthn Register Begin
 
@@ -78,6 +97,10 @@ async def asyncio_detailed(
     is the base64url of the internal user id bytes, excludeCredentials lists already-registered
     credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires
     webauthn.rp_origins to be configured.
+
+    Args:
+        body (PostApiMeWebauthnRegisterBeginBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -87,7 +110,9 @@ async def asyncio_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 

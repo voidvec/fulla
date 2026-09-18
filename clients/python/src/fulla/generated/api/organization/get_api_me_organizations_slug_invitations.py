@@ -6,6 +6,10 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_envelope import ErrorEnvelope
+from ...models.get_api_me_organizations_slug_invitations_response_200 import (
+    GetApiMeOrganizationsSlugInvitationsResponse200,
+)
 from ...types import Response
 
 
@@ -23,18 +27,28 @@ def _get_kwargs(
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200 | None:
     if response.status_code == 200:
-        return None
+        response_200 = GetApiMeOrganizationsSlugInvitationsResponse200.from_dict(response.json())
+
+        return response_200
 
     if response.status_code == 401:
-        return None
+        response_401 = ErrorEnvelope.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 403:
-        return None
+        response_403 = ErrorEnvelope.from_dict(response.json())
+
+        return response_403
 
     if response.status_code == 404:
-        return None
+        response_404 = ErrorEnvelope.from_dict(response.json())
+
+        return response_404
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -42,7 +56,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -55,7 +71,7 @@ def sync_detailed(
     slug: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200]:
     """List Pending Invitations
 
      List pending (unaccepted) invitations (org owner/admin).
@@ -68,7 +84,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        Response[ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200]
     """
 
     kwargs = _get_kwargs(
@@ -82,11 +98,11 @@ def sync_detailed(
     return _build_response(client=client, response=response)
 
 
-async def asyncio_detailed(
+def sync(
     slug: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200 | None:
     """List Pending Invitations
 
      List pending (unaccepted) invitations (org owner/admin).
@@ -99,7 +115,33 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200
+    """
+
+    return sync_detailed(
+        slug=slug,
+        client=client,
+    ).parsed
+
+
+async def asyncio_detailed(
+    slug: str,
+    *,
+    client: AuthenticatedClient,
+) -> Response[ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200]:
+    """List Pending Invitations
+
+     List pending (unaccepted) invitations (org owner/admin).
+
+    Args:
+        slug (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200]
     """
 
     kwargs = _get_kwargs(
@@ -109,3 +151,31 @@ async def asyncio_detailed(
     response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    slug: str,
+    *,
+    client: AuthenticatedClient,
+) -> ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200 | None:
+    """List Pending Invitations
+
+     List pending (unaccepted) invitations (org owner/admin).
+
+    Args:
+        slug (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        ErrorEnvelope | GetApiMeOrganizationsSlugInvitationsResponse200
+    """
+
+    return (
+        await asyncio_detailed(
+            slug=slug,
+            client=client,
+        )
+    ).parsed

@@ -6,12 +6,20 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_envelope import ErrorEnvelope
+from ...models.post_api_me_applications_client_id_transfer_body import PostApiMeApplicationsClientIdTransferBody
+from ...models.post_api_me_applications_client_id_transfer_response_200 import (
+    PostApiMeApplicationsClientIdTransferResponse200,
+)
 from ...types import Response
 
 
 def _get_kwargs(
     client_id: str,
+    *,
+    body: PostApiMeApplicationsClientIdTransferBody,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -20,24 +28,46 @@ def _get_kwargs(
         ),
     }
 
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200 | None:
     if response.status_code == 200:
-        return None
+        response_200 = PostApiMeApplicationsClientIdTransferResponse200.from_dict(response.json())
+
+        return response_200
+
+    if response.status_code == 400:
+        response_400 = ErrorEnvelope.from_dict(response.json())
+
+        return response_400
 
     if response.status_code == 401:
-        return None
+        response_401 = ErrorEnvelope.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 403:
-        return None
+        response_403 = ErrorEnvelope.from_dict(response.json())
+
+        return response_403
 
     if response.status_code == 404:
-        return None
+        response_404 = ErrorEnvelope.from_dict(response.json())
+
+        return response_404
 
     if response.status_code == 409:
-        return None
+        response_409 = ErrorEnvelope.from_dict(response.json())
+
+        return response_409
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -45,7 +75,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -58,7 +90,8 @@ def sync_detailed(
     client_id: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+    body: PostApiMeApplicationsClientIdTransferBody,
+) -> Response[ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200]:
     """Transfer Application
 
      Move the management anchor. Send org_slug set to an organization slug the caller manages, or
@@ -67,17 +100,19 @@ def sync_detailed(
 
     Args:
         client_id (str):
+        body (PostApiMeApplicationsClientIdTransferBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        Response[ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200]
     """
 
     kwargs = _get_kwargs(
         client_id=client_id,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -87,11 +122,12 @@ def sync_detailed(
     return _build_response(client=client, response=response)
 
 
-async def asyncio_detailed(
+def sync(
     client_id: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+    body: PostApiMeApplicationsClientIdTransferBody,
+) -> ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200 | None:
     """Transfer Application
 
      Move the management anchor. Send org_slug set to an organization slug the caller manages, or
@@ -100,19 +136,85 @@ async def asyncio_detailed(
 
     Args:
         client_id (str):
+        body (PostApiMeApplicationsClientIdTransferBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200
+    """
+
+    return sync_detailed(
+        client_id=client_id,
+        client=client,
+        body=body,
+    ).parsed
+
+
+async def asyncio_detailed(
+    client_id: str,
+    *,
+    client: AuthenticatedClient,
+    body: PostApiMeApplicationsClientIdTransferBody,
+) -> Response[ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200]:
+    """Transfer Application
+
+     Move the management anchor. Send org_slug set to an organization slug the caller manages, or
+    org_slug null to move back to personal. The client_id, existing consents and issued tokens are
+    preserved.
+
+    Args:
+        client_id (str):
+        body (PostApiMeApplicationsClientIdTransferBody):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200]
     """
 
     kwargs = _get_kwargs(
         client_id=client_id,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    client_id: str,
+    *,
+    client: AuthenticatedClient,
+    body: PostApiMeApplicationsClientIdTransferBody,
+) -> ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200 | None:
+    """Transfer Application
+
+     Move the management anchor. Send org_slug set to an organization slug the caller manages, or
+    org_slug null to move back to personal. The client_id, existing consents and issued tokens are
+    preserved.
+
+    Args:
+        client_id (str):
+        body (PostApiMeApplicationsClientIdTransferBody):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        ErrorEnvelope | PostApiMeApplicationsClientIdTransferResponse200
+    """
+
+    return (
+        await asyncio_detailed(
+            client_id=client_id,
+            client=client,
+            body=body,
+        )
+    ).parsed
