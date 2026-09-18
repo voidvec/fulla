@@ -15,7 +15,7 @@
 // Wave-2 P0: revoke the Redis-cached client row on every successful write
 // (validateClient trusts the cached secret/scope data — see header for the
 // TTL-bounded best-effort semantics).
-#include "../ClientCacheInvalidator.h"
+#include <fulla/drogon/utils/ClientCacheInvalidator.h>
 
 #include <atomic>
 #include <map>
@@ -109,8 +109,11 @@ void ClientManagementService::listClients(const ::drogon::HttpRequestPtr &req, R
     // ORDER BY client_id was only a stable-display ordering, not a behavioral
     // contract (Admin API tests don't depend on order).
     Mapper<Oauth2Clients> mapper(db);
+    // Review M10: soft-deleted self-registered apps are gone from every
+    // flow — the admin listing hides them too (delete is the terminal state).
     mapper.findBy(
-      Criteria(),
+      Criteria(::drogon_model::fulla_db::Oauth2Clients::Cols::_deleted_at,
+               ::drogon::orm::CompareOperator::IsNull),
       [req, cb, db](const std::vector<Oauth2Clients> &rows) {
           // v1.4.0 open platform governance: fan out to the owners table so
           // the admin list can show who each client belongs to. Split queries

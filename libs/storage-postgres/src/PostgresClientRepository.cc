@@ -151,14 +151,30 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                     [buildClient](const Oauth2ClientOwners &owner) {
                         buildClient(owner.getValueOfStatus() != "active");
                     },
-                    [buildClient](const DrogonDbException &) {
-                        buildClient(false);  // no owners row -> admin-owned, active
+                    [buildClient, clientId](const DrogonDbException &e) {
+                        // Review C3: only "no owners row" means admin-owned
+                        // (active). A genuine DB failure must fail CLOSED —
+                        // treating it as active lets a suspended client
+                        // through on a connection blip.
+                        auto *noRows = dynamic_cast<const UnexpectedRows *>(&e);
+                        if (noRows != nullptr)
+                        {
+                            buildClient(false);  // admin-owned, active
+                            return;
+                        }
+                        LOG_ERROR << "Postgres getClient: owners lookup failed for "
+                                  << clientId << ", failing closed: " << e.base().what();
+                        buildClient(true);  // treat as suspended -> not found
                     }
                   );
               }
               catch (...)
               {
-                  buildClient(false);
+                  // Mapper construction failure is also a real error: fail
+                  // closed rather than silently treating the client as active.
+                  LOG_ERROR << "Postgres getClient: owners Mapper construction failed for "
+                            << clientId << ", failing closed";
+                  buildClient(true);
               }
           },
           [sharedCb, clientId](const DrogonDbException &e) {
@@ -302,14 +318,26 @@ void PostgresClientRepository::validateClient(
                     [checkSecret](const Oauth2ClientOwners &owner) {
                         checkSecret(owner.getValueOfStatus() != "active");
                     },
-                    [checkSecret](const DrogonDbException &) {
-                        checkSecret(false);  // no owners row -> admin-owned, active
+                    [checkSecret, clientId](const DrogonDbException &e) {
+                        // Review C3: fail CLOSED on real DB errors (see the
+                        // getClient twin above for the rationale).
+                        auto *noRows = dynamic_cast<const UnexpectedRows *>(&e);
+                        if (noRows != nullptr)
+                        {
+                            checkSecret(false);  // admin-owned, active
+                            return;
+                        }
+                        LOG_ERROR << "Postgres validateClient: owners lookup failed for "
+                                  << clientId << ", failing closed: " << e.base().what();
+                        checkSecret(true);  // treat as suspended -> reject
                     }
                   );
               }
               catch (...)
               {
-                  checkSecret(false);
+                  LOG_ERROR << "Postgres validateClient: owners Mapper construction failed for "
+                            << clientId << ", failing closed";
+                  checkSecret(true);
               }
           },
           [sharedCb, clientId](const DrogonDbException &e) {

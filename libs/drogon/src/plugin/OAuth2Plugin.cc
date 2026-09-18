@@ -35,7 +35,7 @@
 
 // Wave-2 P0: client-cache invalidation registry (src-internal; see header).
 // Wave-2 P1: user profile/roles read cache + invalidation registry.
-#include "../ClientCacheInvalidator.h"
+#include <fulla/drogon/utils/ClientCacheInvalidator.h>
 #include "../UserReadCache.h"
 
 using namespace drogon;
