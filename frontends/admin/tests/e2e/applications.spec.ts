@@ -26,7 +26,9 @@ test.describe('Applications Management', () => {
 
   test('displays client type badges correctly', async ({ page }) => {
     await expect(page.locator('span:has-text("PUBLIC")')).toBeVisible()
-    await expect(page.locator('span:has-text("CONFIDENTIAL")')).toBeVisible()
+    // v1.4.0 mock set carries multiple CONFIDENTIAL clients (admin + self-
+    // registered) — assert presence, not uniqueness.
+    await expect(page.locator('span:has-text("CONFIDENTIAL")').first()).toBeVisible()
   })
 
   test('opens create application modal', async ({ page }) => {
