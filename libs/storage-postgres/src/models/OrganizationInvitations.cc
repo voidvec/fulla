@@ -33,7 +33,7 @@ const std::vector<typename OrganizationInvitations::MetaData> OrganizationInvita
 {"organization_id","int32_t","integer",4,0,0,1},
 {"email","std::string","character varying",255,0,0,1},
 {"role","std::string","character varying",20,0,0,1},
-{"token","std::string","character varying",64,0,0,1},
+{"token","std::string","character varying",100,0,0,1},
 {"invited_by","int32_t","integer",4,0,0,1},
 {"expires_at","::trantor::Date","timestamp with time zone",0,0,0,1},
 {"accepted_at","::trantor::Date","timestamp with time zone",0,0,0,0},
@@ -1869,11 +1869,11 @@ bool OrganizationInvitations::validJsonOfField(size_t index,
                 return false;
             }
             if(pJson.isString() && std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>{}
-                .from_bytes(pJson.asCString()).size() > 64)
+                .from_bytes(pJson.asCString()).size() > 100)
             {
                 err="String length exceeds limit for the " +
                     fieldName +
-                    " field (the maximum value is 64)";
+                    " field (the maximum value is 100)";
                 return false;
             }
             break;
