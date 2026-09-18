@@ -7,16 +7,20 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.error_envelope import ErrorEnvelope
+from ...models.post_api_me_social_links_provider_authorize_body import PostApiMeSocialLinksProviderAuthorizeBody
 from ...models.post_api_me_social_links_provider_authorize_provider import PostApiMeSocialLinksProviderAuthorizeProvider
 from ...models.post_api_me_social_links_provider_authorize_response_200 import (
     PostApiMeSocialLinksProviderAuthorizeResponse200,
 )
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     provider: PostApiMeSocialLinksProviderAuthorizeProvider,
+    *,
+    body: PostApiMeSocialLinksProviderAuthorizeBody | Unset = UNSET,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -25,6 +29,12 @@ def _get_kwargs(
         ),
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -72,6 +82,7 @@ def sync_detailed(
     provider: PostApiMeSocialLinksProviderAuthorizeProvider,
     *,
     client: AuthenticatedClient,
+    body: PostApiMeSocialLinksProviderAuthorizeBody | Unset = UNSET,
 ) -> Response[ErrorEnvelope | PostApiMeSocialLinksProviderAuthorizeResponse200]:
     """Begin Social Link (mint one-time state)
 
@@ -82,6 +93,8 @@ def sync_detailed(
 
     Args:
         provider (PostApiMeSocialLinksProviderAuthorizeProvider):
+        body (PostApiMeSocialLinksProviderAuthorizeBody | Unset): Optional empty body (action-
+            style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -93,6 +106,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         provider=provider,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -106,6 +120,7 @@ def sync(
     provider: PostApiMeSocialLinksProviderAuthorizeProvider,
     *,
     client: AuthenticatedClient,
+    body: PostApiMeSocialLinksProviderAuthorizeBody | Unset = UNSET,
 ) -> ErrorEnvelope | PostApiMeSocialLinksProviderAuthorizeResponse200 | None:
     """Begin Social Link (mint one-time state)
 
@@ -116,6 +131,8 @@ def sync(
 
     Args:
         provider (PostApiMeSocialLinksProviderAuthorizeProvider):
+        body (PostApiMeSocialLinksProviderAuthorizeBody | Unset): Optional empty body (action-
+            style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -128,6 +145,7 @@ def sync(
     return sync_detailed(
         provider=provider,
         client=client,
+        body=body,
     ).parsed
 
 
@@ -135,6 +153,7 @@ async def asyncio_detailed(
     provider: PostApiMeSocialLinksProviderAuthorizeProvider,
     *,
     client: AuthenticatedClient,
+    body: PostApiMeSocialLinksProviderAuthorizeBody | Unset = UNSET,
 ) -> Response[ErrorEnvelope | PostApiMeSocialLinksProviderAuthorizeResponse200]:
     """Begin Social Link (mint one-time state)
 
@@ -145,6 +164,8 @@ async def asyncio_detailed(
 
     Args:
         provider (PostApiMeSocialLinksProviderAuthorizeProvider):
+        body (PostApiMeSocialLinksProviderAuthorizeBody | Unset): Optional empty body (action-
+            style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -156,6 +177,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         provider=provider,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -167,6 +189,7 @@ async def asyncio(
     provider: PostApiMeSocialLinksProviderAuthorizeProvider,
     *,
     client: AuthenticatedClient,
+    body: PostApiMeSocialLinksProviderAuthorizeBody | Unset = UNSET,
 ) -> ErrorEnvelope | PostApiMeSocialLinksProviderAuthorizeResponse200 | None:
     """Begin Social Link (mint one-time state)
 
@@ -177,6 +200,8 @@ async def asyncio(
 
     Args:
         provider (PostApiMeSocialLinksProviderAuthorizeProvider):
+        body (PostApiMeSocialLinksProviderAuthorizeBody | Unset): Optional empty body (action-
+            style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -190,5 +215,6 @@ async def asyncio(
         await asyncio_detailed(
             provider=provider,
             client=client,
+            body=body,
         )
     ).parsed

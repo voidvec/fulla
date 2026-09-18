@@ -5,15 +5,18 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.post_api_register_body import PostApiRegisterBody
 from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
+    body: PostApiRegisterBody | Unset = UNSET,
     username: str,
     password: str,
     email: str | Unset = UNSET,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     params: dict[str, Any] = {}
 
@@ -31,6 +34,12 @@ def _get_kwargs(
         "params": params,
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -59,6 +68,7 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiRegisterBody | Unset = UNSET,
     username: str,
     password: str,
     email: str | Unset = UNSET,
@@ -71,6 +81,7 @@ def sync_detailed(
         username (str):
         password (str):
         email (str | Unset):
+        body (PostApiRegisterBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -81,6 +92,7 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
+        body=body,
         username=username,
         password=password,
         email=email,
@@ -96,6 +108,7 @@ def sync_detailed(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiRegisterBody | Unset = UNSET,
     username: str,
     password: str,
     email: str | Unset = UNSET,
@@ -108,6 +121,7 @@ async def asyncio_detailed(
         username (str):
         password (str):
         email (str | Unset):
+        body (PostApiRegisterBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -118,6 +132,7 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
+        body=body,
         username=username,
         password=password,
         email=email,

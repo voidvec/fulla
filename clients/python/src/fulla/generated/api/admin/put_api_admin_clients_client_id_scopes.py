@@ -6,12 +6,16 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import Response
+from ...models.put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     client_id: str,
+    *,
+    body: PutApiAdminClientsClientIdScopesBody | Unset = UNSET,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "put",
@@ -20,6 +24,12 @@ def _get_kwargs(
         ),
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -52,6 +62,7 @@ def sync_detailed(
     client_id: str,
     *,
     client: AuthenticatedClient,
+    body: PutApiAdminClientsClientIdScopesBody | Unset = UNSET,
 ) -> Response[Any]:
     """Update Client Scopes
 
@@ -59,6 +70,8 @@ def sync_detailed(
 
     Args:
         client_id (str):
+        body (PutApiAdminClientsClientIdScopesBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -70,6 +83,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         client_id=client_id,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -83,6 +97,7 @@ async def asyncio_detailed(
     client_id: str,
     *,
     client: AuthenticatedClient,
+    body: PutApiAdminClientsClientIdScopesBody | Unset = UNSET,
 ) -> Response[Any]:
     """Update Client Scopes
 
@@ -90,6 +105,8 @@ async def asyncio_detailed(
 
     Args:
         client_id (str):
+        body (PutApiAdminClientsClientIdScopesBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -101,6 +118,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         client_id=client_id,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)

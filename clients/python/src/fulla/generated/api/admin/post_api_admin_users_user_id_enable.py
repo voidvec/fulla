@@ -6,12 +6,16 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import Response
+from ...models.post_api_admin_users_user_id_enable_body import PostApiAdminUsersUserIdEnableBody
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     user_id: int,
+    *,
+    body: PostApiAdminUsersUserIdEnableBody | Unset = UNSET,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -20,6 +24,12 @@ def _get_kwargs(
         ),
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -49,6 +59,7 @@ def sync_detailed(
     user_id: int,
     *,
     client: AuthenticatedClient,
+    body: PostApiAdminUsersUserIdEnableBody | Unset = UNSET,
 ) -> Response[Any]:
     """Enable User
 
@@ -56,6 +67,8 @@ def sync_detailed(
 
     Args:
         user_id (int):
+        body (PostApiAdminUsersUserIdEnableBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -67,6 +80,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         user_id=user_id,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -80,6 +94,7 @@ async def asyncio_detailed(
     user_id: int,
     *,
     client: AuthenticatedClient,
+    body: PostApiAdminUsersUserIdEnableBody | Unset = UNSET,
 ) -> Response[Any]:
     """Enable User
 
@@ -87,6 +102,8 @@ async def asyncio_detailed(
 
     Args:
         user_id (int):
+        body (PostApiAdminUsersUserIdEnableBody | Unset): Optional empty body (action-style
+            operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -98,6 +115,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         user_id=user_id,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)

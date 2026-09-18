@@ -5,14 +5,17 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.post_api_google_login_body import PostApiGoogleLoginBody
 from ...models.social_login_token_response import SocialLoginTokenResponse
-from ...types import UNSET, Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
+    body: PostApiGoogleLoginBody | Unset = UNSET,
     code: str,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     params: dict[str, Any] = {}
 
@@ -26,6 +29,12 @@ def _get_kwargs(
         "params": params,
     }
 
+    if not isinstance(body, Unset):
+        _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -69,6 +78,7 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiGoogleLoginBody | Unset = UNSET,
     code: str,
 ) -> Response[Any | SocialLoginTokenResponse]:
     """Google OAuth2 Login
@@ -78,6 +88,7 @@ def sync_detailed(
 
     Args:
         code (str):
+        body (PostApiGoogleLoginBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -88,6 +99,7 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
+        body=body,
         code=code,
     )
 
@@ -101,6 +113,7 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiGoogleLoginBody | Unset = UNSET,
     code: str,
 ) -> Any | SocialLoginTokenResponse | None:
     """Google OAuth2 Login
@@ -110,6 +123,7 @@ def sync(
 
     Args:
         code (str):
+        body (PostApiGoogleLoginBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -121,6 +135,7 @@ def sync(
 
     return sync_detailed(
         client=client,
+        body=body,
         code=code,
     ).parsed
 
@@ -128,6 +143,7 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiGoogleLoginBody | Unset = UNSET,
     code: str,
 ) -> Response[Any | SocialLoginTokenResponse]:
     """Google OAuth2 Login
@@ -137,6 +153,7 @@ async def asyncio_detailed(
 
     Args:
         code (str):
+        body (PostApiGoogleLoginBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -147,6 +164,7 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
+        body=body,
         code=code,
     )
 
@@ -158,6 +176,7 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
+    body: PostApiGoogleLoginBody | Unset = UNSET,
     code: str,
 ) -> Any | SocialLoginTokenResponse | None:
     """Google OAuth2 Login
@@ -167,6 +186,7 @@ async def asyncio(
 
     Args:
         code (str):
+        body (PostApiGoogleLoginBody | Unset): Optional empty body (action-style operation).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -179,6 +199,7 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
+            body=body,
             code=code,
         )
     ).parsed

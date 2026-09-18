@@ -6,6 +6,8 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.delete_api_me_applications_client_id_response_200 import DeleteApiMeApplicationsClientIdResponse200
+from ...models.error_envelope import ErrorEnvelope
 from ...types import Response
 
 
@@ -23,18 +25,28 @@ def _get_kwargs(
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope | None:
     if response.status_code == 200:
-        return None
+        response_200 = DeleteApiMeApplicationsClientIdResponse200.from_dict(response.json())
+
+        return response_200
 
     if response.status_code == 401:
-        return None
+        response_401 = ErrorEnvelope.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 403:
-        return None
+        response_403 = ErrorEnvelope.from_dict(response.json())
+
+        return response_403
 
     if response.status_code == 404:
-        return None
+        response_404 = ErrorEnvelope.from_dict(response.json())
+
+        return response_404
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -42,7 +54,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -55,7 +69,7 @@ def sync_detailed(
     client_id: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> Response[DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope]:
     """Delete Application
 
      Soft-delete a self-registered application; it disappears from every flow immediately (authorization,
@@ -69,7 +83,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        Response[DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope]
     """
 
     kwargs = _get_kwargs(
@@ -83,11 +97,11 @@ def sync_detailed(
     return _build_response(client=client, response=response)
 
 
-async def asyncio_detailed(
+def sync(
     client_id: str,
     *,
     client: AuthenticatedClient,
-) -> Response[Any]:
+) -> DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope | None:
     """Delete Application
 
      Soft-delete a self-registered application; it disappears from every flow immediately (authorization,
@@ -101,7 +115,34 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
+        DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope
+    """
+
+    return sync_detailed(
+        client_id=client_id,
+        client=client,
+    ).parsed
+
+
+async def asyncio_detailed(
+    client_id: str,
+    *,
+    client: AuthenticatedClient,
+) -> Response[DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope]:
+    """Delete Application
+
+     Soft-delete a self-registered application; it disappears from every flow immediately (authorization,
+    token, introspection).
+
+    Args:
+        client_id (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope]
     """
 
     kwargs = _get_kwargs(
@@ -111,3 +152,32 @@ async def asyncio_detailed(
     response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    client_id: str,
+    *,
+    client: AuthenticatedClient,
+) -> DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope | None:
+    """Delete Application
+
+     Soft-delete a self-registered application; it disappears from every flow immediately (authorization,
+    token, introspection).
+
+    Args:
+        client_id (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        DeleteApiMeApplicationsClientIdResponse200 | ErrorEnvelope
+    """
+
+    return (
+        await asyncio_detailed(
+            client_id=client_id,
+            client=client,
+        )
+    ).parsed
