@@ -2,6 +2,7 @@
 #include "OpenPlatformConfig.h"
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
+#include <fulla/drogon/utils/ClientCacheInvalidator.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
@@ -214,11 +215,12 @@ void requireManagePermission(
   const ResolvedUser &caller,
   const ::drogon::HttpRequestPtr &req,
   const ResponseCallback &cb,
-  std::function<void(bool ok, const OwnerModel &owner)> &&continuation
+  std::function<void(bool ok, const OwnerModel &owner)> &&continuation,
+  bool blockWhenSuspended = true
 )
 {
     loadOwnerRow(db, clientId, req, cb,
-      [req, cb, db, clientId, caller, continuation = std::move(continuation)](
+      [req, cb, db, clientId, caller, continuation = std::move(continuation), blockWhenSuspended](
         bool exists, const OwnerModel &owner) {
           if (!exists)
           {
@@ -230,7 +232,31 @@ void requireManagePermission(
           }
           if (owner.getOrgId() == nullptr)
           {
-              continuation(owner.getValueOfCreatorUserId() == caller.id, owner);
+              // Review C1: a personal app is manageable ONLY by its creator.
+              // Denying without responding would hang the request (and leave
+              // no 403 audit trail), so the reject path must respond here —
+              // the continuation contract is "ok == true means continue;
+              // ok == false means the response has already been sent".
+              const bool ok = owner.getValueOfCreatorUserId() == caller.id;
+              if (!ok)
+              {
+                  respondError(
+                    req, cb, "AUTHZ_ACCESS_DENIED",
+                    "only the creator can manage a personal application"
+                  );
+                  return;
+              }
+              // Review M5: a suspended app is frozen for management writes
+              // (delete stays open as the owner's exit path).
+              if (blockWhenSuspended && owner.getValueOfStatus() == "suspended")
+              {
+                  respondError(
+                    req, cb, "AUTHZ_ACCESS_DENIED",
+                    "application is suspended; contact the administrator"
+                  );
+                  return;
+              }
+              continuation(true, owner);
               return;
           }
           // Org app: caller must CURRENTLY hold owner/admin in that org (a
@@ -241,13 +267,21 @@ void requireManagePermission(
               Mapper<MemberModel>(db).findBy(
                 Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ, orgId) &&
                   Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, caller.id),
-                [req, cb, continuation = std::move(continuation), owner](
+                [req, cb, continuation = std::move(continuation), owner, blockWhenSuspended](
                   const std::vector<MemberModel> &rows) {
                     if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
                     {
                         respondError(
                           req, cb, "AUTHZ_ACCESS_DENIED",
                           "org owner or admin role required for this application"
+                        );
+                        return;
+                    }
+                    if (blockWhenSuspended && owner.getValueOfStatus() == "suspended")
+                    {
+                        respondError(
+                          req, cb, "AUTHZ_ACCESS_DENIED",
+                          "application is suspended; contact the administrator"
                         );
                         return;
                     }
@@ -646,7 +680,12 @@ void insertApplication(
                       const OwnerModel &) {
                         replaceClientScopes(db, clientId, scopes, req, cb,
                           [req, cb, clientId, secret, confidential, orgId, caller]() {
-                              audit(req, confidential ? "application_created" : "application_created",
+                              audit(req, "application_created",
+                                clientId);
+                              // Review C2: every client write invalidates the
+                              // Redis client cache or a rotated/created row
+                              // stays trusted for up to the cache TTL.
+                              ::fulla::drogon::ClientCacheInvalidator::instance().invalidate(
                                 clientId);
                               Json::Value json;
                               json["client_id"] = clientId;
@@ -666,7 +705,30 @@ void insertApplication(
                               (*cb)(resp);
                           });
                     },
-                    [req, cb](const DrogonDbException &e) {
+                    [req, cb, db, clientId](const DrogonDbException &e) {
+                        // Review M2: an ownerless client row is a governance
+                        // blind spot (admin-owned semantics, unquota'd,
+                        // unsuspendable) — compensate by removing the client
+                        // row we just inserted.
+                        LOG_ERROR << "application owner insert failed for " << clientId
+                                  << ", compensating: " << e.base().what();
+                        try
+                        {
+                            Mapper<ClientModel>(db).deleteBy(
+                              Criteria(ClientModel::Cols::_client_id, CompareOperator::EQ, clientId),
+                              [](const std::size_t) {},
+                              [clientId](const DrogonDbException &ce) {
+                                  LOG_ERROR << "compensation delete failed for " << clientId
+                                            << " (orphaned client row remains): "
+                                            << ce.base().what();
+                              }
+                            );
+                        }
+                        catch (...)
+                        {
+                            LOG_ERROR << "compensation Mapper construction failed for "
+                                      << clientId;
+                        }
                         respondError(req, cb, "DB_QUERY_ERROR",
                           std::string("application owner insert failed: ") + e.base().what());
                     }
@@ -717,14 +779,32 @@ void ApplicationService::list(const ::drogon::HttpRequestPtr &req, ResponseCallb
 
                     auto merged = std::make_shared<std::map<std::string, OwnerModel>>();
                     auto pending = std::make_shared<int>(1 + (managerOrgIds.empty() ? 0 : 1));
+                    // Review minor: if one parallel findOwners fails AFTER
+                    // the other already responded, the error callback would
+                    // emit a second response — guard every emission.
+                    auto responded = std::make_shared<bool>(false);
+                    auto guardedRespond =
+                      [cb, responded](const ::drogon::HttpResponsePtr &r) {
+                          if (*responded)
+                          {
+                              LOG_WARN << "applications list: suppressing duplicate response";
+                              return;
+                          }
+                          *responded = true;
+                          (*cb)(r);
+                      };
                     auto finish = std::make_shared<std::function<void()>>();
-                    *finish = [req, cb, db, merged]() {
+                    *finish = [req, cb, guardedRespond, db, merged]() {
+                        // Error paths route through the same guard so a
+                        // late failure can't double-respond after a success.
+                        auto guardedCb = std::make_shared<ResponseCallback::element_type>(
+                          guardedRespond);
                         if (merged->empty())
                         {
                             Json::Value json;
                             json["applications"] = Json::Value(Json::arrayValue);
                             json["total"] = 0;
-                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                            guardedRespond(::drogon::HttpResponse::newHttpJsonResponse(json));
                             return;
                         }
                         std::vector<std::string> clientIds;
@@ -735,7 +815,7 @@ void ApplicationService::list(const ::drogon::HttpRequestPtr &req, ResponseCallb
                             Mapper<ClientModel>(db).findBy(
                               Criteria(ClientModel::Cols::_client_id, CompareOperator::In, clientIds) &&
                                 Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
-                              [req, cb, merged](const std::vector<ClientModel> &clients) {
+                              [req, guardedRespond, merged](const std::vector<ClientModel> &clients) {
                                   Json::Value json;
                                   Json::Value arr(Json::arrayValue);
                                   for (const auto &c : clients)
@@ -747,17 +827,17 @@ void ApplicationService::list(const ::drogon::HttpRequestPtr &req, ResponseCallb
                                   }
                                   json["applications"] = arr;
                                   json["total"] = static_cast<int>(arr.size());
-                                  (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                  guardedRespond(::drogon::HttpResponse::newHttpJsonResponse(json));
                               },
-                              [req, cb](const DrogonDbException &e) {
-                                  respondError(req, cb, "DB_QUERY_ERROR",
+                              [req, guardedCb](const DrogonDbException &e) {
+                                  respondError(req, guardedCb, "DB_QUERY_ERROR",
                                     std::string("application query failed: ") + e.base().what());
                               }
                             );
                         }
                         catch (...)
                         {
-                            respondError(req, cb, "DB_QUERY_ERROR",
+                            respondError(req, guardedCb, "DB_QUERY_ERROR",
                               "application query: Mapper construction failed");
                         }
                     };
@@ -1098,6 +1178,8 @@ void ApplicationService::update(
                                     updated.setAllowedGrantTypes(grantTypes);
                                     touched = true;
                                 }
+                                ::fulla::drogon::ClientCacheInvalidator::instance()
+                                  .invalidate(clientId);
                                 auto respondOk = [req, cb]() {
                                     Json::Value json;
                                     json["message"] = "Application updated";
@@ -1200,6 +1282,8 @@ void ApplicationService::rotateSecret(
                               Mapper<ClientModel>(db).update(
                                 updated,
                                 [req, cb, clientId, secret](const std::size_t) {
+                                    ::fulla::drogon::ClientCacheInvalidator::instance()
+                                      .invalidate(clientId);
                                     audit(req, "application_secret_rotated", clientId);
                                     Json::Value json;
                                     json["client_id"] = clientId;
@@ -1285,8 +1369,29 @@ void ApplicationService::transfer(
                           "transfer: application is already personal");
                         return;
                     }
-                    OwnerModel updated = owner;
-                    updated.setOrgIdToNull();
+                    // Review M8: moving back to personal must respect the
+                    // CREATOR's personal-app quota (personal apps are keyed by
+                    // creator_user_id, not by whoever manages the org today).
+                    findOwners(db,
+                      Criteria(OwnerModel::Cols::_creator_user_id,
+                               CompareOperator::EQ, owner.getValueOfCreatorUserId()) &&
+                        Criteria(OwnerModel::Cols::_org_id, CompareOperator::IsNull),
+                      req, cb,
+                      [req, cb, db, cfg, clientId, owner](const std::vector<OwnerModel> &personal) {
+                          std::vector<std::string> ids;
+                          for (const auto &o : personal)
+                              ids.push_back(o.getValueOfClientId());
+                          countAliveClients(db, ids, req, cb,
+                            [req, cb, db, cfg, clientId, owner](std::size_t alive) {
+                                if (static_cast<int>(alive) >= cfg.maxAppsPerUser)
+                                {
+                                    respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                      "application quota exceeded (" +
+                                        std::to_string(cfg.maxAppsPerUser) + ")");
+                                    return;
+                                }
+                                OwnerModel updated = owner;
+                                updated.setOrgIdToNull();
                     try
                     {
                         Mapper<OwnerModel>(db).update(
@@ -1308,6 +1413,8 @@ void ApplicationService::transfer(
                         respondError(req, cb, "DB_QUERY_ERROR", "transfer: Mapper construction failed");
                     }
                     return;
+                            });
+                      });
                 }
                 const std::string orgSlug = (*jsonBody)["org_slug"].asString();
                 if (owner.getOrgId() != nullptr)
@@ -1441,6 +1548,7 @@ void ApplicationService::remove(
                       Criteria(ClientModel::Cols::_client_id, CompareOperator::EQ, clientId) &&
                         Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
                       [req, cb, db, clientId](const ClientModel &client) {
+                          // delete stays open for suspended apps (exit path).
                           ClientModel updated = client;
                           updated.setDeletedAt(::trantor::Date::now());
                           try
@@ -1448,6 +1556,8 @@ void ApplicationService::remove(
                               Mapper<ClientModel>(db).update(
                                 updated,
                                 [req, cb, clientId](const std::size_t) {
+                                    ::fulla::drogon::ClientCacheInvalidator::instance()
+                                      .invalidate(clientId);
                                     audit(req, "application_deleted", clientId);
                                     Json::Value json;
                                     json["message"] = "Application deleted";
@@ -1476,7 +1586,7 @@ void ApplicationService::remove(
                     respondError(req, cb, "DB_QUERY_ERROR",
                       "application lookup: Mapper construction failed");
                 }
-            });
+            }, false);
       });
 }
 
@@ -1508,8 +1618,35 @@ void ApplicationService::setStatus(
           {
               Mapper<OwnerModel>(db).update(
                 updated,
-                [req, cb, clientId, suspended](const std::size_t) {
+                [req, cb, clientId, suspended, db](const std::size_t) {
+                    ::fulla::drogon::ClientCacheInvalidator::instance().invalidate(clientId);
                     audit(req, suspended ? "client_suspended" : "client_resumed", clientId);
+                    if (suspended)
+                    {
+                        // Review M5: "suspended = no new codes or tokens" must
+                        // also cover tokens ALREADY issued — revoke them in
+                        // place (documented batch-UPDATE exemption; the
+                        // response is not delayed by this fire-and-forget).
+                        db->execSqlAsync(
+                          "UPDATE oauth2_access_tokens SET revoked = true WHERE client_id = $1",
+                          [db, clientId](const ::drogon::orm::Result &) {
+                              db->execSqlAsync(
+                                "UPDATE oauth2_refresh_tokens SET revoked = true WHERE client_id = $1",
+                                [clientId](const ::drogon::orm::Result &) {},
+                                [clientId](const ::drogon::orm::DrogonDbException &e) {
+                                    LOG_ERROR << "suspend: refresh revocation failed for "
+                                              << clientId << ": " << e.base().what();
+                                },
+                                clientId
+                              );
+                          },
+                          [clientId](const ::drogon::orm::DrogonDbException &e) {
+                              LOG_ERROR << "suspend: access revocation failed for "
+                                        << clientId << ": " << e.base().what();
+                          },
+                          clientId
+                        );
+                    }
                     Json::Value json;
                     json["client_id"] = clientId;
                     json["status"] = suspended ? "suspended" : "active";

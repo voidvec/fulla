@@ -75,6 +75,7 @@ struct ResolvedUser
     int32_t id;
     std::string email;
     std::string username;
+    bool emailVerified = false;  // review M7: invitation acceptance requires it
 };
 
 using ResolvedCallback = std::function<void(bool found, const ResolvedUser &user)>;
@@ -119,6 +120,13 @@ void resolveCaller(
               u.id = users[0].getValueOfId();
               u.email = users[0].getValueOfEmail();
               u.username = users[0].getValueOfUsername();
+              try
+              {
+                  u.emailVerified = users[0].getValueOfEmailVerified();
+              }
+              catch (...)
+              {
+              }
               onResolved(true, u);
           },
           [req, cb](const DrogonDbException &e) {
@@ -151,7 +159,8 @@ void findOrgBySlug(
           [cb, req, onFound = std::move(onFound)](const OrgModel &org) {
               onFound(true, org);
           },
-          [req, cb](const DrogonDbException &) {
+          [req, cb](const DrogonDbException &e) {
+              LOG_WARN << "findOrgBySlug: not found or DB error: " << e.base().what();
               respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
           }
         );
@@ -199,6 +208,18 @@ bool isManagerRole(const std::string &role)
     return role == "owner" || role == "admin";
 }
 
+// createInvitation tail helper (defined below the public methods; forward
+// declaration because the pending-cap count() callback calls it).
+void proceedWithInvitationInsert(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrgMemberService::ResponseCallback &cb,
+  const ::drogon::orm::DbClientPtr &db,
+  const ::drogon_model::fulla_db::Organizations &org,
+  const std::string &email,
+  const std::string &role,
+  const ResolvedUser &caller
+);
+
 void audit(
   const ::drogon::HttpRequestPtr &req,
   const char *action,
@@ -221,6 +242,18 @@ void audit(
 // ---------------------------------------------------------------------------
 void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
 {
+    // Review C4: self-service org creation rides the SAME fail-closed master
+    // switch as application registration (open_platform.enabled) — the
+    // config block documents both as off until an operator enables it.
+    if (!openplatform::OpenPlatformConfig::load().enabled)
+    {
+        respondError(
+          req, cb, "AUTHZ_ACCESS_DENIED",
+          "organization self-service is disabled on this deployment"
+        );
+        return;
+    }
+
     auto jsonBody = req->getJsonObject();
     if (!jsonBody)
     {
@@ -474,7 +507,9 @@ void OrgMemberService::listMembers(
                                 try
                                 {
                                     Mapper<UserModel>(db).findBy(
-                                      Criteria(UserModel::Cols::_id, CompareOperator::In, userIds),
+                                      Criteria(UserModel::Cols::_id, CompareOperator::In, userIds) &&
+                                        Criteria(UserModel::Cols::_deleted_at,
+                                                 CompareOperator::IsNull),
                                       [req, cb, rows](const std::vector<UserModel> &users) {
                                           std::map<int32_t, const UserModel *> byId;
                                           for (const auto &u : users)
@@ -681,6 +716,57 @@ void OrgMemberService::createInvitation(
                           respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
                           return;
                       }
+                      // Review M6: bound the mail relay — at most N pending
+                      // invitations per org (config, default 20). count()
+                      // yields the single gate value; the insert continues
+                      // from its success callback.
+                      const int pendingCap =
+                        openplatform::OpenPlatformConfig::load().maxPendingInvitationsPerOrg;
+                      try
+                      {
+                          Mapper<InviteModel>(db).count(
+                            Criteria(InviteModel::Cols::_organization_id,
+                                     CompareOperator::EQ, org.getValueOfId()) &&
+                              Criteria(InviteModel::Cols::_accepted_at,
+                                       CompareOperator::IsNull),
+                            [req, cb, db, org, email, role, caller, pendingCap](
+                              const size_t pending) {
+                                if (static_cast<int>(pending) >= pendingCap)
+                                {
+                                    respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                      "invite: too many pending invitations for this organization");
+                                    return;
+                                }
+                                proceedWithInvitationInsert(req, cb, db, org, email, role, caller);
+                            },
+                            [req, cb](const DrogonDbException &e) {
+                                respondError(req, cb, "DB_QUERY_ERROR",
+                                  std::string("invite: pending count failed: ") + e.base().what());
+                            });
+                      }
+                      catch (...)
+                      {
+                          respondError(req, cb, "DB_QUERY_ERROR",
+                            "invite: count Mapper construction failed");
+                      }
+                  });
+            });
+      });
+}
+
+// createInvitation tail: the actual insert, split out so the pending-cap
+// count() callback can continue into it (re-opened anonymous namespace to
+// match the forward declaration above).
+namespace {
+void proceedWithInvitationInsert(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrgMemberService::ResponseCallback &cb,
+  const ::drogon::orm::DbClientPtr &db,
+  const ::drogon_model::fulla_db::Organizations &org,
+  const std::string &email,
+  const std::string &role,
+  const ResolvedUser &caller)
+{
                       InviteModel invite;
                       invite.setOrganizationId(org.getValueOfId());
                       invite.setEmail(email);
@@ -743,10 +829,8 @@ void OrgMemberService::createInvitation(
                       {
                           respondError(req, cb, "DB_QUERY_ERROR", "invite: Mapper construction failed");
                       }
-                  });
-            });
-      });
-}
+}  // namespace
+}  // closes proceedWithInvitationInsert
 
 // ---------------------------------------------------------------------------
 // GET /api/me/organizations/{slug}/invitations — pending only (owner/admin).
@@ -921,6 +1005,15 @@ void OrgMemberService::acceptInvitation(const ::drogon::HttpRequestPtr &req, Res
                 "accept invite: your account has no email address to match the invitation");
               return;
           }
+          // Review M7: matching the email is not enough when the account has
+          // never verified it — otherwise a leaked accept token can be
+          // redeemed by any account that merely CLAIMS the address.
+          if (!caller.emailVerified)
+          {
+              respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                "accept invite: verify your email address before accepting an invitation");
+              return;
+          }
           try
           {
               Mapper<InviteModel>(db).findOne(
@@ -990,7 +1083,8 @@ void OrgMemberService::acceptInvitation(const ::drogon::HttpRequestPtr &req, Res
                         respondError(req, cb, "DB_QUERY_ERROR", "accept invite: Mapper construction failed");
                     }
                 },
-                [req, cb](const DrogonDbException &) {
+                [req, cb](const DrogonDbException &e) {
+                    LOG_WARN << "accept invite: token lookup failed: " << e.base().what();
                     respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "accept invite: invalid token");
                 }
               );

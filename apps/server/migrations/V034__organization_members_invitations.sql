@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS organization_members (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL DEFAULT 'member',
+    role VARCHAR(20) NOT NULL DEFAULT 'member'
+        CHECK (role IN ('owner', 'admin', 'member')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (organization_id, user_id)
 );
@@ -24,8 +25,12 @@ CREATE TABLE IF NOT EXISTS organization_invitations (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'member',
-    token VARCHAR(64) NOT NULL UNIQUE,
+    role VARCHAR(20) NOT NULL DEFAULT 'member'
+        CHECK (role IN ('admin', 'member')),
+    -- 100 fits generateSecureToken's 43-char base64url output AND its
+    -- defense-in-depth two-UUID fallback (~72 chars) — 64 truncated the
+    -- fallback (review finding).
+    token VARCHAR(100) NOT NULL UNIQUE,
     invited_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     accepted_at TIMESTAMP WITH TIME ZONE,
