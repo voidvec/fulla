@@ -478,6 +478,44 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
     REQUIRE(resumeResp != nullptr);
     CHECK(statusIs(resumeResp, drogon::k200OK));
 
+    // 6c) transfer round-trip (self-review: this flow was untested and hid a
+    // double-response bug — the toPersonal branch fell through to the toOrg
+    // section). personal -> org -> personal, then a redundant transfer is
+    // rejected cleanly.
+    {
+        // Create an org owned by userA.
+        Json::Value orgBody;
+        orgBody["slug"] = "qa-app-org-" + suffix;
+        orgBody["name"] = "QA App Org " + suffix;
+        auto orgResp = sendPostJson("/api/me/organizations", orgBody, *tokenA);
+        REQUIRE(orgResp != nullptr);
+        CHECK(statusIs(orgResp, drogon::k201Created));
+        const std::string orgSlug = orgBody["slug"].asString();
+
+        // personal -> org
+        Json::Value toOrg;
+        toOrg["org_slug"] = orgSlug;
+        auto t1 = sendPostJson("/api/me/applications/" + confClientId + "/transfer",
+                               toOrg, *tokenA);
+        REQUIRE(t1 != nullptr);
+        CHECK(statusIs(t1, drogon::k200OK));
+
+        // org -> personal (exercises the M8 creator-quota gate; must answer
+        // exactly once with 200 — the old fallthrough produced a spurious
+        // 400 first).
+        Json::Value toPersonal;  // org_slug absent -> personal
+        auto t2 = sendPostJson("/api/me/applications/" + confClientId + "/transfer",
+                               toPersonal, *tokenA);
+        REQUIRE(t2 != nullptr);
+        CHECK(statusIs(t2, drogon::k200OK));
+
+        // Already personal -> clean 400, single response.
+        auto t3 = sendPostJson("/api/me/applications/" + confClientId + "/transfer",
+                               toPersonal, *tokenA);
+        REQUIRE(t3 != nullptr);
+        CHECK(statusIs(t3, drogon::k400BadRequest));
+    }
+
     // 7) delete the PUBLIC app; list no longer contains it
     auto delResp = sendDelete("/api/me/applications/" + publicClientId, *tokenA);
     REQUIRE(delResp != nullptr);

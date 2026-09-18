@@ -1415,6 +1415,11 @@ void ApplicationService::transfer(
                     return;
                             });
                       });
+                    // Self-review: the M8 quota gate is an async chain — after
+                    // launching it we MUST return here, or execution falls
+                    // through to the toOrg section below (double response:
+                    // immediate 400 "already belongs to one" + the chain's).
+                    return;
                 }
                 const std::string orgSlug = (*jsonBody)["org_slug"].asString();
                 if (owner.getOrgId() != nullptr)
