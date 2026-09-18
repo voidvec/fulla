@@ -12,12 +12,14 @@ on:
       - 'docs/**'
       - 'blog/**'
       - 'website/**'
+      - 'scripts/gen-llms-txt.mjs'
       - '.github/workflows/website.yml'
   pull_request:
     paths:
       - 'docs/**'
       - 'blog/**'
       - 'website/**'
+      - 'scripts/gen-llms-txt.mjs'
       - '.github/workflows/website.yml'
   # Manual deploy: lets the site go live from a branch before merge (requires
   # Pages Source = GitHub Actions in repo settings). The operator triggers
@@ -44,6 +46,15 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: website/package-lock.json
+
+      # Wave 0 (AI-native DX): llms.txt / llms-full.txt are committed
+      # artifacts generated from docs/. Regenerate and diff so they can
+      # never drift stale when docs/ changes (the generator is
+      # dependency-free, no npm install needed for this step).
+      - name: llms.txt freshness gate
+        run: |
+          node scripts/gen-llms-txt.mjs
+          git diff --exit-code --stat -- website/static/llms.txt website/static/llms-full.txt
 
       - name: Build website
         working-directory: website

@@ -1,0 +1,71 @@
+# fulla
+
+> fulla is a self-hosted OAuth 2.1 / OpenID Connect identity provider written in C++ (Drogon): authorization-code + PKCE, client credentials, device flow, WebAuthn/MFA, organizations, and an open application platform — deployable as a single Docker image backed by PostgreSQL.
+
+Essential docs:
+- [Getting Started](https://fulla.dev/docs/intro): **fulla** is a high-performance, open-source identity and access management (IAM) core built in C++17: a production-grade OAuth2/OIDC authorization server with…
+
+Guides docs:
+- [Automating with Fulla (no human in the loop)](https://fulla.dev/docs/guides/automation): Fulla speaks standard OAuth 2.0, so scripts, CLIs and service-to-service
+- [Build an app on Fulla (OIDC sign-in)](https://fulla.dev/docs/guides/build-an-app): Let your web/mobile/CLI application use Fulla as its identity provider:
+
+Evaluate docs:
+- [Architecture Overview](https://fulla.dev/docs/architecture/architecture-overview): This page summarizes the overall architecture of fulla from four perspectives: technology stack, module layout, request flow, and deployment topology.
+- [OAuth2 Data Persistence](https://fulla.dev/docs/architecture/data-persistence): This document describes the OAuth2 plugin's persistence layer design, database schema, Redis key-value structure, and security hardening.
+- [OAuth2 Security Architecture](https://fulla.dev/docs/architecture/security-architecture): This document describes the system's security threat model and the corresponding defense mechanisms, covering token lifecycle management, secret storage, and a…
+- [fulla Competitor Performance Benchmark Comparison Design](https://fulla.dev/docs/benchmark/competitor-benchmark-design): - **What**: Load-test Keycloak / Ory Hydra / Zitadel on the **same machine, with the same wrk ladder and the same PostgreSQL backend**, producing a like-for-li…
+
+Domains docs:
+- [OAuth2 API Reference](https://fulla.dev/docs/domains/api-reference): This service provides authentication and authorization based on the OAuth 2.0 standard (RFC 6749).
+- [Multi-Tenancy (Organizations)](https://fulla.dev/docs/domains/multi-tenancy): fulla's multi-tenancy today is an **organizational layer**: organizations
+- [OpenID Connect (OIDC) Integration Guide](https://fulla.dev/docs/domains/oidc-guide): This guide describes how to integrate this OAuth2 service into your application as an OIDC Provider.
+- [RBAC Access Control System (Role-Based Access Control)](https://fulla.dev/docs/domains/rbac-guide): This document details the design and usage of the system's role-based access control (RBAC).
+- [Session Management](https://fulla.dev/docs/domains/session-management): fulla has **two different lifetimes that people often conflate**: the
+- [Social Login Guide](https://fulla.dev/docs/domains/social-login): Backend social login is implemented with a "provider adapter" pattern. Since #70 all three providers — GitHub, Google, WeChat — run the SAME closed loop: upstr…
+- [Token Lifecycle](https://fulla.dev/docs/domains/token-lifecycle): How tokens are born, live, and die in fulla: the three token types, what is
+
+SDK docs:
+- [SDK Integration Guide (Consuming Release Artifacts)](https://fulla.dev/docs/sdk/sdk-integration-guide): How to obtain and integrate fulla's release artifacts: the SDK binary package (libraries + headers + `fulla-*Config.cmake`) and the GHCR container images. For …
+- [SDK Runtime Contract](https://fulla.dev/docs/sdk/sdk-runtime-contract): External contract statement: the threading model, ABI, exceptions, logging, and dependency boundaries that the fulla SDK (`fulla::common` / `fulla::oauth2` / `…
+
+Operate docs:
+- [Account Lockout Mechanism](https://fulla.dev/docs/operate/account-lockout): The OAuth2 system implements an account lockout mechanism to defend against brute-force attacks. After repeated failed logins, an account is temporarily locked.
+- [Configuration Guide](https://fulla.dev/docs/operate/configuration-guide): The application supports overriding key configuration items with environment variables. This matters
+- [Windows Docker Desktop Deployment Validation Guide](https://fulla.dev/docs/operate/deployment-windows-docker-desktop): This guide explains how to validate the deployment of the full fulla stack on Windows Docker Desktop. **Apart from domain and SSL, every other feature is fully…
+- [Production Deployment Guide](https://fulla.dev/docs/operate/deployment): This guide explains how to deploy the full OAuth2 stack (user frontend + admin console + backend API) to a production environment.
+- [Docker Deployment and Container Orchestration Guide](https://fulla.dev/docs/operate/docker-deployment): This document explains how to deploy the complete OAuth2 service stack with Docker Compose, locally or in production.
+- [OAuth2 Observability Design](https://fulla.dev/docs/operate/observability): The system integrates complete Prometheus monitoring metrics and structured, context-aware logging, supporting real-time monitoring and troubleshooting in prod…
+- [PostgreSQL Major-Version Upgrade Runbook (15 → 17)](https://fulla.dev/docs/operate/postgresql-major-upgrade): Both routes require: **complete a full backup and keep the old data volume before
+- [Deployment Verification Checklist](https://fulla.dev/docs/operate/verification-checklist): This document provides complete deployment verification procedures to ensure the fulla full-stack system runs correctly on Windows Docker Desktop or in a Linux…
+
+Contribute docs:
+- [Playwright E2E Automated Testing Integration Guide](https://fulla.dev/docs/contribute/admin-e2e-testing-guide): 1. Core Principles
+- [OAuth2 Admin Console - Test Cases](https://fulla.dev/docs/contribute/admin-test-cases): 
+- [CI/CD Pipeline Guide (CI/CD Guide)](https://fulla.dev/docs/contribute/ci-cd-guide): This document describes the project's continuous integration and continuous delivery (CI/CD) mechanism, built on **GitHub Actions**.
+- [Frontend i18n Guide — Selection, Scope, and Contributor Workflow](https://fulla.dev/docs/contribute/frontend-i18n): - Both frontends speak **English (default) and Simplified Chinese** through **vue-i18n v11** message catalogs — one switcher drives page chrome *and* error mes…
+- [Testing Strategy and Execution Guide (Testing Guide)](https://fulla.dev/docs/contribute/testing-guide): This document describes the project's test layering strategy, the coverage of each test file, and how to run the full test suite locally.
+- [OAuth2 User Frontend - Test Cases](https://fulla.dev/docs/contribute/user-frontend-test-cases): 
+- [Versioning & Release Policy](https://fulla.dev/docs/contribute/versioning-and-release): fulla's version numbering scheme, bump decision rules, release cadence, pre-release
+
+Decisions docs:
+- [adr/ADR-0001.md](https://fulla.dev/docs/adr/ADR-0001): The repository carries both a directly deployable authorization-server product and a reusable protocol engine. Without constraining dependency direction, Domai…
+- [adr/ADR-0002.md](https://fulla.dev/docs/adr/ADR-0002): In C++ static libraries, Drogon relies on static-initialization self-registration; whole-archive linking is fragile across platforms/consumers and drags in eve…
+- [adr/ADR-0003.md](https://fulla.dev/docs/adr/ADR-0003): Error codes/messages/HTTP statuses scattered inside controllers caused drift; the application-side and protocol-side error body formats are inherently differen…
+- [adr/ADR-0004.md](https://fulla.dev/docs/adr/ADR-0004): JWT access tokens widen the leak surface and are hard to revoke instantly; storing tokens/secrets in plaintext means a database leak equals a credential leak.
+- [adr/ADR-0005.md](https://fulla.dev/docs/adr/ADR-0005): Coexisting username and email identifiers caused login ambiguity and unique-constraint conflicts.
+- [adr/ADR-0006.md](https://fulla.dev/docs/adr/ADR-0006): Bare this captures in Drogon async callbacks and lock-free cross-thread access were the main source of historical defects (11 audit findings).
+- [adr/ADR-0007.md](https://fulla.dev/docs/adr/ADR-0007): If MFA verify does not bind the first-factor context, cross-client confusion and a redirect_uri bypass can be combined into account takeover.
+- [adr/ADR-0008.md](https://fulla.dev/docs/adr/ADR-0008): If SPA login persists the PKCE verifier/token to storage, XSS immediately equals session hijacking.
+- [adr/ADR-0009.md](https://fulla.dev/docs/adr/ADR-0009): If drogon_ctl-generated model classes undergo manual renaming, regeneration drifts immediately; if already-applied migrations are modified, multi-environment s…
+- [adr/ADR-0010.md](https://fulla.dev/docs/adr/ADR-0010): The homegrown Redis fixed-window rate-limiting Filter carried high maintenance costs and was coupled to storage.
+- [adr/ADR-0011.md](https://fulla.dev/docs/adr/ADR-0011): Windows/macOS cannot containerize PG/Redis; running DB-backed tests on all three platforms would make the matrix infeasible.
+- [adr/ADR-0012.md](https://fulla.dev/docs/adr/ADR-0012): The callback style is criticized as callback hell; C++20 coroutines can eliminate callbacks but bring ABI/debugging/stack-tracing costs.
+- [adr/ADR-0013.md](https://fulla.dev/docs/adr/ADR-0013): Both Vue 3 SPAs (`frontends/user`, `frontends/admin`) ship with zero i18n: page chrome is hardcoded English while the shared error-message catalog (`src/servic…
+- [OAuth/OIDC 规范性审查报告 — fulla](https://fulla.dev/docs/adr/oauth-oidc-compliance-audit): fulla 在 **OAuth 2.0 核心（RFC 6749）的"快乐路径"**上基本合规：授权码与刷新令牌的生成、哈希存储、单次性、轮换、重用级联吊销都按规范实现；PKCE 的 S256 算法是规范正确的 `base64url(raw digest)`；introspect/revoke 的客户端认证模型近期（c…
+- [authforge → fulla 改名影响范围分析](https://fulla.dev/docs/adr/rename-impact-fulla): 改名是**大规模但低风险**的工程：全仓 1658 个文件、约 1.1 万处 `authforge` 出现，其中约 **90% 是纯机械替换**（源码标识符、脚本、文档、CI），真正需要**决策和迁移策略**的只有 8 个层面：
+- [专业仓库改造审计 — 入库范围清理清单](https://fulla.dev/docs/adr/repo-professionalization-audit): **合计**：约 347 个文件出库。所有工具目录磁盘副本保留（本地工具流不受影响），仅退出版本库。
+
+Reference docs:
+- [Documentation Governance v4 — Content Adjudication · Bilingual Docusaurus Site](https://fulla.dev/docs/documentation-governance): 1. **Actionable**: a stranger can get one thing done (deploy / integrate /
+
+Full documentation (all pages concatenated): https://fulla.dev/llms-full.txt

@@ -304,6 +304,17 @@ client, _ := af.NewM2MClient(ctx, "http://localhost:5555", "backend-svc", "…",
 
 ---
 
+## AI 可读文档
+
+fulla 的文档同时以 LLM 友好形态发布——如果你是 AI agent（或在构建一个），从这里开始：
+
+- **[`https://fulla.dev/llms.txt`](https://fulla.dev/llms.txt)** —— 索引版：每个文档页一行摘要 + 链接。
+- **[`https://fulla.dev/llms-full.txt`](https://fulla.dev/llms-full.txt)** —— 全量拼接版（单文件）。
+
+coding agent 部署 fulla 的最短路径是上面的路径 A（`docker compose -f deploy/docker/docker-compose.yml up -d --build`），然后阅读[入门](https://fulla.dev/docs/intro)与[构建应用](https://fulla.dev/docs/guides/build-an-app)文档。两个文件由 `node scripts/gen-llms-txt.mjs` 从 `docs/` 生成，过期时 CI 会失败。
+
+---
+
 ## 部署
 
 | 目标 | 入口 | 说明 |
