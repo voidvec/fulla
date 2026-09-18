@@ -8,6 +8,9 @@
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
 #include <fulla/drogon/utils/PortalUrl.h>
+#include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
+#include <fulla/storage/postgres/models/Organizations.h>
+#include <fulla/storage/postgres/models/Users.h>
 #include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 #include <algorithm>
@@ -711,8 +714,110 @@ void AuthorizationEndpointController::authorize(
                               location +=
                                 "&consent_csrf=" + ::drogon::utils::urlEncode(consentCsrf);
                           }
-                          auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
-                          callback(resp);
+                          // v1.4.0 open platform (M3): surface WHO offers the
+                          // app on the consent screen — an org app shows the
+                          // org name, a personal app the creator's display
+                          // name (username fallback), admin-seeded clients
+                          // show nothing (official first-party apps). Lookup
+                          // failure or memory-mode (no DB) degrades to no
+                          // owner_name, exactly the pre-v1.4.0 consent URL.
+                          auto sendConsentRedirect =
+                            [callback, location](const std::string &ownerName) {
+                                std::string finalLocation = location;
+                                if (!ownerName.empty())
+                                {
+                                    finalLocation +=
+                                      "&owner_name=" + ::drogon::utils::urlEncode(ownerName);
+                                }
+                                callback(::drogon::HttpResponse::newRedirectionResponse(
+                                  finalLocation));
+                            };
+                          try
+                          {
+                              auto ownerDb = ::drogon::app().getDbClient();
+                              ::drogon::orm::Mapper<
+                                ::drogon_model::fulla_db::Oauth2ClientOwners>
+                                ownersMapper(ownerDb);
+                              ownersMapper.findOne(
+                                ::drogon::orm::Criteria(
+                                  ::drogon_model::fulla_db::Oauth2ClientOwners::Cols::_client_id,
+                                  ::drogon::orm::CompareOperator::EQ,
+                                  clientId),
+                                [ownerDb, sendConsentRedirect, callback](
+                                  const ::drogon_model::fulla_db::Oauth2ClientOwners &owner) {
+                                    if (owner.getOrgId() != nullptr)
+                                    {
+                                        const int32_t orgId = *owner.getOrgId();
+                                        try
+                                        {
+                                            ::drogon::orm::Mapper<
+                                              ::drogon_model::fulla_db::Organizations>
+                                              orgsMapper(ownerDb);
+                                            orgsMapper.findOne(
+                                              ::drogon::orm::Criteria(
+                                                ::drogon_model::fulla_db::Organizations::Cols::
+                                                  _id,
+                                                ::drogon::orm::CompareOperator::EQ,
+                                                orgId),
+                                                [sendConsentRedirect](
+                                                  const ::drogon_model::fulla_db::Organizations
+                                                    &org) {
+                                                    sendConsentRedirect(
+                                                      org.getValueOfName());
+                                                },
+                                                [sendConsentRedirect](
+                                                  const ::drogon::orm::DrogonDbException &) {
+                                                    sendConsentRedirect("");
+                                                });
+                                        }
+                                        catch (...)
+                                        {
+                                            sendConsentRedirect("");
+                                        }
+                                        return;
+                                    }
+                                    // Personal app: creator's display_name
+                                    // (username fallback).
+                                    try
+                                    {
+                                        ::drogon::orm::Mapper<
+                                          ::drogon_model::fulla_db::Users>
+                                          usersMapper(ownerDb);
+                                        usersMapper.findOne(
+                                          ::drogon::orm::Criteria(
+                                            ::drogon_model::fulla_db::Users::Cols::_id,
+                                            ::drogon::orm::CompareOperator::EQ,
+                                            owner.getValueOfCreatorUserId()),
+                                            [sendConsentRedirect](
+                                              const ::drogon_model::fulla_db::Users &user) {
+                                                std::string label =
+                                                  user.getValueOfDisplayName();
+                                                if (label.empty())
+                                                    label = user.getValueOfUsername();
+                                                sendConsentRedirect(label);
+                                            },
+                                            [sendConsentRedirect](
+                                              const ::drogon::orm::DrogonDbException &) {
+                                                sendConsentRedirect("");
+                                            });
+                                    }
+                                    catch (...)
+                                    {
+                                        sendConsentRedirect("");
+                                    }
+                                },
+                                [sendConsentRedirect](
+                                  const ::drogon::orm::DrogonDbException &) {
+                                    // No owners row: admin-seeded client.
+                                    sendConsentRedirect("");
+                                });
+                          }
+                          catch (...)
+                          {
+                              // No DB (memory mode) — consent proceeds without
+                              // owner attribution.
+                              sendConsentRedirect("");
+                          }
                           return;
                       }
 
