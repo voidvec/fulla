@@ -25,6 +25,18 @@ test.describe('OAuth2 Consent Page', () => {
     await expect(page.locator('button:has-text("Authorize")')).toBeVisible()
     await expect(page.locator('button:has-text("Deny")')).toBeVisible()
   })
+
+  // v1.4.0 open platform: consent screens attribute self-registered apps to
+  // their owner (owner_name on the authorize -> consent redirect).
+  test('shows owner attribution when owner_name is present', async ({ page }) => {
+    await page.goto('/consent?client_id=app_community&scope=openid&redirect_uri=http://example.com/callback&state=t&owner_name=Ada%20Lovelace')
+    await expect(page.getByTestId('consent-owner-name')).toContainText('Ada Lovelace')
+  })
+
+  test('omits owner attribution for official apps', async ({ page }) => {
+    await page.goto('/consent?client_id=fulla-portal&scope=openid&redirect_uri=http://example.com/callback&state=t')
+    await expect(page.getByTestId('consent-owner-name')).toHaveCount(0)
+  })
 })
 
 // Gap-fix E7: the consent POST must carry the server-provided user_id (URL

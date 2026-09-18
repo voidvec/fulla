@@ -29,6 +29,10 @@ const codeChallenge = route.query.code_challenge as string || ''
 const consentCsrf = route.query.consent_csrf as string || ''
 const codeChallengeMethod = route.query.code_challenge_method as string || ''
 const nonce = route.query.nonce as string || ''
+// v1.4.0 open platform: who offers this app (org name for org apps, the
+// creator's display name for personal apps) — carried on the authorize ->
+// consent redirect so users can tell self-registered apps from official ones.
+const ownerName = route.query.owner_name as string || ''
 
 const scopes = scope.split(' ').filter(Boolean)
 
@@ -127,6 +131,14 @@ function handleConsent(action: 'approve' | 'deny') {
           label="client_id"
           class="mt-1"
         />
+        <!-- Owner attribution (v1.4.0): shown only for self-registered apps -->
+        <p
+          v-if="ownerName"
+          class="mt-0.5 text-xs text-neutral-500"
+          data-testid="consent-owner-name"
+        >
+          {{ $t('oauth.consent.providedBy', { owner: ownerName }) }}
+        </p>
       </div>
     </div>
 
