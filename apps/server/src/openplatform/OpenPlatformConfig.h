@@ -25,6 +25,7 @@ struct OpenPlatformConfig
     int maxOrgsPerUser = 3;      // orgs a user may own
     int maxRedirectUris = 20;    // per app
     int creationRatePerDay = 5;  // app creations per creator per UTC day
+    int maxPendingInvitationsPerOrg = 20;  // review M6: mail-relay bound
 
     static OpenPlatformConfig load()
     {
@@ -44,6 +45,8 @@ struct OpenPlatformConfig
         cfg.maxRedirectUris = json.get("max_redirect_uris", cfg.maxRedirectUris).asInt();
         cfg.creationRatePerDay =
           json.get("creation_rate_limit_per_day", cfg.creationRatePerDay).asInt();
+        cfg.maxPendingInvitationsPerOrg =
+          json.get("max_pending_invitations_per_org", cfg.maxPendingInvitationsPerOrg).asInt();
         return cfg;
     }
 };

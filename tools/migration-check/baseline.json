@@ -32,6 +32,6 @@
   "V031__normalize_user_emails.sql": "9a73f57e63a72d841ee4640e95bef3f954943de042c9400517c1cefd60a8b126",
   "V032__oauth2_codes_nonce.sql": "39156523359a96153c6088baafb136560b874c208dd070a6d1f4f07f44d0568a",
   "V033__users_profile_fields.sql": "3d4ca36db49294687d5cf8592bf88814d010fdd9544d02dd6d291af8e01f6c90",
-  "V034__organization_members_invitations.sql": "c1c661dfe6622eac6d3d691d1aadc2ced9f63d4e3c1d9a24fc947a3664a5ed05",
+  "V034__organization_members_invitations.sql": "9d4f9a6566d7a309604bcdd64610291dc13b7be965fc5058b9c0d801760345ae",
   "V035__client_owners_open_platform.sql": "0d9958365fba04e4fd994ba1d5621157a4ba29774a933dcf90fa614eaf3dd954"
 }
