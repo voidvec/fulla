@@ -320,6 +320,17 @@ Both are generated from the single-source OpenAPI spec (`apps/server/openapi.yam
 
 ---
 
+## AI-Readable Docs
+
+fulla's documentation is published in LLM-friendly form — if you are an AI agent (or building one), start here:
+
+- **[`https://fulla.dev/llms.txt`](https://fulla.dev/llms.txt)** — indexed overview: one line per doc page with links.
+- **[`https://fulla.dev/llms-full.txt`](https://fulla.dev/llms-full.txt)** — all documentation pages concatenated (single file).
+
+For a coding agent setting fulla up, the shortest path is Path A above (`docker compose -f deploy/docker/docker-compose.yml up -d --build`), then read the [Getting Started](https://fulla.dev/docs/intro) and [Build an app](https://fulla.dev/docs/guides/build-an-app) pages. Both files are regenerated from `docs/` by `node scripts/gen-llms-txt.mjs` and fail CI when stale.
+
+---
+
 ## Deployment
 
 | Target | Entry point | Notes |
