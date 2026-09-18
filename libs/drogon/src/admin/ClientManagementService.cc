@@ -2,6 +2,9 @@
 
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
+#include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
+#include <fulla/storage/postgres/models/Organizations.h>
+#include <fulla/storage/postgres/models/Users.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/validation/RuleSet.h>
@@ -15,8 +18,10 @@
 #include "../ClientCacheInvalidator.h"
 
 #include <atomic>
+#include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 
 namespace fulla::drogon::admin
@@ -106,27 +111,181 @@ void ClientManagementService::listClients(const ::drogon::HttpRequestPtr &req, R
     Mapper<Oauth2Clients> mapper(db);
     mapper.findBy(
       Criteria(),
-      [cb](const std::vector<Oauth2Clients> &rows) {
-          Json::Value json;
-          json["status"] = "success";
-          Json::Value clients(Json::arrayValue);
-          for (const auto &row : rows)
+      [req, cb, db](const std::vector<Oauth2Clients> &rows) {
+          // v1.4.0 open platform governance: fan out to the owners table so
+          // the admin list can show who each client belongs to. Split queries
+          // (no JOIN, per db-operations.md); a missing/failed owners lookup
+          // degrades to owner=null rather than failing the whole listing.
+          auto emitListing = [cb, rows](
+            const std::map<std::string, ::drogon_model::fulla_db::Oauth2ClientOwners>
+              &ownerByClient,
+            const std::map<int32_t, std::string> &creatorNames,
+            const std::map<int32_t, std::string> &orgNames) {
+              Json::Value json;
+              json["status"] = "success";
+              Json::Value clients(Json::arrayValue);
+              for (const auto &row : rows)
+              {
+                  Json::Value client;
+                  client["client_id"] = row.getValueOfClientId();
+                  client["client_type"] = row.getValueOfClientType();
+                  client["name"] = row.getValueOfName();
+                  client["redirect_uris"] = row.getValueOfRedirectUris();
+                  client["allowed_grant_types"] = row.getValueOfAllowedGrantTypes();
+                  // F-017: surface the declared token-endpoint auth method.
+                  client["token_endpoint_auth_method"] = row.getValueOfTokenEndpointAuthMethod();
+                  // B1: surface the backchannel-logout URI.
+                  client["backchannel_logout_uri"] = row.getValueOfBackchannelLogoutUri();
+                  auto it = ownerByClient.find(row.getValueOfClientId());
+                  client["self_registered"] = (it != ownerByClient.end());
+                  if (it != ownerByClient.end())
+                  {
+                      Json::Value owner;
+                      owner["creator_user_id"] = it->second.getValueOfCreatorUserId();
+                      auto nameIt = creatorNames.find(it->second.getValueOfCreatorUserId());
+                      owner["creator_name"] =
+                        nameIt != creatorNames.end() ? nameIt->second : "";
+                      if (it->second.getOrgId() != nullptr)
+                      {
+                          owner["org_id"] = *it->second.getOrgId();
+                          auto orgIt = orgNames.find(*it->second.getOrgId());
+                          owner["org_name"] = orgIt != orgNames.end() ? orgIt->second : "";
+                      }
+                      owner["status"] = it->second.getValueOfStatus();
+                      client["owner"] = owner;
+                  }
+                  else
+                  {
+                      client["owner"] = Json::Value();
+                  }
+                  clients.append(client);
+              }
+              json["clients"] = clients;
+              json["total"] = static_cast<int>(rows.size());
+              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          };
+
+          try
           {
-              Json::Value client;
-              client["client_id"] = row.getValueOfClientId();
-              client["client_type"] = row.getValueOfClientType();
-              client["name"] = row.getValueOfName();
-              client["redirect_uris"] = row.getValueOfRedirectUris();
-              client["allowed_grant_types"] = row.getValueOfAllowedGrantTypes();
-              // F-017: surface the declared token-endpoint auth method.
-              client["token_endpoint_auth_method"] = row.getValueOfTokenEndpointAuthMethod();
-              // B1: surface the backchannel-logout URI.
-              client["backchannel_logout_uri"] = row.getValueOfBackchannelLogoutUri();
-              clients.append(client);
+              Mapper<::drogon_model::fulla_db::Oauth2ClientOwners> ownersMapper(db);
+              ownersMapper.findBy(
+                Criteria(),
+                [db, emitListing](
+                  const std::vector<::drogon_model::fulla_db::Oauth2ClientOwners> &owners) {
+                    std::map<std::string, ::drogon_model::fulla_db::Oauth2ClientOwners>
+                      ownerByClient;
+                    std::set<int32_t> creatorIds;
+                    std::set<int32_t> orgIds;
+                    for (const auto &o : owners)
+                    {
+                        ownerByClient[o.getValueOfClientId()] = o;
+                        creatorIds.insert(o.getValueOfCreatorUserId());
+                        if (o.getOrgId() != nullptr)
+                            orgIds.insert(*o.getOrgId());
+                    }
+                    // Resolve creator display names (display_name preferred,
+                    // username fallback) and org names; both fan-outs are
+                    // optional for the listing (missing rows degrade to "").
+                    auto finish = std::make_shared<std::function<void(
+                      const std::map<int32_t, std::string> &,
+                      const std::map<int32_t, std::string> &)>>();
+                    *finish = [ownerByClient, emitListing](
+                                 const std::map<int32_t, std::string> &creatorNames,
+                                 const std::map<int32_t, std::string> &orgNames) {
+                        emitListing(ownerByClient, creatorNames, orgNames);
+                    };
+                    auto orgDone = std::make_shared<std::function<void(
+                      std::map<int32_t, std::string>)>>();
+                    *orgDone = [creatorIds, finish, db](std::map<int32_t, std::string> orgNames) {
+                        if (creatorIds.empty())
+                        {
+                            std::map<int32_t, std::string> empty;
+                            (*finish)(empty, orgNames);
+                            return;
+                        }
+                        std::vector<int32_t> ids(creatorIds.begin(), creatorIds.end());
+                        try
+                        {
+                            Mapper<::drogon_model::fulla_db::Users> usersMapper(db);
+                            usersMapper.findBy(
+                              ::drogon::orm::Criteria(
+                                ::drogon_model::fulla_db::Users::Cols::_id,
+                                ::drogon::orm::CompareOperator::In,
+                                ids),
+                              [orgNames, finish](
+                                const std::vector<::drogon_model::fulla_db::Users> &users) {
+                                  std::map<int32_t, std::string> creatorNames;
+                                  for (const auto &u : users)
+                                  {
+                                      std::string label = u.getValueOfDisplayName();
+                                      if (label.empty())
+                                          label = u.getValueOfUsername();
+                                      creatorNames[u.getValueOfId()] = label;
+                                  }
+                                  (*finish)(creatorNames, orgNames);
+                              },
+                              [orgNames, finish](
+                                const ::drogon::orm::DrogonDbException &) {
+                                  std::map<int32_t, std::string> empty;
+                                  (*finish)(empty, orgNames);
+                              });
+                        }
+                        catch (...)
+                        {
+                            std::map<int32_t, std::string> empty;
+                            (*finish)(empty, orgNames);
+                        }
+                    };
+                    if (orgIds.empty())
+                    {
+                        std::map<int32_t, std::string> empty;
+                        (*orgDone)(empty);
+                        return;
+                    }
+                    std::vector<int32_t> oids(orgIds.begin(), orgIds.end());
+                    try
+                    {
+                        Mapper<::drogon_model::fulla_db::Organizations> orgsMapper(db);
+                        orgsMapper.findBy(
+                          ::drogon::orm::Criteria(
+                            ::drogon_model::fulla_db::Organizations::Cols::_id,
+                            ::drogon::orm::CompareOperator::In,
+                            oids),
+                          [orgDone](
+                            const std::vector<::drogon_model::fulla_db::Organizations>
+                              &orgs) {
+                              std::map<int32_t, std::string> orgNames;
+                              for (const auto &org : orgs)
+                                  orgNames[org.getValueOfId()] = org.getValueOfName();
+                              (*orgDone)(orgNames);
+                          },
+                          [orgDone](const ::drogon::orm::DrogonDbException &) {
+                              std::map<int32_t, std::string> empty;
+                              (*orgDone)(empty);
+                          });
+                    }
+                    catch (...)
+                    {
+                        std::map<int32_t, std::string> empty;
+                        (*orgDone)(empty);
+                    }
+                },
+                [emitListing](
+                  const ::drogon::orm::DrogonDbException &) {
+                    // Owners lookup failed (pre-V035 databases) — degrade to
+                    // an admin-only listing, exactly the pre-v1.4.0 shape.
+                    std::map<std::string, ::drogon_model::fulla_db::Oauth2ClientOwners>
+                      empty;
+                    std::map<int32_t, std::string> noNames;
+                    emitListing(empty, noNames, noNames);
+                });
           }
-          json["clients"] = clients;
-          json["total"] = static_cast<int>(rows.size());
-          (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          catch (...)
+          {
+              std::map<std::string, ::drogon_model::fulla_db::Oauth2ClientOwners> empty;
+              std::map<int32_t, std::string> noNames;
+              emitListing(empty, noNames, noNames);
+          }
       },
       [req, cb](const ::drogon::orm::DrogonDbException &e) {
           respondError(

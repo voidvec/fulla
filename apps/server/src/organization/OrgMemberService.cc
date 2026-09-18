@@ -6,6 +6,7 @@
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
+#include <fulla/drogon/utils/EmailService.h>
 #include <fulla/storage/postgres/models/OrganizationInvitations.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <fulla/storage/postgres/models/Organizations.h>
@@ -694,6 +695,32 @@ void OrgMemberService::createInvitation(
                             invite,
                             [req, cb, org](const InviteModel &inserted) {
                                 audit(req, "org_invitation_created", org.getValueOfSlug());
+                                // Fire-and-forget delivery (same pattern as
+                                // EmailVerificationService): with SMTP
+                                // configured the invitee gets the token by
+                                // mail; in Console mode (no SMTP) it just
+                                // logs — the admin UI response still carries
+                                // the token for out-of-band delivery.
+                                const std::string mailBody =
+                                  "You have been invited to join the organization \"" +
+                                  org.getValueOfName() +
+                                  "\" on Fulla.\n\n"
+                                  "Invitation token (valid for 72 hours, single use):\n  " +
+                                  inserted.getValueOfToken() +
+                                  "\n\n"
+                                  "Sign in to the portal, open My Organizations, and paste "
+                                  "the token under \"Accept an invitation\". If you did not "
+                                  "expect this invitation you can ignore this email.";
+                                ::fulla::drogon::utils::getEmailService().sendEmail(
+                                  inserted.getValueOfEmail(),
+                                  "Fulla Organization Invitation",
+                                  mailBody,
+                                  [](bool ok) {
+                                      if (!ok)
+                                      {
+                                          LOG_WARN << "org invitation email delivery failed";
+                                      }
+                                  });
                                 Json::Value json;
                                 json["id"] = inserted.getValueOfId();
                                 json["email"] = inserted.getValueOfEmail();
