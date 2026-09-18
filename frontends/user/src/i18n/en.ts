@@ -146,6 +146,7 @@ export default {
       title: 'Authorize Access',
       subtitle: 'This application is asking to access your account.',
       unknownClient: 'Unknown client',
+      providedBy: 'Offered by {owner}',
       permissionsHeading: 'It will be able to',
       missingUser: 'Your session could not be identified. Please sign in again.',
       deny: 'Deny',

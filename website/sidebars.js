@@ -32,6 +32,8 @@ const sidebars = {
       type: 'category',
       label: L('Integrate', '集成'),
       items: [
+        'guides/build-an-app',
+        'guides/automation',
         'sdk/sdk-integration-guide',
         'sdk/sdk-runtime-contract',
         'domains/api-reference',
