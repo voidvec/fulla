@@ -130,14 +130,27 @@ void WeChatController::login(
 
     try
     {
-        // Extract the authorization code from a form-urlencoded body
-        // (Drogon parses application/x-www-form-urlencoded bodies into
-        // getParameter automatically) or a query parameter. The previous
-        // hand-rolled body.find("code=") parser was buggy: it matched the
-        // substring anywhere (so "notcode=xyz" parsed as code="xyz") and did
-        // not URL-decode. Drogon's getParameter handles both correctly.
-        // See GoogleController.cc for the same fix.
-        std::string code = req->getParameter("code");
+        // Extract the authorization code. The generalized SocialCallbackPage
+        // (the /callback/wechat route) posts {"code": "..."} as JSON -- the
+        // same contract GitHubController::login serves -- so read the JSON
+        // body first; query parameters and form-urlencoded bodies (Drogon
+        // parses those into getParameter automatically) stay supported.
+        // The previous hand-rolled body.find("code=") parser was buggy: it
+        // matched the substring anywhere (so "notcode=xyz" parsed as
+        // code="xyz") and did not URL-decode. Drogon's getParameter handles
+        // both correctly. See GoogleController.cc for the same fix.
+        std::string code;
+        auto jsonBody = req->getJsonObject();
+        // isString guard: a non-string "code" is a validation error, not a
+        // 500-class jsoncpp LogicError from asString().
+        if (jsonBody && (*jsonBody)["code"].isString())
+        {
+            code = (*jsonBody)["code"].asString();
+        }
+        if (code.empty())
+        {
+            code = req->getParameter("code");
+        }
 
         if (code.empty())
         {

@@ -143,7 +143,9 @@ void GitHubController::login(
     // Extract code from POST body or query
     std::string code;
     auto jsonBody = req->getJsonObject();
-    if (jsonBody && jsonBody->isMember("code"))
+    // isString guard: a non-string "code" (object/array/number) is a
+    // validation error, not a 500-class jsoncpp LogicError from asString().
+    if (jsonBody && (*jsonBody)["code"].isString())
     {
         code = (*jsonBody)["code"].asString();
     }

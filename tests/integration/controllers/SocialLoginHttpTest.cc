@@ -125,16 +125,64 @@ DROGON_TEST(Integration_P0_GoogleLogin_AutoCreateDisabled_Returns403)
 }
 
 // Missing code -> 400 VALIDATION_MISSING_REQUIRED_FIELD (controller's own
-// validation, before the service is called). The controller's body parser
-// scans for the literal "code=" substring, so the body must NOT contain that
-// substring anywhere (e.g. "state=xyz" is safe; "notcode=xyz" is NOT, because
-// it contains "code=").
+// validation, before the service is called). The controller reads the code
+// from a JSON body first, then falls back to query parameters and
+// form-urlencoded bodies; this form-encoded probe is empty of "code" in all
+// three representations, so it must 400.
 DROGON_TEST(Integration_P1_GoogleLogin_MissingCode_Returns400)
 {
     SOCIAL_SKIP_GUARD;
 
     injectGoogleFake();  // install fake (not actually hit on this path)
     auto resp = sendPostForm("/api/google/login", "state=xyz&other=val");
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k400BadRequest));
+}
+
+// The SPA contract (SocialCallbackPage posts {"code": "..."} as JSON) as a
+// permanent regression test: the form-encoded tests above predate the JSON
+// extraction and did not cover it — the exact gap that let the Google JSON
+// contract break silently behind unconfigured credentials (PR #225 review,
+// Major).
+DROGON_TEST(Integration_P0_GoogleLogin_JsonCodeBody_ReturnsTokens)
+{
+    SOCIAL_SKIP_GUARD;
+
+    auto h = injectGoogleFake();
+    Json::Value tokenBody;
+    tokenBody["access_token"] = "gtok-json";
+    h.http->postFormResponses.push_back(
+      fulla::identity::testing::okJson(tokenBody));
+    Json::Value userBody;
+    userBody["sub"] = "g-json";
+    userBody["name"] = "JSON User";
+    userBody["email"] = "json@example.test";
+    h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
+
+    Json::Value reqBody;
+    reqBody["code"] = "test-auth-code";
+    auto resp = sendPostJson("/api/google/login", reqBody);
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k200OK));
+    Json::Value body;
+    REQUIRE(parseJsonBody(resp, body));
+    CHECK(body.isMember("access_token"));
+    CHECK(body.isMember("refresh_token"));
+    CHECK(h.accountRepo->linked.count(
+            fulla::identity::testing::FakeSocialAccountRepository::key("google", "g-json")) == 1);
+}
+
+// A non-string "code" (JSON object) is a validation error (400 missing-field
+// via the isString guard + empty fallback), not a 500-class jsoncpp
+// LogicError from asString().
+DROGON_TEST(Integration_P1_GoogleLogin_NonStringCode_Returns400)
+{
+    SOCIAL_SKIP_GUARD;
+
+    injectGoogleFake();  // install fake (must not be hit on this path)
+    Json::Value hostile;
+    hostile["code"]["evil"] = true;
+    auto resp = sendPostJson("/api/google/login", hostile);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
 }
@@ -183,6 +231,33 @@ DROGON_TEST(Integration_P0_WeChatLogin_FakeExchange_ReturnsTokens)
     CHECK(body.isMember("refresh_token"));
     CHECK(h.accountRepo->linked.count(
             fulla::identity::testing::FakeSocialAccountRepository::key("wechat", "wx-openid-1")) == 1);
+}
+
+// The SPA contract (SocialCallbackPage posts {"code": "..."} as JSON) for the
+// WeChat controller — folded into PR #225 together with the WeChatController
+// JSON-extraction fix so the same contract regression cannot resurface here.
+DROGON_TEST(Integration_P0_WeChatLogin_JsonCodeBody_ReturnsTokens)
+{
+    SOCIAL_SKIP_GUARD;
+
+    auto h = injectWeChatFake();
+    Json::Value tokenBody;
+    tokenBody["access_token"] = "wtok-json";
+    tokenBody["openid"] = "wx-openid-json";
+    h.http->getResponses.push_back(fulla::identity::testing::okJson(tokenBody));
+    Json::Value userBody;
+    userBody["openid"] = "wx-openid-json";
+    userBody["nickname"] = "WX JSON";
+    h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
+
+    Json::Value reqBody;
+    reqBody["code"] = "wx-auth-code";
+    auto resp = sendPostJson("/api/wechat/login", reqBody);
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k200OK));
+    Json::Value body;
+    REQUIRE(parseJsonBody(resp, body));
+    CHECK(body.isMember("access_token"));
 }
 
 // #70: an already-linked WeChat identity (existing user) -> tokens, no
@@ -245,9 +320,9 @@ DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
     CHECK(h.accountRepo->linked.size() == 1);
 }
 
-// Missing code -> 400. Body must not contain the "code=" substring (same
-
-// parser quirk as Google's missing-code case above).
+// Missing code -> 400 (controller validation, service not called). The body
+// carries no "code" in any of the three supported representations (JSON body,
+// query, form), so it must 400.
 
 DROGON_TEST(Integration_P1_WeChatLogin_MissingCode_Returns400)
 {
@@ -303,6 +378,34 @@ DROGON_TEST(Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens)
     CHECK(body.isMember("refresh_token"));
     CHECK(body["token_type"].asString() == "Bearer");
     CHECK(body.isMember("expires_in"));
+}
+
+// The SPA contract (SocialCallbackPage posts {"code": "..."} as JSON) as a
+// permanent regression test — the form-encoded test above predates the JSON
+// extraction and did not cover it (PR #225 review, Major).
+DROGON_TEST(Integration_P0_GitHubLogin_JsonCodeBody_ReturnsTokens)
+{
+    SOCIAL_SKIP_GUARD;
+
+    auto h = injectGitHubFake();
+    Json::Value tokenBody;
+    tokenBody["access_token"] = "gh-tok-json";
+    h.http->postFormResponses.push_back(fulla::identity::testing::okJson(tokenBody));
+    Json::Value userBody;
+    userBody["id"] = 12345;
+    userBody["login"] = "gh-json-user";
+    userBody["email"] = "ghjson@example.test";
+    h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
+
+    Json::Value reqBody;
+    reqBody["code"] = "gh-auth-code";
+    auto resp = sendPostJson("/api/github/login", reqBody);
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k200OK));
+    Json::Value body;
+    REQUIRE(parseJsonBody(resp, body));
+    CHECK(body.isMember("access_token"));
+    CHECK(body.isMember("refresh_token"));
 }
 
 // Missing code -> 400 (controller validation, service not called).
