@@ -277,6 +277,7 @@ export default {
         empty: 'No social accounts linked.',
         redirecting: 'Redirecting...',
         linkGithub: 'Link GitHub Account',
+        linkGoogle: 'Link Google Account',
         unlinkConfirm:
           'Unlink your {provider} account? You will not be able to sign in with {provider} until it is linked to an account again.',
         unlinked: '{provider} account unlinked',

@@ -267,6 +267,7 @@ export default {
         empty: '尚未关联社交账户。',
         redirecting: '跳转中…',
         linkGithub: '关联 GitHub 账户',
+        linkGoogle: '关联 Google 账户',
         unlinkConfirm:
           '确定解除 {provider} 账户的关联？在重新关联之前，您将无法使用 {provider} 登录。',
         unlinked: '已解除 {provider} 账户关联',
