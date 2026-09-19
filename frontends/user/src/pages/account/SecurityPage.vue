@@ -646,6 +646,15 @@ onMounted(fetchProfile)
         >
           {{ linkingProvider === 'github' ? $t('account.security.social.redirecting') : $t('account.security.social.linkGithub') }}
         </AppButton>
+
+        <AppButton
+          v-if="!unlinkingProvider"
+          class="mt-2"
+          :disabled="linkingProvider !== ''"
+          @click="beginSocialLink('google')"
+        >
+          {{ linkingProvider === 'google' ? $t('account.security.social.redirecting') : $t('account.security.social.linkGoogle') }}
+        </AppButton>
       </AppCard>
 
       <!-- Delete Account -->

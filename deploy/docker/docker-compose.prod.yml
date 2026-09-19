@@ -49,6 +49,7 @@ services:
         VITE_CLIENT_ID: ${VITE_CLIENT_ID:-fulla-portal}
         VITE_REDIRECT_URI: ${VITE_REDIRECT_URI:-}
         VITE_GITHUB_CLIENT_ID: ${VITE_GITHUB_CLIENT_ID:-}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     container_name: fulla-frontend
     restart: always
     expose:
