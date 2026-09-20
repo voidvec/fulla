@@ -842,6 +842,12 @@ type PostApiAdminOrganizationsJSONBody struct {
 	Slug           string  `json:"slug"`
 }
 
+// PostApiAdminOrganizationsSlugTransferOwnershipJSONBody defines parameters for PostApiAdminOrganizationsSlugTransferOwnership.
+type PostApiAdminOrganizationsSlugTransferOwnershipJSONBody struct {
+	// UserId ID of the live user who becomes the new owner
+	UserId int32 `json:"user_id"`
+}
+
 // PostApiAdminRolesJSONBody defines parameters for PostApiAdminRoles.
 type PostApiAdminRolesJSONBody struct {
 	Description *string `json:"description,omitempty"`
@@ -1285,6 +1291,9 @@ type PostApiAdminClientsClientIdSuspendJSONRequestBody = PostApiAdminClientsClie
 
 // PostApiAdminOrganizationsJSONRequestBody defines body for PostApiAdminOrganizations for application/json ContentType.
 type PostApiAdminOrganizationsJSONRequestBody PostApiAdminOrganizationsJSONBody
+
+// PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody defines body for PostApiAdminOrganizationsSlugTransferOwnership for application/json ContentType.
+type PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody PostApiAdminOrganizationsSlugTransferOwnershipJSONBody
 
 // PostApiAdminRolesJSONRequestBody defines body for PostApiAdminRoles for application/json ContentType.
 type PostApiAdminRolesJSONRequestBody PostApiAdminRolesJSONBody
@@ -1808,6 +1817,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 	GetApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminOrganizationsSlugTransferOwnershipWithBody Transfer Organization Ownership
+	//
+	// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+	PostApiAdminOrganizationsSlugTransferOwnershipWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminOrganizationsSlugTransferOwnership Transfer Organization Ownership
+	//
+	// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+	PostApiAdminOrganizationsSlugTransferOwnership(ctx context.Context, slug string, body PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminRoles List Roles
 	//
@@ -3376,6 +3403,44 @@ func (c *Client) PostApiAdminOrganizations(ctx context.Context, body PostApiAdmi
 // Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 func (c *Client) GetApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiAdminOrganizationsSlugRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminOrganizationsSlugTransferOwnershipWithBody Transfer Organization Ownership
+//
+// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+func (c *Client) PostApiAdminOrganizationsSlugTransferOwnershipWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminOrganizationsSlugTransferOwnershipRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminOrganizationsSlugTransferOwnership Transfer Organization Ownership
+//
+// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+func (c *Client) PostApiAdminOrganizationsSlugTransferOwnership(ctx context.Context, slug string, body PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminOrganizationsSlugTransferOwnershipRequest(c.Server, slug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6455,6 +6520,53 @@ func NewGetApiAdminOrganizationsSlugRequest(server string, slug string) (*http.R
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewPostApiAdminOrganizationsSlugTransferOwnershipRequest calls the generic PostApiAdminOrganizationsSlugTransferOwnership builder with application/json body
+func NewPostApiAdminOrganizationsSlugTransferOwnershipRequest(server string, slug string, body PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminOrganizationsSlugTransferOwnershipRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPostApiAdminOrganizationsSlugTransferOwnershipRequestWithBody constructs an http.Request for the PostApiAdminOrganizationsSlugTransferOwnership method, with any body, and a specified content type
+func NewPostApiAdminOrganizationsSlugTransferOwnershipRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/organizations/%s/transfer-ownership", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10251,6 +10363,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 	GetApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiAdminOrganizationsSlugResponse, error)
 
+	// PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse Transfer Organization Ownership
+	//
+	// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+	PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminOrganizationsSlugTransferOwnershipResponse, error)
+
+	// PostApiAdminOrganizationsSlugTransferOwnershipWithResponse Transfer Organization Ownership
+	//
+	// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+	PostApiAdminOrganizationsSlugTransferOwnershipWithResponse(ctx context.Context, slug string, body PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminOrganizationsSlugTransferOwnershipResponse, error)
+
 	// GetApiAdminRolesWithResponse List Roles
 	//
 	// Get a list of all roles with user counts.
@@ -12246,6 +12376,62 @@ func (r GetApiAdminOrganizationsSlugResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetApiAdminOrganizationsSlugResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAdminOrganizationsSlugTransferOwnershipResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		OrganizationId *int    `json:"organization_id,omitempty"`
+		OwnerUserId    *int    `json:"owner_user_id,omitempty"`
+		Slug           *string `json:"slug,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) GetJSON200() *struct {
+	OrganizationId *int    `json:"organization_id,omitempty"`
+	OwnerUserId    *int    `json:"owner_user_id,omitempty"`
+	Slug           *string `json:"slug,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminOrganizationsSlugTransferOwnershipResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16838,6 +17024,36 @@ func (c *ClientWithResponses) GetApiAdminOrganizationsSlugWithResponse(ctx conte
 	return ParseGetApiAdminOrganizationsSlugResponse(rsp)
 }
 
+// PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse Transfer Organization Ownership
+//
+// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+func (c *ClientWithResponses) PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminOrganizationsSlugTransferOwnershipResponse, error) {
+	rsp, err := c.PostApiAdminOrganizationsSlugTransferOwnershipWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminOrganizationsSlugTransferOwnershipResponse(rsp)
+}
+
+// PostApiAdminOrganizationsSlugTransferOwnershipWithResponse Transfer Organization Ownership
+//
+// Reassign the organization's owner seat to a live user (#221 admin override). The target is promoted (or added) as owner; previous owner rows are demoted to admin. Resolves the soft-deleted-owner deadlock where an org becomes unmanageable.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/organizations/{slug}/transfer-ownership (the `PostApiAdminOrganizationsSlugTransferOwnership` operationId).
+func (c *ClientWithResponses) PostApiAdminOrganizationsSlugTransferOwnershipWithResponse(ctx context.Context, slug string, body PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminOrganizationsSlugTransferOwnershipResponse, error) {
+	rsp, err := c.PostApiAdminOrganizationsSlugTransferOwnership(ctx, slug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminOrganizationsSlugTransferOwnershipResponse(rsp)
+}
+
 // GetApiAdminRolesWithResponse List Roles
 //
 // Get a list of all roles with user counts.
@@ -19267,6 +19483,49 @@ func ParseGetApiAdminOrganizationsSlugResponse(rsp *http.Response) (*GetApiAdmin
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case rsp.StatusCode == 401:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAdminOrganizationsSlugTransferOwnershipResponse parses an HTTP response from a PostApiAdminOrganizationsSlugTransferOwnershipWithResponse call
+func ParsePostApiAdminOrganizationsSlugTransferOwnershipResponse(rsp *http.Response) (*PostApiAdminOrganizationsSlugTransferOwnershipResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminOrganizationsSlugTransferOwnershipResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			OrganizationId *int    `json:"organization_id,omitempty"`
+			OwnerUserId    *int    `json:"owner_user_id,omitempty"`
+			Slug           *string `json:"slug,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case rsp.StatusCode == 401:
 		break // No content-type

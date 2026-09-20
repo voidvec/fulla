@@ -53,6 +53,13 @@ void OrganizationController::initApiDocsImpl()
     openapi::OpenApiGenerator::addEndpoint(
       orgEp("/api/admin/organizations/{slug}", "GET", "Get Organization",
             "Get details of a specific organization by slug.", {"roles:read"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      orgEp("/api/admin/organizations/{slug}/transfer-ownership", "POST",
+            "Transfer Organization Ownership",
+            "Reassign the organization's owner seat to a live user (#221 admin "
+            "override). Body: {user_id}. The target is promoted (or added) as "
+            "owner; previous owner rows are demoted to admin.",
+            {"roles:write"}));
 }
 
 void OrganizationController::list(
@@ -84,6 +91,18 @@ void OrganizationController::getBySlug(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     OrganizationService::getBySlug(req, sharedCb, slug);
+}
+
+
+void OrganizationController::transferOwnership(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrganizationService::transferOwnership(req, sharedCb, slug);
 }
 
 }  // namespace organization

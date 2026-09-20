@@ -59,6 +59,7 @@ POST /api/admin/clients/{clientId}/reset-secret
 POST /api/admin/clients/{clientId}/resume
 POST /api/admin/clients/{clientId}/suspend
 POST /api/admin/organizations
+POST /api/admin/organizations/{slug}/transfer-ownership
 POST /api/admin/roles
 POST /api/admin/scopes
 POST /api/admin/tokens/revoke-by-client

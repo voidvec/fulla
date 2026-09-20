@@ -1314,6 +1314,63 @@ paths:
       tags:
       - Admin
       - Organization
+  /api/admin/organizations/{slug}/transfer-ownership:
+    post:
+      description: Reassign the organization's owner seat to a live user (#221
+        admin override). The target is promoted (or added) as owner; previous
+        owner rows are demoted to admin. Resolves the soft-deleted-owner
+        deadlock where an org becomes unmanageable.
+      operationId: post_api_admin_organizations_{slug}_transfer_ownership
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - user_id
+              properties:
+                user_id:
+                  type: integer
+                  format: int32
+                  description: ID of the live user who becomes the new owner
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  organization_id:
+                    type: integer
+                  owner_user_id:
+                    type: integer
+          description: Ownership transferred
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: 'Validation error: missing/invalid JSON body or user_id'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Organization or target user not found (or soft-deleted)
+      security:
+      - bearerAuth: []
+      summary: Transfer Organization Ownership
+      tags:
+      - Admin
+      - Organization
   /api/admin/roles:
     get:
       description: Get a list of all roles with user counts.
