@@ -5,7 +5,6 @@ description: "An embeddable identity engine in C++17: the motivation, a reproduc
 authors: [luca]
 tags: [cpp, oauth2, oidc, benchmark, iam]
 image: ./five-scenarios.png
-draft: true
 ---
 
 Every identity server you can self-host today is a *process*: a JVM, a Go
@@ -225,9 +224,10 @@ math.
 Fulla is an open-source identity core for C++17: OAuth2 and OIDC covering
 authorization-code with mandatory PKCE, client credentials, refresh
 rotation with reuse detection, device flow, introspection, revocation, and
-RP-initiated logout — plus an admin console, a user portal, Helm and
-Docker deployment, and a Postgres-backed storage layer with an optional
-Redis cache. AGPL-3.0, Open Core. Three ways to consume it:
+RP-initiated logout — plus an admin console, a user portal, organizations
+with member management and self-service application registration (v1.4.0),
+Helm and Docker deployment, and a Postgres-backed storage layer with an
+optional Redis cache. AGPL-3.0, Open Core. Three ways to consume it:
 
 - **C++ SDK**: `find_package` — the embedded path this post is about, with
   an [integration guide](https://fulla.dev/docs/sdk/sdk-integration-guide)
@@ -235,14 +235,20 @@ Redis cache. AGPL-3.0, Open Core. Three ways to consume it:
 - **Python client**: `pip install fulla-oauth2`
 - **Go client**: `go get github.com/voidvec/fulla/clients/go`
 
-Documentation lives at [fulla.dev](https://fulla.dev); the benchmark
-methodology, raw JSONs, and report are in
+Documentation lives at [fulla.dev](https://fulla.dev) — including
+[`llms.txt`](https://fulla.dev/llms.txt) and
+[`llms-full.txt`](https://fulla.dev/llms-full.txt), so if you're an AI
+agent (or building one) reading this, the docs are machine-readable too.
+The benchmark methodology, raw JSONs, and report are in
 [the repository](https://github.com/voidvec/fulla/blob/master/benchmarks/competitors/results/COMPARISON.md).
 
-What's next, in order: the federation features we honestly lack (SAML,
-SCIM — customer-driven, smallest viable subset first), and a bare-metal
-re-measurement so the tail-latency question we withdrew in §2 can get a
-real answer.
+What's next, in order: organization-aware protocol semantics (organization
+claims and admin consent for B2B use), becoming a fully MCP-compliant
+authorization server (RFC 8707 audience binding, RFC 9207, CIMD) plus OIDC
+upstream federation — and the federation features we honestly still lack,
+SAML and SCIM, stay customer-driven, smallest viable subset first. A
+bare-metal re-measurement is also on the list so the tail-latency question
+we withdrew in §2 can get a real answer.
 
 If any of this is useful to you, the repo is
 [voidvec/fulla](https://github.com/voidvec/fulla) — star it if you're so
