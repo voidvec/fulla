@@ -480,10 +480,26 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
 
     // 4c) #223 anti-enumeration uniformity: probing a SEEDED client (no
     // owners row) and a NON-EXISTENT client must return exactly the same
-    // shape as the IDOR 404 above — same status, same error code (the
-    // response message derives from the catalog per code, so identical by
-    // construction).
+    // shape as the IDOR 404 above — same status, same error code AND the
+    // same catalog message (locked in explicitly so a future detail leak
+    // cannot regress silently).
+    std::string uniformMessage;
     {
+        // Review guard: the seeded-probe leg below only proves anything if
+        // backend-svc actually exists (a DB applied seeds but missed the
+        // client would silently degrade it to a second ghost probe).
+        auto db = ::drogon::app().getDbClient();
+        std::promise<bool> seeded;
+        db->execSqlAsync(
+          "SELECT 1 FROM oauth2_clients WHERE client_id = 'backend-svc'",
+          [&seeded](const ::drogon::orm::Result &r) { seeded.set_value(!r.empty()); },
+          [&seeded](const ::drogon::orm::DrogonDbException &) { seeded.set_value(false); });
+        REQUIRE(seeded.get_future().get());
+
+        Json::Value idorErr = idorBody["error"];
+        REQUIRE(idorErr.isMember("message"));
+        uniformMessage = idorErr["message"].asString();
+
         auto seededProbe = sendPostJson("/api/me/applications/backend-svc/rotate-secret",
                                         Json::Value(Json::objectValue), *tokenB);
         REQUIRE(seededProbe != nullptr);
@@ -491,6 +507,7 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
         Json::Value seededBody;
         REQUIRE(parseJsonBody(seededProbe, seededBody));
         CHECK(seededBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+        CHECK(seededBody["error"]["message"].asString() == uniformMessage);
 
         auto ghostProbe = sendPostJson(
           "/api/me/applications/no-such-client-" + suffix + "/rotate-secret",
@@ -500,6 +517,7 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
         Json::Value ghostBody;
         REQUIRE(parseJsonBody(ghostProbe, ghostBody));
         CHECK(ghostBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+        CHECK(ghostBody["error"]["message"].asString() == uniformMessage);
     }
 
     // 5) rotate the CONFIDENTIAL secret

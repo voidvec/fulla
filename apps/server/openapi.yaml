@@ -2458,18 +2458,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
           description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-          description: Caller cannot manage this application
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Application not found
+          description: Application not found (or caller cannot manage it; #223 uniform 404)
       security:
       - bearerAuth: []
       summary: Delete Application
@@ -2538,7 +2532,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Caller cannot manage this application (or it is suspended)
+          description: Application is suspended (management writes are frozen)
         '404':
           content:
             application/json:
@@ -2601,7 +2595,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Caller cannot manage this application (or it is suspended)
+          description: Application is suspended (management writes are frozen)
         '404':
           content:
             application/json:
@@ -2669,7 +2663,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Caller cannot manage this application / target org role missing
+          description: Application is suspended, or caller lacks the manager role on the target organization
         '404':
           content:
             application/json:

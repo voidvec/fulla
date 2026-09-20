@@ -13642,8 +13642,6 @@ type DeleteApiMeApplicationsClientIdResponse struct {
 	}
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *ErrorEnvelope
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *ErrorEnvelope
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *ErrorEnvelope
 }
@@ -13658,11 +13656,6 @@ func (r DeleteApiMeApplicationsClientIdResponse) GetJSON200() *struct {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r DeleteApiMeApplicationsClientIdResponse) GetJSON401() *ErrorEnvelope {
 	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r DeleteApiMeApplicationsClientIdResponse) GetJSON403() *ErrorEnvelope {
-	return r.JSON403
 }
 
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
@@ -20237,13 +20230,6 @@ func ParseDeleteApiMeApplicationsClientIdResponse(rsp *http.Response) (*DeleteAp
 			return nil, err
 		}
 		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest ErrorEnvelope
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorEnvelope
