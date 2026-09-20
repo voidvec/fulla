@@ -289,16 +289,97 @@ DROGON_TEST(Integration_P1_Admin_OrgOwnerTransfer_SoftDeletedOwnerDeadlockResolv
         CHECK(statusIs(resp, ::drogon::k200OK));
     }
 
+    // Review coverage: a NON-ADMIN user token is rejected by the admin
+    // filter (the endpoint's RBAC + scope gates).
+    {
+        Json::Value body;
+        body["user_id"] = std::stoi(bUserId);
+        auto resp = sendPostJson(transferPath, body, *tokenB);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k403Forbidden));
+    }
+
+    // Review coverage: transfer to a NON-MEMBER takes the insert path (the
+    // admin override must resolve orgs where nobody is left to invite), and
+    // the LIVING previous owner is demoted to 'admin' — observable now that
+    // B has not been soft-deleted.
+    const std::string userD = "qa_ow_d_" + suffix;
+    const std::string passD = randomPassword();
+    std::string dUserId;
+    {
+        REQUIRE(createVerifiedUser(userD, userD + "@qa.example", passD));
+        auto db = ::drogon::app().getDbClient();
+        std::promise<std::string> got;
+        db->execSqlAsync(
+          "SELECT id FROM users WHERE username = $1",
+          [&got](const ::drogon::orm::Result &r) {
+              got.set_value(r.empty() ? "" : std::to_string(r[0]["id"].as<int64_t>()));
+          },
+          [&got](const ::drogon::orm::DrogonDbException &) { got.set_value(""); },
+          userD);
+        dUserId = got.get_future().get();
+        REQUIRE(!dUserId.empty());
+
+        Json::Value body;
+        body["user_id"] = std::stoi(dUserId);
+        auto resp = sendPostJson(transferPath, body, *adminToken);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k200OK));
+
+        auto membersResp = sendGet("/api/me/organizations/" + orgSlug + "/members", *tokenB);
+        REQUIRE(membersResp != nullptr);
+        CHECK(statusIs(membersResp, ::drogon::k200OK));
+        Json::Value membersBody;
+        REQUIRE(parseJsonBody(membersResp, membersBody));
+        bool dIsOwner = false;
+        bool bIsAdmin = false;
+        int ownerCount = 0;
+        for (const auto &m : membersBody["members"])
+        {
+            if (m["role"].asString() == "owner")
+                ++ownerCount;
+            if (m["username"].asString() == userD && m["role"].asString() == "owner")
+                dIsOwner = true;
+            if (m["username"].asString() == userB && m["role"].asString() == "admin")
+                bIsAdmin = true;
+        }
+        CHECK(dIsOwner);   // insert path: non-member became owner
+        CHECK(bIsAdmin);   // living previous owner demoted (not dropped)
+        CHECK(ownerCount == 1);
+    }
+
+    // Review coverage: idempotent re-run leaves exactly one owner.
+    {
+        Json::Value body;
+        body["user_id"] = std::stoi(dUserId);
+        auto resp = sendPostJson(transferPath, body, *adminToken);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k200OK));
+
+        auto tokenD = loginTokenVerbose(userD, passD);
+        REQUIRE(tokenD.has_value());
+        auto membersResp = sendGet("/api/me/organizations/" + orgSlug + "/members", *tokenD);
+        REQUIRE(membersResp != nullptr);
+        CHECK(statusIs(membersResp, ::drogon::k200OK));
+        Json::Value membersBody;
+        REQUIRE(parseJsonBody(membersResp, membersBody));
+        int ownerCount = 0;
+        for (const auto &m : membersBody["members"])
+            if (m["role"].asString() == "owner")
+                ++ownerCount;
+        CHECK(ownerCount == 1);
+    }
+
     // Cleanup: hard-delete the throwaway users (member rows FK-cascade; the
     // org row stays — slugs are timestamp-unique, same as the org flow test).
     {
         auto db = ::drogon::app().getDbClient();
         std::promise<bool> cleaned;
         db->execSqlAsync(
-          "DELETE FROM users WHERE username IN ($1, $2)",
+          "DELETE FROM users WHERE username IN ($1, $2, $3)",
           [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
           [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
-          userA, userB);
+          userA, userB, userD);
         CHECK(cleaned.get_future().get());
     }
 }
