@@ -38,11 +38,6 @@ def _parse_response(
 
         return response_401
 
-    if response.status_code == 403:
-        response_403 = ErrorEnvelope.from_dict(response.json())
-
-        return response_403
-
     if response.status_code == 404:
         response_404 = ErrorEnvelope.from_dict(response.json())
 
