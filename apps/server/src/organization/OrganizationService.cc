@@ -5,11 +5,11 @@
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <fulla/storage/postgres/models/Organizations.h>
 #include <fulla/storage/postgres/models/Users.h>
-#include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 
 #include <drogon/drogon.h>
 
+#include <limits>
 #include <regex>
 
 namespace organization
@@ -215,14 +215,19 @@ void OrganizationService::transferOwnership(
         );
         return;
     }
-    const int32_t targetUserId = static_cast<int32_t>((*jsonBody)["user_id"].asInt64());
-    if (targetUserId <= 0)
+    const int64_t requestedUserId = (*jsonBody)["user_id"].asInt64();
+    // Validate in the int64 domain BEFORE narrowing: a plain static_cast
+    // would wrap out-of-range values (e.g. 2^32 + 1 -> 1) onto a different
+    // real user (review D1).
+    if (requestedUserId <= 0 || requestedUserId > (std::numeric_limits<int32_t>::max)())
     {
         respondError(
-          req, cb, "VALIDATION_INVALID_INPUT", "transfer ownership: user_id must be positive"
+          req, cb, "VALIDATION_INVALID_INPUT",
+          "transfer ownership: user_id is out of range"
         );
         return;
     }
+    const int32_t targetUserId = static_cast<int32_t>(requestedUserId);
 
     // UnexpectedRows (no such org/user) -> uniform 404; real DB failures
     // surface as DB_QUERY_ERROR (fail visibly — same split as the
@@ -261,9 +266,15 @@ void OrganizationService::transferOwnership(
                     [req, cb, db, org, orgId, slug, targetUserId, userNotFound](const Users &) {
                         // Step 2 (runs after the upsert below): demote any
                         // OTHER owner rows to 'admin' and respond. Ordered
-                        // after the promote/insert so the fail-open direction
-                        // is "two owners temporarily" (retryable), never
-                        // "zero owners".
+                        // after the promote/insert so a mid-flight failure
+                        // biases toward "two owners temporarily" (retryable).
+                        // Not transactional (V034's comment envisioned a
+                        // single-transaction transfer for the full v1.5.0
+                        // nominate-and-accept workflow); the promote's
+                        // count==0 abort below closes the "target left
+                        // mid-flight -> zero owners" window, and the
+                        // remaining two-concurrent-transfers race is a
+                        // system-admin-only surface documented in the PR.
                         auto demoteOthersAndRespond = [req, cb, db, org, orgId, slug, targetUserId]() {
                             // Documented batch-UPDATE exemption (same pattern
                             // as the open-platform suspend revocation): the
@@ -313,7 +324,20 @@ void OrganizationService::transferOwnership(
                                   {
                                       Mapper<MemberModel>(db).update(
                                         updated,
-                                        [demoteOthersAndRespond](const std::size_t) {
+                                        [req, cb, demoteOthersAndRespond](const std::size_t count) {
+                                            if (count == 0)
+                                            {
+                                                // The target left the org
+                                                // between findOne and update.
+                                                // Demoting now would leave the
+                                                // org with zero owners — abort
+                                                // instead (review D2).
+                                                respondError(
+                                                  req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                                  "target left the organization during the "
+                                                  "transfer; retry");
+                                                return;
+                                            }
                                             demoteOthersAndRespond();
                                         },
                                         [req, cb](const DrogonDbException &e) {
@@ -330,11 +354,14 @@ void OrganizationService::transferOwnership(
                                         "membership promote: Mapper construction failed");
                                   }
                               },
-                              [req, cb, db, orgId, targetUserId, demoteOthersAndRespond,
-                               userNotFound](const DrogonDbException &e) {
+                              [req, cb, db, orgId, targetUserId, demoteOthersAndRespond](
+                                const DrogonDbException &e) {
                                   if (dynamic_cast<const UnexpectedRows *>(&e) == nullptr)
                                   {
-                                      userNotFound(e);  // real DB error (same split)
+                                      respondError(
+                                        req, cb, "DB_QUERY_ERROR",
+                                        std::string("membership lookup failed: ") +
+                                          e.base().what());
                                       return;
                                   }
                                   MemberModel m;
