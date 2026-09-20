@@ -79,6 +79,12 @@ from .post_api_admin_clients_client_id_suspend_body import PostApiAdminClientsCl
 from .post_api_admin_clients_client_id_suspend_response_200 import PostApiAdminClientsClientIdSuspendResponse200
 from .post_api_admin_organizations_body import PostApiAdminOrganizationsBody
 from .post_api_admin_organizations_response_200 import PostApiAdminOrganizationsResponse200
+from .post_api_admin_organizations_slug_transfer_ownership_body import (
+    PostApiAdminOrganizationsSlugTransferOwnershipBody,
+)
+from .post_api_admin_organizations_slug_transfer_ownership_response_200 import (
+    PostApiAdminOrganizationsSlugTransferOwnershipResponse200,
+)
 from .post_api_admin_roles_body import PostApiAdminRolesBody
 from .post_api_admin_scopes_body import PostApiAdminScopesBody
 from .post_api_admin_tokens_revoke_by_client_body import PostApiAdminTokensRevokeByClientBody
@@ -216,6 +222,8 @@ __all__ = (
     "PostApiAdminClientsClientIdSuspendResponse200",
     "PostApiAdminOrganizationsBody",
     "PostApiAdminOrganizationsResponse200",
+    "PostApiAdminOrganizationsSlugTransferOwnershipBody",
+    "PostApiAdminOrganizationsSlugTransferOwnershipResponse200",
     "PostApiAdminRolesBody",
     "PostApiAdminScopesBody",
     "PostApiAdminTokensRevokeByClientBody",

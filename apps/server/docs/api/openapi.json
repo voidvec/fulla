@@ -335,6 +335,35 @@
         ]
       }
     },
+    "/api/admin/clients/{clientId}/resume" : 
+    {
+      "post" : 
+      {
+        "description" : "Lift a suspension on a self-registered application.",
+        "operationId" : "post_api_admin_clients_{clientId}_resume",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Resume Application",
+        "tags" : 
+        [
+          "Admin",
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "clients:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/clients/{clientId}/scopes" : 
     {
       "get" : 
@@ -379,6 +408,35 @@
         [
           "Admin",
           "Clients"
+        ],
+        "x-required-scopes" : 
+        [
+          "clients:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/clients/{clientId}/suspend" : 
+    {
+      "post" : 
+      {
+        "description" : "Suspend a self-registered application (abuse response): client validation fails while suspended.",
+        "operationId" : "post_api_admin_clients_{clientId}_suspend",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Suspend Application",
+        "tags" : 
+        [
+          "Admin",
+          "Applications"
         ],
         "x-required-scopes" : 
         [
@@ -583,6 +641,35 @@
         "x-required-scopes" : 
         [
           "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/organizations/{slug}/transfer-ownership" : 
+    {
+      "post" : 
+      {
+        "description" : "Reassign the organization's owner seat to a live user (#221 admin override). Body: {user_id}. The target is promoted (or added) as owner; previous owner rows are demoted to admin.",
+        "operationId" : "post_api_admin_organizations_{slug}_transfer-ownership",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Transfer Organization Ownership",
+        "tags" : 
+        [
+          "Admin",
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
         ],
         "x-scope-implied-by" : 
         [
@@ -1374,6 +1461,144 @@
         ]
       }
     },
+    "/api/me/applications" : 
+    {
+      "get" : 
+      {
+        "description" : "List the caller's self-registered applications (personal plus org apps the caller can manage). Secrets are never included.",
+        "operationId" : "get_api_me_applications",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List My Applications",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "Register an OAuth2/OIDC application (RP self-registration). Gated by the open_platform config: enabled, require_org, per-user/per-org quotas, a 24h creation rate limit, the self_service scope allowlist, and the grant-type whitelist. The client secret (CONFIDENTIAL) is returned exactly once.",
+        "operationId" : "post_api_me_applications",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Register Application (self-service)",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/applications/{clientId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "Soft-delete a self-registered application; it disappears from every flow immediately (authorization, token, introspection).",
+        "operationId" : "delete_api_me_applications_{clientId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Delete Application",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "patch" : 
+      {
+        "description" : "Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal: creator; org: org owner/admin).",
+        "operationId" : "patch_api_me_applications_{clientId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Update Application",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/applications/{clientId}/rotate-secret" : 
+    {
+      "post" : 
+      {
+        "description" : "Rotate the client secret of a CONFIDENTIAL self-registered application. The previous secret is invalidated immediately; the new secret is returned exactly once.",
+        "operationId" : "post_api_me_applications_{clientId}_rotate-secret",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Rotate Application Secret",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/applications/{clientId}/transfer" : 
+    {
+      "post" : 
+      {
+        "description" : "Move the management anchor: {org_slug: \"...\"} to an organization the caller manages, or {org_slug: null} back to personal. client_id, existing consents and issued tokens are preserved.",
+        "operationId" : "post_api_me_applications_{clientId}_transfer",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Transfer Application",
+        "tags" : 
+        [
+          "Applications"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
     "/api/me/authorized-apps" : 
     {
       "get" : 
@@ -1482,6 +1707,192 @@
         ]
       }
     },
+    "/api/me/org-invitations/accept" : 
+    {
+      "post" : 
+      {
+        "description" : "Accept an invitation by token. The caller's account email must match the invitation email (normalized).",
+        "operationId" : "post_api_me_org-invitations_accept",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Accept Organization Invitation",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations" : 
+    {
+      "get" : 
+      {
+        "description" : "List the current user's organization memberships (with the caller's org role).",
+        "operationId" : "get_api_me_organizations",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List My Organizations",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "Create an organization; the caller becomes its owner. Gated by the open_platform config (max_orgs_per_user quota, reserved-slug list).",
+        "operationId" : "post_api_me_organizations",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Create Organization (self-service)",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/invitations" : 
+    {
+      "get" : 
+      {
+        "description" : "List pending (unaccepted, unexpired-tracking) invitations (owner/admin).",
+        "operationId" : "get_api_me_organizations_{slug}_invitations",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Pending Invitations",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "Create a single-use 72h invitation (owner/admin). The token is returned once and must be delivered out-of-band; email delivery is not part of v1.4.0.",
+        "operationId" : "post_api_me_organizations_{slug}_invitations",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Invite Organization Member",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/invitations/{invitationId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "Revoke a pending invitation (owner/admin).",
+        "operationId" : "delete_api_me_organizations_{slug}_invitations_{invitationId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Revoke Invitation",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/members" : 
+    {
+      "get" : 
+      {
+        "description" : "List members of an organization (any member may view).",
+        "operationId" : "get_api_me_organizations_{slug}_members",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Organization Members",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/members/{userId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "Remove a member. Owner removes anyone except self; admins remove members; members may only remove themselves (leave). The owner seat cannot be removed.",
+        "operationId" : "delete_api_me_organizations_{slug}_members_{userId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Remove Organization Member",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
     "/api/me/password" : 
     {
       "put" : 
@@ -1496,6 +1907,30 @@
           }
         ],
         "summary" : "Change Password",
+        "tags" : 
+        [
+          "User Profile"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/profile" : 
+    {
+      "patch" : 
+      {
+        "description" : "Update the current user's editable profile fields. Body (JSON, both keys optional; an absent key leaves the field unchanged, an empty string clears it): display_name (<=100 chars), avatar_url (https-only, <=2048 chars).",
+        "operationId" : "patch_api_me_profile",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Update User Profile",
         "tags" : 
         [
           "User Profile"

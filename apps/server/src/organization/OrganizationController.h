@@ -41,6 +41,14 @@ class OrganizationController : public ::drogon::HttpController<OrganizationContr
       ::drogon::Get,
       "fulla::drogon::filters::AuthorizationFilter"
     );
+    // #221 admin override: reassign an org's owner seat (minimal slice; the
+    // self-service nominate-and-accept workflow is v1.5.0 scope).
+    ADD_METHOD_TO(
+      OrganizationController::transferOwnership,
+      "/api/admin/organizations/{slug}/transfer-ownership",
+      ::drogon::Post,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
     METHOD_LIST_END
 
     void list(
@@ -52,6 +60,12 @@ class OrganizationController : public ::drogon::HttpController<OrganizationContr
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
     );
     void getBySlug(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    void transferOwnership(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &slug

@@ -37,6 +37,18 @@ class OrganizationService
       ResponseCallback cb,
       const std::string &slug
     );
+
+    /// POST /api/admin/organizations/{slug}/transfer-ownership — #221 admin
+    /// override: reassign the org's single owner seat to a live user (system
+    /// admin surface; the self-service nominate-and-accept workflow is
+    /// v1.5.0 scope). Target may be a non-member (membership is created) or
+    /// an existing member (role promoted). Any previous owner row is demoted
+    /// to 'admin' so the single-owner invariant holds after the call.
+    static void transferOwnership(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug
+    );
 };
 
 }  // namespace organization
