@@ -209,6 +209,14 @@ void loadOwnerRow(
 // Management permission (design §2.3): personal app (org_id NULL) -> creator;
 // org app -> that org's owner/admin members. Continuation receives ok=false
 // with the error response already sent.
+//
+// #223 anti-enumeration: every "the caller may not manage this app" outcome
+// (admin-seeded client, someone else's personal app, org app without the
+// manager role) responds with the SAME 404 shape as a non-existent client —
+// same code, same status — so probes cannot distinguish client provenance
+// by error shape (the response message derives from the catalog per code,
+// making the bodies identical by construction). Only callers who ARE
+// authorized managers can observe state-level 403s (suspension).
 void requireManagePermission(
   const DbClientPtr &db,
   const std::string &clientId,
@@ -224,25 +232,26 @@ void requireManagePermission(
         bool exists, const OwnerModel &owner) {
           if (!exists)
           {
+              // Admin-seeded client (no owners row) or non-existent client:
+              // one uniform 404 (#223 — no provenance text).
               respondError(
-                req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
-                "application not found (admin-managed clients are not self-service)"
+                req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "application not found"
               );
               return;
           }
           if (owner.getOrgId() == nullptr)
           {
               // Review C1: a personal app is manageable ONLY by its creator.
-              // Denying without responding would hang the request (and leave
-              // no 403 audit trail), so the reject path must respond here —
-              // the continuation contract is "ok == true means continue;
-              // ok == false means the response has already been sent".
+              // #223: a non-creator gets the uniform 404 (indistinguishable
+              // from a non-existent client); the response must still be sent
+              // here — the continuation contract is "ok == true means
+              // continue; ok == false means the response has already been
+              // sent" (denying without responding would hang the request).
               const bool ok = owner.getValueOfCreatorUserId() == caller.id;
               if (!ok)
               {
                   respondError(
-                    req, cb, "AUTHZ_ACCESS_DENIED",
-                    "only the creator can manage a personal application"
+                    req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "application not found"
                   );
                   return;
               }
@@ -271,9 +280,13 @@ void requireManagePermission(
                   const std::vector<MemberModel> &rows) {
                     if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
                     {
+                        // #223: non-members and non-manager members get the
+                        // uniform 404 — identical to probing an admin-seeded
+                        // or non-existent client. (Plain members also do not
+                        // see org apps in the list endpoint, so 404 is
+                        // coherent UX, not just hardening.)
                         respondError(
-                          req, cb, "AUTHZ_ACCESS_DENIED",
-                          "org owner or admin role required for this application"
+                          req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "application not found"
                         );
                         return;
                     }

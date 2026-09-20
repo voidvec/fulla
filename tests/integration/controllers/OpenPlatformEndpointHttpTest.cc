@@ -324,6 +324,44 @@ DROGON_TEST(Integration_P1_OpenPlatform_Org_CreateInviteAcceptFlow)
     REQUIRE(denyResp != nullptr);
     CHECK(statusIs(denyResp, drogon::k403Forbidden));
 
+    // #223: an org app probed by a plain member returns the uniform 404 —
+    // identical to probing a seeded or non-existent client (B cannot see
+    // org apps in the list either, so this is coherent UX, not a lie).
+    {
+        Json::Value orgApp;
+        orgApp["name"] = "QA Org App " + suffix;
+        Json::Value cbUris(Json::arrayValue);
+        cbUris.append("http://localhost/cb");
+        orgApp["redirect_uris"] = cbUris;
+        auto orgAppResp = sendPostJson("/api/me/applications", orgApp, *tokenA);
+        REQUIRE(orgAppResp != nullptr);
+        CHECK(statusIs(orgAppResp, drogon::k201Created));
+        Json::Value orgAppBody;
+        REQUIRE(parseJsonBody(orgAppResp, orgAppBody));
+        const std::string orgAppId = orgAppBody["client_id"].asString();
+
+        Json::Value toOrg;
+        toOrg["org_slug"] = "qa-org-" + suffix;
+        auto transferResp =
+          sendPostJson("/api/me/applications/" + orgAppId + "/transfer", toOrg, *tokenA);
+        REQUIRE(transferResp != nullptr);
+        CHECK(statusIs(transferResp, drogon::k200OK));
+
+        auto memberProbe = sendPostJson("/api/me/applications/" + orgAppId + "/rotate-secret",
+                                        Json::Value(Json::objectValue), *tokenB);
+        REQUIRE(memberProbe != nullptr);
+        CHECK(statusIs(memberProbe, drogon::k404NotFound));
+        Json::Value memberProbeBody;
+        REQUIRE(parseJsonBody(memberProbe, memberProbeBody));
+        CHECK(memberProbeBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+
+        // The org owner still manages the org app.
+        auto ownerRotate = sendPostJson("/api/me/applications/" + orgAppId + "/rotate-secret",
+                                        Json::Value(Json::objectValue), *tokenA);
+        REQUIRE(ownerRotate != nullptr);
+        CHECK(statusIs(ownerRotate, drogon::k200OK));
+    }
+
     // B leaves (self-removal)
     auto leaveResp =
       sendDelete("/api/me/organizations/qa-org-" + suffix + "/members/" + bUserId, *tokenB);
@@ -420,7 +458,9 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
     CHECK(listHasConf);
 
     // 4b) Cross-user IDOR (review C1): user B operating user A's personal
-    // app is denied WITH a response (the old code silently hung).
+    // app is denied WITH a response (the old code silently hung). #223: the
+    // denial is now the uniform 404 (indistinguishable from a non-existent
+    // client), not a 403 that reveals "self-registered personal app".
     const std::string userB = "qa_app_b_" + suffix;
     const std::string passB = randomPassword();
     REQUIRE(createVerifiedUser(userB, userB + "@qa.example", passB));
@@ -430,10 +470,37 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
       sendPostJson("/api/me/applications/" + confClientId + "/rotate-secret",
                    Json::Value(Json::objectValue), *tokenB);
     REQUIRE(idorRotate != nullptr);
-    CHECK(statusIs(idorRotate, drogon::k403Forbidden));
+    CHECK(statusIs(idorRotate, drogon::k404NotFound));
+    Json::Value idorBody;
+    REQUIRE(parseJsonBody(idorRotate, idorBody));
+    CHECK(idorBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
     auto idorDelete = sendDelete("/api/me/applications/" + confClientId, *tokenB);
     REQUIRE(idorDelete != nullptr);
-    CHECK(statusIs(idorDelete, drogon::k403Forbidden));
+    CHECK(statusIs(idorDelete, drogon::k404NotFound));
+
+    // 4c) #223 anti-enumeration uniformity: probing a SEEDED client (no
+    // owners row) and a NON-EXISTENT client must return exactly the same
+    // shape as the IDOR 404 above — same status, same error code (the
+    // response message derives from the catalog per code, so identical by
+    // construction).
+    {
+        auto seededProbe = sendPostJson("/api/me/applications/backend-svc/rotate-secret",
+                                        Json::Value(Json::objectValue), *tokenB);
+        REQUIRE(seededProbe != nullptr);
+        CHECK(statusIs(seededProbe, drogon::k404NotFound));
+        Json::Value seededBody;
+        REQUIRE(parseJsonBody(seededProbe, seededBody));
+        CHECK(seededBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+
+        auto ghostProbe = sendPostJson(
+          "/api/me/applications/no-such-client-" + suffix + "/rotate-secret",
+          Json::Value(Json::objectValue), *tokenB);
+        REQUIRE(ghostProbe != nullptr);
+        CHECK(statusIs(ghostProbe, drogon::k404NotFound));
+        Json::Value ghostBody;
+        REQUIRE(parseJsonBody(ghostProbe, ghostBody));
+        CHECK(ghostBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    }
 
     // 5) rotate the CONFIDENTIAL secret
     auto rotateResp =
