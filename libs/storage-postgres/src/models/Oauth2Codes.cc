@@ -7,6 +7,7 @@
 
 #include "Oauth2Codes.h"
 #include "Oauth2Clients.h"
+#include "Organizations.h"
 #include <drogon/utils/Utilities.h>
 #include <string>
 
@@ -26,6 +27,7 @@ const std::string Oauth2Codes::Cols::_used = "\"used\"";
 const std::string Oauth2Codes::Cols::_auth_time = "\"auth_time\"";
 const std::string Oauth2Codes::Cols::_amr = "\"amr\"";
 const std::string Oauth2Codes::Cols::_nonce = "\"nonce\"";
+const std::string Oauth2Codes::Cols::_org_id = "\"org_id\"";
 const std::string Oauth2Codes::primaryKeyName = "code";
 const bool Oauth2Codes::hasPrimaryKey = true;
 const std::string Oauth2Codes::tableName = "\"oauth2_codes\"";
@@ -42,7 +44,8 @@ const std::vector<typename Oauth2Codes::MetaData> Oauth2Codes::metaData_={
 {"used","bool","boolean",1,0,0,0},
 {"auth_time","int64_t","bigint",8,0,0,0},
 {"amr","std::string","character varying",128,0,0,0},
-{"nonce","std::string","character varying",512,0,0,0}
+{"nonce","std::string","character varying",512,0,0,0},
+{"org_id","int32_t","integer",4,0,0,0}
 };
 const std::string &Oauth2Codes::getColumnName(size_t index) noexcept(false)
 {
@@ -101,11 +104,15 @@ Oauth2Codes::Oauth2Codes(const Row &r, const ssize_t indexOffset) noexcept
         {
             nonce_=std::make_shared<std::string>(r["nonce"].as<std::string>());
         }
+        if(!r["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r["org_id"].as<int32_t>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 12 > r.size())
+        if(offset + 13 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -171,13 +178,18 @@ Oauth2Codes::Oauth2Codes(const Row &r, const ssize_t indexOffset) noexcept
         {
             nonce_=std::make_shared<std::string>(r[index].as<std::string>());
         }
+        index = offset + 12;
+        if(!r[index].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r[index].as<int32_t>());
+        }
     }
 
 }
 
 Oauth2Codes::Oauth2Codes(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -276,6 +288,14 @@ Oauth2Codes::Oauth2Codes(const Json::Value &pJson, const std::vector<std::string
         if(!pJson[pMasqueradingVector[11]].isNull())
         {
             nonce_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
+        }
+    }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[12]].asInt64());
         }
     }
 }
@@ -378,12 +398,20 @@ Oauth2Codes::Oauth2Codes(const Json::Value &pJson) noexcept(false)
             nonce_=std::make_shared<std::string>(pJson["nonce"].asString());
         }
     }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[12]=true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
+        }
+    }
 }
 
 void Oauth2Codes::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -483,6 +511,14 @@ void Oauth2Codes::updateByMasqueradedJson(const Json::Value &pJson,
             nonce_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[12]].asInt64());
+        }
+    }
 }
 
 void Oauth2Codes::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -580,6 +616,14 @@ void Oauth2Codes::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["nonce"].isNull())
         {
             nonce_=std::make_shared<std::string>(pJson["nonce"].asString());
+        }
+    }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
         }
     }
 }
@@ -883,6 +927,28 @@ void Oauth2Codes::setNonceToNull() noexcept
     dirtyFlag_[11] = true;
 }
 
+const int32_t &Oauth2Codes::getValueOfOrgId() const noexcept
+{
+    static const int32_t defaultValue = int32_t();
+    if(orgId_)
+        return *orgId_;
+    return defaultValue;
+}
+const std::shared_ptr<int32_t> &Oauth2Codes::getOrgId() const noexcept
+{
+    return orgId_;
+}
+void Oauth2Codes::setOrgId(const int32_t &pOrgId) noexcept
+{
+    orgId_ = std::make_shared<int32_t>(pOrgId);
+    dirtyFlag_[12] = true;
+}
+void Oauth2Codes::setOrgIdToNull() noexcept
+{
+    orgId_.reset();
+    dirtyFlag_[12] = true;
+}
+
 void Oauth2Codes::updateId(const uint64_t id)
 {
 }
@@ -901,7 +967,8 @@ const std::vector<std::string> &Oauth2Codes::insertColumns() noexcept
         "used",
         "auth_time",
         "amr",
-        "nonce"
+        "nonce",
+        "org_id"
     };
     return inCols;
 }
@@ -1040,6 +1107,17 @@ void Oauth2Codes::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Oauth2Codes::updateColumns() const
@@ -1092,6 +1170,10 @@ const std::vector<std::string> Oauth2Codes::updateColumns() const
     if(dirtyFlag_[11])
     {
         ret.push_back(getColumnName(11));
+    }
+    if(dirtyFlag_[12])
+    {
+        ret.push_back(getColumnName(12));
     }
     return ret;
 }
@@ -1230,6 +1312,17 @@ void Oauth2Codes::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Oauth2Codes::toJson() const
 {
@@ -1330,6 +1423,14 @@ Json::Value Oauth2Codes::toJson() const
     {
         ret["nonce"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1342,7 +1443,7 @@ Json::Value Oauth2Codes::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 12)
+    if(pMasqueradingVector.size() == 13)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1476,6 +1577,17 @@ Json::Value Oauth2Codes::toMasqueradedJson(
                 ret[pMasqueradingVector[11]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[12].empty())
+        {
+            if(getOrgId())
+            {
+                ret[pMasqueradingVector[12]]=getValueOfOrgId();
+            }
+            else
+            {
+                ret[pMasqueradingVector[12]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1575,6 +1687,14 @@ Json::Value Oauth2Codes::toMasqueradedJson(
     {
         ret["nonce"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1655,13 +1775,18 @@ bool Oauth2Codes::validateJsonForCreation(const Json::Value &pJson, std::string 
         if(!validJsonOfField(11, "nonce", pJson["nonce"], err, true))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(12, "org_id", pJson["org_id"], err, true))
+            return false;
+    }
     return true;
 }
 bool Oauth2Codes::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1778,6 +1903,14 @@ bool Oauth2Codes::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[12].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[12]))
+          {
+              if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1853,13 +1986,18 @@ bool Oauth2Codes::validateJsonForUpdate(const Json::Value &pJson, std::string &e
         if(!validJsonOfField(11, "nonce", pJson["nonce"], err, false))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(12, "org_id", pJson["org_id"], err, false))
+            return false;
+    }
     return true;
 }
 bool Oauth2Codes::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                    const std::vector<std::string> &pMasqueradingVector,
                                                    std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1928,6 +2066,11 @@ bool Oauth2Codes::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
       {
           if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+      {
+          if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, false))
               return false;
       }
     }
@@ -2137,6 +2280,17 @@ bool Oauth2Codes::validJsonOfField(size_t index,
                 return false;
             }
             break;
+        case 12:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isInt())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
         default:
             err="Internal error in the server";
             return false;
@@ -2182,6 +2336,49 @@ void Oauth2Codes::getClient(const DbClientPtr &clientPtr,
                     else
                     {
                         rcb(Oauth2Clients(r[0]));
+                    }
+               }
+               >> ecb;
+}
+Organizations Oauth2Codes::getOrganizations(const DbClientPtr &clientPtr) const {
+    static const std::string sql = "select * from organizations where id = $1";
+    Result r(nullptr);
+    {
+        auto binder = *clientPtr << sql;
+        binder << *orgId_ << Mode::Blocking >>
+            [&r](const Result &result) { r = result; };
+        binder.exec();
+    }
+    if (r.size() == 0)
+    {
+        throw UnexpectedRows("0 rows found");
+    }
+    else if (r.size() > 1)
+    {
+        throw UnexpectedRows("Found more than one row");
+    }
+    return Organizations(r[0]);
+}
+
+void Oauth2Codes::getOrganizations(const DbClientPtr &clientPtr,
+                                   const std::function<void(Organizations)> &rcb,
+                                   const ExceptionCallback &ecb) const
+{
+    static const std::string sql = "select * from organizations where id = $1";
+    *clientPtr << sql
+               << *orgId_
+               >> [rcb = std::move(rcb), ecb](const Result &r){
+                    if (r.size() == 0)
+                    {
+                        ecb(UnexpectedRows("0 rows found"));
+                    }
+                    else if (r.size() > 1)
+                    {
+                        ecb(UnexpectedRows("Found more than one row"));
+                    }
+                    else
+                    {
+                        rcb(Organizations(r[0]));
                     }
                }
                >> ecb;

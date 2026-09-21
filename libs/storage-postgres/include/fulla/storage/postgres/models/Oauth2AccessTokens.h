@@ -39,6 +39,7 @@ namespace drogon_model
 namespace fulla_db
 {
 class Oauth2Clients;
+class Organizations;
 
 class Oauth2AccessTokens
 {
@@ -58,6 +59,7 @@ class Oauth2AccessTokens
         static const std::string _introspect_count;
         static const std::string _revoked_at;
         static const std::string _revoked_by;
+        static const std::string _org_id;
     };
 
     static const int primaryKeyNumber;
@@ -228,8 +230,17 @@ class Oauth2AccessTokens
     void setRevokedBy(std::string &&pRevokedBy) noexcept;
     void setRevokedByToNull() noexcept;
 
+    /**  For column org_id  */
+    ///Get the value of the column org_id, returns the default value if the column is null
+    const int32_t &getValueOfOrgId() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+    ///Set the value of the column org_id
+    void setOrgId(const int32_t &pOrgId) noexcept;
+    void setOrgIdToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 13;  }
+
+    static size_t getColumnNumber() noexcept {  return 14;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -240,6 +251,10 @@ class Oauth2AccessTokens
     void getClient(const drogon::orm::DbClientPtr &clientPtr,
                    const std::function<void(Oauth2Clients)> &rcb,
                    const drogon::orm::ExceptionCallback &ecb) const;
+    Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+    void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+                          const std::function<void(Organizations)> &rcb,
+                          const drogon::orm::ExceptionCallback &ecb) const;
   private:
     friend drogon::orm::Mapper<Oauth2AccessTokens>;
     friend drogon::orm::BaseBuilder<Oauth2AccessTokens, true, true>;
@@ -268,6 +283,7 @@ class Oauth2AccessTokens
     std::shared_ptr<int32_t> introspectCount_;
     std::shared_ptr<int64_t> revokedAt_;
     std::shared_ptr<std::string> revokedBy_;
+    std::shared_ptr<int32_t> orgId_;
     struct MetaData
     {
         const std::string colName_;
@@ -279,7 +295,7 @@ class Oauth2AccessTokens
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[13]={ false };
+    bool dirtyFlag_[14]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -365,6 +381,11 @@ class Oauth2AccessTokens
         if(dirtyFlag_[12])
         {
             sql += "revoked_by,";
+            ++parametersCount;
+        }
+        if(dirtyFlag_[13])
+        {
+            sql += "org_id,";
             ++parametersCount;
         }
         if(parametersCount > 0)
@@ -459,6 +480,11 @@ class Oauth2AccessTokens
             sql.append(placeholderStr, n);
         }
         if(dirtyFlag_[12])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        if(dirtyFlag_[13])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);

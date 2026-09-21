@@ -12,7 +12,6 @@
 #include "Oauth2DeviceCodes.h"
 #include "Oauth2RefreshTokens.h"
 #include "Oauth2Scopes.h"
-#include "Organizations.h"
 #include <drogon/utils/Utilities.h>
 #include <string>
 
@@ -30,7 +29,6 @@ const std::string Oauth2Clients::Cols::_allowed_grant_types = "\"allowed_grant_t
 const std::string Oauth2Clients::Cols::_token_endpoint_auth_method = "\"token_endpoint_auth_method\"";
 const std::string Oauth2Clients::Cols::_backchannel_logout_uri = "\"backchannel_logout_uri\"";
 const std::string Oauth2Clients::Cols::_backchannel_logout_session_required = "\"backchannel_logout_session_required\"";
-const std::string Oauth2Clients::Cols::_org_id = "\"org_id\"";
 const std::string Oauth2Clients::Cols::_deleted_at = "\"deleted_at\"";
 const std::string Oauth2Clients::primaryKeyName = "client_id";
 const bool Oauth2Clients::hasPrimaryKey = true;
@@ -47,7 +45,6 @@ const std::vector<typename Oauth2Clients::MetaData> Oauth2Clients::metaData_={
 {"token_endpoint_auth_method","std::string","character varying",50,0,0,0},
 {"backchannel_logout_uri","std::string","character varying",512,0,0,0},
 {"backchannel_logout_session_required","bool","boolean",1,0,0,0},
-{"org_id","int32_t","integer",4,0,0,0},
 {"deleted_at","::trantor::Date","timestamp with time zone",0,0,0,0}
 };
 const std::string &Oauth2Clients::getColumnName(size_t index) noexcept(false)
@@ -99,10 +96,6 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
         {
             backchannelLogoutSessionRequired_=std::make_shared<bool>(r["backchannel_logout_session_required"].as<bool>());
         }
-        if(!r["org_id"].isNull())
-        {
-            orgId_=std::make_shared<int32_t>(r["org_id"].as<int32_t>());
-        }
         if(!r["deleted_at"].isNull())
         {
             auto timeStr = r["deleted_at"].as<std::string>();
@@ -129,7 +122,7 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 12 > r.size())
+        if(offset + 11 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -188,11 +181,6 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
         index = offset + 10;
         if(!r[index].isNull())
         {
-            orgId_=std::make_shared<int32_t>(r[index].as<int32_t>());
-        }
-        index = offset + 11;
-        if(!r[index].isNull())
-        {
             auto timeStr = r[index].as<std::string>();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
@@ -219,7 +207,7 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
 
 Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -309,15 +297,7 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::st
         dirtyFlag_[10] = true;
         if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[10]].asInt64());
-        }
-    }
-    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
-    {
-        dirtyFlag_[11] = true;
-        if(!pJson[pMasqueradingVector[11]].isNull())
-        {
-            auto timeStr = pJson[pMasqueradingVector[11]].asString();
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -422,17 +402,9 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson) noexcept(false)
             backchannelLogoutSessionRequired_=std::make_shared<bool>(pJson["backchannel_logout_session_required"].asBool());
         }
     }
-    if(pJson.isMember("org_id"))
-    {
-        dirtyFlag_[10]=true;
-        if(!pJson["org_id"].isNull())
-        {
-            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
-        }
-    }
     if(pJson.isMember("deleted_at"))
     {
-        dirtyFlag_[11]=true;
+        dirtyFlag_[10]=true;
         if(!pJson["deleted_at"].isNull())
         {
             auto timeStr = pJson["deleted_at"].asString();
@@ -461,7 +433,7 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson) noexcept(false)
 void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -550,15 +522,7 @@ void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[10] = true;
         if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[10]].asInt64());
-        }
-    }
-    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
-    {
-        dirtyFlag_[11] = true;
-        if(!pJson[pMasqueradingVector[11]].isNull())
-        {
-            auto timeStr = pJson[pMasqueradingVector[11]].asString();
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -662,17 +626,9 @@ void Oauth2Clients::updateByJson(const Json::Value &pJson) noexcept(false)
             backchannelLogoutSessionRequired_=std::make_shared<bool>(pJson["backchannel_logout_session_required"].asBool());
         }
     }
-    if(pJson.isMember("org_id"))
-    {
-        dirtyFlag_[10] = true;
-        if(!pJson["org_id"].isNull())
-        {
-            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
-        }
-    }
     if(pJson.isMember("deleted_at"))
     {
-        dirtyFlag_[11] = true;
+        dirtyFlag_[10] = true;
         if(!pJson["deleted_at"].isNull())
         {
             auto timeStr = pJson["deleted_at"].asString();
@@ -948,28 +904,6 @@ void Oauth2Clients::setBackchannelLogoutSessionRequiredToNull() noexcept
     dirtyFlag_[9] = true;
 }
 
-const int32_t &Oauth2Clients::getValueOfOrgId() const noexcept
-{
-    static const int32_t defaultValue = int32_t();
-    if(orgId_)
-        return *orgId_;
-    return defaultValue;
-}
-const std::shared_ptr<int32_t> &Oauth2Clients::getOrgId() const noexcept
-{
-    return orgId_;
-}
-void Oauth2Clients::setOrgId(const int32_t &pOrgId) noexcept
-{
-    orgId_ = std::make_shared<int32_t>(pOrgId);
-    dirtyFlag_[10] = true;
-}
-void Oauth2Clients::setOrgIdToNull() noexcept
-{
-    orgId_.reset();
-    dirtyFlag_[10] = true;
-}
-
 const ::trantor::Date &Oauth2Clients::getValueOfDeletedAt() const noexcept
 {
     static const ::trantor::Date defaultValue = ::trantor::Date();
@@ -984,12 +918,12 @@ const std::shared_ptr<::trantor::Date> &Oauth2Clients::getDeletedAt() const noex
 void Oauth2Clients::setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept
 {
     deletedAt_ = std::make_shared<::trantor::Date>(pDeletedAt);
-    dirtyFlag_[11] = true;
+    dirtyFlag_[10] = true;
 }
 void Oauth2Clients::setDeletedAtToNull() noexcept
 {
     deletedAt_.reset();
-    dirtyFlag_[11] = true;
+    dirtyFlag_[10] = true;
 }
 
 void Oauth2Clients::updateId(const uint64_t id)
@@ -1009,7 +943,6 @@ const std::vector<std::string> &Oauth2Clients::insertColumns() noexcept
         "token_endpoint_auth_method",
         "backchannel_logout_uri",
         "backchannel_logout_session_required",
-        "org_id",
         "deleted_at"
     };
     return inCols;
@@ -1129,17 +1062,6 @@ void Oauth2Clients::outputArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[10])
     {
-        if(getOrgId())
-        {
-            binder << getValueOfOrgId();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[11])
-    {
         if(getDeletedAt())
         {
             binder << getValueOfDeletedAt();
@@ -1197,10 +1119,6 @@ const std::vector<std::string> Oauth2Clients::updateColumns() const
     if(dirtyFlag_[10])
     {
         ret.push_back(getColumnName(10));
-    }
-    if(dirtyFlag_[11])
-    {
-        ret.push_back(getColumnName(11));
     }
     return ret;
 }
@@ -1319,17 +1237,6 @@ void Oauth2Clients::updateArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[10])
     {
-        if(getOrgId())
-        {
-            binder << getValueOfOrgId();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[11])
-    {
         if(getDeletedAt())
         {
             binder << getValueOfDeletedAt();
@@ -1423,14 +1330,6 @@ Json::Value Oauth2Clients::toJson() const
     {
         ret["backchannel_logout_session_required"]=Json::Value();
     }
-    if(getOrgId())
-    {
-        ret["org_id"]=getValueOfOrgId();
-    }
-    else
-    {
-        ret["org_id"]=Json::Value();
-    }
     if(getDeletedAt())
     {
         ret["deleted_at"]=getDeletedAt()->toDbStringLocal();
@@ -1451,7 +1350,7 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 12)
+    if(pMasqueradingVector.size() == 11)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1565,24 +1464,13 @@ Json::Value Oauth2Clients::toMasqueradedJson(
         }
         if(!pMasqueradingVector[10].empty())
         {
-            if(getOrgId())
+            if(getDeletedAt())
             {
-                ret[pMasqueradingVector[10]]=getValueOfOrgId();
+                ret[pMasqueradingVector[10]]=getDeletedAt()->toDbStringLocal();
             }
             else
             {
                 ret[pMasqueradingVector[10]]=Json::Value();
-            }
-        }
-        if(!pMasqueradingVector[11].empty())
-        {
-            if(getDeletedAt())
-            {
-                ret[pMasqueradingVector[11]]=getDeletedAt()->toDbStringLocal();
-            }
-            else
-            {
-                ret[pMasqueradingVector[11]]=Json::Value();
             }
         }
         return ret;
@@ -1668,14 +1556,6 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     {
         ret["backchannel_logout_session_required"]=Json::Value();
     }
-    if(getOrgId())
-    {
-        ret["org_id"]=getValueOfOrgId();
-    }
-    else
-    {
-        ret["org_id"]=Json::Value();
-    }
     if(getDeletedAt())
     {
         ret["deleted_at"]=getDeletedAt()->toDbStringLocal();
@@ -1754,14 +1634,9 @@ bool Oauth2Clients::validateJsonForCreation(const Json::Value &pJson, std::strin
         if(!validJsonOfField(9, "backchannel_logout_session_required", pJson["backchannel_logout_session_required"], err, true))
             return false;
     }
-    if(pJson.isMember("org_id"))
-    {
-        if(!validJsonOfField(10, "org_id", pJson["org_id"], err, true))
-            return false;
-    }
     if(pJson.isMember("deleted_at"))
     {
-        if(!validJsonOfField(11, "deleted_at", pJson["deleted_at"], err, true))
+        if(!validJsonOfField(10, "deleted_at", pJson["deleted_at"], err, true))
             return false;
     }
     return true;
@@ -1770,7 +1645,7 @@ bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                        const std::vector<std::string> &pMasqueradingVector,
                                                        std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1879,14 +1754,6 @@ bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
-      if(!pMasqueradingVector[11].empty())
-      {
-          if(pJson.isMember(pMasqueradingVector[11]))
-          {
-              if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, true))
-                  return false;
-          }
-      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1952,14 +1819,9 @@ bool Oauth2Clients::validateJsonForUpdate(const Json::Value &pJson, std::string 
         if(!validJsonOfField(9, "backchannel_logout_session_required", pJson["backchannel_logout_session_required"], err, false))
             return false;
     }
-    if(pJson.isMember("org_id"))
-    {
-        if(!validJsonOfField(10, "org_id", pJson["org_id"], err, false))
-            return false;
-    }
     if(pJson.isMember("deleted_at"))
     {
-        if(!validJsonOfField(11, "deleted_at", pJson["deleted_at"], err, false))
+        if(!validJsonOfField(10, "deleted_at", pJson["deleted_at"], err, false))
             return false;
     }
     return true;
@@ -1968,7 +1830,7 @@ bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2032,11 +1894,6 @@ bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
       {
           if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, false))
-              return false;
-      }
-      if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
-      {
-          if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
               return false;
       }
     }
@@ -2226,17 +2083,6 @@ bool Oauth2Clients::validJsonOfField(size_t index,
             }
             break;
         case 10:
-            if(pJson.isNull())
-            {
-                return true;
-            }
-            if(!pJson.isInt())
-            {
-                err="Type error in the "+fieldName+" field";
-                return false;
-            }
-            break;
-        case 11:
             if(pJson.isNull())
             {
                 return true;
@@ -2432,49 +2278,6 @@ void Oauth2Clients::getDeviceCodes(const DbClientPtr &clientPtr,
                        ret.emplace_back(Oauth2DeviceCodes(row));
                    }
                    rcb(ret);
-               }
-               >> ecb;
-}
-Organizations Oauth2Clients::getOrganizations(const DbClientPtr &clientPtr) const {
-    static const std::string sql = "select * from organizations where id = $1";
-    Result r(nullptr);
-    {
-        auto binder = *clientPtr << sql;
-        binder << *orgId_ << Mode::Blocking >>
-            [&r](const Result &result) { r = result; };
-        binder.exec();
-    }
-    if (r.size() == 0)
-    {
-        throw UnexpectedRows("0 rows found");
-    }
-    else if (r.size() > 1)
-    {
-        throw UnexpectedRows("Found more than one row");
-    }
-    return Organizations(r[0]);
-}
-
-void Oauth2Clients::getOrganizations(const DbClientPtr &clientPtr,
-                                     const std::function<void(Organizations)> &rcb,
-                                     const ExceptionCallback &ecb) const
-{
-    static const std::string sql = "select * from organizations where id = $1";
-    *clientPtr << sql
-               << *orgId_
-               >> [rcb = std::move(rcb), ecb](const Result &r){
-                    if (r.size() == 0)
-                    {
-                        ecb(UnexpectedRows("0 rows found"));
-                    }
-                    else if (r.size() > 1)
-                    {
-                        ecb(UnexpectedRows("Found more than one row"));
-                    }
-                    else
-                    {
-                        rcb(Organizations(r[0]));
-                    }
                }
                >> ecb;
 }

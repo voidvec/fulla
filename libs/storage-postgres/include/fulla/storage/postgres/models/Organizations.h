@@ -52,6 +52,7 @@ class Organizations
         static const std::string _issuer_override;
         static const std::string _created_at;
         static const std::string _updated_at;
+        static const std::string _require_mfa;
     };
 
     static const int primaryKeyNumber;
@@ -177,8 +178,16 @@ class Organizations
     void setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept;
     void setUpdatedAtToNull() noexcept;
 
+    /**  For column require_mfa  */
+    ///Get the value of the column require_mfa, returns the default value if the column is null
+    const bool &getValueOfRequireMfa() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<bool> &getRequireMfa() const noexcept;
+    ///Set the value of the column require_mfa
+    void setRequireMfa(const bool &pRequireMfa) noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 8;  }
+
+    static size_t getColumnNumber() noexcept {  return 9;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -208,6 +217,7 @@ class Organizations
     std::shared_ptr<std::string> issuerOverride_;
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
+    std::shared_ptr<bool> requireMfa_;
     struct MetaData
     {
         const std::string colName_;
@@ -219,7 +229,7 @@ class Organizations
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[8]={ false };
+    bool dirtyFlag_[9]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -276,6 +286,12 @@ class Organizations
         {
             needSelection=true;
         }
+        sql += "require_mfa,";
+        ++parametersCount;
+        if(!dirtyFlag_[8])
+        {
+            needSelection=true;
+        }
         needSelection=true;
         if(parametersCount > 0)
         {
@@ -324,6 +340,15 @@ class Organizations
             sql +="default,";
         }
         if(dirtyFlag_[7])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        else
+        {
+            sql +="default,";
+        }
+        if(dirtyFlag_[8])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
