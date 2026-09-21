@@ -25,6 +25,7 @@
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/IMetrics.h>
 #include <fulla/oauth2/protocol/AuthorizationService.h>
+#include <optional>
 #include <string>
 #include <memory>
 #include <functional>
@@ -219,7 +220,8 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
       const std::string &nonce,
       std::function<void(bool, std::string, std::string)> &&callback,
       int64_t authTime = 0,
-      const std::string &amr = ""
+      const std::string &amr = "",
+      const std::optional<int32_t> &orgId = std::nullopt
     );
 
     /**

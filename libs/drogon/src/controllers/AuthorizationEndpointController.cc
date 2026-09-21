@@ -1,6 +1,8 @@
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
 #include <fulla/oauth2/access/ScopeDecision.h>
+#include <fulla/drogon/authz/OrgContextGate.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/drogon/utils/OrgContextSlots.h>
 #include <fulla/drogon/validation/RuleSet.h>
 #include <fulla/drogon/validation/HttpResponder.h>
 #include <fulla/drogon/error/OAuth2ErrorHandler.h>
@@ -105,6 +107,15 @@ void AuthorizationEndpointController::initApiDocsImpl()
        {"max_age",
         "Maximum allowable age of the user's authentication in seconds. If "
         "the session auth_time is older, re-authentication is forced.",
+        fulla::drogon::observability::openapi::ParameterType::STRING,
+        fulla::drogon::observability::openapi::ParameterLocation::QUERY,
+        false},
+       {"org_id",
+        "Organization context hint (v1.5.0): integer id or slug of the "
+        "organization this authorization is made in. Accepted only when "
+        "the user is a current member and the client belongs to that "
+        "organization; otherwise a uniform inline error (no redirect). "
+        "Combine with the org scope to receive org_ctx claims.",
         fulla::drogon::observability::openapi::ParameterType::STRING,
         fulla::drogon::observability::openapi::ParameterLocation::QUERY,
         false}};
@@ -514,6 +525,14 @@ void AuthorizationEndpointController::authorize(
                     }
                     if (!nonce.empty())
                         location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
+                    // v1.5.0 M1: carry the org context hint through the
+                    // login round trip; the login POST re-runs the same
+                    // OrgContextGate before issuing the code.
+                    {
+                        const std::string orgRef = req->getParameter("org_id");
+                        if (!orgRef.empty())
+                            location += "&org_id=" + ::drogon::utils::urlEncode(orgRef);
+                    }
                     auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                     callback(resp);
                     return;
@@ -581,10 +600,90 @@ void AuthorizationEndpointController::authorize(
                     }
                     if (!nonce.empty())
                         location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
+                    // v1.5.0 M1: carry the org context hint through the
+                    // login round trip; the login POST re-runs the same
+                    // OrgContextGate before issuing the code.
+                    {
+                        const std::string orgRef = req->getParameter("org_id");
+                        if (!orgRef.empty())
+                            location += "&org_id=" + ::drogon::utils::urlEncode(orgRef);
+                    }
                     auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                     callback(resp);
                     return;
                 }
+
+                // v1.5.0 M1 (design §2.1 item 5 / O1): the org-context
+                // gate wraps the scope evaluation. `org_id` is a client-
+                // supplied HINT; it is accepted only for a current member
+                // of the referenced org on an org-owned client (§2.5 MFA
+                // policy applies), and EVERY rejection cause renders the
+                // SAME inline error page with NO redirect (anti-
+                // enumeration; #229's authorize face). The wrapper below
+                // dispatches the gate decision and carries the validated
+                // binding (nullopt = no org context) into the unchanged
+                // scope/consent/issuance tail; the tail body keeps its
+                // original indentation so the wrap stays diff-reviewable.
+                auto proceedWithOrgContext =
+                  [plugin, req, clientId, userId, redirectUri, state, scope,
+                   codeChallenge, codeChallengeMethod, nonce, promptNone,
+                   promptConsent, sessAuthTime, sessAmr, requestedScopes,
+                   callback = std::move(callback)](
+                    const ::fulla::drogon::authz::OrgContextDecision &decision) mutable {
+                  std::optional<int32_t> orgId;
+                  switch (decision.kind)
+                  {
+                    case ::fulla::drogon::authz::OrgContextDecision::Kind::Proceed:
+                        orgId = decision.orgId;
+                        // NOTE (review nit 3): the session stash is minted
+                        // only in the consent-redirect branch below -- the
+                        // silent path issues within this request and would
+                        // otherwise strand a slot until TTL/eviction.
+                        break;
+                    case ::fulla::drogon::authz::OrgContextDecision::Kind::MfaRequired:
+                    {
+                        // §2.5: inline guidance (no redirect) pointing at
+                        // the existing MFA flow; retry after an MFA login.
+                        if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()
+                                       ->getMetrics())
+                            m->incrementCounter(
+                              "oauth2_requests_total",
+                              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
+                              static_cast<double>(403)
+                            );
+                        auto resp = ::drogon::HttpResponse::newHttpResponse();
+                        resp->setStatusCode(::drogon::k403Forbidden);
+                        resp->setBody(
+                          "This organization requires multi-factor "
+                          "authentication. Sign in with MFA, then retry the "
+                          "authorization request."
+                        );
+                        callback(resp);
+                        return;
+                    }
+                    case ::fulla::drogon::authz::OrgContextDecision::Kind::None:
+                        break;
+                    case ::fulla::drogon::authz::OrgContextDecision::Kind::Invalid:
+                    case ::fulla::drogon::authz::OrgContextDecision::Kind::StorageError:
+                    default:
+                    {
+                        // Uniform inline rejection (O1): identical shape for
+                        // unknown org / non-member / unrelated client /
+                        // DB-down, never a redirect back to redirect_uri.
+                        if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()
+                                       ->getMetrics())
+                            m->incrementCounter(
+                              "oauth2_requests_total",
+                              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
+                              static_cast<double>(400)
+                            );
+                        auto resp = ::drogon::HttpResponse::newHttpResponse();
+                        resp->setStatusCode(::drogon::k400BadRequest);
+                        resp->setBody("Invalid or unauthorized org_id parameter.");
+                        callback(resp);
+                        return;
+                    }
+                  }
 
                 auto authService = plugin->getAuthorizationService();
                 if (!authService)
@@ -614,6 +713,7 @@ void AuthorizationEndpointController::authorize(
                    promptConsent,
                    sessAuthTime,
                    sessAmr,
+                   orgId,
                    callback = std::move(callback)](
                     fulla::oauth2::access::ScopeValidationSummary summary
                   ) mutable {
@@ -711,6 +811,24 @@ void AuthorizationEndpointController::authorize(
                               );
                               location +=
                                 "&consent_csrf=" + ::drogon::utils::urlEncode(consentCsrf);
+                          }
+                          // v1.5.0 M1 (design §2.1 item 4): the org binding
+                          // selected for THIS request crosses the portal
+                          // round trip server-side, keyed by `state` -- the
+                          // consent URL never carries it. The consent POST
+                          // consumes it one-shot and re-runs the gate.
+                          // (Minted here, not at gate time, so the silent
+                          // path does not strand a slot -- review nit 3.)
+                          if (req->session() && orgId.has_value() && !state.empty())
+                          {
+                              ::fulla::drogon::utils::OrgContextSlots::mint(
+                                req->session(),
+                                state,
+                                *orgId,
+                                static_cast<int64_t>(
+                                  ::trantor::Date::now().secondsSinceEpoch()
+                                )
+                              );
                           }
                           // v1.4.0 open platform (M3): surface WHO offers the
                           // app on the consent screen — an org app shows the
@@ -837,11 +955,65 @@ void AuthorizationEndpointController::authorize(
                             callback(resp);
                         },
                         sessAuthTime,
-                        sessAmr
+                        sessAmr,
+                        orgId
                       );
                   }
                 );
-            }
+                  };  // proceedWithOrgContext
+
+                  // v1.5.0 M1 dispatch: no org_id parameter -> straight
+                  // through; otherwise the gate decides (see the wrapper's
+                  // decision handling above).
+                  {
+                      const std::string orgRef = req->getParameter("org_id");
+                      if (orgRef.empty())
+                      {
+                          proceedWithOrgContext(
+                            [] {
+                                ::fulla::drogon::authz::OrgContextDecision d;
+                                d.kind =
+                                  ::fulla::drogon::authz::OrgContextDecision::Kind::None;
+                                return d;
+                            }()
+                          );
+                          return;
+                      }
+                      // session userId is the internal id as a string (the
+                      // canonical /api/me pattern, V024).
+                      int32_t internalUserId = 0;
+                      try
+                      {
+                          internalUserId = std::stoi(userId);
+                      }
+                      catch (...)
+                      {
+                          internalUserId = 0;
+                      }
+                      if (internalUserId <= 0)
+                      {
+                          proceedWithOrgContext(
+                            [] {
+                                ::fulla::drogon::authz::OrgContextDecision d;
+                                d.kind =
+                                  ::fulla::drogon::authz::OrgContextDecision::Kind::Invalid;
+                                return d;
+                            }()
+                          );
+                          return;
+                      }
+                      ::fulla::drogon::authz::OrgContextGate::validate(
+                        orgRef,
+                        clientId,
+                        internalUserId,
+                        sessAmr,
+                        [proceedWithOrgContext = std::move(proceedWithOrgContext)](
+                          const ::fulla::drogon::authz::OrgContextDecision &d) mutable {
+                            proceedWithOrgContext(d);
+                        }
+                      );
+                  }
+              }
           );
       }
     );

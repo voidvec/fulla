@@ -493,6 +493,32 @@ double value
 ) = 0;
 };
 }
+=== libs/common/include/fulla/common/ports/IOrgContextResolver.h
+#pragma once
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+namespace fulla::common::ports
+{
+struct OrgContextInfo
+{
+std::string orgName;
+std::vector<std::string> roles;
+};
+class IOrgContextResolver
+{
+public:
+using OrgContextCallback = std::function<void(std::optional<OrgContextInfo>)>;
+virtual ~IOrgContextResolver() = default;
+virtual void resolveOrgContext(
+const std::string &subject,
+int32_t orgId,
+OrgContextCallback &&cb
+) = 0;
+};
+}
 === libs/common/include/fulla/common/ports/IRoleProvider.h
 #pragma once
 #include <cstdint>
@@ -907,6 +933,29 @@ int ttlSeconds_;
 };
 }
 #endif
+=== libs/drogon/include/fulla/drogon/adapters/StorageOrgContextResolver.h
+#pragma once
+#include <fulla/common/ports/IOrgContextResolver.h>
+#include <drogon/orm/DbClient.h>
+#include <memory>
+#include <string>
+namespace fulla::drogon::adapters
+{
+class StorageOrgContextResolver : public fulla::common::ports::IOrgContextResolver
+{
+public:
+explicit StorageOrgContextResolver(::drogon::orm::DbClientPtr dbClient)
+: dbClient_(std::move(dbClient))
+;
+void resolveOrgContext(
+const std::string &subject,
+int32_t orgId,
+fulla::common::ports::IOrgContextResolver::OrgContextCallback &&cb
+) override;
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
 === libs/drogon/include/fulla/drogon/adapters/StorageRoleProvider.h
 #pragma once
 #include <fulla/common/ports/IRoleProvider.h>
@@ -1173,6 +1222,40 @@ inline ::drogon::HttpResponsePtr respondInsufficientScope(
 const ::drogon::HttpRequestPtr &req,
 const ResourceScopeRequirement &reqmt)
 ;
+}
+=== libs/drogon/include/fulla/drogon/authz/OrgContextGate.h
+#pragma once
+#include <cstdint>
+#include <functional>
+#include <string>
+namespace fulla::drogon::authz
+{
+struct OrgContextDecision
+{
+enum class Kind
+{
+None,
+Proceed,
+Invalid,
+MfaRequired,
+StorageError
+};
+Kind kind = Kind::None;
+int32_t orgId = 0;
+std::string orgName;
+};
+class OrgContextGate
+{
+public:
+using DecisionCallback = std::function<void(const OrgContextDecision &)>;
+static void validate(
+const std::string &orgRef,
+const std::string &clientId,
+int32_t internalUserId,
+const std::string &amr,
+DecisionCallback &&cb
+);
+};
 }
 === libs/drogon/include/fulla/drogon/authz/ResourceScopeRegistry.h
 #pragma once
@@ -2894,6 +2977,7 @@ void doPurge();
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/IMetrics.h>
 #include <fulla/oauth2/protocol/AuthorizationService.h>
+#include <optional>
 #include <string>
 #include <memory>
 #include <functional>
@@ -2969,7 +3053,8 @@ const std::string &codeChallengeMethod,
 const std::string &nonce,
 std::function<void(bool, std::string, std::string)> &&callback,
 int64_t authTime = 0,
-const std::string &amr = ""
+const std::string &amr = "",
+const std::optional<int32_t> &orgId = std::nullopt
 );
 void exchangeCodeForToken(
 const std::string &code,
@@ -3403,6 +3488,33 @@ private:
 Config config_;
 };
 IEmailService &getEmailService();
+}
+=== libs/drogon/include/fulla/drogon/utils/OrgContextSlots.h
+#pragma once
+#include <drogon/drogon.h>
+#include <cstdint>
+#include <optional>
+#include <string>
+namespace fulla::drogon::utils
+{
+class OrgContextSlots
+{
+public:
+static constexpr std::size_t kMaxSlots = 5;
+static constexpr int64_t kTtlSeconds = 600;
+static constexpr const char *kSessionKey = "pending_org_context_slots";
+static void mint(
+const ::drogon::SessionPtr &session,
+const std::string &state,
+int32_t orgId,
+int64_t nowSeconds
+);
+static std::optional<int32_t> consume(
+const ::drogon::SessionPtr &session,
+const std::string &state,
+int64_t nowSeconds
+);
+};
 }
 === libs/drogon/include/fulla/drogon/utils/PasswordHasher.h
 #pragma once
@@ -5075,6 +5187,7 @@ inline ClientType stringToClientType(const std::string &str)
 #include <fulla/oauth2/model/ClientType.h>
 #include <json/json.h>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 namespace fulla::oauth2::model
@@ -5104,6 +5217,7 @@ int64_t expiresAt;
 bool used = false;
 int64_t authTime = 0;
 std::string amr;
+std::optional<int32_t> orgId;
 };
 struct OAuth2AccessToken
 {
@@ -5120,6 +5234,7 @@ int64_t notBefore = 0;
 int introspectCount = 0;
 int64_t revokedAt = 0;
 std::string revokedBy;
+std::optional<int32_t> orgId;
 };
 struct OAuth2RefreshToken
 {
@@ -5133,6 +5248,7 @@ bool revoked = false;
 std::string familyId;
 int64_t revokedAt = 0;
 std::string revokedBy;
+std::optional<int32_t> orgId;
 };
 struct TokenIntrospection
 {
@@ -5146,6 +5262,7 @@ std::string sub;
 std::string aud;
 std::string iss;
 std::string scope;
+std::optional<int32_t> orgId;
 Json::Value toJson() const
 ;
 };
@@ -5339,6 +5456,7 @@ const std::string &rawToken
 #pragma once
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/ICryptoProvider.h>
+#include <fulla/common/ports/IOrgContextResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
@@ -5372,6 +5490,10 @@ std::string issuer = "http://localhost:5555"
 );
 void setJwkManager(std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager)
 ;
+void setOrgContextResolver(
+std::shared_ptr<fulla::common::ports::IOrgContextResolver> resolver
+)
+;
 void generateAuthorizationCode(
 const std::string &clientId,
 const std::string &subject,
@@ -5382,7 +5504,8 @@ const std::string &codeChallengeMethod,
 const std::string &nonce,
 std::function<void(bool, std::string, std::string)> &&callback,
 int64_t authTime = 0,
-const std::string &amr = ""
+const std::string &amr = "",
+const std::optional<int32_t> &orgId = std::nullopt
 );
 void exchangeCodeForToken(
 const std::string &code,
@@ -5427,6 +5550,7 @@ std::shared_ptr<fulla::common::ports::ICryptoProvider> crypto_;
 std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
 std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
+std::shared_ptr<fulla::common::ports::IOrgContextResolver> orgContextResolver_;
 int64_t authCodeTtl_;
 int64_t accessTokenTtl_;
 int64_t refreshTokenTtl_;
@@ -5435,6 +5559,12 @@ std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
 void resolveRoles(
 const std::string &subject,
 std::function<void(std::vector<std::string>)> &&cb
+);
+void resolveOrgContextForClaims(
+const std::string &subject,
+const std::optional<int32_t> &orgId,
+const std::string &scope,
+std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
 );
 void audit(
 const std::string &action,
@@ -5866,7 +5996,9 @@ int64_t getCurrentTimestamp() const;
 #include <drogon/orm/DbClient.h>
 #include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
+#include <fulla/storage/postgres/models/Organizations.h>
 #include <functional>
+#include <optional>
 #include <string>
 namespace fulla::storage::postgres
 {
@@ -5888,6 +6020,12 @@ LookupStatus status = LookupStatus::Error;
 ::drogon_model::fulla_db::OrganizationMembers row{};
 std::string error;
 };
+struct OrganizationLookup
+{
+LookupStatus status = LookupStatus::Error;
+::drogon_model::fulla_db::Organizations row{};
+std::string error;
+};
 using OwnerRowCallback = std::function<void(const OwnerRowLookup &)>;
 using MembershipCallback = std::function<void(const MembershipLookup &)>;
 using OwnerLabelCallback = std::function<void(const std::string &)>;
@@ -5897,6 +6035,11 @@ public:
 explicit ClientOwnersRepository(::drogon::orm::DbClientPtr dbClient);
 void findOwnerRow(const std::string &clientId, OwnerRowCallback &&cb);
 void findMembership(int32_t orgId, int32_t userId, MembershipCallback &&cb);
+void findOrganization(const std::string &orgRef, std::function<void(const OrganizationLookup &)> &&cb);
+void findUserIdBySubject(
+const std::string &subject,
+std::function<void(std::optional<int32_t>)> &&cb
+);
 void resolveOwnerLabel(const std::string &clientId, OwnerLabelCallback &&cb);
 private:
 ::drogon::orm::DbClientPtr dbClient_;

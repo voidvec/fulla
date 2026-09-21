@@ -27,6 +27,8 @@ class IntrospectionResponse:
             aud (str | Unset):
             iss (str | Unset):
             scope (str | Unset): Space-separated scopes.
+            org_id (int | Unset): v1.5.0: present when the token was issued in org context (authorize org_id parameter). The
+                token's own binding; roles/name stay userinfo-only.
     """
 
     active: bool
@@ -39,6 +41,7 @@ class IntrospectionResponse:
     aud: str | Unset = UNSET
     iss: str | Unset = UNSET
     scope: str | Unset = UNSET
+    org_id: int | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -61,6 +64,8 @@ class IntrospectionResponse:
         iss = self.iss
 
         scope = self.scope
+
+        org_id = self.org_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -87,6 +92,8 @@ class IntrospectionResponse:
             field_dict["iss"] = iss
         if scope is not UNSET:
             field_dict["scope"] = scope
+        if org_id is not UNSET:
+            field_dict["org_id"] = org_id
 
         return field_dict
 
@@ -113,6 +120,8 @@ class IntrospectionResponse:
 
         scope = d.pop("scope", UNSET)
 
+        org_id = d.pop("org_id", UNSET)
+
         introspection_response = cls(
             active=active,
             client_id=client_id,
@@ -124,6 +133,7 @@ class IntrospectionResponse:
             aud=aud,
             iss=iss,
             scope=scope,
+            org_id=org_id,
         )
 
         introspection_response.additional_properties = d
