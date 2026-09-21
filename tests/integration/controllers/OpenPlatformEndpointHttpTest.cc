@@ -148,6 +148,48 @@ void dumpIfBad(const ::drogon::HttpResponsePtr &resp, const char *where)
               << " body=" << Json::writeString(Json::StreamWriterBuilder(), body);
 }
 
+// Blocking one-shot SQL for the #230 failure-injection case (same
+// promise/future pattern as createVerifiedUser's verified UPDATE; the
+// DrogonDbException is consumed in the error callback so a failed ALTER can
+// never escape into the event loop -> 0xc0000409).
+bool runSql(const std::string &sql)
+{
+    auto db = ::drogon::app().getDbClient();
+    std::promise<bool> done;
+    db->execSqlAsync(
+      sql,
+      [&done](const ::drogon::orm::Result &) { done.set_value(true); },
+      [&done, sql](const ::drogon::orm::DrogonDbException &e) {
+          LOG_ERROR << "[OwnerDbFailure] sql failed: " << e.base().what()
+                    << " (sql: " << sql.substr(0, 60) << "...)";
+          done.set_value(false);
+      });
+    return done.get_future().get();
+}
+
+// Restores a RENAMEd-away table no matter how the case exits (a failed
+// REQUIRE unwinds through drogon's test framework; this destructor still
+// runs), so one red assertion cannot leave the schema broken for the
+// whole suite.
+struct TableRenameRestore
+{
+    std::string table;
+    std::string tmpName;
+    explicit TableRenameRestore(std::string tableName)
+        : table(std::move(tableName)), tmpName(this->table + "_tmp")
+    {
+    }
+    ~TableRenameRestore()
+    {
+        if (!runSql("ALTER TABLE " + tmpName + " RENAME TO " + table))
+        {
+            LOG_ERROR << "[OwnerDbFailure] RESTORE FAILED for " << table
+                      << " -- fulla_db schema left broken,"
+                         " run db-reset before the next suite";
+        }
+    }
+};
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -625,5 +667,150 @@ DROGON_TEST(Integration_P1_OpenPlatform_App_RegisterRotateDeleteFlow)
       [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
       [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
       userA, userB);
+    CHECK(cleaned.get_future().get());
+}
+
+// ---------------------------------------------------------------------------
+// #230: a REAL DB failure during the owners-row lookup must surface as
+// 500 DB_QUERY_ERROR on every management endpoint, NOT the uniform 404.
+// Post-#227 the two were indistinguishable: ApplicationService swallowed
+// every DrogonDbException as "no owner row", so a broken DB silently
+// impersonated a legitimate denial (without even a log). Injection =
+// RENAME the owners table away; the RAII guard restores it, and the
+// post-restore leg proves management works again.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_OpenPlatform_OwnerDbFailure_ManageEndpoints500Not404)
+{
+    OPENPLATFORM_SKIP_GUARD;
+
+    const std::string suffix = uniqueSuffix();
+    const std::string userA = "qa_dbfail_" + suffix;
+    const std::string passA = randomPassword();
+    REQUIRE(createVerifiedUser(userA, userA + "@qa.example", passA));
+    auto tokenA = loginTokenVerbose(userA, passA);
+    REQUIRE(tokenA.has_value());
+
+    // A CONFIDENTIAL app owned by userA (goes through requireManagePermission).
+    Json::Value confApp;
+    confApp["name"] = "QA DbFail App " + suffix;
+    confApp["client_type"] = "CONFIDENTIAL";
+    Json::Value uris(Json::arrayValue);
+    uris.append("https://qa.example/callback");
+    confApp["redirect_uris"] = uris;
+    auto createResp = sendPostJson("/api/me/applications", confApp, *tokenA);
+    REQUIRE(createResp != nullptr);
+    CHECK(statusIs(createResp, drogon::k201Created));
+    Json::Value confBody;
+    REQUIRE(parseJsonBody(createResp, confBody));
+    const std::string clientId = confBody["client_id"].asString();
+    CHECK(!clientId.empty());
+
+    // CHECK/REQUIRE need the DROGON_TEST context, which helper functions
+    // do not have: this predicate only inspects, the call sites below do
+    // the asserting (test-methodology rule).
+    auto isDbError = [](const ::drogon::HttpResponsePtr &resp) {
+        Json::Value body;
+        return resp != nullptr &&
+               resp->getStatusCode() == drogon::k500InternalServerError &&
+               parseJsonBody(resp, body) &&
+               body["error"]["code"].asString() == "DB_QUERY_ERROR";
+    };
+
+    // Inject a real DB failure: every owners-table read now errors.
+    REQUIRE(runSql("ALTER TABLE oauth2_client_owners RENAME TO oauth2_client_owners_tmp"));
+    {
+        TableRenameRestore restore("oauth2_client_owners");
+
+        // GET list (control leg: the findOwners query fails directly).
+        auto listResp = sendGet("/api/me/applications", *tokenA);
+        REQUIRE(listResp != nullptr);
+        const bool listDbErr = isDbError(listResp);
+        CHECK(listDbErr);
+        if (!listDbErr)
+            dumpIfBad(listResp, "GET list under injected DB failure");
+
+        // PATCH (requireManagePermission -> loadOwnerRow fails).
+        Json::Value patch;
+        patch["name"] = "Renamed " + suffix;
+        auto patchResp = sendPatchJson("/api/me/applications/" + clientId, patch, *tokenA);
+        REQUIRE(patchResp != nullptr);
+        const bool patchDbErr = isDbError(patchResp);
+        CHECK(patchDbErr);
+        if (!patchDbErr)
+            dumpIfBad(patchResp, "PATCH under injected DB failure");
+
+        // rotate-secret.
+        auto rotateResp = sendPostJson("/api/me/applications/" + clientId + "/rotate-secret",
+                                       Json::Value(Json::objectValue), *tokenA);
+        REQUIRE(rotateResp != nullptr);
+        const bool rotateDbErr = isDbError(rotateResp);
+        CHECK(rotateDbErr);
+        if (!rotateDbErr)
+            dumpIfBad(rotateResp, "rotate-secret under injected DB failure");
+
+        // DELETE.
+        auto delResp = sendDelete("/api/me/applications/" + clientId, *tokenA);
+        REQUIRE(delResp != nullptr);
+        const bool delDbErr = isDbError(delResp);
+        CHECK(delDbErr);
+        if (!delDbErr)
+            dumpIfBad(delResp, "DELETE under injected DB failure");
+    }
+
+    // Post-restore: the same owner can manage the app again (200). This
+    // proves the guard really put the table back (and that the 500s above
+    // were caused by the injection, not by a coincidentally dead app).
+    auto rotateAgain =
+      sendPostJson("/api/me/applications/" + clientId + "/rotate-secret",
+                   Json::Value(Json::objectValue), *tokenA);
+    REQUIRE(rotateAgain != nullptr);
+    CHECK(statusIs(rotateAgain, drogon::k200OK));
+
+    // Second leg: the ORG-app membership read (#222 sank it into
+    // ClientOwnersRepository::findMembership) must fail the same way --
+    // 500 DB_QUERY_ERROR, never the uniform 404. Transfer the app to an
+    // org first so requireManagePermission takes the membership branch.
+    Json::Value orgBody;
+    orgBody["slug"] = "qa-dbfail-org-" + suffix;
+    orgBody["name"] = "QA DbFail Org " + suffix;
+    auto orgResp = sendPostJson("/api/me/organizations", orgBody, *tokenA);
+    REQUIRE(orgResp != nullptr);
+    CHECK(statusIs(orgResp, drogon::k201Created));
+    Json::Value toOrg;
+    toOrg["org_slug"] = orgBody["slug"].asString();
+    auto transferResp =
+      sendPostJson("/api/me/applications/" + clientId + "/transfer", toOrg, *tokenA);
+    REQUIRE(transferResp != nullptr);
+    CHECK(statusIs(transferResp, drogon::k200OK));
+
+    REQUIRE(runSql("ALTER TABLE organization_members RENAME TO organization_members_tmp"));
+    {
+        TableRenameRestore restore("organization_members");
+        Json::Value patchOrg;
+        patchOrg["name"] = "Renamed Org " + suffix;
+        auto patchOrgResp = sendPatchJson("/api/me/applications/" + clientId, patchOrg, *tokenA);
+        REQUIRE(patchOrgResp != nullptr);
+        const bool patchOrgDbErr = isDbError(patchOrgResp);
+        CHECK(patchOrgDbErr);
+        if (!patchOrgDbErr)
+            dumpIfBad(patchOrgResp, "PATCH (org app) under injected membership failure");
+    }
+    // Post-restore: the org owner manages the org app again.
+    Json::Value patchOrgOk;
+    patchOrgOk["name"] = "Renamed Org OK " + suffix;
+    auto patchOrgAgain =
+      sendPatchJson("/api/me/applications/" + clientId, patchOrgOk, *tokenA);
+    REQUIRE(patchOrgAgain != nullptr);
+    CHECK(statusIs(patchOrgAgain, drogon::k200OK));
+
+    // cleanup users (owners row cascades with the user; client + org rows
+    // stay; harmless timestamp-unique QA artifacts)
+    auto db = ::drogon::app().getDbClient();
+    std::promise<bool> cleaned;
+    db->execSqlAsync(
+      "DELETE FROM users WHERE username = $1",
+      [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
+      [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
+      userA);
     CHECK(cleaned.get_future().get());
 }

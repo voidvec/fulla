@@ -8,9 +8,7 @@
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
 #include <fulla/drogon/utils/PortalUrl.h>
-#include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
-#include <fulla/storage/postgres/models/Organizations.h>
-#include <fulla/storage/postgres/models/Users.h>
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 #include <algorithm>
@@ -734,83 +732,23 @@ void AuthorizationEndpointController::authorize(
                             };
                           try
                           {
-                              auto ownerDb = ::drogon::app().getDbClient();
-                              ::drogon::orm::Mapper<
-                                ::drogon_model::fulla_db::Oauth2ClientOwners>
-                                ownersMapper(ownerDb);
-                              ownersMapper.findOne(
-                                ::drogon::orm::Criteria(
-                                  ::drogon_model::fulla_db::Oauth2ClientOwners::Cols::_client_id,
-                                  ::drogon::orm::CompareOperator::EQ,
-                                  clientId),
-                                [ownerDb, sendConsentRedirect, callback](
-                                  const ::drogon_model::fulla_db::Oauth2ClientOwners &owner) {
-                                    if (owner.getOrgId() != nullptr)
-                                    {
-                                        const int32_t orgId = *owner.getOrgId();
-                                        try
-                                        {
-                                            ::drogon::orm::Mapper<
-                                              ::drogon_model::fulla_db::Organizations>
-                                              orgsMapper(ownerDb);
-                                            orgsMapper.findOne(
-                                              ::drogon::orm::Criteria(
-                                                ::drogon_model::fulla_db::Organizations::Cols::
-                                                  _id,
-                                                ::drogon::orm::CompareOperator::EQ,
-                                                orgId),
-                                                [sendConsentRedirect](
-                                                  const ::drogon_model::fulla_db::Organizations
-                                                    &org) {
-                                                    sendConsentRedirect(
-                                                      org.getValueOfName());
-                                                },
-                                                [sendConsentRedirect](
-                                                  const ::drogon::orm::DrogonDbException &) {
-                                                    sendConsentRedirect("");
-                                                });
-                                        }
-                                        catch (...)
-                                        {
-                                            sendConsentRedirect("");
-                                        }
-                                        return;
-                                    }
-                                    // Personal app: creator's display_name
-                                    // (username fallback).
-                                    try
-                                    {
-                                        ::drogon::orm::Mapper<
-                                          ::drogon_model::fulla_db::Users>
-                                          usersMapper(ownerDb);
-                                        usersMapper.findOne(
-                                          ::drogon::orm::Criteria(
-                                            ::drogon_model::fulla_db::Users::Cols::_id,
-                                            ::drogon::orm::CompareOperator::EQ,
-                                            owner.getValueOfCreatorUserId()),
-                                            [sendConsentRedirect](
-                                              const ::drogon_model::fulla_db::Users &user) {
-                                                std::string label =
-                                                  user.getValueOfDisplayName();
-                                                if (label.empty())
-                                                    label = user.getValueOfUsername();
-                                                sendConsentRedirect(label);
-                                            },
-                                            [sendConsentRedirect](
-                                              const ::drogon::orm::DrogonDbException &) {
-                                                sendConsentRedirect("");
-                                            });
-                                    }
-                                    catch (...)
-                                    {
-                                        sendConsentRedirect("");
-                                    }
-                                },
-                                [sendConsentRedirect](
-                                  const ::drogon::orm::DrogonDbException &) {
-                                    // No owners row: admin-seeded client.
-                                    sendConsentRedirect("");
-                                });
+                              // #222 (v1.5.0 M0): the owner->label fan-out
+                              // (org app -> org name, personal app ->
+                              // creator display_name with username fallback,
+                              // admin-seeded -> nothing) moved into the
+                              // shared ClientOwnersRepository. Mechanical
+                              // extraction, zero behavior change: any lookup
+                              // failure or memory-mode (no DB) still degrades
+                              // to no owner_name, exactly the pre-v1.4.0
+                              // consent URL.
+                              ::fulla::storage::postgres::ClientOwnersRepository
+                                ownersRepo(::drogon::app().getDbClient());
+                              ownersRepo.resolveOwnerLabel(
+                                clientId,
+                                [sendConsentRedirect](const std::string &label) {
+                                    sendConsentRedirect(label);
+                                }
+                              );
                           }
                           catch (...)
                           {

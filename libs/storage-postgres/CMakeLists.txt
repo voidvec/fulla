@@ -106,6 +106,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/PostgresWebAuthnRepository.cc
     src/PostgresSocialAccountRepository.cc
     src/PostgresRepositoryBase.cc
+    src/ClientOwnersRepository.cc
     src/PostgresClientRepository.cc
     src/PostgresGrantRepository.cc
     src/PostgresTokenRepository.cc

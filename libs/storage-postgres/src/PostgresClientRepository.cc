@@ -3,10 +3,10 @@
 #include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
 #include <fulla/storage/postgres/models/Oauth2Scopes.h>
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
-#include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
 
 namespace fulla::storage::postgres
 {
@@ -157,39 +157,34 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                   );
               };
 
-              try
-              {
-                  Mapper<Oauth2ClientOwners> ownersMapper(dbClientReader_);
-                  ownersMapper.findOne(
-                    Criteria(Oauth2ClientOwners::Cols::_client_id, CompareOperator::EQ, clientId),
-                    [buildClient](const Oauth2ClientOwners &owner) {
-                        buildClient(owner.getValueOfStatus() != "active");
-                    },
-                    [buildClient, clientId](const DrogonDbException &e) {
-                        // Review C3: only "no owners row" means admin-owned
-                        // (active). A genuine DB failure must fail CLOSED —
-                        // treating it as active lets a suspended client
-                        // through on a connection blip.
-                        auto *noRows = dynamic_cast<const UnexpectedRows *>(&e);
-                        if (noRows != nullptr)
-                        {
+              // #222 (v1.5.0 M0): the owners-row read lives in the shared
+              // ClientOwnersRepository; the fail-closed POLICY (Review C3)
+              // stays here: NoRow = admin-owned/active, Error = treat as
+              // suspended (a genuine DB failure must fail CLOSED: treating
+              // it as active would let a suspended client through on a
+              // connection blip; the repository maps Mapper-construction
+              // failures into Error too).
+              ClientOwnersRepository ownersRepo(dbClientReader_);
+              ownersRepo.findOwnerRow(
+                clientId,
+                [buildClient, clientId](const OwnerRowLookup &lookup) {
+                    switch (lookup.status)
+                    {
+                        case LookupStatus::NoRow:
                             buildClient(false);  // admin-owned, active
                             return;
-                        }
-                        LOG_ERROR << "Postgres getClient: owners lookup failed for "
-                                  << clientId << ", failing closed: " << e.base().what();
-                        buildClient(true);  // treat as suspended -> not found
+                        case LookupStatus::Found:
+                            buildClient(lookup.row.getValueOfStatus() != "active");
+                            return;
+                        case LookupStatus::Error:
+                        default:
+                            LOG_ERROR << "Postgres getClient: owners lookup failed for "
+                                      << clientId << ", failing closed: " << lookup.error;
+                            buildClient(true);  // treat as suspended -> not found
+                            return;
                     }
-                  );
-              }
-              catch (...)
-              {
-                  // Mapper construction failure is also a real error: fail
-                  // closed rather than silently treating the client as active.
-                  LOG_ERROR << "Postgres getClient: owners Mapper construction failed for "
-                            << clientId << ", failing closed";
-                  buildClient(true);
-              }
+                }
+              );
           },
           [sharedCb, clientId](const DrogonDbException &e) {
               LOG_DEBUG << "Postgres getClient: Not found or Error -> " << clientId << " ("
@@ -324,35 +319,29 @@ void PostgresClientRepository::validateClient(
                   // uniformity fix, not a timing-side-channel fix).
                   (*sharedCb)(match);
               };
-              try
-              {
-                  Mapper<Oauth2ClientOwners> ownersMapper(dbClientReader_);
-                  ownersMapper.findOne(
-                    Criteria(Oauth2ClientOwners::Cols::_client_id, CompareOperator::EQ, clientId),
-                    [checkSecret](const Oauth2ClientOwners &owner) {
-                        checkSecret(owner.getValueOfStatus() != "active");
-                    },
-                    [checkSecret, clientId](const DrogonDbException &e) {
-                        // Review C3: fail CLOSED on real DB errors (see the
-                        // getClient twin above for the rationale).
-                        auto *noRows = dynamic_cast<const UnexpectedRows *>(&e);
-                        if (noRows != nullptr)
-                        {
+              // #222 (v1.5.0 M0): shared owners-row read (see the getClient
+              // twin above); fail-closed POLICY (Review C3) preserved here.
+              ClientOwnersRepository ownersRepo(dbClientReader_);
+              ownersRepo.findOwnerRow(
+                clientId,
+                [checkSecret, clientId](const OwnerRowLookup &lookup) {
+                    switch (lookup.status)
+                    {
+                        case LookupStatus::NoRow:
                             checkSecret(false);  // admin-owned, active
                             return;
-                        }
-                        LOG_ERROR << "Postgres validateClient: owners lookup failed for "
-                                  << clientId << ", failing closed: " << e.base().what();
-                        checkSecret(true);  // treat as suspended -> reject
+                        case LookupStatus::Found:
+                            checkSecret(lookup.row.getValueOfStatus() != "active");
+                            return;
+                        case LookupStatus::Error:
+                        default:
+                            LOG_ERROR << "Postgres validateClient: owners lookup failed for "
+                                      << clientId << ", failing closed: " << lookup.error;
+                            checkSecret(true);  // treat as suspended -> reject
+                            return;
                     }
-                  );
-              }
-              catch (...)
-              {
-                  LOG_ERROR << "Postgres validateClient: owners Mapper construction failed for "
-                            << clientId << ", failing closed";
-                  checkSecret(true);
-              }
+                }
+              );
           },
           [sharedCb, clientId](const DrogonDbException &e) {
               LOG_ERROR << "Postgres validateClient Error (Database Exception) for " << clientId

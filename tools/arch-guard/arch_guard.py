@@ -4,7 +4,7 @@
 Spec: .kiro/specs/fulla-sdk-refactor/tasks.md Task 33 (M6). This is a
 static source check over the framework-agnostic Domain libraries
 (libs/common, libs/oauth2, libs/identity). It fails (exit 1) on any violation
-of the three architecture rules the refactor established:
+of the rules the refactor established:
 
   R1  Domain code must NOT include Drogon headers (``#include <drogon/...>``).
       jsoncpp (``<json/...>``) stays allowed -- it is the one framework-neutral
@@ -13,6 +13,12 @@ of the three architecture rules the refactor established:
       headers -- the two SDK domains stay decoupled and separately consumable.
   R3  Domain code must NOT use ``drogon::orm`` -- ORM belongs to
       libs/storage-postgres, never the Domain.
+  R4  apps/server product services are a REGISTERED EXCEPTION allowed to
+      construct ``drogon::orm::Mapper`` directly (#222, v1.5.0 M0; see
+      apps/server/AGENTS.md). The exception is capped: the number of
+      ``Mapper<`` construction points under apps/server/src (comment-stripped,
+      same caliber as R1-R3) must stay <= the frozen baseline. Lower the
+      baseline when the count drops; NEVER raise it.
 
 Only production code is scanned (each lib's ``include/`` and ``src/`` trees).
 The ``test/`` and ``testing/`` trees are intentionally excluded: unit tests may
@@ -53,6 +59,15 @@ RE_DROGON_ORM = re.compile(r'\bdrogon::orm\b')
 # R2: cross-domain includes (oauth2 <-> identity), matched by public header path.
 RE_INCLUDE_IDENTITY = re.compile(r'#\s*include\s*[<"][^">]*fulla/identity/')
 RE_INCLUDE_OAUTH2 = re.compile(r'#\s*include\s*[<"][^">]*fulla/oauth2/')
+# R4: a direct Mapper construction point (`Mapper<X> m(db)` or the inline
+# `Mapper<X>(db).findBy(...)` form). Every use site constructs one.
+RE_MAPPER_CONSTRUCTION = re.compile(r'\bMapper\s*<')
+
+# R4 cap, frozen at v1.5.0 M0 (#222) after the ClientOwnersRepository
+# extraction. Measured with this script's own caliber (comment-stripped
+# apps/server/src production sources). Direction: DOWN only -- lower the
+# constant when the count drops, never raise it back.
+R4_MAPPER_BASELINE = 57
 
 
 class Violation(NamedTuple):
@@ -144,6 +159,26 @@ def iter_source_files(root: Path) -> Iterable[tuple[str, Path]]:
                     yield lib, path
 
 
+def count_mapper_points(root: Path) -> List[tuple[Path, int]]:
+    """R4: per-file direct Mapper construction points under apps/server/src.
+
+    Same caliber as R1-R3 (comment-stripped source text). Returns one
+    (relative path, count) entry per file with a nonzero count.
+    """
+    app_src = root / "apps" / "server" / "src"
+    if not app_src.is_dir():
+        raise FileNotFoundError(f"guarded directory not found: {app_src}")
+    per_file: List[tuple[Path, int]] = []
+    for path in sorted(app_src.rglob("*")):
+        if not (path.is_file() and path.suffix in SOURCE_SUFFIXES):
+            continue
+        cleaned = strip_comments(path.read_text(encoding="utf-8", errors="replace"))
+        count = len(RE_MAPPER_CONSTRUCTION.findall(cleaned))
+        if count:
+            per_file.append((path.relative_to(root), count))
+    return per_file
+
+
 def scan_file(lib: str, path: Path, root: Path) -> List[Violation]:
     raw = path.read_text(encoding="utf-8", errors="replace")
     cleaned = strip_comments(raw)
@@ -178,10 +213,12 @@ def main(argv: List[str]) -> int:
     print("========================================")
     print(f"root: {root}")
     print(f"scanning libs: {', '.join(DOMAIN_LIBS)} (include/, src/)")
+    print("scanning apps/server/src for R4 (Mapper construction cap)")
     print("")
 
     try:
         files = list(iter_source_files(root))
+        mapper_points = count_mapper_points(root)
     except FileNotFoundError as exc:
         print(f"[ERROR] {exc}")
         return 2
@@ -192,16 +229,31 @@ def main(argv: List[str]) -> int:
 
     print(f"scanned {len(files)} source files.")
 
-    if violations:
+    # R4: registered-exception cap on direct Mapper construction in
+    # apps/server product services (#222). Only exceeding the frozen
+    # baseline fails; the per-file breakdown is always printed so a
+    # reviewer can re-freeze DOWN after a cleanup PR.
+    total_mapper_points = sum(count for _, count in mapper_points)
+    print("")
+    print(f"R4 apps/server/src Mapper construction points: {total_mapper_points} "
+          f"(frozen baseline {R4_MAPPER_BASELINE})")
+    for path, count in mapper_points:
+        print(f"    {count:3d}  {path}")
+
+    if violations or total_mapper_points > R4_MAPPER_BASELINE:
         print("")
         print("[ERROR] 架构守卫检查失败 (arch-guard violations detected):")
         print("--------------------------------------------------------")
         for v in violations:
             print(f"  {v.rule}")
             print(f"    {v.path}:{v.line}: {v.text}")
+        if total_mapper_points > R4_MAPPER_BASELINE:
+            print(f"  R4 (apps/server Mapper cap {R4_MAPPER_BASELINE})")
+            print(f"    apps/server/src constructs Mapper at {total_mapper_points} points")
         print("--------------------------------------------------------")
         print("Rules: Domain (common/oauth2/identity) forbids <drogon/...> and")
-        print("drogon::orm; oauth2 and identity must not include each other.")
+        print("drogon::orm; oauth2 and identity must not include each other;")
+        print("apps/server/src direct Mapper constructions are capped (R4).")
         return 1
 
     print("[PASS] 架构守卫检查通过 (all Domain layering rules satisfied).")

@@ -5,7 +5,7 @@
 
 ## 模块职责
 
-**纯装配层**：读取配置、构造 Domain 服务和 Adapter 实现、注入依赖、启动 HTTP 服务器。**不包含任何业务逻辑**。
+**装配层 + 产品级服务**：`main.cc`/`bootstrap/` 是纯装配（读配置、注入依赖、启动服务器，不含业务逻辑）；`openplatform/`、`organization/` 是产品级服务（跨模块业务，v1.4.0 起写实存在）。
 
 **职责边界**：
 - ✅ Bootstrap 模块（`src/bootstrap/`）：装配 Domain 服务、注册 Controller、设置 CORS/安全头/异常处理
@@ -13,9 +13,14 @@
 - ✅ 配置管理（`config/*.json`）：JSON 基线 + 环境变量覆盖
 - ✅ OpenAPI 文档（`openapi.yaml`、`docs/api/openapi.json`）：API 规范
 - ✅ 种子数据（`seed/*.sql`）：开发/测试环境初始数据
-- ✅ 产品级 Controller（`src/organization/`）：多租户组织管理（跨模块业务）
+- ✅ 产品级服务（`src/organization/`：多租户组织管理；`src/openplatform/`：开放平台自助应用）
 - ❌ **禁止** Domain 逻辑（业务规则在 `libs/oauth2`、`libs/identity`）
-- ❌ **禁止** 直接 DB 访问（通过 `libs/storage-*` 的 Repository 接口）
+- ❌ 装配层（`main.cc`/`bootstrap/`）**禁止**直接 DB 访问
+- ⚠️ 产品级服务（`openplatform/`、`organization/`、`bootstrap/AdminBootstrapper`）直接构造
+  `drogon::orm::Mapper` 是**登记例外**（#222，v1.5.0 M0 写实）：存量查询允许保留，但
+  **只降不升**——`tools/arch-guard` 的 **R4** 对 `apps/server/src` 的 Mapper 构造点数设
+  冻结基线（当前 57），新增属主/成员类读取优先走
+  `libs/storage-postgres` 的 `ClientOwnersRepository` 等共享仓储
 
 ## 高频变更文件 Top 5
 
@@ -86,8 +91,12 @@
 
 ### Organization 模块（`src/organization/`）
 - `OrganizationController`：多租户组织管理 API（CRUD、成员管理）
-- `OrganizationService`：组织业务逻辑（调用 `libs/identity` 的 Repository）
-- **注意**：这是唯一包含业务逻辑的 `apps/server` 子目录（跨模块产品级功能）
+- `OrganizationService`：组织业务逻辑（直接 Mapper 登记例外之一，见上文职责边界）
+- **注意**：与 `src/openplatform/` 同为产品级服务目录（跨模块产品级功能）
+
+### Openplatform 模块（`src/openplatform/`）
+- `ApplicationController` + `ApplicationService`：开放平台自助应用注册/管理
+  （v1.4.0）；属主/成员读取走 `ClientOwnersRepository`（#222），其余 Mapper 为登记例外存量
 
 ### 配置（`config/*.json`）
 
