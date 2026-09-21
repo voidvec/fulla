@@ -5861,6 +5861,47 @@ std::unordered_map<std::string, ::fulla::oauth2::model::OAuth2RefreshToken> refr
 int64_t getCurrentTimestamp() const;
 };
 }
+=== libs/storage-postgres/include/fulla/storage/postgres/ClientOwnersRepository.h
+#pragma once
+#include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
+#include <fulla/storage/postgres/models/OrganizationMembers.h>
+#include <functional>
+#include <string>
+namespace fulla::storage::postgres
+{
+enum class LookupStatus
+{
+Found,
+NoRow,
+Error
+};
+struct OwnerRowLookup
+{
+LookupStatus status = LookupStatus::Error;
+::drogon_model::fulla_db::Oauth2ClientOwners row{};
+std::string error;
+};
+struct MembershipLookup
+{
+LookupStatus status = LookupStatus::Error;
+::drogon_model::fulla_db::OrganizationMembers row{};
+std::string error;
+};
+using OwnerRowCallback = std::function<void(const OwnerRowLookup &)>;
+using MembershipCallback = std::function<void(const MembershipLookup &)>;
+using OwnerLabelCallback = std::function<void(const std::string &)>;
+class ClientOwnersRepository
+{
+public:
+explicit ClientOwnersRepository(::drogon::orm::DbClientPtr dbClient);
+void findOwnerRow(const std::string &clientId, OwnerRowCallback &&cb);
+void findMembership(int32_t orgId, int32_t userId, MembershipCallback &&cb);
+void resolveOwnerLabel(const std::string &clientId, OwnerLabelCallback &&cb);
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
 === libs/storage-postgres/include/fulla/storage/postgres/PostgresClientRepository.h
 #pragma once
 #include <fulla/oauth2/repository/IClientRepository.h>
@@ -6304,6 +6345,7 @@ static const std::string _ip;
 static const std::string _user_agent;
 static const std::string _request_id;
 static const std::string _details;
+static const std::string _org_id;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -6384,6 +6426,10 @@ const std::shared_ptr<std::string> &getDetails() const noexcept;
 void setDetails(const std::string &pDetails) noexcept;
 void setDetails(std::string &&pDetails) noexcept;
 void setDetailsToNull() noexcept;
+const int32_t &getValueOfOrgId() const noexcept;
+const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+void setOrgId(const int32_t &pOrgId) noexcept;
+void setOrgIdToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -6415,6 +6461,7 @@ std::shared_ptr<std::string> ip_;
 std::shared_ptr<std::string> userAgent_;
 std::shared_ptr<std::string> requestId_;
 std::shared_ptr<std::string> details_;
+std::shared_ptr<int32_t> orgId_;
 struct MetaData
 {
 const std::string colName_;
@@ -6426,7 +6473,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[12]={ false };
+bool dirtyFlag_[13]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -6610,6 +6657,7 @@ namespace drogon_model
 namespace fulla_db
 {
 class Oauth2Clients;
+class Organizations;
 class Oauth2AccessTokens
 {
 public:
@@ -6628,6 +6676,7 @@ static const std::string _not_before;
 static const std::string _introspect_count;
 static const std::string _revoked_at;
 static const std::string _revoked_by;
+static const std::string _org_id;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -6709,6 +6758,10 @@ const std::shared_ptr<std::string> &getRevokedBy() const noexcept;
 void setRevokedBy(const std::string &pRevokedBy) noexcept;
 void setRevokedBy(std::string &&pRevokedBy) noexcept;
 void setRevokedByToNull() noexcept;
+const int32_t &getValueOfOrgId() const noexcept;
+const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+void setOrgId(const int32_t &pOrgId) noexcept;
+void setOrgIdToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -6717,6 +6770,10 @@ Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVecto
 Oauth2Clients getClient(const drogon::orm::DbClientPtr &clientPtr) const;
 void getClient(const drogon::orm::DbClientPtr &clientPtr,
 const std::function<void(Oauth2Clients)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
 const drogon::orm::ExceptionCallback &ecb) const;
 private:
 friend drogon::orm::Mapper<Oauth2AccessTokens>;
@@ -6745,6 +6802,7 @@ std::shared_ptr<int64_t> notBefore_;
 std::shared_ptr<int32_t> introspectCount_;
 std::shared_ptr<int64_t> revokedAt_;
 std::shared_ptr<std::string> revokedBy_;
+std::shared_ptr<int32_t> orgId_;
 struct MetaData
 {
 const std::string colName_;
@@ -6756,7 +6814,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[13]={ false };
+bool dirtyFlag_[14]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -7091,7 +7149,6 @@ class Oauth2Codes;
 class Oauth2DeviceCodes;
 class Oauth2RefreshTokens;
 class Oauth2Scopes;
-class Organizations;
 class Oauth2Clients
 {
 public:
@@ -7107,7 +7164,6 @@ static const std::string _allowed_grant_types;
 static const std::string _token_endpoint_auth_method;
 static const std::string _backchannel_logout_uri;
 static const std::string _backchannel_logout_session_required;
-static const std::string _org_id;
 static const std::string _deleted_at;
 };
 static const int primaryKeyNumber;
@@ -7181,10 +7237,6 @@ const bool &getValueOfBackchannelLogoutSessionRequired() const noexcept;
 const std::shared_ptr<bool> &getBackchannelLogoutSessionRequired() const noexcept;
 void setBackchannelLogoutSessionRequired(const bool &pBackchannelLogoutSessionRequired) noexcept;
 void setBackchannelLogoutSessionRequiredToNull() noexcept;
-const int32_t &getValueOfOrgId() const noexcept;
-const std::shared_ptr<int32_t> &getOrgId() const noexcept;
-void setOrgId(const int32_t &pOrgId) noexcept;
-void setOrgIdToNull() noexcept;
 const ::trantor::Date &getValueOfDeletedAt() const noexcept;
 const std::shared_ptr<::trantor::Date> &getDeletedAt() const noexcept;
 void setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept;
@@ -7214,10 +7266,6 @@ std::vector<Oauth2DeviceCodes> getDeviceCodes(const drogon::orm::DbClientPtr &cl
 void getDeviceCodes(const drogon::orm::DbClientPtr &clientPtr,
 const std::function<void(std::vector<Oauth2DeviceCodes>)> &rcb,
 const drogon::orm::ExceptionCallback &ecb) const;
-Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
-void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
-const std::function<void(Organizations)> &rcb,
-const drogon::orm::ExceptionCallback &ecb) const;
 private:
 friend drogon::orm::Mapper<Oauth2Clients>;
 friend drogon::orm::BaseBuilder<Oauth2Clients, true, true>;
@@ -7242,7 +7290,6 @@ std::shared_ptr<std::string> allowedGrantTypes_;
 std::shared_ptr<std::string> tokenEndpointAuthMethod_;
 std::shared_ptr<std::string> backchannelLogoutUri_;
 std::shared_ptr<bool> backchannelLogoutSessionRequired_;
-std::shared_ptr<int32_t> orgId_;
 std::shared_ptr<::trantor::Date> deletedAt_;
 struct MetaData
 {
@@ -7255,7 +7302,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[12]={ false };
+bool dirtyFlag_[11]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -7300,6 +7347,7 @@ namespace drogon_model
 namespace fulla_db
 {
 class Oauth2Clients;
+class Organizations;
 class Oauth2Codes
 {
 public:
@@ -7317,6 +7365,7 @@ static const std::string _used;
 static const std::string _auth_time;
 static const std::string _amr;
 static const std::string _nonce;
+static const std::string _org_id;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -7398,6 +7447,10 @@ const std::shared_ptr<std::string> &getNonce() const noexcept;
 void setNonce(const std::string &pNonce) noexcept;
 void setNonce(std::string &&pNonce) noexcept;
 void setNonceToNull() noexcept;
+const int32_t &getValueOfOrgId() const noexcept;
+const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+void setOrgId(const int32_t &pOrgId) noexcept;
+void setOrgIdToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -7406,6 +7459,10 @@ Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVecto
 Oauth2Clients getClient(const drogon::orm::DbClientPtr &clientPtr) const;
 void getClient(const drogon::orm::DbClientPtr &clientPtr,
 const std::function<void(Oauth2Clients)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
 const drogon::orm::ExceptionCallback &ecb) const;
 private:
 friend drogon::orm::Mapper<Oauth2Codes>;
@@ -7433,6 +7490,7 @@ std::shared_ptr<bool> used_;
 std::shared_ptr<int64_t> authTime_;
 std::shared_ptr<std::string> amr_;
 std::shared_ptr<std::string> nonce_;
+std::shared_ptr<int32_t> orgId_;
 struct MetaData
 {
 const std::string colName_;
@@ -7444,7 +7502,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[12]={ false };
+bool dirtyFlag_[13]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -7662,6 +7720,7 @@ namespace drogon_model
 namespace fulla_db
 {
 class Oauth2Clients;
+class Organizations;
 class Oauth2RefreshTokens
 {
 public:
@@ -7677,6 +7736,7 @@ static const std::string _revoked;
 static const std::string _revoked_at;
 static const std::string _revoked_by;
 static const std::string _family_id;
+static const std::string _org_id;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -7747,6 +7807,10 @@ const std::shared_ptr<std::string> &getFamilyId() const noexcept;
 void setFamilyId(const std::string &pFamilyId) noexcept;
 void setFamilyId(std::string &&pFamilyId) noexcept;
 void setFamilyIdToNull() noexcept;
+const int32_t &getValueOfOrgId() const noexcept;
+const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+void setOrgId(const int32_t &pOrgId) noexcept;
+void setOrgIdToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -7755,6 +7819,10 @@ Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVecto
 Oauth2Clients getClient(const drogon::orm::DbClientPtr &clientPtr) const;
 void getClient(const drogon::orm::DbClientPtr &clientPtr,
 const std::function<void(Oauth2Clients)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
 const drogon::orm::ExceptionCallback &ecb) const;
 private:
 friend drogon::orm::Mapper<Oauth2RefreshTokens>;
@@ -7780,6 +7848,7 @@ std::shared_ptr<bool> revoked_;
 std::shared_ptr<int64_t> revokedAt_;
 std::shared_ptr<std::string> revokedBy_;
 std::shared_ptr<std::string> familyId_;
+std::shared_ptr<int32_t> orgId_;
 struct MetaData
 {
 const std::string colName_;
@@ -7791,7 +7860,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[10]={ false };
+bool dirtyFlag_[11]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -8253,6 +8322,171 @@ std::string sqlForInserting(bool &needSelection) const
 };
 }
 }
+=== libs/storage-postgres/include/fulla/storage/postgres/models/OrganizationConsents.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class Oauth2Clients;
+class Oauth2Scopes;
+class Organizations;
+class Users;
+class OrganizationConsents
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _organization_id;
+static const std::string _client_id;
+static const std::string _scope_name;
+static const std::string _granted_by;
+static const std::string _granted_at;
+static const std::string _revoked_at;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit OrganizationConsents(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit OrganizationConsents(const Json::Value &pJson) noexcept(false);
+OrganizationConsents(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+OrganizationConsents() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const int32_t &getValueOfOrganizationId() const noexcept;
+const std::shared_ptr<int32_t> &getOrganizationId() const noexcept;
+void setOrganizationId(const int32_t &pOrganizationId) noexcept;
+const std::string &getValueOfClientId() const noexcept;
+const std::shared_ptr<std::string> &getClientId() const noexcept;
+void setClientId(const std::string &pClientId) noexcept;
+void setClientId(std::string &&pClientId) noexcept;
+const std::string &getValueOfScopeName() const noexcept;
+const std::shared_ptr<std::string> &getScopeName() const noexcept;
+void setScopeName(const std::string &pScopeName) noexcept;
+void setScopeName(std::string &&pScopeName) noexcept;
+const int32_t &getValueOfGrantedBy() const noexcept;
+const std::shared_ptr<int32_t> &getGrantedBy() const noexcept;
+void setGrantedBy(const int32_t &pGrantedBy) noexcept;
+const ::trantor::Date &getValueOfGrantedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getGrantedAt() const noexcept;
+void setGrantedAt(const ::trantor::Date &pGrantedAt) noexcept;
+void setGrantedAtToNull() noexcept;
+const ::trantor::Date &getValueOfRevokedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getRevokedAt() const noexcept;
+void setRevokedAt(const ::trantor::Date &pRevokedAt) noexcept;
+void setRevokedAtToNull() noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Oauth2Clients getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Oauth2Clients)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Oauth2Scopes getOauth2Scopes(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOauth2Scopes(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Oauth2Scopes)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Users getUsers(const drogon::orm::DbClientPtr &clientPtr) const;
+void getUsers(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Users)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+private:
+friend drogon::orm::Mapper<OrganizationConsents>;
+friend drogon::orm::BaseBuilder<OrganizationConsents, true, true>;
+friend drogon::orm::BaseBuilder<OrganizationConsents, true, false>;
+friend drogon::orm::BaseBuilder<OrganizationConsents, false, true>;
+friend drogon::orm::BaseBuilder<OrganizationConsents, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<OrganizationConsents>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<int32_t> organizationId_;
+std::shared_ptr<std::string> clientId_;
+std::shared_ptr<std::string> scopeName_;
+std::shared_ptr<int32_t> grantedBy_;
+std::shared_ptr<::trantor::Date> grantedAt_;
+std::shared_ptr<::trantor::Date> revokedAt_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[7]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
 === libs/storage-postgres/include/fulla/storage/postgres/models/OrganizationInvitations.h
 #pragma once
 #include <drogon/orm/Result.h>
@@ -8608,6 +8842,7 @@ static const std::string _primary_color;
 static const std::string _issuer_override;
 static const std::string _created_at;
 static const std::string _updated_at;
+static const std::string _require_mfa;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -8669,6 +8904,9 @@ const ::trantor::Date &getValueOfUpdatedAt() const noexcept;
 const std::shared_ptr<::trantor::Date> &getUpdatedAt() const noexcept;
 void setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept;
 void setUpdatedAtToNull() noexcept;
+const bool &getValueOfRequireMfa() const noexcept;
+const std::shared_ptr<bool> &getRequireMfa() const noexcept;
+void setRequireMfa(const bool &pRequireMfa) noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -8696,6 +8934,7 @@ std::shared_ptr<std::string> primaryColor_;
 std::shared_ptr<std::string> issuerOverride_;
 std::shared_ptr<::trantor::Date> createdAt_;
 std::shared_ptr<::trantor::Date> updatedAt_;
+std::shared_ptr<bool> requireMfa_;
 struct MetaData
 {
 const std::string colName_;
@@ -8707,7 +8946,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[8]={ false };
+bool dirtyFlag_[9]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

@@ -27,7 +27,8 @@
         "webauthn_credentials",
         "organization_members",
         "organization_invitations",
-        "oauth2_client_owners"
+        "oauth2_client_owners",
+        "organization_consents"
     ],
     "relationships": {
         "enabled": true,

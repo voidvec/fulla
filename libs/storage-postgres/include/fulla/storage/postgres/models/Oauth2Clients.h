@@ -44,7 +44,6 @@ class Oauth2Codes;
 class Oauth2DeviceCodes;
 class Oauth2RefreshTokens;
 class Oauth2Scopes;
-class Organizations;
 
 class Oauth2Clients
 {
@@ -61,7 +60,6 @@ class Oauth2Clients
         static const std::string _token_endpoint_auth_method;
         static const std::string _backchannel_logout_uri;
         static const std::string _backchannel_logout_session_required;
-        static const std::string _org_id;
         static const std::string _deleted_at;
     };
 
@@ -209,15 +207,6 @@ class Oauth2Clients
     void setBackchannelLogoutSessionRequired(const bool &pBackchannelLogoutSessionRequired) noexcept;
     void setBackchannelLogoutSessionRequiredToNull() noexcept;
 
-    /**  For column org_id  */
-    ///Get the value of the column org_id, returns the default value if the column is null
-    const int32_t &getValueOfOrgId() const noexcept;
-    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<int32_t> &getOrgId() const noexcept;
-    ///Set the value of the column org_id
-    void setOrgId(const int32_t &pOrgId) noexcept;
-    void setOrgIdToNull() noexcept;
-
     /**  For column deleted_at  */
     ///Get the value of the column deleted_at, returns the default value if the column is null
     const ::trantor::Date &getValueOfDeletedAt() const noexcept;
@@ -228,7 +217,7 @@ class Oauth2Clients
     void setDeletedAtToNull() noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 12;  }
+    static size_t getColumnNumber() noexcept {  return 11;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -255,10 +244,6 @@ class Oauth2Clients
     void getDeviceCodes(const drogon::orm::DbClientPtr &clientPtr,
                         const std::function<void(std::vector<Oauth2DeviceCodes>)> &rcb,
                         const drogon::orm::ExceptionCallback &ecb) const;
-    Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
-    void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
-                          const std::function<void(Organizations)> &rcb,
-                          const drogon::orm::ExceptionCallback &ecb) const;
   private:
     friend drogon::orm::Mapper<Oauth2Clients>;
     friend drogon::orm::BaseBuilder<Oauth2Clients, true, true>;
@@ -284,7 +269,6 @@ class Oauth2Clients
     std::shared_ptr<std::string> tokenEndpointAuthMethod_;
     std::shared_ptr<std::string> backchannelLogoutUri_;
     std::shared_ptr<bool> backchannelLogoutSessionRequired_;
-    std::shared_ptr<int32_t> orgId_;
     std::shared_ptr<::trantor::Date> deletedAt_;
     struct MetaData
     {
@@ -297,7 +281,7 @@ class Oauth2Clients
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[12]={ false };
+    bool dirtyFlag_[11]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -368,11 +352,6 @@ class Oauth2Clients
             needSelection=true;
         }
         if(dirtyFlag_[10])
-        {
-            sql += "org_id,";
-            ++parametersCount;
-        }
-        if(dirtyFlag_[11])
         {
             sql += "deleted_at,";
             ++parametersCount;
@@ -447,11 +426,6 @@ class Oauth2Clients
             sql +="default,";
         }
         if(dirtyFlag_[10])
-        {
-            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
-            sql.append(placeholderStr, n);
-        }
-        if(dirtyFlag_[11])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);

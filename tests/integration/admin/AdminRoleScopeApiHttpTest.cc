@@ -23,6 +23,7 @@
 #include "HttpTestClient.h"
 
 #include <chrono>
+#include <future>
 #include <string>
 
 using fulla::test::http::loginAsAdmin;
@@ -228,4 +229,46 @@ DROGON_TEST(Integration_P1_AdminScope_Create_DuplicateName_Returns409)
     auto resp = sendPostJson("/api/admin/scopes", dupBody, *token);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k409Conflict));
+}
+
+// ---------------------------------------------------------------------------
+// V036 org scope seed: the `org` scope exists in the admin listing AND is
+// flagged self_service (the self-registered-application allowlist) in the
+// DB. The list API does not expose self_service, so the flag is asserted
+// by direct SQL -- the API leg proves the seed is visible where M1 will
+// consume it. Idempotency (ON CONFLICT DO NOTHING) is exercised by every
+// db-reset chain replay; this case pins the END state.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P2_AdminScope_OrgSeed_PlantedSelfService)
+{
+    ADMIN_ROLESCOPE_SKIP_GUARD;
+
+    auto token = loginAsAdmin();
+    REQUIRE(token.has_value());
+
+    auto resp = sendGet("/api/admin/scopes", *token);
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k200OK));
+    Json::Value body;
+    REQUIRE(parseJsonBody(resp, body));
+    CHECK(body["scopes"].isArray());
+    bool hasOrg = false;
+    for (const auto &scope : body["scopes"])
+    {
+        if (scope["name"].asString() == "org")
+            hasOrg = true;
+    }
+    CHECK(hasOrg);
+
+    auto db = ::drogon::app().getDbClient();
+    std::promise<bool> selfService;
+    db->execSqlAsync(
+      "SELECT self_service FROM oauth2_scopes WHERE name = 'org'",
+      [&selfService](const ::drogon::orm::Result &r) {
+          selfService.set_value(!r.empty() && r[0][0].as<bool>());
+      },
+      [&selfService](const ::drogon::orm::DrogonDbException &) {
+          selfService.set_value(false);
+      });
+    CHECK(selfService.get_future().get());
 }

@@ -7,6 +7,7 @@
 
 #include "Oauth2AccessTokens.h"
 #include "Oauth2Clients.h"
+#include "Organizations.h"
 #include <drogon/utils/Utilities.h>
 #include <string>
 
@@ -27,6 +28,7 @@ const std::string Oauth2AccessTokens::Cols::_not_before = "\"not_before\"";
 const std::string Oauth2AccessTokens::Cols::_introspect_count = "\"introspect_count\"";
 const std::string Oauth2AccessTokens::Cols::_revoked_at = "\"revoked_at\"";
 const std::string Oauth2AccessTokens::Cols::_revoked_by = "\"revoked_by\"";
+const std::string Oauth2AccessTokens::Cols::_org_id = "\"org_id\"";
 const std::string Oauth2AccessTokens::primaryKeyName = "token";
 const bool Oauth2AccessTokens::hasPrimaryKey = true;
 const std::string Oauth2AccessTokens::tableName = "\"oauth2_access_tokens\"";
@@ -44,7 +46,8 @@ const std::vector<typename Oauth2AccessTokens::MetaData> Oauth2AccessTokens::met
 {"not_before","int64_t","bigint",8,0,0,0},
 {"introspect_count","int32_t","integer",4,0,0,0},
 {"revoked_at","int64_t","bigint",8,0,0,0},
-{"revoked_by","std::string","character varying",50,0,0,0}
+{"revoked_by","std::string","character varying",50,0,0,0},
+{"org_id","int32_t","integer",4,0,0,0}
 };
 const std::string &Oauth2AccessTokens::getColumnName(size_t index) noexcept(false)
 {
@@ -107,11 +110,15 @@ Oauth2AccessTokens::Oauth2AccessTokens(const Row &r, const ssize_t indexOffset) 
         {
             revokedBy_=std::make_shared<std::string>(r["revoked_by"].as<std::string>());
         }
+        if(!r["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r["org_id"].as<int32_t>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 13 > r.size())
+        if(offset + 14 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -182,13 +189,18 @@ Oauth2AccessTokens::Oauth2AccessTokens(const Row &r, const ssize_t indexOffset) 
         {
             revokedBy_=std::make_shared<std::string>(r[index].as<std::string>());
         }
+        index = offset + 13;
+        if(!r[index].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r[index].as<int32_t>());
+        }
     }
 
 }
 
 Oauth2AccessTokens::Oauth2AccessTokens(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 13)
+    if(pMasqueradingVector.size() != 14)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -295,6 +307,14 @@ Oauth2AccessTokens::Oauth2AccessTokens(const Json::Value &pJson, const std::vect
         if(!pJson[pMasqueradingVector[12]].isNull())
         {
             revokedBy_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
+        }
+    }
+    if(!pMasqueradingVector[13].empty() && pJson.isMember(pMasqueradingVector[13]))
+    {
+        dirtyFlag_[13] = true;
+        if(!pJson[pMasqueradingVector[13]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[13]].asInt64());
         }
     }
 }
@@ -405,12 +425,20 @@ Oauth2AccessTokens::Oauth2AccessTokens(const Json::Value &pJson) noexcept(false)
             revokedBy_=std::make_shared<std::string>(pJson["revoked_by"].asString());
         }
     }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[13]=true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
+        }
+    }
 }
 
 void Oauth2AccessTokens::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 13)
+    if(pMasqueradingVector.size() != 14)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -518,6 +546,14 @@ void Oauth2AccessTokens::updateByMasqueradedJson(const Json::Value &pJson,
             revokedBy_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
         }
     }
+    if(!pMasqueradingVector[13].empty() && pJson.isMember(pMasqueradingVector[13]))
+    {
+        dirtyFlag_[13] = true;
+        if(!pJson[pMasqueradingVector[13]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[13]].asInt64());
+        }
+    }
 }
 
 void Oauth2AccessTokens::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -623,6 +659,14 @@ void Oauth2AccessTokens::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["revoked_by"].isNull())
         {
             revokedBy_=std::make_shared<std::string>(pJson["revoked_by"].asString());
+        }
+    }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[13] = true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
         }
     }
 }
@@ -928,6 +972,28 @@ void Oauth2AccessTokens::setRevokedByToNull() noexcept
     dirtyFlag_[12] = true;
 }
 
+const int32_t &Oauth2AccessTokens::getValueOfOrgId() const noexcept
+{
+    static const int32_t defaultValue = int32_t();
+    if(orgId_)
+        return *orgId_;
+    return defaultValue;
+}
+const std::shared_ptr<int32_t> &Oauth2AccessTokens::getOrgId() const noexcept
+{
+    return orgId_;
+}
+void Oauth2AccessTokens::setOrgId(const int32_t &pOrgId) noexcept
+{
+    orgId_ = std::make_shared<int32_t>(pOrgId);
+    dirtyFlag_[13] = true;
+}
+void Oauth2AccessTokens::setOrgIdToNull() noexcept
+{
+    orgId_.reset();
+    dirtyFlag_[13] = true;
+}
+
 void Oauth2AccessTokens::updateId(const uint64_t id)
 {
 }
@@ -947,7 +1013,8 @@ const std::vector<std::string> &Oauth2AccessTokens::insertColumns() noexcept
         "not_before",
         "introspect_count",
         "revoked_at",
-        "revoked_by"
+        "revoked_by",
+        "org_id"
     };
     return inCols;
 }
@@ -1097,6 +1164,17 @@ void Oauth2AccessTokens::outputArgs(drogon::orm::internal::SqlBinder &binder) co
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[13])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Oauth2AccessTokens::updateColumns() const
@@ -1153,6 +1231,10 @@ const std::vector<std::string> Oauth2AccessTokens::updateColumns() const
     if(dirtyFlag_[12])
     {
         ret.push_back(getColumnName(12));
+    }
+    if(dirtyFlag_[13])
+    {
+        ret.push_back(getColumnName(13));
     }
     return ret;
 }
@@ -1302,6 +1384,17 @@ void Oauth2AccessTokens::updateArgs(drogon::orm::internal::SqlBinder &binder) co
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[13])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Oauth2AccessTokens::toJson() const
 {
@@ -1410,6 +1503,14 @@ Json::Value Oauth2AccessTokens::toJson() const
     {
         ret["revoked_by"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1422,7 +1523,7 @@ Json::Value Oauth2AccessTokens::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 13)
+    if(pMasqueradingVector.size() == 14)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1567,6 +1668,17 @@ Json::Value Oauth2AccessTokens::toMasqueradedJson(
                 ret[pMasqueradingVector[12]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[13].empty())
+        {
+            if(getOrgId())
+            {
+                ret[pMasqueradingVector[13]]=getValueOfOrgId();
+            }
+            else
+            {
+                ret[pMasqueradingVector[13]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1674,6 +1786,14 @@ Json::Value Oauth2AccessTokens::toMasqueradedJson(
     {
         ret["revoked_by"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1759,13 +1879,18 @@ bool Oauth2AccessTokens::validateJsonForCreation(const Json::Value &pJson, std::
         if(!validJsonOfField(12, "revoked_by", pJson["revoked_by"], err, true))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(13, "org_id", pJson["org_id"], err, true))
+            return false;
+    }
     return true;
 }
 bool Oauth2AccessTokens::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                             const std::vector<std::string> &pMasqueradingVector,
                                                             std::string &err)
 {
-    if(pMasqueradingVector.size() != 13)
+    if(pMasqueradingVector.size() != 14)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1890,6 +2015,14 @@ bool Oauth2AccessTokens::validateMasqueradedJsonForCreation(const Json::Value &p
                   return false;
           }
       }
+      if(!pMasqueradingVector[13].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[13]))
+          {
+              if(!validJsonOfField(13, pMasqueradingVector[13], pJson[pMasqueradingVector[13]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1970,13 +2103,18 @@ bool Oauth2AccessTokens::validateJsonForUpdate(const Json::Value &pJson, std::st
         if(!validJsonOfField(12, "revoked_by", pJson["revoked_by"], err, false))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(13, "org_id", pJson["org_id"], err, false))
+            return false;
+    }
     return true;
 }
 bool Oauth2AccessTokens::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                           const std::vector<std::string> &pMasqueradingVector,
                                                           std::string &err)
 {
-    if(pMasqueradingVector.size() != 13)
+    if(pMasqueradingVector.size() != 14)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2050,6 +2188,11 @@ bool Oauth2AccessTokens::validateMasqueradedJsonForUpdate(const Json::Value &pJs
       if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
       {
           if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[13].empty() && pJson.isMember(pMasqueradingVector[13]))
+      {
+          if(!validJsonOfField(13, pMasqueradingVector[13], pJson[pMasqueradingVector[13]], err, false))
               return false;
       }
     }
@@ -2264,6 +2407,17 @@ bool Oauth2AccessTokens::validJsonOfField(size_t index,
                 return false;
             }
             break;
+        case 13:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isInt())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
         default:
             err="Internal error in the server";
             return false;
@@ -2309,6 +2463,49 @@ void Oauth2AccessTokens::getClient(const DbClientPtr &clientPtr,
                     else
                     {
                         rcb(Oauth2Clients(r[0]));
+                    }
+               }
+               >> ecb;
+}
+Organizations Oauth2AccessTokens::getOrganizations(const DbClientPtr &clientPtr) const {
+    static const std::string sql = "select * from organizations where id = $1";
+    Result r(nullptr);
+    {
+        auto binder = *clientPtr << sql;
+        binder << *orgId_ << Mode::Blocking >>
+            [&r](const Result &result) { r = result; };
+        binder.exec();
+    }
+    if (r.size() == 0)
+    {
+        throw UnexpectedRows("0 rows found");
+    }
+    else if (r.size() > 1)
+    {
+        throw UnexpectedRows("Found more than one row");
+    }
+    return Organizations(r[0]);
+}
+
+void Oauth2AccessTokens::getOrganizations(const DbClientPtr &clientPtr,
+                                          const std::function<void(Organizations)> &rcb,
+                                          const ExceptionCallback &ecb) const
+{
+    static const std::string sql = "select * from organizations where id = $1";
+    *clientPtr << sql
+               << *orgId_
+               >> [rcb = std::move(rcb), ecb](const Result &r){
+                    if (r.size() == 0)
+                    {
+                        ecb(UnexpectedRows("0 rows found"));
+                    }
+                    else if (r.size() > 1)
+                    {
+                        ecb(UnexpectedRows("Found more than one row"));
+                    }
+                    else
+                    {
+                        rcb(Organizations(r[0]));
                     }
                }
                >> ecb;

@@ -25,6 +25,7 @@ const std::string AuditLogs::Cols::_ip = "\"ip\"";
 const std::string AuditLogs::Cols::_user_agent = "\"user_agent\"";
 const std::string AuditLogs::Cols::_request_id = "\"request_id\"";
 const std::string AuditLogs::Cols::_details = "\"details\"";
+const std::string AuditLogs::Cols::_org_id = "\"org_id\"";
 const std::vector<std::string> AuditLogs::primaryKeyName = {"id","timestamp"};
 const bool AuditLogs::hasPrimaryKey = true;
 const std::string AuditLogs::tableName = "\"audit_logs\"";
@@ -41,7 +42,8 @@ const std::vector<typename AuditLogs::MetaData> AuditLogs::metaData_={
 {"ip","std::string","character varying",45,0,0,0},
 {"user_agent","std::string","text",0,0,0,0},
 {"request_id","std::string","character varying",64,0,0,0},
-{"details","std::string","jsonb",0,0,0,0}
+{"details","std::string","jsonb",0,0,0,0},
+{"org_id","int32_t","integer",4,0,0,0}
 };
 const std::string &AuditLogs::getColumnName(size_t index) noexcept(false)
 {
@@ -118,11 +120,15 @@ AuditLogs::AuditLogs(const Row &r, const ssize_t indexOffset) noexcept
         {
             details_=std::make_shared<std::string>(r["details"].as<std::string>());
         }
+        if(!r["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r["org_id"].as<int32_t>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 12 > r.size())
+        if(offset + 13 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -206,13 +212,18 @@ AuditLogs::AuditLogs(const Row &r, const ssize_t indexOffset) noexcept
         {
             details_=std::make_shared<std::string>(r[index].as<std::string>());
         }
+        index = offset + 12;
+        if(!r[index].isNull())
+        {
+            orgId_=std::make_shared<int32_t>(r[index].as<int32_t>());
+        }
     }
 
 }
 
 AuditLogs::AuditLogs(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -329,6 +340,14 @@ AuditLogs::AuditLogs(const Json::Value &pJson, const std::vector<std::string> &p
         if(!pJson[pMasqueradingVector[11]].isNull())
         {
             details_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
+        }
+    }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[12]].asInt64());
         }
     }
 }
@@ -449,12 +468,20 @@ AuditLogs::AuditLogs(const Json::Value &pJson) noexcept(false)
             details_=std::make_shared<std::string>(pJson["details"].asString());
         }
     }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[12]=true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
+        }
+    }
 }
 
 void AuditLogs::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -571,6 +598,14 @@ void AuditLogs::updateByMasqueradedJson(const Json::Value &pJson,
             details_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[12]].asInt64());
+        }
+    }
 }
 
 void AuditLogs::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -685,6 +720,14 @@ void AuditLogs::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["details"].isNull())
         {
             details_=std::make_shared<std::string>(pJson["details"].asString());
+        }
+    }
+    if(pJson.isMember("org_id"))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson["org_id"].isNull())
+        {
+            orgId_=std::make_shared<int32_t>((int32_t)pJson["org_id"].asInt64());
         }
     }
 }
@@ -978,6 +1021,28 @@ void AuditLogs::setDetailsToNull() noexcept
     dirtyFlag_[11] = true;
 }
 
+const int32_t &AuditLogs::getValueOfOrgId() const noexcept
+{
+    static const int32_t defaultValue = int32_t();
+    if(orgId_)
+        return *orgId_;
+    return defaultValue;
+}
+const std::shared_ptr<int32_t> &AuditLogs::getOrgId() const noexcept
+{
+    return orgId_;
+}
+void AuditLogs::setOrgId(const int32_t &pOrgId) noexcept
+{
+    orgId_ = std::make_shared<int32_t>(pOrgId);
+    dirtyFlag_[12] = true;
+}
+void AuditLogs::setOrgIdToNull() noexcept
+{
+    orgId_.reset();
+    dirtyFlag_[12] = true;
+}
+
 void AuditLogs::updateId(const uint64_t id)
 {
 }
@@ -999,7 +1064,8 @@ const std::vector<std::string> &AuditLogs::insertColumns() noexcept
         "ip",
         "user_agent",
         "request_id",
-        "details"
+        "details",
+        "org_id"
     };
     return inCols;
 }
@@ -1127,6 +1193,17 @@ void AuditLogs::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> AuditLogs::updateColumns() const
@@ -1175,6 +1252,10 @@ const std::vector<std::string> AuditLogs::updateColumns() const
     if(dirtyFlag_[11])
     {
         ret.push_back(getColumnName(11));
+    }
+    if(dirtyFlag_[12])
+    {
+        ret.push_back(getColumnName(12));
     }
     return ret;
 }
@@ -1302,6 +1383,17 @@ void AuditLogs::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getOrgId())
+        {
+            binder << getValueOfOrgId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value AuditLogs::toJson() const
 {
@@ -1402,6 +1494,14 @@ Json::Value AuditLogs::toJson() const
     {
         ret["details"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1414,7 +1514,7 @@ Json::Value AuditLogs::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 12)
+    if(pMasqueradingVector.size() == 13)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1548,6 +1648,17 @@ Json::Value AuditLogs::toMasqueradedJson(
                 ret[pMasqueradingVector[11]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[12].empty())
+        {
+            if(getOrgId())
+            {
+                ret[pMasqueradingVector[12]]=getValueOfOrgId();
+            }
+            else
+            {
+                ret[pMasqueradingVector[12]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1647,6 +1758,14 @@ Json::Value AuditLogs::toMasqueradedJson(
     {
         ret["details"]=Json::Value();
     }
+    if(getOrgId())
+    {
+        ret["org_id"]=getValueOfOrgId();
+    }
+    else
+    {
+        ret["org_id"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1727,13 +1846,18 @@ bool AuditLogs::validateJsonForCreation(const Json::Value &pJson, std::string &e
         if(!validJsonOfField(11, "details", pJson["details"], err, true))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(12, "org_id", pJson["org_id"], err, true))
+            return false;
+    }
     return true;
 }
 bool AuditLogs::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                    const std::vector<std::string> &pMasqueradingVector,
                                                    std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1850,6 +1974,14 @@ bool AuditLogs::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[12].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[12]))
+          {
+              if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1930,13 +2062,18 @@ bool AuditLogs::validateJsonForUpdate(const Json::Value &pJson, std::string &err
         if(!validJsonOfField(11, "details", pJson["details"], err, false))
             return false;
     }
+    if(pJson.isMember("org_id"))
+    {
+        if(!validJsonOfField(12, "org_id", pJson["org_id"], err, false))
+            return false;
+    }
     return true;
 }
 bool AuditLogs::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                  const std::vector<std::string> &pMasqueradingVector,
                                                  std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2010,6 +2147,11 @@ bool AuditLogs::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
       {
           if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+      {
+          if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, false))
               return false;
       }
     }
@@ -2229,6 +2371,17 @@ bool AuditLogs::validJsonOfField(size_t index,
                 return true;
             }
             if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 12:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isInt())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

@@ -56,6 +56,7 @@ class AuditLogs
         static const std::string _user_agent;
         static const std::string _request_id;
         static const std::string _details;
+        static const std::string _org_id;
     };
 
     static const int primaryKeyNumber;
@@ -220,8 +221,17 @@ class AuditLogs
     void setDetails(std::string &&pDetails) noexcept;
     void setDetailsToNull() noexcept;
 
+    /**  For column org_id  */
+    ///Get the value of the column org_id, returns the default value if the column is null
+    const int32_t &getValueOfOrgId() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<int32_t> &getOrgId() const noexcept;
+    ///Set the value of the column org_id
+    void setOrgId(const int32_t &pOrgId) noexcept;
+    void setOrgIdToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 12;  }
+
+    static size_t getColumnNumber() noexcept {  return 13;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -255,6 +265,7 @@ class AuditLogs
     std::shared_ptr<std::string> userAgent_;
     std::shared_ptr<std::string> requestId_;
     std::shared_ptr<std::string> details_;
+    std::shared_ptr<int32_t> orgId_;
     struct MetaData
     {
         const std::string colName_;
@@ -266,7 +277,7 @@ class AuditLogs
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[12]={ false };
+    bool dirtyFlag_[13]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -342,6 +353,11 @@ class AuditLogs
             sql += "details,";
             ++parametersCount;
         }
+        if(dirtyFlag_[12])
+        {
+            sql += "org_id,";
+            ++parametersCount;
+        }
         needSelection=true;
         if(parametersCount > 0)
         {
@@ -410,6 +426,11 @@ class AuditLogs
             sql.append(placeholderStr, n);
         }
         if(dirtyFlag_[11])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        if(dirtyFlag_[12])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
