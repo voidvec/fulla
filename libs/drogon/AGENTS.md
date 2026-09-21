@@ -102,7 +102,12 @@
 - 禁用时，对应 `.cc` 文件从编译中排除，`#ifdef WITH_*` 守卫确保头文件一致性
 
 ### 6. DB 访问
-- **禁止** Controller 直接构造 `Mapper<...>(db)`。必须通过 Repository 接口（`libs/storage-*`）或 Domain 服务（`libs/oauth2`、`libs/identity`）。
+- **方向**：新增 Controller 内的 DB 读取走 Repository（`libs/storage-postgres`，如
+  `ClientOwnersRepository`——v1.5.0 M0 起 AEC consent 属主查询即经它）或 Domain 服务
+  （`libs/oauth2`、`libs/identity`）；触碰既有直查代码时顺带迁移（migrate-on-touch）。
+- **登记例外（#222 写实，v1.5.0 M0）**：本目录约 18 个文件存在直接 `Mapper<...>(db)`
+  历史存量（AuthService、admin/* 等），未设上限执法、非本里程碑清偿范围——旧规则
+  「一律禁止」与现实脱节，故校准为上述方向性约定；不新增例外文件。
 - 所有 DB 操作遵循 `.claude/rules/db-operations.md`：async callback + Mapper + Criteria 三件套。
 
 ### 7. Error 处理

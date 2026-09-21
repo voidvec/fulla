@@ -7,6 +7,7 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/validation/RuleSet.h>
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
@@ -41,6 +42,12 @@ using ClientScopeModel = ::drogon_model::fulla_db::Oauth2ClientScopes;
 using OrgModel = ::drogon_model::fulla_db::Organizations;
 using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
 using UserModel = ::drogon_model::fulla_db::Users;
+
+// Shared client-ownership reads (#222, v1.5.0 M0).
+using ::fulla::storage::postgres::ClientOwnersRepository;
+using ::fulla::storage::postgres::LookupStatus;
+using ::fulla::storage::postgres::MembershipLookup;
+using ::fulla::storage::postgres::OwnerRowLookup;
 
 // The grant types a self-registered app may declare (design §4.2); the
 // password grant does not exist in fulla and is never addable here.
@@ -179,31 +186,32 @@ void loadOwnerRow(
   OwnerCallback &&onLoaded
 )
 {
-    // Share the callback between BOTH drogon callbacks: MSVC evaluates call
-    // arguments right-to-left, so two `= std::move(onLoaded)` init-captures
-    // would leave the SUCCESS callback holding an empty std::function
-    // (bad_function_call on the found path).
-    auto sharedOnLoaded = std::make_shared<OwnerCallback>(std::move(onLoaded));
-    try
-    {
-        Mapper<OwnerModel> mapper(db);
-        mapper.findOne(
-          Criteria(OwnerModel::Cols::_client_id, CompareOperator::EQ, clientId),
-          [cb, req, sharedOnLoaded](const OwnerModel &owner) {
-              (*sharedOnLoaded)(true, owner);
-          },
-          [req, cb, sharedOnLoaded](const DrogonDbException &) {
-              // No owners row = admin-seeded client: exists as a client, but
-              // is not user-manageable.
-              OwnerModel none;
-              (*sharedOnLoaded)(false, none);
+    // #222/#230 (v1.5.0 M0): the raw owners-row query lives in the shared
+    // ClientOwnersRepository. NoRow keeps the uniform-404 shape (#227), but
+    // a REAL query failure now surfaces as 500 DB_QUERY_ERROR instead of
+    // masquerading as "no such application" (#230: the old path swallowed
+    // every DrogonDbException as no-owner-row, without even a log).
+    ClientOwnersRepository ownersRepo(db);
+    ownersRepo.findOwnerRow(
+      clientId,
+      [req, cb, onLoaded = std::move(onLoaded)](const OwnerRowLookup &lookup) {
+          if (lookup.status == LookupStatus::Error)
+          {
+              respondError(
+                req, cb, "DB_QUERY_ERROR", "owner lookup failed: " + lookup.error
+              );
+              return;
           }
-        );
-    }
-    catch (...)
-    {
-        respondError(req, cb, "DB_QUERY_ERROR", "owner lookup: Mapper construction failed");
-    }
+          if (lookup.status == LookupStatus::NoRow)
+          {
+              // No owners row = admin-seeded client: exists as a client,
+              // but is not user-manageable.
+              OwnerModel none;
+              onLoaded(false, none);
+              return;
+          }
+          onLoaded(true, lookup.row);
+      });
 }
 
 // Management permission (design §2.3): personal app (org_id NULL) -> creator;
@@ -271,45 +279,44 @@ void requireManagePermission(
           // Org app: caller must CURRENTLY hold owner/admin in that org (a
           // creator who left the org has no residual rights — ratified).
           const int32_t orgId = *owner.getOrgId();
-          try
-          {
-              Mapper<MemberModel>(db).findBy(
-                Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ, orgId) &&
-                  Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, caller.id),
-                [req, cb, continuation = std::move(continuation), owner, blockWhenSuspended](
-                  const std::vector<MemberModel> &rows) {
-                    if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
-                    {
-                        // #223: non-members and non-manager members get the
-                        // uniform 404 — identical to probing an admin-seeded
-                        // or non-existent client. (Plain members also do not
-                        // see org apps in the list endpoint, so 404 is
-                        // coherent UX, not just hardening.)
-                        respondError(
-                          req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "application not found"
-                        );
-                        return;
-                    }
-                    if (blockWhenSuspended && owner.getValueOfStatus() == "suspended")
-                    {
-                        respondError(
-                          req, cb, "AUTHZ_ACCESS_DENIED",
-                          "application is suspended; contact the administrator"
-                        );
-                        return;
-                    }
-                    continuation(true, owner);
-                },
-                [req, cb](const DrogonDbException &e) {
-                    respondError(req, cb, "DB_QUERY_ERROR",
-                      std::string("membership lookup failed: ") + e.base().what());
+          // #222 (v1.5.0 M0): membership read sunk into the shared
+          // repository; the manager-role POLICY stays here.
+          ClientOwnersRepository ownersRepo(db);
+          ownersRepo.findMembership(
+            orgId,
+            caller.id,
+            [req, cb, continuation = std::move(continuation), owner, blockWhenSuspended](
+              const MembershipLookup &lookup) {
+                if (lookup.status == LookupStatus::Error)
+                {
+                    respondError(
+                      req, cb, "DB_QUERY_ERROR", "membership lookup failed: " + lookup.error
+                    );
+                    return;
                 }
-              );
-          }
-          catch (...)
-          {
-              respondError(req, cb, "DB_QUERY_ERROR", "membership lookup: Mapper construction failed");
-          }
+                if (lookup.status == LookupStatus::NoRow ||
+                    !isManagerRole(lookup.row.getValueOfRole()))
+                {
+                    // #223: non-members and non-manager members get the
+                    // uniform 404 — identical to probing an admin-seeded
+                    // or non-existent client. (Plain members also do not
+                    // see org apps in the list endpoint, so 404 is
+                    // coherent UX, not just hardening.)
+                    respondError(
+                      req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "application not found"
+                    );
+                    return;
+                }
+                if (blockWhenSuspended && owner.getValueOfStatus() == "suspended")
+                {
+                    respondError(
+                      req, cb, "AUTHZ_ACCESS_DENIED",
+                      "application is suspended; contact the administrator"
+                    );
+                    return;
+                }
+                continuation(true, owner);
+            });
       });
 }
 
