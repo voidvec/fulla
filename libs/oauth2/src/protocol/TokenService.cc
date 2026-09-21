@@ -125,6 +125,25 @@ void TokenService::resolveRoles(
     );
 }
 
+void TokenService::resolveOrgContextForClaims(
+  const std::string &subject,
+  const std::optional<int32_t> &orgId,
+  const std::string &scope,
+  std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
+)
+{
+    // Claim release is gated on the `org` scope (design §2.1 item 3): the
+    // org_id parameter SELECTS the context, the scope AUTHORIZES its
+    // release to the RP. No binding, no scope, or no resolver -> no claim
+    // (org_ctx is claim data; its failure mode is absence).
+    if (!orgContextResolver_ || !orgId.has_value() || !scopeContains(scope, "org"))
+    {
+        cb(std::nullopt);
+        return;
+    }
+    orgContextResolver_->resolveOrgContext(subject, *orgId, std::move(cb));
+}
+
 void TokenService::audit(
   const std::string &action,
   const std::string &outcome,
@@ -156,7 +175,8 @@ void TokenService::generateAuthorizationCode(
   const std::string &nonce,
   std::function<void(bool, std::string, std::string)> &&callback,
   int64_t authTime,
-  const std::string &amr
+  const std::string &amr,
+  const std::optional<int32_t> &orgId
 )
 {
     if (!grants_ || !crypto_)
@@ -196,6 +216,9 @@ void TokenService::generateAuthorizationCode(
     // the code so the token endpoint can stamp them into the id_token.
     authCode.authTime = authTime;
     authCode.amr = amr;
+    // v1.5.0 M1 (design §2.1 item 4): the org binding picked at authorize
+    // time rides the code row; token exchange inherits it down the chain.
+    authCode.orgId = orgId;
 
     grants_->saveAuthCode(authCode, [callback = std::move(callback), code]() {
         callback(true, code, "");
@@ -280,9 +303,20 @@ void TokenService::exchangeCodeForToken(
                 }
 
                 auto authCode = *authCodeOpt;
-                self->resolveRoles(
+                // v1.5.0 M1 (design §2.1): resolve the org_ctx claim data
+                // first -- a nullopt hop when the code carries no org
+                // binding, the granted scopes lack `org`, or no resolver
+                // is wired -- then roles, then issuance.
+                self->resolveOrgContextForClaims(
                   authCode.userId,
-                  [self, callback, authCode, now](std::vector<std::string> roles) {
+                  authCode.orgId,
+                  authCode.scope,
+                  [self, callback, authCode, now](
+                    std::optional<fulla::common::ports::OrgContextInfo> orgCtx
+                  ) {
+                  self->resolveRoles(
+                    authCode.userId,
+                    [self, callback, authCode, now, orgCtx](std::vector<std::string> roles) {
                       Json::Value rolesJson(Json::arrayValue);
                       for (const auto &r : roles)
                           rolesJson.append(r);
@@ -314,6 +348,9 @@ void TokenService::exchangeCodeForToken(
                       // (previously the column was never written and the DB
                       // default leaked a hardcoded example.com URL).
                       token.issuer = self->issuer_;
+                      // v1.5.0 M1 (design §2.1 item 4): the org binding
+                      // inherited from the code rides the token pair.
+                      token.orgId = authCode.orgId;
 
                       fulla::oauth2::model::OAuth2RefreshToken refreshToken;
                       refreshToken.token = hashToken(*self->crypto_, refreshTokenStr);
@@ -323,6 +360,7 @@ void TokenService::exchangeCodeForToken(
                       refreshToken.scope = authCode.scope;
                       refreshToken.expiresAt = now + self->refreshTokenTtl_;
                       refreshToken.familyId = familyId;
+                      refreshToken.orgId = authCode.orgId;
 
                       self->tokens_->saveTokenPair(
                         token,
@@ -333,7 +371,8 @@ void TokenService::exchangeCodeForToken(
                          refreshTokenStr,
                          rolesJson,
                          authCode,
-                         now](bool ok) {
+                         now,
+                         orgCtx](bool ok) {
                             if (!ok)
                             {
                                 // Persistence failed: the tokens we would
@@ -423,6 +462,26 @@ void TokenService::exchangeCodeForToken(
                                         idTokenClaims["acr"] = mfa ? "2" : "1";
                                     }
                                 }
+                                // v1.5.0 M1 (design §2.1 item 3): org_ctx =
+                                // the active org + the user's CURRENT roles
+                                // in it (O7: the resolver re-checks
+                                // membership, so a removed member's refresh
+                                // stops carrying org_ctx). orgCtx present
+                                // implies authCode.orgId present.
+                                if (orgCtx.has_value() && authCode.orgId.has_value())
+                                {
+                                    Json::Value orgCtxClaim;
+                                    orgCtxClaim["org_id"] =
+                                      (Json::Int64)*authCode.orgId;
+                                    orgCtxClaim["org_name"] = orgCtx->orgName;
+                                    Json::Value orgRoles(Json::arrayValue);
+                                    for (const auto &r : orgCtx->roles)
+                                    {
+                                        orgRoles.append(r);
+                                    }
+                                    orgCtxClaim["roles"] = orgRoles;
+                                    idTokenClaims["org_ctx"] = orgCtxClaim;
+                                }
 
                                 std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
                                 if (!idToken.empty())
@@ -436,7 +495,9 @@ void TokenService::exchangeCodeForToken(
                         }
                       );
                   }
-                );
+              );
+                  }
+              );  // resolveOrgContextForClaims (v1.5.0 M1 org_ctx hop)
             }
           );
       }
@@ -505,6 +566,17 @@ void TokenService::refreshAccessToken(
               return;
           }
 
+          // v1.5.0 M1 (design §2.1 item 4): refresh preserves the org
+          // binding along the family and re-resolves org_ctx (O7: a
+          // member removed from the org stops getting org_ctx on refresh-
+          // issued id_tokens immediately). Nullopt hop when not applicable.
+          self->resolveOrgContextForClaims(
+            storedRt->userId,
+            storedRt->orgId,
+            storedRt->scope,
+            [self, callback, storedRt, now](
+              std::optional<fulla::common::ports::OrgContextInfo> orgCtx
+            ) {
           auto newTokenStr = generateSecureToken(*self->crypto_);
           auto newRefreshTokenStr = generateSecureToken(*self->crypto_);
           // P2-1: refuse issuance on CSPRNG failure ("" results).
@@ -523,6 +595,8 @@ void TokenService::refreshAccessToken(
           token.expiresAt = now + self->accessTokenTtl_;
           // F-016: same issuer stamping as the authorization_code path above.
           token.issuer = self->issuer_;
+          // v1.5.0 M1: the org binding survives rotation.
+          token.orgId = storedRt->orgId;
 
           fulla::oauth2::model::OAuth2RefreshToken newRt;
           newRt.token = hashToken(*self->crypto_, newRefreshTokenStr);
@@ -532,9 +606,10 @@ void TokenService::refreshAccessToken(
           newRt.scope = storedRt->scope;
           newRt.expiresAt = now + self->refreshTokenTtl_;
           newRt.familyId = storedRt->familyId;
+          newRt.orgId = storedRt->orgId;
 
           self->tokens_->saveTokenPair(
-            token, newRt, [self, callback, newTokenStr, newRefreshTokenStr, storedRt, now](bool ok) {
+            token, newRt, [self, callback, newTokenStr, newRefreshTokenStr, storedRt, now, orgCtx](bool ok) {
                 if (!ok)
                 {
                     // Same silent-failure guard as exchangeCodeForToken:
@@ -567,6 +642,21 @@ void TokenService::refreshAccessToken(
                     idTokenClaims["aud"] = storedRt->clientId;
                     idTokenClaims["iat"] = (Json::Int64)now;
                     idTokenClaims["exp"] = (Json::Int64)(now + self->accessTokenTtl_);
+                    // v1.5.0 M1: org_ctx mirrors the code-exchange id_token
+                    // (O7 re-resolution; orgCtx present implies the binding).
+                    if (orgCtx.has_value() && storedRt->orgId.has_value())
+                    {
+                        Json::Value orgCtxClaim;
+                        orgCtxClaim["org_id"] = (Json::Int64)*storedRt->orgId;
+                        orgCtxClaim["org_name"] = orgCtx->orgName;
+                        Json::Value orgRoles(Json::arrayValue);
+                        for (const auto &r : orgCtx->roles)
+                        {
+                            orgRoles.append(r);
+                        }
+                        orgCtxClaim["roles"] = orgRoles;
+                        idTokenClaims["org_ctx"] = orgCtxClaim;
+                    }
                     std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
                     if (!idToken.empty())
                         json["id_token"] = idToken;
@@ -574,6 +664,8 @@ void TokenService::refreshAccessToken(
                 callback(json);
             }
           );
+              }
+              );  // resolveOrgContextForClaims (v1.5.0 M1 org_ctx hop)
       }
     );
 }

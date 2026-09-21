@@ -81,6 +81,12 @@ void RedisGrantRepository::saveAuthCode(const OAuth2AuthCode &code, VoidCallback
     {
         val["amr"] = code.amr;
     }
+    // v1.5.0 M1 (design §2.1 item 4): the org binding rides the cached
+    // code entry (omitted when absent so pre-M1 entries stay readable).
+    if (code.orgId.has_value())
+    {
+        val["org_id"] = (Json::Int64)*code.orgId;
+    }
     std::string jsonStr = jsonToString(val);
 
     auto now = std::chrono::system_clock::now();
@@ -155,6 +161,9 @@ void RedisGrantRepository::getAuthCode(const std::string &code, AuthCodeCallback
           authCode.nonce = json["nonce"].asString();
           authCode.authTime = json["auth_time"].asInt64();
           authCode.amr = json["amr"].asString();
+          // v1.5.0 M1: org binding (absent in pre-M1 cached entries).
+          if (json.isMember("org_id"))
+              authCode.orgId = json["org_id"].asInt();
           cb(authCode);
       },
       [cb, codeStr = code](const RedisException &e) {
@@ -297,6 +306,14 @@ void RedisGrantRepository::consumeAuthCode(
           authCode.nonce = json["nonce"].asString();
           authCode.authTime = json["auth_time"].asInt64();
           authCode.amr = json["amr"].asString();
+          // v1.5.0 M1 (review 1.1): the org binding must survive the
+          // consume path too -- token exchange reads it here (write/read
+          // symmetry with saveAuthCode/getAuthCode; absent in pre-M1
+          // cached entries).
+          if (json.isMember("org_id"))
+          {
+              authCode.orgId = json["org_id"].asInt();
+          }
 
           cb(authCode);
       },

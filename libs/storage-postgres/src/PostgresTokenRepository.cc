@@ -46,6 +46,12 @@ void PostgresTokenRepository::saveAccessToken(const OAuth2AccessToken &token, Vo
         // F-016: persist the issuer stamped at issuance (previously never
         // written, so every row carried the schema's hardcoded default).
         newToken.setIssuer(token.issuer);
+        // v1.5.0 M1 (design §2.1 item 4): the org binding inherited from
+        // the code. V036 column; absent -> NULL.
+        if (token.orgId.has_value())
+        {
+            newToken.setOrgId(*token.orgId);
+        }
 
         mapper.insert(
           newToken,
@@ -166,62 +172,141 @@ void PostgresTokenRepository::saveTokenPair(
               invokeOnce(false);
           };
 
-          transPtr->execSqlAsync(
-            "INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at, "
-            "revoked, issuer) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            [transPtr, rt, refreshInsertErrorCb](const ::drogon::orm::Result &) {
-                // Access token saved, now save refresh token. The caller's
-                // callback fires from the commit callback above, not here.
-                if (rt.familyId.empty())
-                {
-                    transPtr->execSqlAsync(
-                      "INSERT INTO oauth2_refresh_tokens "
-                      "(token, access_token, client_id, user_id, scope, expires_at, revoked) "
-                      "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                      [](const ::drogon::orm::Result &) {},
-                      refreshInsertErrorCb,
-                      rt.token,
-                      rt.accessToken,
-                      rt.clientId,
-                      rt.userId,
-                      rt.scope,
-                      rt.expiresAt,
-                      rt.revoked
-                    );
-                }
-                else
-                {
-                    transPtr->execSqlAsync(
-                      "INSERT INTO oauth2_refresh_tokens "
-                      "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
-                      "family_id) "
-                      "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                      [](const ::drogon::orm::Result &) {},
-                      refreshInsertErrorCb,
-                      rt.token,
-                      rt.accessToken,
-                      rt.clientId,
-                      rt.userId,
-                      rt.scope,
-                      rt.expiresAt,
-                      rt.revoked,
-                      rt.familyId
-                    );
-                }
-            },
-            [invokeOnce](const DrogonDbException &e) {
-                LOG_ERROR << "saveTokenPair (access) failed: " << e.base().what();
-                invokeOnce(false);
-            },
-            at.token,
-            at.clientId,
-            at.userId,
-            at.scope,
-            at.expiresAt,
-            at.revoked,
-            at.issuer  // F-016: write the issuance-time issuer, not the schema default
-          );
+          // v1.5.0 M1: the refresh insert branches on family_id (pre-
+          // existing) AND org_id (new) -- raw SQL placeholders are a
+          // compile-time arg list, so each combination gets its own
+          // statement. Kept in one lambda so the access insert below has a
+          // single continuation regardless.
+          auto insertRefresh = [transPtr, rt, refreshInsertErrorCb]() {
+              const bool hasFamily = !rt.familyId.empty();
+              const bool hasOrg = rt.orgId.has_value();
+              if (hasFamily && hasOrg)
+              {
+                  transPtr->execSqlAsync(
+                    "INSERT INTO oauth2_refresh_tokens "
+                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
+                    "family_id, org_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    [](const ::drogon::orm::Result &) {},
+                    refreshInsertErrorCb,
+                    rt.token,
+                    rt.accessToken,
+                    rt.clientId,
+                    rt.userId,
+                    rt.scope,
+                    rt.expiresAt,
+                    rt.revoked,
+                    rt.familyId,
+                    *rt.orgId
+                  );
+              }
+              else if (hasFamily)
+              {
+                  transPtr->execSqlAsync(
+                    "INSERT INTO oauth2_refresh_tokens "
+                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
+                    "family_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    [](const ::drogon::orm::Result &) {},
+                    refreshInsertErrorCb,
+                    rt.token,
+                    rt.accessToken,
+                    rt.clientId,
+                    rt.userId,
+                    rt.scope,
+                    rt.expiresAt,
+                    rt.revoked,
+                    rt.familyId
+                  );
+              }
+              else if (hasOrg)
+              {
+                  transPtr->execSqlAsync(
+                    "INSERT INTO oauth2_refresh_tokens "
+                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
+                    "org_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    [](const ::drogon::orm::Result &) {},
+                    refreshInsertErrorCb,
+                    rt.token,
+                    rt.accessToken,
+                    rt.clientId,
+                    rt.userId,
+                    rt.scope,
+                    rt.expiresAt,
+                    rt.revoked,
+                    *rt.orgId
+                  );
+              }
+              else
+              {
+                  transPtr->execSqlAsync(
+                    "INSERT INTO oauth2_refresh_tokens "
+                    "(token, access_token, client_id, user_id, scope, expires_at, revoked) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    [](const ::drogon::orm::Result &) {},
+                    refreshInsertErrorCb,
+                    rt.token,
+                    rt.accessToken,
+                    rt.clientId,
+                    rt.userId,
+                    rt.scope,
+                    rt.expiresAt,
+                    rt.revoked
+                  );
+              }
+          };
+
+          auto accessInsertErrorCb = [invokeOnce](const DrogonDbException &e) {
+              LOG_ERROR << "saveTokenPair (access) failed: " << e.base().what();
+              invokeOnce(false);
+          };
+
+          if (at.orgId.has_value())
+          {
+              transPtr->execSqlAsync(
+                "INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, "
+                "expires_at, revoked, issuer, org_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                [insertRefresh](const ::drogon::orm::Result &) {
+                    // Access token saved, now save refresh token. The
+                    // caller's callback fires from the commit callback above,
+                    // not here.
+                    insertRefresh();
+                },
+                accessInsertErrorCb,
+                at.token,
+                at.clientId,
+                at.userId,
+                at.scope,
+                at.expiresAt,
+                at.revoked,
+                at.issuer,
+                *at.orgId
+              );
+          }
+          else
+          {
+              transPtr->execSqlAsync(
+                "INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, "
+                "expires_at, revoked, issuer) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                [insertRefresh](const ::drogon::orm::Result &) {
+                    // Access token saved, now save refresh token. The
+                    // caller's callback fires from the commit callback above,
+                    // not here.
+                    insertRefresh();
+                },
+                accessInsertErrorCb,
+                at.token,
+                at.clientId,
+                at.userId,
+                at.scope,
+                at.expiresAt,
+                at.revoked,
+                at.issuer  // F-016: write the issuance-time issuer, not the schema default
+              );
+          }
       }
     );
 }
@@ -247,6 +332,9 @@ void PostgresTokenRepository::getAccessToken(const std::string &token, AccessTok
               t.scope = row.getValueOfScope();
               t.expiresAt = row.getValueOfExpiresAt();
               t.revoked = row.getValueOfRevoked();
+              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              t.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
+                                       : std::nullopt;
               (*sharedCb)(t);
           },
           [sharedCb](const DrogonDbException &e) {
@@ -340,6 +428,9 @@ void PostgresTokenRepository::getRefreshToken(const std::string &token, RefreshT
               t.expiresAt = row.getValueOfExpiresAt();
               t.revoked = row.getValueOfRevoked();
               t.familyId = row.getValueOfFamilyId();
+              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              t.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
+                                       : std::nullopt;
               (*sharedCb)(t);
           },
           [sharedCb](const DrogonDbException &e) {
@@ -419,9 +510,10 @@ void PostgresTokenRepository::atomicRevokeRefreshToken(
 
     // Atomic CAS: UPDATE ... WHERE revoked=false RETURNING *
     dbClientMaster_->execSqlAsync(
-      "UPDATE oauth2_refresh_tokens SET revoked = true "
-      "WHERE token = $1 AND revoked = false "
-      "RETURNING token, access_token, client_id, user_id, scope, expires_at, family_id",
+        "UPDATE oauth2_refresh_tokens SET revoked = true "
+        "WHERE token = $1 AND revoked = false "
+        "RETURNING token, access_token, client_id, user_id, scope, expires_at, family_id, "
+        "org_id",
       [sharedCb](const ::drogon::orm::Result &r) {
           if (r.empty())
           {
@@ -438,6 +530,10 @@ void PostgresTokenRepository::atomicRevokeRefreshToken(
           rt.scope = row["scope"].isNull() ? "" : row["scope"].as<std::string>();
           rt.expiresAt = row["expires_at"].as<int64_t>();
           rt.familyId = row["family_id"].isNull() ? "" : row["family_id"].as<std::string>();
+          // v1.5.0 M1: the org binding must survive the rotation read.
+          rt.orgId =
+            row["org_id"].isNull() ? std::nullopt
+                                   : std::optional<int32_t>(row["org_id"].as<int32_t>());
           rt.revoked = true;
           (*sharedCb)(rt);
       },
@@ -543,6 +639,10 @@ void PostgresTokenRepository::introspectToken(
           introspection.nbf = accessToken.getValueOfNotBefore();
           introspection.sub = accessToken.getValueOfUserId();
           introspection.scope = accessToken.getValueOfScope();
+          // v1.5.0 M1: expose the token's org binding (design §2.1 item 4).
+          introspection.orgId =
+            accessToken.getOrgId() ? std::optional<int32_t>(*accessToken.getOrgId())
+                                   : std::nullopt;
           (*sharedCb)(introspection);
       },
       [sharedCb, now, token, self = shared_from_this(), this](const DrogonDbException &) {
@@ -577,6 +677,10 @@ void PostgresTokenRepository::introspectToken(
                 introspection.nbf = 0;
                 introspection.sub = refreshToken.getValueOfUserId();
                 introspection.scope = refreshToken.getValueOfScope();
+                // v1.5.0 M1: org binding on the refresh branch too.
+                introspection.orgId =
+                  refreshToken.getOrgId() ? std::optional<int32_t>(*refreshToken.getOrgId())
+                                          : std::nullopt;
                 (*sharedCb)(introspection);
             },
             [sharedCb](const DrogonDbException &) {
