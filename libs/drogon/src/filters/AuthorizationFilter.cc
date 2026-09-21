@@ -178,6 +178,14 @@ void AuthorizationFilter::doFilter(
               (*req->getAttributes())["userId"] = at->userId;
               (*req->getAttributes())["scope"] = at->scope;
               (*req->getAttributes())["clientId"] = at->clientId;
+              // v1.5.0 M1 (review nit 6): expose the token's org binding
+              // so org-aware handlers (userinfo's org_ctx) do not need a
+              // second introspection round-trip for a field this filter
+              // already holds. Stringified for attribute-shape consistency.
+              if (at->orgId.has_value())
+              {
+                  (*req->getAttributes())["orgId"] = std::to_string(*at->orgId);
+              }
 
               // 3. Get User Roles
               plugin->getUserRoles(

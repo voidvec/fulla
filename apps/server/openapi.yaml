@@ -242,13 +242,21 @@ components:
         scope:
           type: string
           description: Space-separated scopes.
+        org_id:
+          type: integer
+          format: int32
+          description: 'v1.5.0: present when the token was issued in org context
+            (authorize org_id parameter). The token''s own binding; roles/name
+            stay userinfo-only.'
       required:
       - active
       type: object
     UserInfoResponse:
       description: >-
         OIDC Core §5.3 userinfo claims. email_verified present iff email
-        present; roles present iff non-empty.
+        present; roles present iff non-empty. org_ctx present iff the token
+        was issued in org context, carries the org scope, and the user is
+        still a member (v1.5.0; membership is re-checked in real time).
       properties:
         sub:
           type: string
@@ -266,6 +274,21 @@ components:
           type: array
           items:
             type: string
+        org_ctx:
+          type: object
+          description: 'v1.5.0: the ACTIVE organization context (id + name + the
+            user''s current roles in it); active-org-only, never the full
+            membership list.'
+          properties:
+            org_id:
+              type: integer
+              format: int32
+            org_name:
+              type: string
+            roles:
+              type: array
+              items:
+                type: string
       required:
       - sub
       - name
@@ -4004,12 +4027,23 @@ paths:
         required: false
         schema:
           type: integer
+      - description: 'Organization context hint (v1.5.0): integer id or slug
+          of the organization this authorization is made in. Accepted only
+          when the user is a current member and the client belongs to that
+          organization; every rejection renders the same inline 400 (no
+          redirect). Combine with the org scope to receive org_ctx claims.'
+        in: query
+        name: org_id
+        required: false
+        schema:
+          type: string
       responses:
         '302':
           description: Redirect to client with authorization code (or an error=
             redirect for prompt=none / invalid_scope / etc.)
         '400':
-          description: Invalid request (malformed prompt, missing required params)
+          description: Invalid request (malformed prompt, missing required
+            params, or an invalid/unauthorized org_id)
       summary: Request authorization
       tags:
       - OAuth2

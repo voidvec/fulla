@@ -20,6 +20,7 @@ def _get_kwargs(
     nonce: str | Unset = UNSET,
     prompt: str | Unset = UNSET,
     max_age: int | Unset = UNSET,
+    org_id: str | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
@@ -43,6 +44,8 @@ def _get_kwargs(
     params["prompt"] = prompt
 
     params["max_age"] = max_age
+
+    params["org_id"] = org_id
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -90,6 +93,7 @@ def sync_detailed(
     nonce: str | Unset = UNSET,
     prompt: str | Unset = UNSET,
     max_age: int | Unset = UNSET,
+    org_id: str | Unset = UNSET,
 ) -> Response[Any]:
     """Request authorization
 
@@ -109,6 +113,7 @@ def sync_detailed(
         nonce (str | Unset):
         prompt (str | Unset):
         max_age (int | Unset):
+        org_id (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -129,6 +134,7 @@ def sync_detailed(
         nonce=nonce,
         prompt=prompt,
         max_age=max_age,
+        org_id=org_id,
     )
 
     response = client.get_httpx_client().request(
@@ -151,6 +157,7 @@ async def asyncio_detailed(
     nonce: str | Unset = UNSET,
     prompt: str | Unset = UNSET,
     max_age: int | Unset = UNSET,
+    org_id: str | Unset = UNSET,
 ) -> Response[Any]:
     """Request authorization
 
@@ -170,6 +177,7 @@ async def asyncio_detailed(
         nonce (str | Unset):
         prompt (str | Unset):
         max_age (int | Unset):
+        org_id (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -190,6 +198,7 @@ async def asyncio_detailed(
         nonce=nonce,
         prompt=prompt,
         max_age=max_age,
+        org_id=org_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)

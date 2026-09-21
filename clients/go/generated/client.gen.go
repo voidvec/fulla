@@ -479,6 +479,9 @@ type IntrospectionResponse struct {
 	Iss      *string `json:"iss,omitempty"`
 	Nbf      *int64  `json:"nbf,omitempty"`
 
+	// OrgId v1.5.0: present when the token was issued in org context (authorize org_id parameter). The token's own binding; roles/name stay userinfo-only.
+	OrgId *int32 `json:"org_id,omitempty"`
+
 	// Scope Space-separated scopes.
 	Scope *string `json:"scope,omitempty"`
 
@@ -748,13 +751,20 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 }
 
-// UserInfoResponse OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty.
+// UserInfoResponse OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.5.0; membership is re-checked in real time).
 type UserInfoResponse struct {
 	Email         *string `json:"email,omitempty"`
 	EmailVerified *bool   `json:"email_verified,omitempty"`
 
 	// Name Username (fallback: email, then sub).
-	Name  string    `json:"name"`
+	Name string `json:"name"`
+
+	// OrgCtx v1.5.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the full membership list.
+	OrgCtx *struct {
+		OrgId   *int32    `json:"org_id,omitempty"`
+		OrgName *string   `json:"org_name,omitempty"`
+		Roles   *[]string `json:"roles,omitempty"`
+	} `json:"org_ctx,omitempty"`
 	Roles *[]string `json:"roles,omitempty"`
 
 	// Sub Subject (public user id, stringified).
@@ -1147,6 +1157,9 @@ type GetOauth2AuthorizeParams struct {
 
 	// MaxAge Maximum allowable age in seconds of the user's authentication. If the session auth_time is older, re-authentication is forced.
 	MaxAge *int `form:"max_age,omitempty" json:"max_age,omitempty"`
+
+	// OrgId Organization context hint (v1.5.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; every rejection renders the same inline 400 (no redirect). Combine with the org scope to receive org_ctx claims.
+	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
 }
 
 // PostOauth2ConsentParams defines parameters for PostOauth2Consent.
@@ -9268,6 +9281,18 @@ func NewGetOauth2AuthorizeRequest(server string, params *GetOauth2AuthorizeParam
 		if params.MaxAge != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "max_age", *params.MaxAge, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.OrgId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "org_id", *params.OrgId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

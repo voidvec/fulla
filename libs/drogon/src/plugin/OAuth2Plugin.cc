@@ -3,6 +3,7 @@
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <fulla/drogon/adapters/DrogonLogger.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
+#include <fulla/drogon/adapters/StorageOrgContextResolver.h>
 #include <fulla/drogon/adapters/OpenSslCryptoProvider.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/adapters/DrogonMetrics.h>
@@ -233,6 +234,34 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
       issuer
     );
     tokenService_->setJwkManager(jwkManager_);
+    // v1.5.0 M1 (design §2.1 item 3; review 1.4): the org_ctx claim
+    // resolver for id_tokens issued in org context (org name + CURRENT
+    // roles via the shared ClientOwnersRepository; O7 real-time
+    // membership semantics). Constructor-injected like StorageRoleProvider
+    // (memory mode passes nullptr -> org_ctx is simply absent).
+    {
+        // Storage-type-guarded: memory-mode deployments must not reach
+        // getDbClient() at all -- in Debug builds Drogon's DbClientManager
+        // ASSERTS for an unknown client name (abort, not an exception; the
+        // SdkSmoke example caught this on the coverage leg, whose memory
+        // config carries "db_clients": []). nullptr resolver -> org_ctx is
+        // simply absent.
+        ::drogon::orm::DbClientPtr orgCtxDb;
+        if (storageType_ != "memory")
+        {
+            try
+            {
+                orgCtxDb = ::drogon::app().getDbClient();
+            }
+            catch (...)
+            {
+                orgCtxDb = nullptr;
+            }
+        }
+        tokenService_->setOrgContextResolver(
+          std::make_shared<fulla::drogon::adapters::StorageOrgContextResolver>(orgCtxDb)
+        );
+    }
     clientService_ = std::make_shared<fulla::oauth2::protocol::ClientService>(clientRepo_);
     identityService_ = std::make_shared<fulla::identity::IdentityService>(
       fulla::identity::IdentityService::Repos{
@@ -755,7 +784,8 @@ void OAuth2Plugin::generateAuthorizationCode(
   const std::string &nonce,
   std::function<void(bool, std::string, std::string)> &&callback,
   int64_t authTime,
-  const std::string &amr
+  const std::string &amr,
+  const std::optional<int32_t> &orgId
 )
 {
     tokenService_->generateAuthorizationCode(
@@ -768,7 +798,8 @@ void OAuth2Plugin::generateAuthorizationCode(
       nonce,
       std::move(callback),
       authTime,
-      amr
+      amr,
+      orgId
     );
 }
 

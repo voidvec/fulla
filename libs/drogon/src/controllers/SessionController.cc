@@ -1,7 +1,9 @@
 #include <mutex>
 #include <fulla/drogon/controllers/SessionController.h>
+#include <fulla/drogon/authz/OrgContextGate.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
+#include <fulla/drogon/utils/OrgContextSlots.h>
 #include <fulla/drogon/utils/PasswordHasher.h>
 #include <fulla/drogon/utils/PortalUrl.h>
 #include <fulla/storage/postgres/models/Users.h>
@@ -628,6 +630,10 @@ void SessionController::login(
     std::string clientId, redirectUri, scope, state;
     std::string codeChallenge, codeChallengeMethod;
     std::string nonce;
+    // v1.5.0 M1: the org context hint carried through the login round trip
+    // (authorize adds org_id to the login URL); validated by the
+    // OrgContextGate below before the code is issued.
+    std::string orgIdParam;
 
     // Try JSON body first
     if (req->contentType() == ::drogon::CT_APPLICATION_JSON)
@@ -644,6 +650,10 @@ void SessionController::login(
             codeChallenge = json->get("code_challenge", "").asString();
             codeChallengeMethod = json->get("code_challenge_method", "").asString();
             nonce = json->get("nonce", "").asString();
+            // Review nit 7: a non-string org_id must not throw
+            // Json::LogicError (social-auth isString precedent).
+            if (json->isMember("org_id") && (*json)["org_id"].isString())
+                orgIdParam = (*json)["org_id"].asString();
         }
     }
     // Fallback to form data (Drogon automatically parses form-urlencoded)
@@ -659,6 +669,7 @@ void SessionController::login(
         codeChallenge = params["code_challenge"];
         codeChallengeMethod = params["code_challenge_method"];
         nonce = params["nonce"];
+        orgIdParam = params["org_id"];
     }
 
     // Task 24 slice 4 (fulla-sdk-refactor): validateUser's continuation
@@ -680,6 +691,7 @@ void SessionController::login(
                         nonce,
                         codeChallenge,
                         codeChallengeMethod,
+                        orgIdParam,
                         callback = std::move(callback)](
                          bool success,
                          int32_t internalId,
@@ -930,6 +942,8 @@ void SessionController::login(
                codeChallengeMethod,
                nonce,
                customCfg,
+               internalId,
+               orgIdParam,
                callback = std::move(callback)](
                 ::OAuth2Plugin::CodeIssuanceGuardResult guard) mutable {
                   if (!guard.ok)
@@ -999,46 +1013,107 @@ void SessionController::login(
                           sessAmr = req->session()->get<std::string>("amr");
                   }
 
-                  plugin->generateAuthorizationCode(
+                  // v1.5.0 M1 (design §2.1 item 5): when the authorize
+                  // request carried an org_id hint through the login round
+                  // trip, the SAME OrgContextGate decides here (fresh
+                  // membership + org-owned client + §2.5 MFA policy);
+                  // rejections use this endpoint's error style. The shared
+                  // callback lets the gate's error path respond while the
+                  // issuance lambda owns the happy path.
+                  auto sharedCb =
+                    std::make_shared<
+                      std::function<void(const ::drogon::HttpResponsePtr &)>>(
+                      std::move(callback)
+                    );
+                  auto issueLoginCode =
+                    [plugin, req, clientId, publicSub, scope, redirectUri,
+                     state, codeChallenge, codeChallengeMethod, nonce,
+                     sessAuthTime, sessAmr, sharedCb](
+                      const std::optional<int32_t> &orgId) {
+                      plugin->generateAuthorizationCode(
+                        clientId,
+                        publicSub,
+                        scope,
+                        redirectUri,
+                        codeChallenge,
+                        codeChallengeMethod,
+                        nonce,
+                        [req, redirectUri, state, sharedCb](
+                          bool success, std::string code, std::string error) {
+                            if (!success)
+                            {
+                                respondError(
+                                  req,
+                                  *sharedCb,
+                                  "INTERNAL_ERROR",
+                                  "login: failed to generate authorization code: " + error
+                                );
+                                return;
+                            }
+
+                            // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode
+                            // code and state.
+                            std::string location =
+                              redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                            if (!state.empty())
+                                location += "&state=" + ::drogon::utils::urlEncode(state);
+                            if (req->getParameter("json") == "true")
+                            {
+                                Json::Value ret;
+                                ret["code"] = code;
+                                ret["location"] = location;
+                                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
+                                (*sharedCb)(resp);
+                                return;
+                            }
+                            auto resp =
+                              ::drogon::HttpResponse::newRedirectionResponse(location);
+                            (*sharedCb)(resp);
+                        },
+                        sessAuthTime,
+                        sessAmr,
+                        orgId
+                      );
+                  };
+                  if (orgIdParam.empty())
+                  {
+                      issueLoginCode(std::nullopt);
+                      return;
+                  }
+                  ::fulla::drogon::authz::OrgContextGate::validate(
+                    orgIdParam,
                     clientId,
-                    publicSub,
-                    scope,
-                    redirectUri,
-                    codeChallenge,
-                    codeChallengeMethod,
-                    nonce,
-                    [req, redirectUri, state, callback = std::move(callback)](
-                      bool success, std::string code, std::string error) mutable {
-                        if (!success)
+                    internalId,
+                    sessAmr,
+                    [req, sharedCb,
+                     issueLoginCode = std::move(issueLoginCode)](
+                      const ::fulla::drogon::authz::OrgContextDecision &d) mutable {
+                        using Kind =
+                          ::fulla::drogon::authz::OrgContextDecision::Kind;
+                        if (d.kind == Kind::Proceed)
+                        {
+                            issueLoginCode(d.orgId);
+                            return;
+                        }
+                        if (d.kind == Kind::MfaRequired)
                         {
                             respondError(
                               req,
-                              std::move(callback),
-                              "INTERNAL_ERROR",
-                              "login: failed to generate authorization code: " + error
+                              *sharedCb,
+                              "AUTH_MFA_REQUIRED",
+                              "login: organization requires multi-factor authentication"
                             );
                             return;
                         }
-
-                        // F-020 (RFC 6749 4.1.2/4.1.3): urlEncode code + state.
-                        std::string location =
-                          redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
-                        if (!state.empty())
-                            location += "&state=" + ::drogon::utils::urlEncode(state);
-                        if (req->getParameter("json") == "true")
-                        {
-                            Json::Value ret;
-                            ret["code"] = code;
-                            ret["location"] = location;
-                            auto resp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
-                            callback(resp);
-                            return;
-                        }
-                        auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
-                        callback(resp);
-                    },
-                    sessAuthTime,
-                    sessAmr
+                        // Uniform rejection (unknown org / non-member /
+                        // unrelated client / storage failure alike).
+                        respondError(
+                          req,
+                          *sharedCb,
+                          "VALIDATION_INVALID_INPUT",
+                          "login: invalid or unauthorized org_id parameter"
+                        );
+                    }
                   );
               });
         }
@@ -1393,6 +1468,29 @@ void SessionController::consent(
               return;
           }
 
+          // v1.5.0 M1 (design §2.1 item 4): the org binding selected at
+          // authorize time is stashed server-side keyed by `state` (the
+          // consent URL never carries it). Consume it one-shot and re-run
+          // the OrgContextGate (fresh membership + §2.5 MFA policy) before
+          // recording consents and issuing. An expired/evicted/absent
+          // stash degrades to a no-org-context issuance -- never a
+          // wrong-org one. The issuance body keeps its original
+          // indentation so the wrap stays diff-reviewable.
+          const std::optional<int32_t> orgStashed =
+            ::fulla::drogon::utils::OrgContextSlots::consume(
+              req->session(),
+              state,
+              static_cast<int64_t>(::trantor::Date::now().secondsSinceEpoch())
+            );
+          auto sharedCb =
+            std::make_shared<
+              std::function<void(const ::drogon::HttpResponsePtr &)>>(
+              std::move(callback)
+            );
+          auto issueConsentCode = [plugin, req, clientId, userId, scope, redirectUri,
+                                   state, codeChallenge, codeChallengeMethod, nonce,
+                                   internalUserId, sessAuthTime, sessAmr,
+                                   sharedCb](std::optional<int32_t> orgId) {
           std::vector<std::string> scopes;
           std::stringstream ss(scope);
           std::string scopeItem;
@@ -1427,12 +1525,13 @@ void SessionController::consent(
                  req,
                  sessAuthTime,
                  sessAmr,
-                 callback = std::move(callback)](bool success) mutable {
+                 orgId,
+                 sharedCb](bool success) {
                     if (!success)
                     {
                         respondError(
                           req,
-                          std::move(callback),
+                          *sharedCb,
                           "INTERNAL_ERROR",
                           "consent: failed to save user consent for scope: " + firstScope
                         );
@@ -1452,7 +1551,7 @@ void SessionController::consent(
                       codeChallenge,
                       codeChallengeMethod,
                       nonce,
-                      [clientId, redirectUri, state, req, callback = std::move(callback)](
+                      [clientId, redirectUri, state, req, sharedCb](
                         bool success, std::string code, std::string error
                       ) mutable {
                           if (!success)
@@ -1462,7 +1561,7 @@ void SessionController::consent(
                               // F-007: server_error redirects back to the
                               // client per RFC 6749 §4.1.2.1.
                               sendOAuthErrorRedirect(
-                                callback,
+                                *sharedCb,
                                 redirectUri,
                                 "server_error",
                                 "Failed to generate authorization code",
@@ -1483,10 +1582,11 @@ void SessionController::consent(
                                 fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
                                 static_cast<double>(302)
                               );
-                          callback(resp);
+                          (*sharedCb)(resp);
                       },
                       sessAuthTime,
-                      sessAmr
+                      sessAmr,
+                      orgId
                     );
                 }
               );
@@ -1501,7 +1601,7 @@ void SessionController::consent(
                 codeChallenge,
                 codeChallengeMethod,
                 nonce,
-                [clientId, redirectUri, state, req, callback = std::move(callback)](
+                [clientId, redirectUri, state, req, sharedCb](
                   bool success, std::string code, std::string error
                 ) mutable {
                     if (!success)
@@ -1510,7 +1610,7 @@ void SessionController::consent(
                         // F-007: server_error redirects back to the client
                         // per RFC 6749 §4.1.2.1.
                         sendOAuthErrorRedirect(
-                          callback,
+                          *sharedCb,
                           redirectUri,
                           "server_error",
                           "Failed to generate authorization code",
@@ -1529,12 +1629,58 @@ void SessionController::consent(
                           fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
                           static_cast<double>(302)
                         );
-                    callback(resp);
+                    (*sharedCb)(resp);
                 },
                 sessAuthTime,
-                sessAmr
+                sessAmr,
+                orgId
               );
           }
+          };  // issueConsentCode
+
+          // Dispatch: no stash -> straight issuance; stash -> re-run the
+          // gate (uniform rejections in this endpoint's error style).
+          if (!orgStashed.has_value())
+          {
+              issueConsentCode(std::nullopt);
+              return;
+          }
+          ::fulla::drogon::authz::OrgContextGate::validate(
+            std::to_string(*orgStashed),
+            clientId,
+            *internalUserId,
+            sessAmr,
+            [req, state,
+             issueConsentCode = std::move(issueConsentCode),
+             sharedCb](
+              const ::fulla::drogon::authz::OrgContextDecision &d) mutable {
+                using Kind = ::fulla::drogon::authz::OrgContextDecision::Kind;
+                if (d.kind == Kind::Proceed)
+                {
+                    issueConsentCode(d.orgId);
+                    return;
+                }
+                if (d.kind == Kind::MfaRequired)
+                {
+                    respondError(
+                      req,
+                      *sharedCb,
+                      "AUTH_MFA_REQUIRED",
+                      "consent: organization requires multi-factor authentication"
+                    );
+                    return;
+                }
+                // Uniform rejection: membership could have changed since
+                // authorize minted the stash; treat identically to an
+                // unknown org (anti-enumeration).
+                respondError(
+                  req,
+                  *sharedCb,
+                  "VALIDATION_INVALID_INPUT",
+                  "consent: invalid or unauthorized org context"
+                );
+            }
+          );
       }
           );
         });

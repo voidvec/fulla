@@ -1,6 +1,7 @@
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <fulla/drogon/validation/RuleSet.h>
 #include <fulla/drogon/error/OAuth2ErrorHandler.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>
@@ -637,6 +638,11 @@ void TokenEndpointController::introspect(
                 if (!introspection->sub.empty())
                 {
                     response["sub"] = introspection->sub;
+                }
+                // v1.5.0 M1 (design §2.1 item 4): the token's org binding.
+                if (introspection->orgId.has_value())
+                {
+                    response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
                 }
                 if (!introspection->aud.empty())
                 {
@@ -2047,13 +2053,13 @@ void TokenEndpointController::userInfo(
     // AuthorizationFilter.cc doFilter, ~L90). `this` therefore outlives every
     // async continuation; shared_from_this is not applicable (Drogon manages
     // controllers via raw pointers). Comment added to deter repeat reports.
-    plugin->getUserRoles(userId, [this, userId, callback](std::vector<std::string> roles) {
+    plugin->getUserRoles(userId, [this, req, userId, scope, callback](std::vector<std::string> roles) {
         // Phase 4.5: route through plugin->getUserInfo (today still the god
         // facade; the identity-side migration to fulla::identity::* is a
         // separate follow-up). No getStorage() reach-in.
         auto plugin = resolvePlugin();
         plugin
-          ->getUserInfo(userId, [userId, roles, callback](std::optional<Json::Value> dbUserInfo) {
+          ->getUserInfo(userId, [plugin, req, userId, scope, roles, callback](std::optional<Json::Value> dbUserInfo) mutable {
               Json::Value userInfo;
               userInfo["sub"] = userId;
 
@@ -2132,8 +2138,132 @@ void TokenEndpointController::userInfo(
                   }
               }
 
-              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(userInfo);
-              callback(resp);
+              // v1.5.0 M1 (design §2.1 item 3): org_ctx -- the ACTIVE org
+              // bound to this access token (selected by the org_id
+              // parameter at authorize, carried through the code->token
+              // chain) with the user's CURRENT roles in it (O7 real-time
+              // re-check: a removed member's userinfo drops org_ctx
+              // immediately). Emitted only when the token was issued in
+              // org context AND carries the `org` scope.
+              auto finishUserInfo = [callback](Json::Value userInfoFinal) mutable {
+                  auto resp = ::drogon::HttpResponse::newHttpJsonResponse(userInfoFinal);
+                  callback(resp);
+              };
+              if (!fulla::drogon::utils::hasScope(scope, "org"))
+              {
+                  finishUserInfo(userInfo);
+                  return;
+              }
+              {
+                  // v1.5.0 M1 (review nit 6): the org binding comes from the
+                  // AuthorizationFilter's request attributes (it already
+                  // holds the validated token row) -- no second
+                  // introspection round-trip for a field the filter has.
+                  int32_t orgId = 0;
+                  const bool hasOrgId = [&] {
+                      auto attrs2 = req->getAttributes();
+                      if (!attrs2->find("orgId"))
+                          return false;
+                      try
+                      {
+                          orgId = std::stoi(attrs2->get<std::string>("orgId"));
+                          return true;
+                      }
+                      catch (...)
+                      {
+                          return false;
+                      }
+                  }();
+                  auto withOrgId = [plugin, req, userId, userInfo,
+                                    finishUserInfo = std::move(finishUserInfo),
+                                    hasOrgId,
+                                    orgId]() mutable {
+                        if (!hasOrgId)
+                        {
+                            finishUserInfo(userInfo);
+                            return;
+                        }
+                        // Storage-type-guarded (Debug asserts on an
+                        // unknown client name -- see the plugin wiring
+                        // note); memory mode has no org rows anyway.
+                        ::drogon::orm::DbClientPtr orgDb;
+                        if (plugin->getStorageType() != "memory")
+                        {
+                            try
+                            {
+                                orgDb = ::drogon::app().getDbClient();
+                            }
+                            catch (...)
+                            {
+                                orgDb = nullptr;
+                            }
+                        }
+                        if (!orgDb)
+                        {
+                            // Memory mode: no org rows, no org_ctx.
+                            finishUserInfo(userInfo);
+                            return;
+                        }
+                        auto sharedFinish =
+                          std::make_shared<std::function<void(Json::Value)>>(
+                            [finishUserInfo = std::move(finishUserInfo)](
+                              Json::Value final) mutable {
+                                finishUserInfo(final);
+                            }
+                        );
+                        auto repo = std::make_shared<
+                          ::fulla::storage::postgres::ClientOwnersRepository>(orgDb);
+                        using ::fulla::storage::postgres::LookupStatus;
+                        // Dual-key subject resolution (public_sub | numeric
+                        // id): login-issued tokens carry the UUID subject,
+                        // authorize/consent-issued ones the internal id.
+                        repo->findUserIdBySubject(
+                          userId,
+                          [repo, sharedFinish, userInfo, orgId](
+                            std::optional<int32_t> internalUserId) {
+                              if (!internalUserId.has_value())
+                              {
+                                  (*sharedFinish)(userInfo);
+                                  return;
+                              }
+                              repo->findOrganization(
+                                std::to_string(orgId),
+                                [repo, sharedFinish, userInfo, orgId, internalUserId](
+                                  const ::fulla::storage::postgres::OrganizationLookup &o) {
+                                    if (o.status != LookupStatus::Found)
+                                    {
+                                        (*sharedFinish)(userInfo);
+                                        return;
+                                    }
+                                    // O7: CURRENT membership only.
+                                    repo->findMembership(
+                                      orgId,
+                                      *internalUserId,
+                                      [sharedFinish, userInfo, o](
+                                        const ::fulla::storage::postgres::MembershipLookup &m
+                                      ) {
+                                          Json::Value final(userInfo);
+                                          if (m.status == LookupStatus::Found)
+                                          {
+                                              Json::Value orgCtx;
+                                              orgCtx["org_id"] =
+                                                (Json::Int64)o.row.getValueOfId();
+                                              orgCtx["org_name"] = o.row.getValueOfName();
+                                              Json::Value orgRoles(Json::arrayValue);
+                                              orgRoles.append(m.row.getValueOfRole());
+                                              orgCtx["roles"] = orgRoles;
+                                              final["org_ctx"] = orgCtx;
+                                          }
+                                          (*sharedFinish)(final);
+                                      }
+                                    );
+                                }
+                              );
+                          }
+                        );
+                  };
+                  withOrgId();
+              }
           });
     });
 }

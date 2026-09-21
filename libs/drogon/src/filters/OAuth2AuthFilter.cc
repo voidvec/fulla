@@ -86,6 +86,14 @@ void fulla::drogon::filters::OAuth2AuthFilter::doFilter(
               (*req->getAttributes())["userId"] = tokenInfo->userId;
               (*req->getAttributes())["scope"] = tokenInfo->scope;
               (*req->getAttributes())["clientId"] = tokenInfo->clientId;
+              // v1.5.0 M1 (review nit 6): expose the token's org binding so
+              // org-aware handlers (userinfo's org_ctx) skip a second
+              // introspection round-trip. Stringified for attribute-shape
+              // consistency. (Mirrored in AuthorizationFilter.)
+              if (tokenInfo->orgId.has_value())
+              {
+                  (*req->getAttributes())["orgId"] = std::to_string(*tokenInfo->orgId);
+              }
 
               // #43 resource-scope authorization (RFC 6750 §3.1): consult the
               // central ResourceScopeRegistry for this route's scope

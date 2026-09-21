@@ -2501,6 +2501,16 @@
             {
               "type" : "string"
             }
+          },
+          {
+            "description" : "Organization context hint (v1.5.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; otherwise a uniform inline error (no redirect). Combine with the org scope to receive org_ctx claims.",
+            "in" : "query",
+            "name" : "org_id",
+            "required" : false,
+            "schema" : 
+            {
+              "type" : "string"
+            }
           }
         ],
         "responses" : 

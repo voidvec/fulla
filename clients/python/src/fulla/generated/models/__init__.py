@@ -155,6 +155,7 @@ from .token_request import TokenRequest
 from .token_request_grant_type import TokenRequestGrantType
 from .token_response import TokenResponse
 from .user_info_response import UserInfoResponse
+from .user_info_response_org_ctx import UserInfoResponseOrgCtx
 from .web_authn_assertion_credential import WebAuthnAssertionCredential
 from .web_authn_assertion_credential_response import WebAuthnAssertionCredentialResponse
 from .web_authn_registration_credential import WebAuthnRegistrationCredential
@@ -292,6 +293,7 @@ __all__ = (
     "TokenRequestGrantType",
     "TokenResponse",
     "UserInfoResponse",
+    "UserInfoResponseOrgCtx",
     "WebAuthnAssertionCredential",
     "WebAuthnAssertionCredentialResponse",
     "WebAuthnRegistrationCredential",
