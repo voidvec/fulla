@@ -66,6 +66,12 @@ void PostgresGrantRepository::saveAuthCode(const OAuth2AuthCode &code, VoidCallb
         {
             newCode.setNonce(code.nonce);
         }
+        // v1.5.0 M1 (design §2.1 item 4): the org binding selected at
+        // authorize time rides the code row. V036 column; absent -> NULL.
+        if (code.orgId.has_value())
+        {
+            newCode.setOrgId(*code.orgId);
+        }
 
         mapper.insert(
           newCode,
@@ -121,6 +127,9 @@ void PostgresGrantRepository::getAuthCode(const std::string &code, AuthCodeCallb
               c.amr = row.getValueOfAmr();
               // P0-1: nonce round-trips with the code row.
               c.nonce = row.getValueOfNonce();
+              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              c.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
+                                       : std::nullopt;
               (*sharedCb)(c);
           },
           [sharedCb](const DrogonDbException &e) {
@@ -196,7 +205,7 @@ void PostgresGrantRepository::consumeAuthCode(
         "WHERE code = $1 AND used = false "
         "RETURNING code, client_id, user_id, scope, redirect_uri, "
         "code_challenge, code_challenge_method, expires_at, "
-        "auth_time, amr, nonce",
+        "auth_time, amr, nonce, org_id",
       [sharedCb, redirectUri, code](const ::drogon::orm::Result &r) {
           if (r.empty())
           {
@@ -240,6 +249,10 @@ void PostgresGrantRepository::consumeAuthCode(
           c.amr = row["amr"].isNull() ? "" : row["amr"].as<std::string>();
           // P0-1: nonce round-trips with the consumed code row.
           c.nonce = row["nonce"].isNull() ? "" : row["nonce"].as<std::string>();
+          // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+          c.orgId =
+            row["org_id"].isNull() ? std::nullopt
+                                   : std::optional<int32_t>(row["org_id"].as<int32_t>());
           (*sharedCb)(c);
       },
       [sharedCb, code](const DrogonDbException &e) {

@@ -45,6 +45,7 @@
 
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/ICryptoProvider.h>
+#include <fulla/common/ports/IOrgContextResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
@@ -101,6 +102,17 @@ class TokenService : public std::enable_shared_from_this<TokenService>
         jwkManager_ = std::move(jwkManager);
     }
 
+    /// v1.5.0 M1: publish the org-context resolver used to build the
+    /// org_ctx claim (org name + current roles) for id_tokens issued in
+    /// org context. Nullable by design: unwired (Domain unit tests) simply
+    /// omits org_ctx, exactly like an unwired roleProvider omits roles.
+    void setOrgContextResolver(
+      std::shared_ptr<fulla::common::ports::IOrgContextResolver> resolver
+    )
+    {
+        orgContextResolver_ = std::move(resolver);
+    }
+
     /// Generate an Authorization Code. Original:
     /// oauth2::TokenService::generateAuthorizationCode.
     void generateAuthorizationCode(
@@ -113,7 +125,8 @@ class TokenService : public std::enable_shared_from_this<TokenService>
       const std::string &nonce,
       std::function<void(bool, std::string, std::string)> &&callback,
       int64_t authTime = 0,
-      const std::string &amr = ""
+      const std::string &amr = "",
+      const std::optional<int32_t> &orgId = std::nullopt
     );
 
     /// Exchange an authorization code for an access/refresh token pair.
@@ -184,6 +197,7 @@ class TokenService : public std::enable_shared_from_this<TokenService>
     std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
     std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
     std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
+    std::shared_ptr<fulla::common::ports::IOrgContextResolver> orgContextResolver_;
     int64_t authCodeTtl_;
     int64_t accessTokenTtl_;
     int64_t refreshTokenTtl_;
@@ -196,6 +210,20 @@ class TokenService : public std::enable_shared_from_this<TokenService>
     void resolveRoles(
       const std::string &subject,
       std::function<void(std::vector<std::string>)> &&cb
+    );
+
+    /// v1.5.0 M1: resolve the org_ctx claim data for an issuance in org
+    /// context. Invokes `cb` with nullopt (no org_ctx claim) when the
+    /// resolver is unwired, the code/token carries no org binding, or the
+    /// granted scope set does not include `org` (scope gates claim
+    /// release; the org_id parameter only SELECTS the context -- design
+    /// §2.1 item 3). Otherwise resolves via the port, which re-checks
+    /// CURRENT membership (O7).
+    void resolveOrgContextForClaims(
+      const std::string &subject,
+      const std::optional<int32_t> &orgId,
+      const std::string &scope,
+      std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
     );
 
     void audit(

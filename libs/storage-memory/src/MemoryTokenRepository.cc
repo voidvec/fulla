@@ -173,6 +173,8 @@ void MemoryTokenRepository::introspectToken(
         introspection.nbf = accessToken.notBefore;
         introspection.sub = accessToken.userId;
         introspection.scope = accessToken.scope;
+        // v1.5.0 M1: org binding exposure (design §2.1 item 4).
+        introspection.orgId = accessToken.orgId;
 
         cb(introspection);
         return;
@@ -202,6 +204,8 @@ void MemoryTokenRepository::introspectToken(
         introspection.exp = refreshToken.expiresAt;
         introspection.sub = refreshToken.userId;
         introspection.scope = refreshToken.scope;
+        // v1.5.0 M1: org binding on the refresh branch too.
+        introspection.orgId = refreshToken.orgId;
         // Refresh tokens might not have iat/nbf/iss/aud in the current struct, but we return what
         // we have
 

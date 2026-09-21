@@ -69,6 +69,12 @@ void RedisTokenRepository::saveAccessToken(const OAuth2AccessToken &token, VoidC
     val["introspect_count"] = token.introspectCount;
     val["revoked_at"] = (Json::Int64)token.revokedAt;
     val["revoked_by"] = token.revokedBy;
+    // v1.5.0 M1: org binding (omitted when absent so pre-M1 cached
+    // entries stay readable without the field).
+    if (token.orgId.has_value())
+    {
+        val["org_id"] = (Json::Int64)*token.orgId;
+    }
 
     std::string jsonStr = jsonToString(val);
 
@@ -139,8 +145,15 @@ void RedisTokenRepository::getAccessToken(const std::string &token, AccessTokenC
               accessToken.introspectCount = json["introspect_count"].asInt();
           if (json.isMember("revoked_at"))
               accessToken.revokedAt = json["revoked_at"].asInt64();
+          // v1.5.0 M1: org binding (absent in pre-M1 cached entries).
+          // Same depth as the sibling ifs above: the pre-existing
+          // revoked_by block sat two spaces deeper, which made GCC's
+          // -Wmisleading-indentation read the chain as nested
+          // (CI linux leg, -Werror).
           if (json.isMember("revoked_by"))
               accessToken.revokedBy = json["revoked_by"].asString();
+          if (json.isMember("org_id"))
+              accessToken.orgId = json["org_id"].asInt();
 
           cb(accessToken);
       },
@@ -301,6 +314,9 @@ void RedisTokenRepository::introspectToken(
 
           introspection.sub = json["user_id"].asString();
           introspection.scope = json["scope"].asString();
+          // v1.5.0 M1: org binding (absent in pre-M1 cached entries).
+          if (json.isMember("org_id"))
+              introspection.orgId = json["org_id"].asInt();
 
           cb(introspection);
       },
