@@ -4113,6 +4113,84 @@ paths:
       tags:
       - OAuth2
       - Consent
+  /oauth2/consent/context:
+    get:
+      description: >-
+        Server-side consent-screen context (v1.5.0 M1b, #223 second half):
+        the owner attribution label and the organization-membership banner
+        for the consent flow whose server-minted consent_csrf nonce is
+        presented. The nonce is validated but NOT consumed (the one-shot
+        consume stays with POST /oauth2/consent). The (client_id,
+        redirect_uri) pair must be registered, mirroring what reaching the
+        consent screen via authorize already requires; the org block comes
+        from the binding stashed server-side at authorize time (unknown or
+        missing state, or a flow without an org context, yields org=null).
+      operationId: get_oauth2_consent_context
+      parameters:
+      - description: Server-minted one-shot CSRF nonce from the authorize->consent redirect (required; validated, not consumed)
+        in: query
+        name: consent_csrf
+        required: true
+        schema:
+          type: string
+      - description: The client the consent flow is for (required)
+        in: query
+        name: client_id
+        required: true
+        schema:
+          type: string
+      - description: The flow's redirect_uri; must be registered for client_id (required)
+        in: query
+        name: redirect_uri
+        required: true
+        schema:
+          type: string
+      - description: The flow's state value; resolves the server-stashed org binding (no binding or unknown state -> org is null)
+        in: query
+        name: state
+        required: false
+        schema:
+          type: string
+      - description: The session user id echoed from the consent URL (required; must match the session)
+        in: query
+        name: user_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  owner_name:
+                    type: string
+                    description: 'Attribution label: org name for org apps, the
+                      creator''s display name for personal apps; empty for
+                      admin-seeded clients and on storage degradation.'
+                  org:
+                    nullable: true
+                    type: object
+                    properties:
+                      org_id:
+                        type: integer
+                      org_name:
+                        type: string
+                    description: The org context this flow is authorizing
+                      under (design 2.1); null when the flow has no org
+                      binding.
+          description: Consent context (owner_name empty for admin-seeded clients; org null for flows without an org binding)
+        '400':
+          description: Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)
+        '401':
+          description: No authenticated session (AUTH_SESSION_REQUIRED)
+        '403':
+          description: user_id does not match the authenticated session (AUTHZ_ACCESS_DENIED)
+      summary: Consent screen context (owner attribution + org banner)
+      tags:
+      - OAuth2
+      - Consent
   /oauth2/device/approve:
     post:
       description: >-

@@ -144,6 +144,7 @@ export default {
       subtitle: '该应用正在请求访问您的账户。',
       unknownClient: '未知客户端',
       providedBy: '由 {owner} 提供',
+      orgBanner: '您正以「{org}」成员身份授权',
       permissionsHeading: '该应用将能够',
       missingUser: '无法识别您的会话，请重新登录。',
       deny: '拒绝',

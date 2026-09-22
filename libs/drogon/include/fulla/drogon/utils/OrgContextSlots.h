@@ -59,6 +59,16 @@ class OrgContextSlots
       const std::string &state,
       int64_t nowSeconds
     );
+
+    /// Non-destructive read (v1.5.0 M1b): same lifetime rules as consume()
+    /// but the slot stays. Sole purpose: GET /oauth2/consent/context
+    /// rendering the consent banner before the submit; the one-shot consume
+    /// stays with the issuance path.
+    static std::optional<int32_t> peek(
+      const ::drogon::SessionPtr &session,
+      const std::string &state,
+      int64_t nowSeconds
+    );
 };
 
 }  // namespace fulla::drogon::utils

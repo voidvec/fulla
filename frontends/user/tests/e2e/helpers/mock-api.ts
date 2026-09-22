@@ -191,6 +191,14 @@ export async function setupMocks(page: Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ redirect_uri: 'http://localhost:5173/callback?code=consent-code&state=test' }) })
   })
 
+  // v1.5.0 M1b: consent-screen context (owner attribution + org banner) is
+  // server-derived via GET /oauth2/consent/context. Default = the official-
+  // app shape (no attribution, no org); attribution tests override this
+  // route (page.route is LIFO, so a later registration wins).
+  await page.route('**/oauth2/consent/context*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owner_name: '', org: null }) })
+  })
+
   // Gap-fix E3: logout now goes through POST /oauth2/logout (Bearer) —
   // intercepted here so logout flows and request assertions work offline.
   await page.route('**/oauth2/logout', async (route) => {

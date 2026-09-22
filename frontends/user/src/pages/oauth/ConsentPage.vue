@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import DData from '../../components/ui/DData.vue'
 
@@ -29,10 +30,35 @@ const codeChallenge = route.query.code_challenge as string || ''
 const consentCsrf = route.query.consent_csrf as string || ''
 const codeChallengeMethod = route.query.code_challenge_method as string || ''
 const nonce = route.query.nonce as string || ''
-// v1.4.0 open platform: who offers this app (org name for org apps, the
-// creator's display name for personal apps) — carried on the authorize ->
-// consent redirect so users can tell self-registered apps from official ones.
-const ownerName = route.query.owner_name as string || ''
+// v1.5.0 M1b (#223 second half): owner attribution and the org-membership
+// banner come from the SERVER (GET /oauth2/consent/context, derived from
+// session state), never from URL params — a phisher could forge
+// owner_name=Your Bank on a fake consent link. Any fetch failure (401/400/
+// network) degrades to no attribution/no banner, matching the empty-
+// owner_name degradation the redirect URL always had.
+const ownerName = ref('')
+const orgName = ref('')
+
+onMounted(async () => {
+  if (!consentCsrf) return
+  try {
+    const params = new URLSearchParams({
+      consent_csrf: consentCsrf,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      user_id: serverUserId,
+    })
+    if (state) params.set('state', state)
+    const resp = await axios.get('/oauth2/consent/context', { params })
+    ownerName.value = typeof resp.data?.owner_name === 'string' ? resp.data.owner_name : ''
+    const org = resp.data?.org
+    if (org && typeof org === 'object' && typeof org.org_name === 'string') {
+      orgName.value = org.org_name
+    }
+  } catch {
+    // Degrade silently: the consent screen stays usable without attribution.
+  }
+})
 
 const scopes = scope.split(' ').filter(Boolean)
 
@@ -117,6 +143,26 @@ function handleConsent(action: 'approve' | 'deny') {
       {{ $t('oauth.consent.subtitle') }}
     </p>
 
+    <!-- Org-membership banner (v1.5.0 M1b): server-derived from the flow's
+         org binding — shown only when the authorization is org-scoped. -->
+    <div
+      v-if="orgName"
+      class="flex items-center gap-2.5 mt-5 px-4 py-3 bg-brand-50 border border-brand-200 rounded-card text-sm text-brand-800"
+      data-testid="consent-org-banner"
+    >
+      <svg
+        class="w-4 h-4 shrink-0"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          d="M10 2a4.5 4.5 0 00-4.5 4.5v2H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5v-2A4.5 4.5 0 0010 2zm-2.5 4.5a2.5 2.5 0 015 0v2h-5v-2z"
+        />
+      </svg>
+      {{ $t('oauth.consent.orgBanner', { org: orgName }) }}
+    </div>
+
     <!-- Client identity block -->
     <div class="flex items-center gap-3.5 mt-6 px-4 py-3.5 bg-page border border-neutral-200 rounded-card">
       <div class="w-[38px] h-[38px] rounded-[9px] bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[15px] shrink-0">
@@ -131,7 +177,8 @@ function handleConsent(action: 'approve' | 'deny') {
           label="client_id"
           class="mt-1"
         />
-        <!-- Owner attribution (v1.4.0): shown only for self-registered apps -->
+        <!-- Owner attribution (v1.4.0, server-derived since v1.5.0 M1b):
+             shown only for self-registered apps -->
         <p
           v-if="ownerName"
           class="mt-0.5 text-xs text-neutral-500"

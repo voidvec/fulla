@@ -148,6 +148,7 @@ export default {
       subtitle: 'This application is asking to access your account.',
       unknownClient: 'Unknown client',
       providedBy: 'Offered by {owner}',
+      orgBanner: 'You are authorizing as a member of {org}',
       permissionsHeading: 'It will be able to',
       missingUser: 'Your session could not be identified. Please sign in again.',
       deny: 'Deny',

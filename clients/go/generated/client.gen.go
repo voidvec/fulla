@@ -1187,6 +1187,24 @@ type PostOauth2ConsentParams struct {
 // PostOauth2ConsentParamsAction defines parameters for PostOauth2Consent.
 type PostOauth2ConsentParamsAction string
 
+// GetOauth2ConsentContextParams defines parameters for GetOauth2ConsentContext.
+type GetOauth2ConsentContextParams struct {
+	// ConsentCsrf Server-minted one-shot CSRF nonce from the authorize->consent redirect (required; validated, not consumed)
+	ConsentCsrf string `form:"consent_csrf" json:"consent_csrf"`
+
+	// ClientId The client the consent flow is for (required)
+	ClientId string `form:"client_id" json:"client_id"`
+
+	// RedirectUri The flow's redirect_uri; must be registered for client_id (required)
+	RedirectUri string `form:"redirect_uri" json:"redirect_uri"`
+
+	// State The flow's state value; resolves the server-stashed org binding (no binding or unknown state -> org is null)
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+
+	// UserId The session user id echoed from the consent URL (required; must match the session)
+	UserId string `form:"user_id" json:"user_id"`
+}
+
 // PostOauth2DeviceApproveFormdataBody defines parameters for PostOauth2DeviceApprove.
 type PostOauth2DeviceApproveFormdataBody struct {
 	// UserCode The user_code shown to the user by the device.
@@ -2702,6 +2720,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /oauth2/consent (the `PostOauth2Consent` operationId).
 	PostOauth2Consent(ctx context.Context, params *PostOauth2ConsentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOauth2ConsentContext Consent screen context (owner attribution + org banner)
+	//
+	// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+	//
+	// Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
+	GetOauth2ConsentContext(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOauth2DeviceApproveWithBody Approve Device Authorization
 	//
@@ -5328,6 +5353,23 @@ func (c *Client) GetOauth2Authorize(ctx context.Context, params *GetOauth2Author
 // Corresponds with POST /oauth2/consent (the `PostOauth2Consent` operationId).
 func (c *Client) PostOauth2Consent(ctx context.Context, params *PostOauth2ConsentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostOauth2ConsentRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOauth2ConsentContext Consent screen context (owner attribution + org banner)
+//
+// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+//
+// Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
+func (c *Client) GetOauth2ConsentContext(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOauth2ConsentContextRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9416,6 +9458,92 @@ func NewPostOauth2ConsentRequest(server string, params *PostOauth2ConsentParams)
 	return req, nil
 }
 
+// NewGetOauth2ConsentContextRequest constructs an http.Request for the GetOauth2ConsentContext method
+func NewGetOauth2ConsentContextRequest(server string, params *GetOauth2ConsentContextParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth2/consent/context")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "consent_csrf", params.ConsentCsrf, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "client_id", params.ClientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "redirect_uri", params.RedirectUri, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_id", params.UserId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostOauth2DeviceApproveRequestWithFormdataBody calls the generic PostOauth2DeviceApprove builder with application/x-www-form-urlencoded body
 func NewPostOauth2DeviceApproveRequestWithFormdataBody(server string, body PostOauth2DeviceApproveFormdataRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11321,6 +11449,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /oauth2/consent (the `PostOauth2Consent` operationId).
 	PostOauth2ConsentWithResponse(ctx context.Context, params *PostOauth2ConsentParams, reqEditors ...RequestEditorFn) (*PostOauth2ConsentResponse, error)
+
+	// GetOauth2ConsentContextWithResponse Consent screen context (owner attribution + org banner)
+	//
+	// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
+	GetOauth2ConsentContextWithResponse(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*GetOauth2ConsentContextResponse, error)
 
 	// PostOauth2DeviceApproveWithBodyWithResponse Approve Device Authorization
 	//
@@ -15764,6 +15901,65 @@ func (r PostOauth2ConsentResponse) ContentType() string {
 	return ""
 }
 
+type GetOauth2ConsentContextResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+		Org *struct {
+			OrgId   *int    `json:"org_id,omitempty"`
+			OrgName *string `json:"org_name,omitempty"`
+		} `json:"org,omitempty"`
+
+		// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
+		OwnerName *string `json:"owner_name,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOauth2ConsentContextResponse) GetJSON200() *struct {
+	// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+	Org *struct {
+		OrgId   *int    `json:"org_id,omitempty"`
+		OrgName *string `json:"org_name,omitempty"`
+	} `json:"org,omitempty"`
+
+	// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
+	OwnerName *string `json:"owner_name,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOauth2ConsentContextResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOauth2ConsentContextResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOauth2ConsentContextResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOauth2ConsentContextResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PostOauth2DeviceApproveResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18598,6 +18794,21 @@ func (c *ClientWithResponses) PostOauth2ConsentWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParsePostOauth2ConsentResponse(rsp)
+}
+
+// GetOauth2ConsentContextWithResponse Consent screen context (owner attribution + org banner)
+//
+// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
+func (c *ClientWithResponses) GetOauth2ConsentContextWithResponse(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*GetOauth2ConsentContextResponse, error) {
+	rsp, err := c.GetOauth2ConsentContext(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOauth2ConsentContextResponse(rsp)
 }
 
 // PostOauth2DeviceApproveWithBodyWithResponse Approve Device Authorization
@@ -21642,6 +21853,50 @@ func ParsePostOauth2ConsentResponse(rsp *http.Response) (*PostOauth2ConsentRespo
 	response := &PostOauth2ConsentResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetOauth2ConsentContextResponse parses an HTTP response from a GetOauth2ConsentContextWithResponse call
+func ParseGetOauth2ConsentContextResponse(rsp *http.Response) (*GetOauth2ConsentContextResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOauth2ConsentContextResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+			Org *struct {
+				OrgId   *int    `json:"org_id,omitempty"`
+				OrgName *string `json:"org_name,omitempty"`
+			} `json:"org,omitempty"`
+
+			// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
+			OwnerName *string `json:"owner_name,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 401:
+		break // No content-type
+
+	case rsp.StatusCode == 403:
+		break // No content-type
+
 	}
 
 	return response, nil

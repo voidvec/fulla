@@ -26,16 +26,69 @@ test.describe('OAuth2 Consent Page', () => {
     await expect(page.locator('button:has-text("Deny")')).toBeVisible()
   })
 
-  // v1.4.0 open platform: consent screens attribute self-registered apps to
-  // their owner (owner_name on the authorize -> consent redirect).
-  test('shows owner attribution when owner_name is present', async ({ page }) => {
-    await page.goto('/consent?client_id=app_community&scope=openid&redirect_uri=http://example.com/callback&state=t&owner_name=Ada%20Lovelace')
+  // v1.4.0 open platform + v1.5.0 M1b (#223 second half): consent screens
+  // attribute self-registered apps to their owner — via the SERVER-derived
+  // context endpoint, never the URL (a phisher could forge owner_name).
+  test('shows owner attribution from the server context', async ({ page }) => {
+    await page.route('**/oauth2/consent/context*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ owner_name: 'Ada Lovelace', org: null }),
+      })
+    })
+    await page.goto('/consent?client_id=app_community&scope=openid&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1')
     await expect(page.getByTestId('consent-owner-name')).toContainText('Ada Lovelace')
   })
 
-  test('omits owner attribution for official apps', async ({ page }) => {
-    await page.goto('/consent?client_id=fulla-portal&scope=openid&redirect_uri=http://example.com/callback&state=t')
+  test('forged owner_name URL param is ignored (anti-phishing)', async ({ page }) => {
+    // The default mock answers the empty/official shape; a forged
+    // owner_name on the URL must not render anything.
+    await page.goto('/consent?client_id=app_community&scope=openid&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1&owner_name=Your%20Bank')
     await expect(page.getByTestId('consent-owner-name')).toHaveCount(0)
+    await expect(page.locator('text=Your Bank')).toHaveCount(0)
+  })
+
+  test('omits owner attribution for official apps', async ({ page }) => {
+    await page.goto('/consent?client_id=fulla-portal&scope=openid&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1')
+    await expect(page.getByTestId('consent-owner-name')).toHaveCount(0)
+  })
+
+  // v1.5.0 M1b org banner: shown only when the server context carries an
+  // org binding for the flow.
+  test('shows the org-membership banner when the context has an org', async ({ page }) => {
+    await page.route('**/oauth2/consent/context*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ owner_name: 'ACME Inc.', org: { org_id: 42, org_name: 'ACME Inc.' } }),
+      })
+    })
+    await page.goto('/consent?client_id=app_community&scope=openid+org&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1')
+    await expect(page.getByTestId('consent-org-banner')).toContainText('ACME Inc.')
+  })
+
+  test('no org banner for ordinary (non-org) flows', async ({ page }) => {
+    await page.goto('/consent?client_id=third-party&scope=openid&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1')
+    await expect(page.getByTestId('consent-org-banner')).toHaveCount(0)
+  })
+
+  // Context-fetch failure (expired nonce, session loss, network) degrades
+  // silently: no attribution, no banner — but the consent screen stays
+  // usable (the POST is unaffected by rendering).
+  test('context fetch failure degrades silently and the page stays usable', async ({ page }) => {
+    await page.route('**/oauth2/consent/context*', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'VALIDATION_INVALID_INPUT', message: 'consent context: missing, expired, or mismatched consent_csrf' } }),
+      })
+    })
+    await page.goto('/consent?client_id=third-party&scope=openid&redirect_uri=http://example.com/callback&state=t&consent_csrf=csrf1&user_id=u1')
+    await expect(page.getByTestId('consent-owner-name')).toHaveCount(0)
+    await expect(page.getByTestId('consent-org-banner')).toHaveCount(0)
+    await expect(page.locator('button:has-text("Authorize")')).toBeEnabled()
+    await expect(page.locator('button:has-text("Deny")')).toBeEnabled()
   })
 })
 

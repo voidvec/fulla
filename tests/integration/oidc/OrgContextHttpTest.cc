@@ -1041,3 +1041,408 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentRoundTrip_BindingSurvives)
 
     sqlExec("DELETE FROM users WHERE username = '" + userA + "'");
 }
+
+// ---------------------------------------------------------------------------
+// v1.5.0 M1b (#223 second half): GET /oauth2/consent/context. The consent
+// screen's owner attribution and org banner are SERVER-derived from session
+// state; the authorize -> consent redirect no longer carries owner_name
+// (phishing vector). Pins: happy path (org app: owner_name = org name, org
+// block from the stashed binding), the PEEK contract (context GETs do not
+// burn the one-shot csrf - the consent POST right after still approves),
+// personal-app flow (org = null, creator attribution), the fail-closed
+// gates (bad csrf 400 / no session 401 / user mismatch 403 / unregistered
+// redirect_uri 400), and the redirect-URL owner_name removal itself.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_OrgContext_ConsentContext_ServerDerived)
+{
+    ORGCTX_SKIP_GUARD;
+
+    const std::string suffix = uniqueSuffix();
+    const std::string userA = "qa_orgctx7_" + suffix;
+    const std::string passA = randomPassword();
+    REQUIRE(createVerifiedUser(userA, userA + "@qa.example", passA));
+    auto bearer = consoleBearer(userA, passA);
+    REQUIRE(bearer.has_value());
+
+    const std::string slug = "qa-orgctx-o7-" + suffix;
+    const std::string orgName = "QA OrgCtx7 " + suffix;
+    {
+        Json::Value orgBody;
+        orgBody["slug"] = slug;
+        orgBody["name"] = orgName;
+        auto r = sendPostJson("/api/me/organizations", orgBody, *bearer);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+    }
+    const auto orgIdOpt = sqlInt("SELECT id FROM organizations WHERE slug = '" + slug + "'");
+    REQUIRE(orgIdOpt.has_value());
+
+    // Org app (PUBLIC: authorize only validates PUBLIC clients with an
+    // empty secret today, tracked as #233) + a personal app for the no-org
+    // leg. (No IIFEs here: the DROGON_TEST REQUIRE/CHECK macros expand to
+    // void early-returns, which a value-returning lambda cannot mix with.)
+    std::string orgClientId;
+    {
+        Json::Value app;
+        app["name"] = "QA OrgCtx7 App " + suffix;
+        app["client_type"] = "PUBLIC";
+        Json::Value uris(Json::arrayValue);
+        uris.append(kRedirect);
+        app["redirect_uris"] = uris;
+        Json::Value scopes(Json::arrayValue);
+        scopes.append("openid");
+        scopes.append("org");
+        app["scopes"] = scopes;
+        Json::Value grants(Json::arrayValue);
+        grants.append("authorization_code");
+        app["allowed_grant_types"] = grants;
+        auto r = sendPostJson("/api/me/applications", app, *bearer);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+        Json::Value b;
+        REQUIRE(parseJsonBody(r, b));
+        orgClientId = b["client_id"].asString();
+    }
+    std::string personalClientId;
+    {
+        Json::Value app;
+        app["name"] = "QA OrgCtx7 Personal " + suffix;
+        app["client_type"] = "PUBLIC";
+        Json::Value uris(Json::arrayValue);
+        uris.append(kRedirect);
+        app["redirect_uris"] = uris;
+        Json::Value scopes(Json::arrayValue);
+        scopes.append("openid");
+        app["scopes"] = scopes;
+        Json::Value grants(Json::arrayValue);
+        grants.append("authorization_code");
+        app["allowed_grant_types"] = grants;
+        auto r = sendPostJson("/api/me/applications", app, *bearer);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+        Json::Value b;
+        REQUIRE(parseJsonBody(r, b));
+        personalClientId = b["client_id"].asString();
+    }
+    {
+        Json::Value toOrg;
+        toOrg["org_slug"] = slug;
+        auto r = sendPostJson("/api/me/applications/" + orgClientId + "/transfer", toOrg, *bearer);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k200OK));
+    }
+
+    // Browser session (console login harvests the session cookie).
+    std::string cookie;
+    {
+        const std::string verifier = ::fulla::drogon::utils::generateSecureToken(32);
+        const std::string challenge =
+          ::fulla::drogon::utils::computeCodeChallenge(verifier, "S256");
+        auto resp = sendPostForm(
+          "/oauth2/login?json=true",
+          "username=" + userA + "&password=" + passA +
+            "&client_id=fulla-admin-console"
+            "&redirect_uri=http%3A%2F%2F127.0.0.1%3A5174%2Fadmin%2Fcallback"
+            "&scope=openid&state=cookieharvest7&code_challenge=" + challenge +
+            "&code_challenge_method=S256"
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k200OK));
+        for (const auto &entry : resp->getCookies())
+        {
+            if (!cookie.empty())
+                cookie += "; ";
+            cookie += entry.first + "=" + entry.second.value();
+        }
+        CHECK(!cookie.empty());
+    }
+
+    // authorize (prompt=consent, org hint) -> 302 to the consent page. The
+    // redirect must carry consent_csrf and NOT owner_name (the M1b removal).
+    // PKCE triple: S256 challenges are 43+ chars (shorter is rejected before
+    // the consent redirect); the code is never exchanged here, so a fixed
+    // verifier is fine as long as authorize and the consent POST echo the
+    // SAME challenge.
+    const std::string ctxVerifier = ::fulla::drogon::utils::generateSecureToken(32);
+    const std::string ctxChallenge =
+      ::fulla::drogon::utils::computeCodeChallenge(ctxVerifier, "S256");
+    std::string consentCsrf;
+    std::string userIdParam;
+    {
+        auto client = ::drogon::HttpClient::newHttpClient(
+          "http://127.0.0.1:5555", ::drogon::app().getLoop()
+        );
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Get);
+        req->setPath("/oauth2/authorize");
+        req->setParameter("response_type", "code");
+        req->setParameter("client_id", orgClientId);
+        req->setParameter("redirect_uri", kRedirect);
+        req->setParameter("scope", "openid org");
+        req->setParameter("state", "orgctxctx1");
+        req->setParameter("prompt", "consent");
+        req->setParameter("org_id", slug);
+        req->setParameter("code_challenge", ctxChallenge);
+        req->setParameter("code_challenge_method", "S256");
+        req->addHeader("Cookie", cookie);
+        auto [result, resp] = client->sendRequest(req, 30.0);
+        REQUIRE(result == ::drogon::ReqResult::Ok);
+        REQUIRE(resp != nullptr);
+        if (resp->getStatusCode() != ::drogon::k302Found)
+        {
+            dumpBody(resp, "ctx authorize leg");
+        }
+        CHECK(statusIs(resp, ::drogon::k302Found));
+        for (const auto &entry : resp->getCookies())
+        {
+            const std::string name = entry.first + "=";
+            if (cookie.find(name) == std::string::npos)
+                cookie += "; " + name + entry.second.value();
+        }
+        const std::string location = resp->getHeader("Location");
+        const size_t csrfPos = location.find("consent_csrf=");
+        const size_t uidPos = location.find("user_id=");
+        REQUIRE(csrfPos != std::string::npos);
+        REQUIRE(uidPos != std::string::npos);
+        CHECK(location.find("owner_name=") == std::string::npos);
+        auto part = [&location](size_t start) -> std::string {
+            const size_t end = location.find('&', start);
+            return location.substr(
+              start, (end == std::string::npos ? location.size() : end) - start
+            );
+        };
+        consentCsrf = part(csrfPos + 13);
+        userIdParam = ::drogon::utils::urlDecode(part(uidPos + 8));
+        CHECK(!consentCsrf.empty());
+        CHECK(!userIdParam.empty());
+    }
+
+    // Cookie-GET helper for the context endpoint.
+    auto getContext = [&](const std::string &csrf,
+                          const std::string &clientId,
+                          const std::string &redirectUri,
+                          const std::string &state,
+                          const std::string &userId,
+                          const std::string &cookieHeader) -> ::drogon::HttpResponsePtr {
+        auto client = ::drogon::HttpClient::newHttpClient(
+          "http://127.0.0.1:5555", ::drogon::app().getLoop()
+        );
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Get);
+        req->setPath("/oauth2/consent/context");
+        req->setParameter("consent_csrf", csrf);
+        req->setParameter("client_id", clientId);
+        req->setParameter("redirect_uri", redirectUri);
+        if (!state.empty())
+            req->setParameter("state", state);
+        req->setParameter("user_id", userId);
+        if (!cookieHeader.empty())
+            req->addHeader("Cookie", cookieHeader);
+        auto [result, resp] = client->sendRequest(req, 30.0);
+        if (result != ::drogon::ReqResult::Ok)
+            return nullptr;
+        return resp;
+    };
+
+    // Happy path: org flow -> org app's owner_name is the ORG name and the
+    // org block mirrors the stashed binding.
+    {
+        auto resp = getContext(
+          consentCsrf, orgClientId, kRedirect, "orgctxctx1", userIdParam, cookie
+        );
+        REQUIRE(resp != nullptr);
+        if (resp->getStatusCode() != ::drogon::k200OK)
+        {
+            dumpBody(resp, "ctx happy path");
+        }
+        CHECK(statusIs(resp, ::drogon::k200OK));
+        Json::Value body;
+        REQUIRE(parseJsonBody(resp, body));
+        CHECK(body["owner_name"].asString() == orgName);
+        CHECK(body["org"].isObject());
+        CHECK(body["org"].get("org_id", 0).asInt64() == *orgIdOpt);
+        CHECK(body["org"].get("org_name", "").asString() == orgName);
+    }
+
+    // Wrong-state degradation: the org-flow session asked with a state that
+    // has no slot (the binding is state-keyed server-side) -> org stays
+    // null, never another flow's org (fail-closed, never wrong-org).
+    {
+        auto resp = getContext(
+          consentCsrf, orgClientId, kRedirect, "someone-elses-state", userIdParam, cookie
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k200OK));
+        Json::Value body;
+        REQUIRE(parseJsonBody(resp, body));
+        CHECK(body["org"].isNull());
+        // owner_name is client-derived and unaffected by the state miss.
+        CHECK(body["owner_name"].asString() == orgName);
+    }
+
+    // Peek is non-destructive: a second context GET still answers 200, and
+    // the consent POST right after still approves (the one-shot csrf was
+    // never consumed by rendering).
+    {
+        auto resp = getContext(
+          consentCsrf, orgClientId, kRedirect, "orgctxctx1", userIdParam, cookie
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k200OK));
+
+        auto approve = postFormCookie(
+          "/oauth2/consent",
+          "client_id=" + ::drogon::utils::urlEncode(orgClientId) +
+            "&user_id=" + ::drogon::utils::urlEncode(userIdParam) +
+            "&scope=" + ::drogon::utils::urlEncode("openid org") +
+            "&redirect_uri=" + ::drogon::utils::urlEncode(kRedirect) +
+            "&state=orgctxctx1&action=approve" +
+            "&code_challenge=" + ::drogon::utils::urlEncode(ctxChallenge) +
+            "&code_challenge_method=S256&consent_csrf=" +
+            ::drogon::utils::urlEncode(consentCsrf),
+          cookie
+        );
+        REQUIRE(approve != nullptr);
+        if (approve->getStatusCode() != ::drogon::k302Found)
+        {
+            dumpBody(approve, "ctx approve after peek");
+        }
+        CHECK(statusIs(approve, ::drogon::k302Found));
+        const std::string location = approve->getHeader("Location");
+        CHECK(location.find("?code=") != std::string::npos);
+    }
+
+    // Fail-closed gates. A new flow provides a fresh csrf for the negative
+    // legs (the one above was consumed by the approve).
+    std::string csrf2;
+    {
+        auto client = ::drogon::HttpClient::newHttpClient(
+          "http://127.0.0.1:5555", ::drogon::app().getLoop()
+        );
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Get);
+        req->setPath("/oauth2/authorize");
+        req->setParameter("response_type", "code");
+        req->setParameter("client_id", orgClientId);
+        req->setParameter("redirect_uri", kRedirect);
+        req->setParameter("scope", "openid");
+        req->setParameter("state", "orgctxctx2");
+        req->setParameter("prompt", "consent");
+        req->setParameter("code_challenge", ctxChallenge);
+        req->setParameter("code_challenge_method", "S256");
+        req->addHeader("Cookie", cookie);
+        auto [result, resp] = client->sendRequest(req, 30.0);
+        REQUIRE(result == ::drogon::ReqResult::Ok);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k302Found));
+        const std::string location = resp->getHeader("Location");
+        const size_t csrfPos = location.find("consent_csrf=");
+        REQUIRE(csrfPos != std::string::npos);
+        const size_t end = location.find('&', csrfPos);
+        csrf2 = location.substr(
+          csrfPos + 13, (end == std::string::npos ? location.size() : end) - csrfPos - 13
+        );
+        CHECK(!csrf2.empty());
+    }
+
+    // Unknown csrf -> 400 VALIDATION_INVALID_INPUT (same gate shape as the
+    // consent POST; no owner data leaks).
+    {
+        auto resp = getContext(
+          "deadbeefdeadbeef", orgClientId, kRedirect, "orgctxctx2", userIdParam, cookie
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k400BadRequest));
+        Json::Value err;
+        REQUIRE(parseJsonBody(resp, err));
+        CHECK(err["error"].get("code", "").asString() == "VALIDATION_INVALID_INPUT");
+    }
+    // No session cookie -> 401 AUTH_SESSION_REQUIRED.
+    {
+        auto resp = getContext(
+          csrf2, orgClientId, kRedirect, "orgctxctx2", userIdParam, ""
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k401Unauthorized));
+        Json::Value err;
+        REQUIRE(parseJsonBody(resp, err));
+        CHECK(err["error"].get("code", "").asString() == "AUTH_SESSION_REQUIRED");
+    }
+    // user_id mismatch -> 403 AUTHZ_ACCESS_DENIED.
+    {
+        auto resp = getContext(
+          csrf2, orgClientId, kRedirect, "orgctxctx2", "424242", cookie
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k403Forbidden));
+        Json::Value err;
+        REQUIRE(parseJsonBody(resp, err));
+        CHECK(err["error"].get("code", "").asString() == "AUTHZ_ACCESS_DENIED");
+    }
+    // Unregistered redirect_uri -> 400 VALIDATION_REDIRECT_URI_NOT_REGISTERED
+    // (the anti-enumeration binding: no owner data without knowing a
+    // registered redirect_uri).
+    {
+        auto resp = getContext(
+          csrf2, orgClientId, "http://127.0.0.1:9999/evil", "orgctxctx2", userIdParam, cookie
+        );
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k400BadRequest));
+        Json::Value err;
+        REQUIRE(parseJsonBody(resp, err));
+        CHECK(err["error"].get("code", "").asString() ==
+              "VALIDATION_REDIRECT_URI_NOT_REGISTERED");
+    }
+
+    // Personal-app flow (no org hint): org is null and the attribution is
+    // the creator's label (display_name empty for a fresh user -> username
+    // fallback).
+    {
+        auto client = ::drogon::HttpClient::newHttpClient(
+          "http://127.0.0.1:5555", ::drogon::app().getLoop()
+        );
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Get);
+        req->setPath("/oauth2/authorize");
+        req->setParameter("response_type", "code");
+        req->setParameter("client_id", personalClientId);
+        req->setParameter("redirect_uri", kRedirect);
+        req->setParameter("scope", "openid");
+        req->setParameter("state", "orgctxctx3");
+        req->setParameter("prompt", "consent");
+        req->setParameter("code_challenge", ctxChallenge);
+        req->setParameter("code_challenge_method", "S256");
+        req->addHeader("Cookie", cookie);
+        auto [result, resp] = client->sendRequest(req, 30.0);
+        REQUIRE(result == ::drogon::ReqResult::Ok);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, ::drogon::k302Found));
+        const std::string location = resp->getHeader("Location");
+        const size_t csrfPos = location.find("consent_csrf=");
+        const size_t uidPos = location.find("user_id=");
+        REQUIRE(csrfPos != std::string::npos);
+        REQUIRE(uidPos != std::string::npos);
+        auto part = [&location](size_t start) -> std::string {
+            const size_t end = location.find('&', start);
+            return location.substr(
+              start, (end == std::string::npos ? location.size() : end) - start
+            );
+        };
+        const std::string csrf3 = part(csrfPos + 13);
+        const std::string uid3 = ::drogon::utils::urlDecode(part(uidPos + 8));
+
+        auto ctx = getContext(csrf3, personalClientId, kRedirect, "orgctxctx3", uid3, cookie);
+        REQUIRE(ctx != nullptr);
+        if (ctx->getStatusCode() != ::drogon::k200OK)
+        {
+            dumpBody(ctx, "ctx personal app");
+        }
+        CHECK(statusIs(ctx, ::drogon::k200OK));
+        Json::Value body;
+        REQUIRE(parseJsonBody(ctx, body));
+        CHECK(body["owner_name"].asString() == userA);
+        CHECK(body["org"].isNull());
+    }
+
+    sqlExec("DELETE FROM users WHERE username = '" + userA + "'");
+}

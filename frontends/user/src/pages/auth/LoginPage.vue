@@ -58,9 +58,16 @@ const passwordChangedNotice = route.query.pw_changed === '1'
 // the server re-validates redirect_uri against the client registration) and
 // navigate with a full page load. Before this, such users landed on the
 // dashboard and the relying party never received its authorization code.
+// v1.5.0 M1b: 'org_id' joins the whitelist — the backend already flattens
+// the org context hint onto the /login URL (both authorize login-redirect
+// branches), but dropping it here rebuilt the authorize request without the
+// org context, silently degrading the browser chain to a no-org issuance
+// while every CI-covered (API-driven) flow stayed green. The login submit
+// is an XHR (no form POST navigation), so the whitelist IS the forwarding
+// mechanism — the query survives on the page until the resume rebuild.
 const AUTHORIZE_CARRY_KEYS = [
   'client_id', 'redirect_uri', 'scope', 'state', 'response_type',
-  'code_challenge', 'code_challenge_method', 'nonce',
+  'code_challenge', 'code_challenge_method', 'nonce', 'org_id',
 ] as const
 
 function resumeAuthorizeFlow(): boolean {
