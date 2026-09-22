@@ -3008,6 +3008,10 @@ const std::string &clientId,
 const std::string &clientSecret,
 std::function<void(bool)> &&callback
 );
+void validateClientForAuthorize(
+const std::string &clientId,
+std::function<void(bool)> &&callback
+);
 void getClient(
 const std::string &clientId,
 fulla::oauth2::repository::IClientRepository::ClientCallback &&callback
