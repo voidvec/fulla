@@ -1072,7 +1072,7 @@
       },
       "post" : 
       {
-        "description" : "Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and org_id are optional.",
+        "description" : "Create a new user. Requires username and password; email, roles, mfa_enabled, and email_verified are optional. The deprecated users.org_id column is read-only since v1.5.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
         "operationId" : "post_api_admin_users",
         "responses" : null,
         "security" : 
@@ -1153,7 +1153,7 @@
       },
       "put" : 
       {
-        "description" : "Update user fields: email, email_verified, username, mfa_enabled, locked, org_id (integer sets it, JSON null clears it). Wrong-typed fields are rejected with 400.",
+        "description" : "Update user fields: email, email_verified, username, mfa_enabled, locked. Wrong-typed fields are rejected with 400. The deprecated users.org_id column is read-only since v1.5.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
         "operationId" : "put_api_admin_users_{userId}",
         "responses" : null,
         "security" : 

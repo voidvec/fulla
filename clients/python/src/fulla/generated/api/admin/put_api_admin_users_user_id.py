@@ -70,9 +70,10 @@ def sync_detailed(
     """Update User
 
      Update user information. Updatable fields: username, email, email_verified, mfa_enabled,
-    must_change_password (#145; enforcement starts at the user's next login), locked (true locks the
-    account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are
-    rejected with 400 (never silently skipped).
+    must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the
+    account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The
+    deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected
+    with 400 (organization membership is managed via the organization APIs).
 
     Args:
         user_id (int):
@@ -107,9 +108,10 @@ async def asyncio_detailed(
     """Update User
 
      Update user information. Updatable fields: username, email, email_verified, mfa_enabled,
-    must_change_password (#145; enforcement starts at the user's next login), locked (true locks the
-    account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are
-    rejected with 400 (never silently skipped).
+    must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the
+    account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The
+    deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected
+    with 400 (organization membership is managed via the organization APIs).
 
     Args:
         user_id (int):

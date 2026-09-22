@@ -123,11 +123,6 @@ bool isBoolVal(const Json::Value &v)
 {
     return v.isBool();
 }
-// org_id additionally accepts explicit null = "clear the org" (#59).
-bool isIntOrNullVal(const Json::Value &v)
-{
-    return v.isInt() || v.isNull();
-}
 
 // Parse page/per_page query params with the same clamping as AuditService.
 PaginationParams parsePagination(const ::drogon::HttpRequestPtr &req)
@@ -610,6 +605,22 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "Invalid JSON body");
         return;
     }
+    // users.org_id write surface removed (v1.5.0 org-anchor convergence, design
+    // 1.2/V7): the column stays until v2.0 but the admin API no longer accepts
+    // it - the sole org truth is organization_members + client_owners. Reject
+    // the key on presence (any type) so a caller never believes a deprecated
+    // write landed; same "never a silent skip that answers 200" rule as #53.
+    if (jsonBody->isMember("org_id"))
+    {
+        respondError(
+          req,
+          cb,
+          "VALIDATION_INVALID_INPUT",
+          "org_id is no longer accepted; organization membership is managed "
+          "via the organization APIs"
+        );
+        return;
+    }
     // Up-front type validation (#53): jsoncpp coercions (asString/asBool)
     // throw Json::LogicError on type mismatch and would escape to the event
     // loop; malformed input is a 400, never a crash or a silent default.
@@ -618,8 +629,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
         !jsonMemberHasType(*jsonBody, "email", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email_verified", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, "org_id", isIntOrNullVal))
+        !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal))
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "One or more fields have an invalid type");
         return;
@@ -691,11 +701,6 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
     row.setEmailVerified(emailVerified);
     row.setMfaEnabled(mfaEnabled);
     row.setMustChangePassword(mustChangePassword);
-    // org_id: explicit int sets it; null/absent leaves the column NULL (#59).
-    if (jsonBody->isMember("org_id") && (*jsonBody)["org_id"].isInt())
-    {
-        row.setOrgId((*jsonBody)["org_id"].asInt());
-    }
 
     try
     {
@@ -999,6 +1004,19 @@ void UserAdminService::updateUser(
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "Invalid JSON body");
         return;
     }
+    // org_id write surface removed (v1.5.0, design 1.2/V7 - see createUser);
+    // presence of the key is a 400 regardless of value type.
+    if (jsonBody->isMember("org_id"))
+    {
+        respondError(
+          req,
+          cb,
+          "VALIDATION_INVALID_INPUT",
+          "org_id is no longer accepted; organization membership is managed "
+          "via the organization APIs"
+        );
+        return;
+    }
     // Up-front type validation (#53/#59): wrong-typed fields are a 400 —
     // never a crash (jsoncpp coercion inside the DB callback aborts the
     // process) and never a silent skip that still answers 200 "success".
@@ -1007,8 +1025,7 @@ void UserAdminService::updateUser(
         !jsonMemberHasType(*jsonBody, "username", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, "locked", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, "org_id", isIntOrNullVal))
+        !jsonMemberHasType(*jsonBody, "locked", isBoolVal))
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "One or more fields have an invalid type");
         return;
@@ -1019,11 +1036,10 @@ void UserAdminService::updateUser(
     bool hasMfaEnabled = jsonBody->isMember("mfa_enabled");
     bool hasMustChangePassword = jsonBody->isMember("must_change_password");
     bool hasLocked = jsonBody->isMember("locked");
-    bool hasOrgId = jsonBody->isMember("org_id");
     bool locking = hasLocked && (*jsonBody)["locked"].asBool();
     if (
       !hasEmail && !hasEmailVerified && !hasUsername && !hasMfaEnabled && !hasMustChangePassword &&
-      !hasLocked && !hasOrgId
+      !hasLocked
     )
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "No updatable fields provided");
@@ -1043,7 +1059,7 @@ void UserAdminService::updateUser(
           Criteria(Users::Cols::_id, CompareOperator::EQ, id) &&
         Criteria(Users::Cols::_deleted_at, CompareOperator::IsNull),
           [cb, req, jsonBody, hasEmail, hasEmailVerified, hasUsername, hasMfaEnabled,
-           hasMustChangePassword, hasLocked, hasOrgId, locking, db, id](
+           hasMustChangePassword, hasLocked, locking, db, id](
             Users row
           ) {
               // Defense-in-depth (db-operations rule 2): the whole callback
@@ -1058,7 +1074,7 @@ void UserAdminService::updateUser(
                   // async callback captures it by value).
                   auto proceedWithUpdate = [cb, req, jsonBody, hasEmail, hasEmailVerified,
                                             hasUsername, hasMfaEnabled, hasMustChangePassword,
-                                            hasLocked, hasOrgId, db,
+                                            hasLocked, db,
                                             id, row]() {
                       Users rowLocal = row;
                       if (hasEmail)
@@ -1090,18 +1106,6 @@ void UserAdminService::updateUser(
                           // locked is derived from locked_until: true → forever sentinel,
                           // false → 0 (unlocked, matching enableUser).
                           rowLocal.setLockedUntil((*jsonBody)["locked"].asBool() ? kLockedForeverSentinel : 0);
-                      }
-                      if (hasOrgId)
-                      {
-                          if ((*jsonBody)["org_id"].isNull())
-                          {
-                              // Explicit null clears the org (#59).
-                              rowLocal.setOrgIdToNull();
-                          }
-                          else
-                          {
-                              rowLocal.setOrgId((*jsonBody)["org_id"].asInt());
-                          }
                       }
                       try
                       {

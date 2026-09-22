@@ -283,8 +283,6 @@ export default {
       mfaBadgeEnabled: 'MFA 已启用',
       mfaBadgeOff: 'MFA 未开启',
       accountLocked: '账户已锁定',
-      organizationId: '组织 ID',
-      organizationNone: '（无）',
       createdAt: '创建时间',
       noChanges: '没有更改',
       userUpdated: '用户更新成功',

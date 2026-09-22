@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -22,7 +22,6 @@ class PutApiAdminUsersUserIdBody:
         must_change_password (bool | Unset): Set/clear the forced password-change flag (#145); enforcement starts at the
             user's next login.
         locked (bool | Unset):
-        org_id (int | None | Unset):
     """
 
     username: str | Unset = UNSET
@@ -31,7 +30,6 @@ class PutApiAdminUsersUserIdBody:
     mfa_enabled: bool | Unset = UNSET
     must_change_password: bool | Unset = UNSET
     locked: bool | Unset = UNSET
-    org_id: int | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -46,12 +44,6 @@ class PutApiAdminUsersUserIdBody:
         must_change_password = self.must_change_password
 
         locked = self.locked
-
-        org_id: int | None | Unset
-        if isinstance(self.org_id, Unset):
-            org_id = UNSET
-        else:
-            org_id = self.org_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -68,8 +60,6 @@ class PutApiAdminUsersUserIdBody:
             field_dict["must_change_password"] = must_change_password
         if locked is not UNSET:
             field_dict["locked"] = locked
-        if org_id is not UNSET:
-            field_dict["org_id"] = org_id
 
         return field_dict
 
@@ -88,15 +78,6 @@ class PutApiAdminUsersUserIdBody:
 
         locked = d.pop("locked", UNSET)
 
-        def _parse_org_id(data: object) -> int | None | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(int | None | Unset, data)
-
-        org_id = _parse_org_id(d.pop("org_id", UNSET))
-
         put_api_admin_users_user_id_body = cls(
             username=username,
             email=email,
@@ -104,7 +85,6 @@ class PutApiAdminUsersUserIdBody:
             mfa_enabled=mfa_enabled,
             must_change_password=must_change_password,
             locked=locked,
-            org_id=org_id,
         )
 
         put_api_admin_users_user_id_body.additional_properties = d

@@ -473,8 +473,10 @@ export async function setupAuthenticatedMocks(page: Page) {
 
   // User detail - GET/PUT/DELETE for user info. Stateful: PUT applies the
   // known fields onto the current detail state (mirroring the backend's
-  // contract — org_id: null clears, wrong types are a 400 — issues #53/#59)
-  // so a subsequent GET reflects the update, like the real API.
+  // contract — wrong types are a 400, org_id presence is a 400 since the
+  // v1.5.0 org-anchor convergence — issues #53/#59; the backend answers the
+  // catalog-generic VALIDATION_INVALID_INPUT message in both cases) so a
+  // subsequent GET reflects the update, like the real API.
   const userDetail: any = { ...MOCK_USER_DETAIL }
   await page.route('**/api/admin/users/*', async (route) => {
     if (route.request().method() === 'GET') {
@@ -490,7 +492,7 @@ export async function setupAuthenticatedMocks(page: Page) {
         ['email_verified', 'mfa_enabled', 'locked'].every(
           (k) => body[k] === undefined || typeof body[k] === 'boolean'
         ) &&
-        (body.org_id === undefined || body.org_id === null || Number.isInteger(body.org_id))
+        body.org_id === undefined
       if (!typeOk) {
         await route.fulfill({
           status: 400,

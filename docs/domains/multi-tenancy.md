@@ -32,11 +32,12 @@ Two nullable foreign keys attach entities to an organization:
 
 | Column | On | Semantics |
 |---|---|---|
-| `org_id` | `users` | The user belongs to the org; `NULL` = unassigned (backwards compatible) |
-| `org_id` | `oauth2_clients` | The client is owned by the org; `NULL` = global/ownerless |
+| `org_id` | `users` | Deprecated single-org anchor from V017. **Read-only since v1.5.0** (the admin API write surface was removed); `NULL` = unset. Physical removal planned for v2.0. |
+| (dropped) | `oauth2_clients` | The V017 `org_id` column was never read or written by code and was **dropped in V036**. Client ownership lives in `oauth2_client_owners.org_id` (v1.4.0). |
 
-Both are nullable by design: pre-V017 data and platform-level principals
-(the seed `admin`, the `fulla-admin-console` client) simply have no org.
+The authoritative organization anchors since v1.5.0 are the M:N membership
+table (`organization_members`) and `oauth2_client_owners.org_id`;
+`users.org_id` is a legacy read-only column kept only for migration.
 
 ## 2. Admin API surface
 
@@ -51,8 +52,11 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 
 Additionally:
 
-- `POST/PATCH /api/admin/users` accepts `org_id` — an integer assigns the
-  user to an org; JSON `null` **clears** the assignment.
+- The admin user API (`POST/PUT /api/admin/users`) **no longer accepts
+  `org_id`** (v1.5.0 org-anchor convergence): a request body containing the
+  key is rejected with 400, whatever its value. Organization membership is
+  managed through the organization membership APIs (`organization_members`),
+  and the `users.org_id` column stays readable until its v2.0 physical drop.
 
 Example:
 
@@ -61,18 +65,14 @@ Example:
 curl -X POST http://localhost:5555/api/admin/organizations \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"slug":"acme","name":"ACME Corp","logo_uri":"https://acme.example/logo.svg","primary_color":"#5b2fd1"}'
-
-# Attach a user to it
-curl -X PATCH http://localhost:5555/api/admin/users/42 \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"org_id": 1}'
 ```
 
 ## 3. What this buys you today
 
 - **Ownership bookkeeping**: which human belongs to which company, which
   client application belongs to which company — queryable via the admin API
-  and SQL (`users.org_id`, `oauth2_clients.org_id`).
+  and SQL (membership tables; `users.org_id` is a deprecated read-only
+  legacy column).
 - **Branding catalog**: per-org logo and primary color for frontends that
   want to skin the login experience per tenant.
 - **No migration cliff**: everything is optional and additive; deployments
@@ -98,5 +98,7 @@ the Docker Compose / Helm paths make that cheap
 
 The authoritative DDL is
 [`V017__multi_tenant.sql`](https://github.com/voidvec/fulla/blob/master/apps/server/migrations/V017__multi_tenant.sql)
-(indexes on `users(org_id)`, `oauth2_clients(org_id)`, `organizations(slug)`).
+(V017 indexed `users(org_id)`, `oauth2_clients(org_id)`, and
+`organizations(slug)`; the `oauth2_clients.org_id` column and its index were
+dropped in V036, and `users.org_id` is slated for v2.0).
 Storage-layer details: [Data Persistence](../architecture/data-persistence.md).

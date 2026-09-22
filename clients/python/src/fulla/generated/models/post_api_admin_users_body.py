@@ -22,7 +22,6 @@ class PostApiAdminUsersBody:
         mfa_enabled (bool | Unset):
         must_change_password (bool | Unset): Force a password change at first login (#145); while flagged, no
             authorization codes are issued for the account. Default false.
-        org_id (int | None | Unset):
         roles (list[str] | Unset):
     """
 
@@ -32,7 +31,6 @@ class PostApiAdminUsersBody:
     email_verified: bool | Unset = UNSET
     mfa_enabled: bool | Unset = UNSET
     must_change_password: bool | Unset = UNSET
-    org_id: int | None | Unset = UNSET
     roles: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -48,12 +46,6 @@ class PostApiAdminUsersBody:
         mfa_enabled = self.mfa_enabled
 
         must_change_password = self.must_change_password
-
-        org_id: int | None | Unset
-        if isinstance(self.org_id, Unset):
-            org_id = UNSET
-        else:
-            org_id = self.org_id
 
         roles: list[str] | Unset = UNSET
         if not isinstance(self.roles, Unset):
@@ -75,8 +67,6 @@ class PostApiAdminUsersBody:
             field_dict["mfa_enabled"] = mfa_enabled
         if must_change_password is not UNSET:
             field_dict["must_change_password"] = must_change_password
-        if org_id is not UNSET:
-            field_dict["org_id"] = org_id
         if roles is not UNSET:
             field_dict["roles"] = roles
 
@@ -97,15 +87,6 @@ class PostApiAdminUsersBody:
 
         must_change_password = d.pop("must_change_password", UNSET)
 
-        def _parse_org_id(data: object) -> int | None | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(int | None | Unset, data)
-
-        org_id = _parse_org_id(d.pop("org_id", UNSET))
-
         roles = cast(list[str], d.pop("roles", UNSET))
 
         post_api_admin_users_body = cls(
@@ -115,7 +96,6 @@ class PostApiAdminUsersBody:
             email_verified=email_verified,
             mfa_enabled=mfa_enabled,
             must_change_password=must_change_password,
-            org_id=org_id,
             roles=roles,
         )
 
