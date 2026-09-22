@@ -135,6 +135,16 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
       std::function<void(bool)> &&callback
     );
 
+    // #233: authorize-only client gate. The authorization endpoint lives on
+    // the front channel, where client authentication is optional and a
+    // confidential client cannot present its secret (RFC 6749 3.1), so unlike
+    // validateClient this never checks a secret. Existence + governance only:
+    // getClient resolves soft-deleted (V035) and suspended clients to nullopt.
+    void validateClientForAuthorize(
+      const std::string &clientId,
+      std::function<void(bool)> &&callback
+    );
+
     // Phase 4.3: storage-forwarding accessors routed through the NEW split
     // repository interfaces (today the bridges over storage_) so controllers no
     // longer need to call getStorage() directly. Return/accept the NEW

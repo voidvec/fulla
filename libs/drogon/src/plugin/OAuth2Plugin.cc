@@ -709,6 +709,33 @@ void OAuth2Plugin::validateClient(
     clientService_->validateClient(clientId, clientSecret, std::move(callback));
 }
 
+void OAuth2Plugin::validateClientForAuthorize(
+  const std::string &clientId,
+  std::function<void(bool)> &&callback
+)
+{
+    // #233: existence + governance only, never a secret check. The authorize
+    // endpoint is a front-channel endpoint (RFC 6749 3.1) with no client
+    // credentials to present; the previous empty-secret validateClient call
+    // therefore rejected every CONFIDENTIAL client. getClient resolves
+    // unknown, soft-deleted (V035) and suspended clients to nullopt, so a
+    // non-nullopt row means the request proceeds to redirect_uri/PKCE/consent
+    // validation. Token-endpoint client authentication is unaffected.
+    if (!clientRepo_)
+    {
+        LOG_ERROR << "OAuth2Plugin::validateClientForAuthorize: client repository not available";
+        callback(false);
+        return;
+    }
+    clientRepo_->getClient(
+      clientId,
+      [callback = std::move(callback)](
+        std::optional<fulla::oauth2::model::OAuth2Client> client) mutable {
+          callback(client.has_value());
+      }
+    );
+}
+
 void OAuth2Plugin::validateRedirectUri(
   const std::string &clientId,
   const std::string &redirectUri,

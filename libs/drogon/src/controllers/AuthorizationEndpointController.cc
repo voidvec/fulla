@@ -319,9 +319,12 @@ void AuthorizationEndpointController::authorize(
     }
 
     // Validate Client (Async)
-    plugin->validateClient(
+    // #233: existence + governance gate only. Authorize is a front-channel
+    // endpoint where a confidential client cannot authenticate (RFC 6749
+    // 3.1); the old empty-secret validateClient call rejected every
+    // CONFIDENTIAL client right here.
+    plugin->validateClientForAuthorize(
       clientId,
-      "",
       [plugin,
        clientId,
        redirectUri,
