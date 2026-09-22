@@ -6,7 +6,9 @@
 //   #53  strict JSON type validation on updateUser/createUser (400, no crash)
 //   #56  deleteUser revokes tokens durably (dual key) before responding
 //   #58  case-insensitive user search (lower() on both sides)
-//   #59  org_id nullable semantics (null ≠ 0, null clears, string type → 400)
+//   #59  org_id: admin write surface removed in v1.5.0 (org-anchor
+//        convergence, design 1.2/V7) - presence in a body is a 400; the read
+//        path keeps returning the legacy column until the v2.0 physical DROP
 //   #54  soft-deleted user's self-service token no longer returns data
 //   #60  createUser role-assignment reporting + last-admin guard (409)
 //
@@ -69,23 +71,6 @@ int createThrowawayUser(const std::string &token, const std::string &prefix)
         return -1;
     return respBody["user"]["id"].asInt();
 }
-
-// Create a throwaway organization via the admin API and return its id (-1 on
-// failure). users.org_id has an FK to organizations(id), so org tests must
-// reference a REAL org.
-int createThrowawayOrg(const std::string &token)
-{
-    Json::Value body;
-    body["name"] = "HardeningOrg_" + uniqueSuffix();
-    body["slug"] = "hardening-org-" + uniqueSuffix();
-    auto resp = sendPostJson("/api/admin/organizations", body, token);
-    if (!resp || !statusIs(resp, drogon::k201Created))
-        return -1;
-    Json::Value respBody;
-    if (!parseJsonBody(resp, respBody))
-        return -1;
-    return respBody.get("id", -1).asInt();
-}
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -110,19 +95,20 @@ DROGON_TEST(Integration_P0_AdminUser_Update_TypeMismatch_Returns400)
     };
     Json::Value objVal;
     objVal["a"] = 1;
-    Json::Value intVal(123);
     Json::Value strVal1("yes");
     Json::Value strVal2("true");
     Json::Value intVal2(1);
-    Json::Value strVal3("abc");
+    Json::Value intVal3(123);
     std::vector<Case> cases = {
         {"email", objVal},
         {"email_verified", strVal1},
-        {"username", intVal},
+        {"username", intVal3},
         {"mfa_enabled", strVal2},
         {"locked", intVal2},
-        {"org_id", strVal3},
     };
+    // org_id is deliberately absent here: since the v1.5.0 convergence its
+    // rejection is presence-based, not type-based, and is pinned by
+    // Integration_P0_AdminUser_OrgId_WriteSurfaceRemoved below.
     for (const auto &c : cases)
     {
         Json::Value body;
@@ -135,23 +121,77 @@ DROGON_TEST(Integration_P0_AdminUser_Update_TypeMismatch_Returns400)
 }
 
 // ---------------------------------------------------------------------------
-// #59: org_id is a nullable integer. NULL serializes as JSON null (never the
-// default 0), explicit null clears, non-int types are a 400.
+// #59 (v1.5.0 org-anchor convergence, design 1.2/V7): users.org_id admin
+// write surface removed. Presence of the key in a create/update body is a
+// 400 regardless of value type (never a silent skip that answers 200); the
+// read path still returns the legacy column (JSON null when unset) until
+// the v2.0 physical DROP.
 // ---------------------------------------------------------------------------
-DROGON_TEST(Integration_P0_AdminUser_OrgId_NullSemantics)
+DROGON_TEST(Integration_P0_AdminUser_OrgId_WriteSurfaceRemoved)
 {
     HARDENING_SKIP_GUARD;
 
     auto token = loginAsAdmin();
     REQUIRE(token.has_value());
 
-    const int userId = createThrowawayUser(*token, "orgtest");
-    REQUIRE(userId > 0);
-    // org_id has an FK to organizations(id) — use a real org.
-    const int orgId = createThrowawayOrg(*token);
-    REQUIRE(orgId > 0);
+    // Create with org_id (int / null / wrong type) -> 400 with the validation
+    // error code. All three legs reuse one username so the non-creation check
+    // below covers every value shape (the 400 must fire before the insert).
+    Json::Value createInt(1);
+    Json::Value createNull(Json::nullValue);
+    Json::Value createStr("abc");
+    const std::string rejectedUsername = "orgconv_" + uniqueSuffix();
+    for (const Json::Value *v : {&createInt, &createNull, &createStr})
+    {
+        Json::Value body;
+        body["username"] = rejectedUsername;
+        body["password"] = "TestPass123!";
+        body["org_id"] = *v;
+        auto resp = sendPostJson("/api/admin/users", body, *token);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, drogon::k400BadRequest));
+        Json::Value errBody;
+        REQUIRE(parseJsonBody(resp, errBody));
+        CHECK(errBody["error"].get("code", "").asString() == "VALIDATION_INVALID_INPUT");
+    }
 
-    // Fresh user: org_id must be JSON null (not 0).
+    // Non-creation: the rejected username must not exist (search is a
+    // prefix/contains match on username, so an exact-name miss is decisive).
+    {
+        auto listResp = sendGet("/api/admin/users?q=" + rejectedUsername, *token);
+        REQUIRE(listResp != nullptr);
+        CHECK(statusIs(listResp, drogon::k200OK));
+        Json::Value listBody;
+        REQUIRE(parseJsonBody(listResp, listBody));
+        for (const auto &u : listBody["users"])
+        {
+            CHECK(u.get("username", "").asString() != rejectedUsername);
+        }
+    }
+
+    const int userId = createThrowawayUser(*token, "orgconv");
+    REQUIRE(userId > 0);
+
+    // Update with org_id alone (int / null / wrong type) -> 400 with the
+    // validation error code - also proves an org_id-only body no longer takes
+    // the "no updatable fields" path.
+    Json::Value intVal(1);
+    Json::Value nullVal(Json::nullValue);
+    Json::Value strVal("abc");
+    for (const Json::Value *v : {&intVal, &nullVal, &strVal})
+    {
+        Json::Value body;
+        body["org_id"] = *v;
+        auto resp = sendPutJson("/api/admin/users/" + std::to_string(userId), body, *token);
+        REQUIRE(resp != nullptr);
+        CHECK(statusIs(resp, drogon::k400BadRequest));
+        Json::Value errBody;
+        REQUIRE(parseJsonBody(resp, errBody));
+        CHECK(errBody["error"].get("code", "").asString() == "VALIDATION_INVALID_INPUT");
+    }
+
+    // Read path preserved: a user created after convergence still reports
+    // org_id as JSON null (not 0, not absent).
     {
         auto getResp = sendGet("/api/admin/users/" + std::to_string(userId), *token);
         REQUIRE(getResp != nullptr);
@@ -161,33 +201,13 @@ DROGON_TEST(Integration_P0_AdminUser_OrgId_NullSemantics)
         CHECK(body["org_id"].isNull());
     }
 
-    // Set to the real org id.
+    // Other updatable fields are unaffected by the convergence.
     {
         Json::Value body;
-        body["org_id"] = orgId;
+        body["mfa_enabled"] = true;
         auto resp = sendPutJson("/api/admin/users/" + std::to_string(userId), body, *token);
         REQUIRE(resp != nullptr);
         CHECK(statusIs(resp, drogon::k200OK));
-        auto getResp = sendGet("/api/admin/users/" + std::to_string(userId), *token);
-        REQUIRE(getResp != nullptr);
-        Json::Value body2;
-        REQUIRE(parseJsonBody(getResp, body2));
-        CHECK(body2["org_id"].isInt());
-        CHECK(body2["org_id"].asInt() == orgId);
-    }
-
-    // Explicit null clears.
-    {
-        Json::Value body;
-        body["org_id"] = Json::Value(Json::nullValue);
-        auto resp = sendPutJson("/api/admin/users/" + std::to_string(userId), body, *token);
-        REQUIRE(resp != nullptr);
-        CHECK(statusIs(resp, drogon::k200OK));
-        auto getResp = sendGet("/api/admin/users/" + std::to_string(userId), *token);
-        REQUIRE(getResp != nullptr);
-        Json::Value body2;
-        REQUIRE(parseJsonBody(getResp, body2));
-        CHECK(body2["org_id"].isNull());
     }
 }
 

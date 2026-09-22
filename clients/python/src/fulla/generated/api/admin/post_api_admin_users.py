@@ -63,9 +63,11 @@ def sync_detailed(
 ) -> Response[Any]:
     """Create User
 
-     Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified,
-    must_change_password, and org_id are optional. must_change_password (default false, #145) forces the
-    user to change the password at first login.
+     Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and
+    must_change_password are optional. must_change_password (default false, #145) forces the user to
+    change the password at first login. The deprecated users.org_id column is read-only since v1.5.0:
+    requests containing org_id are rejected with 400 (organization membership is managed via the
+    organization APIs).
 
     Args:
         body (PostApiAdminUsersBody):
@@ -96,9 +98,11 @@ async def asyncio_detailed(
 ) -> Response[Any]:
     """Create User
 
-     Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified,
-    must_change_password, and org_id are optional. must_change_password (default false, #145) forces the
-    user to change the password at first login.
+     Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and
+    must_change_password are optional. must_change_password (default false, #145) forces the user to
+    change the password at first login. The deprecated users.org_id column is read-only since v1.5.0:
+    requests containing org_id are rejected with 400 (organization membership is managed via the
+    organization APIs).
 
     Args:
         body (PostApiAdminUsersBody):

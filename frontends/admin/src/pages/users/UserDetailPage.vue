@@ -41,7 +41,6 @@ const editEmail = ref('')
 const editEmailVerified = ref(false)
 const editMfaEnabled = ref(false)
 const editLocked = ref(false)
-const editOrgId = ref<number | ''>('')
 const selectedRoles = ref<string[]>([])
 
 function showSuccess(msg: string) {
@@ -65,7 +64,6 @@ async function fetchUser() {
     editEmailVerified.value = resp.data.email_verified || false
     editMfaEnabled.value = resp.data.mfa_enabled || false
     editLocked.value = resp.data.locked || false
-    editOrgId.value = resp.data.org_id ?? ''
     selectedRoles.value = (resp.data.roles || []).filter((r: any) => typeof r === 'string')
   } catch (e: unknown) {
     showError(normalizeError(e))
@@ -90,9 +88,6 @@ async function saveInfo() {
     if (editEmailVerified.value !== user.value.email_verified) body.email_verified = editEmailVerified.value
     if (editMfaEnabled.value !== user.value.mfa_enabled) body.mfa_enabled = editMfaEnabled.value
     if (editLocked.value !== (user.value.locked || false)) body.locked = editLocked.value
-    // org_id: an emptied field is an explicit "clear" — send null (the API's
-    // null = setOrgIdToNull), never '' (the backend now 400s wrong types).
-    if (editOrgId.value !== (user.value.org_id ?? '')) body.org_id = editOrgId.value === '' ? null : editOrgId.value
     if (Object.keys(body).length === 0) { showSuccess(t('admin.users.noChanges')); saving.value = false; return }
     await axios.put(`/api/admin/users/${userId.value}`, body, { headers: { 'Content-Type': 'application/json' } })
     showSuccess(t('admin.users.userUpdated'))
@@ -302,15 +297,6 @@ onMounted(() => {
             for="locked"
             class="text-sm font-medium text-neutral-700"
           >{{ $t('admin.users.accountLocked') }}</label>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.users.organizationId') }}</label>
-          <input
-            v-model="editOrgId"
-            type="number"
-            class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
-            :placeholder="$t('admin.users.organizationNone')"
-          >
         </div>
         <div>
           <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.users.createdAt') }}</label>

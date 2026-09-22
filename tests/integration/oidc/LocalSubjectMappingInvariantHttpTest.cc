@@ -236,7 +236,6 @@ DROGON_TEST(Integration_P0_SubjectMapping_AdminCreateUser_ConsentFlow_Returns302
     body["email"] = "p0143adm_" + suffix + "@example.test";
     body["email_verified"] = false;
     body["mfa_enabled"] = false;
-    body["org_id"] = Json::nullValue;
     auto created = sendPostJson("/api/admin/users", body, *token);
     REQUIRE(created != nullptr);
     REQUIRE(statusIs(created, drogon::k201Created));

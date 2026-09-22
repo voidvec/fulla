@@ -1820,9 +1820,11 @@ paths:
     post:
       description: >-
         Create a new user. Requires username and password; email, roles,
-        mfa_enabled, email_verified, must_change_password, and org_id are
-        optional. must_change_password (default false, #145) forces the user
-        to change the password at first login.
+        mfa_enabled, email_verified, and must_change_password are optional.
+        must_change_password (default false, #145) forces the user to change
+        the password at first login. The deprecated users.org_id column is
+        read-only since v1.5.0: requests containing org_id are rejected with
+        400 (organization membership is managed via the organization APIs).
       operationId: post_api_admin_users
       requestBody:
         required: true
@@ -1848,9 +1850,6 @@ paths:
                   description: 'Force a password change at first login (#145);
                     while flagged, no authorization codes are issued for the
                     account. Default false.'
-                org_id:
-                  type: integer
-                  nullable: true
                 roles:
                   type: array
                   items:
@@ -1950,7 +1949,7 @@ paths:
                   username:
                     type: string
                 type: object
-          description: User details (org_id is null when the user has no org)
+          description: User details (org_id is a deprecated read-only legacy column since v1.5.0; null when unset)
         '404':
           description: User not found
       security:
@@ -1963,9 +1962,11 @@ paths:
       description: >-
         Update user information. Updatable fields: username, email,
         email_verified, mfa_enabled, must_change_password (#145; enforcement
-        starts at the user's next login), locked (true locks the account),
-        and org_id (integer sets it; JSON null clears it). Fields with a
-        wrong JSON type are rejected with 400 (never silently skipped).
+        starts at the user's next login), and locked (true locks the account).
+        Fields with a wrong JSON type are rejected with 400 (never silently
+        skipped). The deprecated users.org_id column is read-only since
+        v1.5.0: requests containing org_id are rejected with 400 (organization
+        membership is managed via the organization APIs).
       operationId: put_api_admin_users_{userId}
       parameters:
       - description: User ID
@@ -1993,9 +1994,6 @@ paths:
                     enforcement starts at the user''s next login.'
                 locked:
                   type: boolean
-                org_id:
-                  type: integer
-                  nullable: true
               type: object
       responses:
         '200':

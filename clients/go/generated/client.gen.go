@@ -921,7 +921,6 @@ type PostApiAdminUsersJSONBody struct {
 
 	// MustChangePassword Force a password change at first login (#145); while flagged, no authorization codes are issued for the account. Default false.
 	MustChangePassword *bool     `json:"must_change_password,omitempty"`
-	OrgId              *int      `json:"org_id,omitempty"`
 	Password           string    `json:"password"`
 	Roles              *[]string `json:"roles,omitempty"`
 	Username           string    `json:"username"`
@@ -936,7 +935,6 @@ type PutApiAdminUsersUserIdJSONBody struct {
 
 	// MustChangePassword Set/clear the forced password-change flag (#145); enforcement starts at the user's next login.
 	MustChangePassword *bool   `json:"must_change_password,omitempty"`
-	OrgId              *int    `json:"org_id,omitempty"`
 	Username           *string `json:"username,omitempty"`
 }
 
@@ -2015,7 +2013,7 @@ type ClientInterface interface {
 
 	// PostApiAdminUsersWithBody Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2024,7 +2022,7 @@ type ClientInterface interface {
 
 	// PostApiAdminUsers Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2047,7 +2045,7 @@ type ClientInterface interface {
 
 	// PutApiAdminUsersUserIdWithBody Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2056,7 +2054,7 @@ type ClientInterface interface {
 
 	// PutApiAdminUsersUserId Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3830,7 +3828,7 @@ func (c *Client) GetApiAdminUsers(ctx context.Context, params *GetApiAdminUsersP
 
 // PostApiAdminUsersWithBody Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3849,7 +3847,7 @@ func (c *Client) PostApiAdminUsersWithBody(ctx context.Context, contentType stri
 
 // PostApiAdminUsers Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3902,7 +3900,7 @@ func (c *Client) GetApiAdminUsersUserId(ctx context.Context, userId int, reqEdit
 
 // PutApiAdminUsersUserIdWithBody Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3921,7 +3919,7 @@ func (c *Client) PutApiAdminUsersUserIdWithBody(ctx context.Context, userId int,
 
 // PutApiAdminUsersUserId Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10588,7 +10586,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiAdminUsersWithBodyWithResponse Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10597,7 +10595,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiAdminUsersWithResponse Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10624,7 +10622,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutApiAdminUsersUserIdWithBodyWithResponse Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10633,7 +10631,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutApiAdminUsersUserIdWithResponse Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17374,7 +17372,7 @@ func (c *ClientWithResponses) GetApiAdminUsersWithResponse(ctx context.Context, 
 
 // PostApiAdminUsersWithBodyWithResponse Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17389,7 +17387,7 @@ func (c *ClientWithResponses) PostApiAdminUsersWithBodyWithResponse(ctx context.
 
 // PostApiAdminUsersWithResponse Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, must_change_password, and org_id are optional. must_change_password (default false, #145) forces the user to change the password at first login.
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17434,7 +17432,7 @@ func (c *ClientWithResponses) GetApiAdminUsersUserIdWithResponse(ctx context.Con
 
 // PutApiAdminUsersUserIdWithBodyWithResponse Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17449,7 +17447,7 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdWithBodyWithResponse(ctx con
 
 // PutApiAdminUsersUserIdWithResponse Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), locked (true locks the account), and org_id (integer sets it; JSON null clears it). Fields with a wrong JSON type are rejected with 400 (never silently skipped).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

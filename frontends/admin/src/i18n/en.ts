@@ -291,8 +291,6 @@ export default {
       mfaBadgeEnabled: 'MFA Enabled',
       mfaBadgeOff: 'MFA Off',
       accountLocked: 'Account Locked',
-      organizationId: 'Organization ID',
-      organizationNone: '(none)',
       createdAt: 'Created At',
       noChanges: 'No changes',
       userUpdated: 'User updated successfully',

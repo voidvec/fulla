@@ -30,11 +30,11 @@ organizations (
 
 | 列 | 所在表 | 语义 |
 |---|---|---|
-| `org_id` | `users` | 用户属于该组织；`NULL` = 未分配（向后兼容） |
-| `org_id` | `oauth2_clients` | 客户端由该组织拥有；`NULL` = 全局/无主 |
+| `org_id` | `users` | V017 的单组织锚点，已废弃。**v1.5.0 起只读**（admin API 写入面已移除）；`NULL` = 未设置。计划 v2.0 物理删除。 |
+| （已删除） | `oauth2_clients` | V017 的 `org_id` 列从未被代码读写，**V036 已 DROP**。客户端归属在 `oauth2_client_owners.org_id`（v1.4.0）。 |
 
-两者按设计可空：V017 之前的数据与平台级主体（种子 `admin`、
-`fulla-admin-console` 客户端）没有组织。
+v1.5.0 起组织归属的唯一权威锚点是 M:N 成员表（`organization_members`）与
+`oauth2_client_owners.org_id`；`users.org_id` 只是为迁移保留的只读遗留列。
 
 ## 2. 管理 API 面
 
@@ -49,8 +49,10 @@ organizations (
 
 另：
 
-- `POST/PATCH /api/admin/users` 接受 `org_id`——整数分配用户到组织；
-  JSON `null` **清除**归属。
+- 管理用户 API（`POST/PUT /api/admin/users`）**不再接受 `org_id`**（v1.5.0
+  组织锚点收敛）：请求体携带该键一律 400，无论取值。组织成员关系经组织
+  成员 API（`organization_members`）管理；`users.org_id` 列在 v2.0 物理删除
+  前保持可读。
 
 示例：
 
@@ -59,17 +61,12 @@ organizations (
 curl -X POST http://localhost:5555/api/admin/organizations \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"slug":"acme","name":"ACME Corp","logo_uri":"https://acme.example/logo.svg","primary_color":"#5b2fd1"}'
-
-# 把用户挂到组织
-curl -X PATCH http://localhost:5555/api/admin/users/42 \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"org_id": 1}'
 ```
 
 ## 3. 现在能买到什么
 
 - **归属记账**：哪个人属于哪家公司、哪个客户端应用属于哪家公司——管理 API
-  与 SQL（`users.org_id`、`oauth2_clients.org_id`）均可查。
+  与 SQL（成员表；`users.org_id` 是已废弃的只读遗留列）均可查。
 - **品牌目录**：按组织存 logo 与主色，前端可按租户换肤登录体验。
 - **无迁移断崖**：一切都是可选、增量式的；不关心组织的部署完全不碰它。
 
@@ -91,5 +88,7 @@ curl -X PATCH http://localhost:5555/api/admin/users/42 \
 
 权威 DDL 是
 [`V017__multi_tenant.sql`](https://github.com/voidvec/fulla/blob/master/apps/server/migrations/V017__multi_tenant.sql)
-（`users(org_id)`、`oauth2_clients(org_id)`、`organizations(slug)` 上有索引）。
+（V017 在 `users(org_id)`、`oauth2_clients(org_id)`、`organizations(slug)` 上
+建了索引；`oauth2_clients.org_id` 列及其索引已在 V036 删除，`users.org_id`
+计划 v2.0 删除）。
 存储层细节见[数据与持久化](../architecture/data-persistence.md)。

@@ -47,28 +47,22 @@ test.describe('User Detail Page', () => {
     await expect(page.locator('text=User updated successfully')).toBeVisible()
   })
 
-  // #59: clearing the Organization ID field sends org_id: null (the API's
-  // explicit clear), never '' — and the reloaded detail shows the cleared
-  // state (the mock applies PUTs).
-  test('clearing organization sends org_id null and reloads cleared', async ({ page }) => {
-    const orgInput = page.locator('input[type="number"]')
-    await orgInput.fill('5')
-    await page.click('button:has-text("Save Changes")')
-    await expect(page.locator('text=User updated successfully')).toBeVisible()
-    await expect(orgInput).toHaveValue('5')
+  // v1.5.0 org-anchor convergence (design 1.2/V7): users.org_id admin write
+  // surface removed - the Organization ID input is gone from the form (the
+  // read-only column stays server-side until the v2.0 physical DROP), so the
+  // page must never emit a PUT carrying org_id.
+  test('organization input is removed and org_id is never sent', async ({ page }) => {
+    await expect(page.locator('input[type="number"]')).toHaveCount(0)
 
-    const clearPut = page.waitForRequest(
+    const putPromise = page.waitForRequest(
       (r) =>
         r.method() === 'PUT' &&
         /\/api\/admin\/users\/\d+$/.test(new URL(r.url()).pathname)
     )
-    await orgInput.fill('')
+    await page.fill('input[type="email"]', 'newemail2@example.com')
     await page.click('button:has-text("Save Changes")')
-    const req = await clearPut
-    expect(JSON.parse(req.postData() || '{}').org_id).toBeNull()
-
-    // Reloaded state: org cleared (input empty again after refetch).
-    await expect(orgInput).toHaveValue('')
+    const req = await putPromise
+    expect(JSON.parse(req.postData() || '{}').org_id).toBeUndefined()
   })
 
   test('can save role changes', async ({ page }) => {

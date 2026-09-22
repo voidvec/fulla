@@ -121,3 +121,23 @@ at all. The change itself is the security fix: flagged accounts (bootstrap admin
 admin-created users) get no authorization codes until the password is changed.
 
 - POST /oauth2/login added `#/components/schemas/PasswordChangeRequiredResponse` to the response body `anyOf` list for the response status `200`
+
+---
+
+## 2026-09-22 · v1.5.0 users.org_id admin write-surface convergence (PR: fix/v150-users-orgid-converge)
+
+The admin user create/update request bodies drop the deprecated `org_id`
+property (tenant design §1.2, V7 disposition: three org anchors converge to
+the membership table + client_owners as the sole truth). Callers that still
+send the key now get an explicit 400 naming the field instead of a silent
+no-op — the API contract is honestly narrower, which is precisely the kind
+of change this gate exists to surface. Removing an OPTIONAL property is
+WARN-severity in oasdiff (the CI gate runs `-o ERR` and passes without
+these entries); they are kept here because this file is the audit trail of
+every consciously allowed breaking change. The column itself stays
+(read-only, null for new users) until the v2.0 physical DROP; the admin SPA
+input was removed and both SDKs are regenerated in the same PR. The only
+known consumers are this repo's own admin SPA and the regenerated SDKs.
+
+- in API POST /api/admin/users removed the request property `org_id`
+- in API PUT /api/admin/users/{userId} removed the request property `org_id`
