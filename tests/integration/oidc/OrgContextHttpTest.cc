@@ -812,14 +812,16 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentRoundTrip_BindingSurvives)
     const auto orgIdOpt = sqlInt("SELECT id FROM organizations WHERE slug = '" + slug + "'");
     REQUIRE(orgIdOpt.has_value());
     std::string clientId;
+    std::string clientSecret;
     {
-        // PUBLIC app: /oauth2/authorize validates the client with an empty
-        // secret, which fails for CONFIDENTIAL clients (pre-existing
-        // behavior, registered as a tracking issue) -- the browser
-        // authorize+consent flow only works for PUBLIC clients today.
+        // CONFIDENTIAL app (the #233 fix lets /oauth2/authorize accept
+        // confidential clients: the endpoint gates on existence + governance
+        // only, never a secret). The consent chain below therefore exercises
+        // the real third-party shape, Basic-authenticated at exchange and
+        // introspection time.
         Json::Value app;
         app["name"] = "QA OrgCtx6 App " + suffix;
-        app["client_type"] = "PUBLIC";
+        app["client_type"] = "CONFIDENTIAL";
         Json::Value uris(Json::arrayValue);
         uris.append(kRedirect);
         app["redirect_uris"] = uris;
@@ -838,8 +840,10 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentRoundTrip_BindingSurvives)
         Json::Value b;
         REQUIRE(parseJsonBody(r, b));
         clientId = b["client_id"].asString();
+        clientSecret = b["client_secret"].asString();
+        CHECK(!clientId.empty());
+        CHECK(!clientSecret.empty());
     }
-    const std::string clientSecret;  // PUBLIC: PKCE only
     {
         Json::Value toOrg;
         toOrg["org_slug"] = slug;
@@ -967,15 +971,20 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentRoundTrip_BindingSurvives)
         CHECK(!code1.empty());
     }
 
-    // Exchange -> userinfo + id_token org_ctx. (Introspection needs client
-    // credentials, which a PUBLIC client has none of; that leg is covered
-    // by the login-chain case against a CONFIDENTIAL app.)
+    // Exchange -> introspection + userinfo + id_token org_ctx (the
+    // CONFIDENTIAL app authenticates with client_secret_basic on the
+    // introspection leg too, restoring the assertion the old PUBLIC
+    // workaround had to drop).
     std::string access1;
     Json::Value tokens1;
     {
         tokens1 = exchangeCode(code1, verifier1, clientId, clientSecret, kRedirect);
         access1 = tokens1.get("access_token", "").asString();
         CHECK(!access1.empty());
+        Json::Value intro = introspectWith(access1, clientId, clientSecret);
+        CHECK(intro.get("active", false).asBool());
+        CHECK(intro.isMember("org_id"));
+        CHECK(intro.get("org_id", 0).asInt64() == *orgIdOpt);
         Json::Value ui = userInfoFor(access1);
         CHECK(ui.isMember("org_ctx"));
         CHECK(ui["org_ctx"].get("org_id", 0).asInt64() == *orgIdOpt);
