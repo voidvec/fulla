@@ -113,6 +113,20 @@ test.describe('Authorize flow resume (U-3)', () => {
     expect(url.searchParams.get('nonce')).toBe('n0nce77')
   })
 
+  // v1.5.0 M1b: the backend flattens the org context hint onto /login with
+  // the other authorize parameters; the resume rebuild must carry it too,
+  // or the browser chain silently degrades to a no-org issuance.
+  test('password login resumes authorize preserving the org_id hint', async ({ page }) => {
+    await page.goto(authorizeQuery + '&org_id=acme-corp')
+    await page.locator('input[autocomplete="username"]').fill('testuser')
+    await page.locator('input[autocomplete="current-password"]').fill('password123')
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL(/\/oauth2\/authorize\?/, { timeout: 10000 })
+    const url = new URL(page.url())
+    expect(url.searchParams.get('org_id')).toBe('acme-corp')
+    expect(url.searchParams.get('client_id')).toBe('rp-app')
+  })
+
   test('MFA login resumes authorize with all parameters', async ({ page }) => {
     await page.route('**/oauth2/login', async (route) => {
       await route.fulfill({

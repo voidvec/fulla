@@ -2,6 +2,7 @@
 #include <drogon/drogon.h>
 #include <drogon/DrClassMap.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
+#include <fulla/drogon/controllers/ConsentContextController.h>
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/controllers/DiscoveryController.h>
 #include <fulla/drogon/controllers/HealthController.h>
@@ -116,6 +117,9 @@ void registerAllControllers()
       std::make_shared<fulla::drogon::controllers::AuthorizationEndpointController>()
     );
     drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::ConsentContextController>()
+    );
+    drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::TokenEndpointController>()
     );
     drogon::app().registerController(
@@ -160,6 +164,8 @@ void wireControllerPluginDependencies()
       ->setPlugin(plugin);
     drogon::DrClassMap::getSingleInstance<
       fulla::drogon::controllers::AuthorizationEndpointController>()
+      ->setPlugin(plugin);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::ConsentContextController>()
       ->setPlugin(plugin);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::TokenEndpointController>()
       ->setPlugin(plugin);

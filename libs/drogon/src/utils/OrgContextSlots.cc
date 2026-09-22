@@ -155,4 +155,28 @@ std::optional<int32_t> OrgContextSlots::consume(
     return std::nullopt;
 }
 
+std::optional<int32_t> OrgContextSlots::peek(
+  const ::drogon::SessionPtr &session,
+  const std::string &state,
+  int64_t nowSeconds
+)
+{
+    if (!session || state.empty())
+    {
+        return std::nullopt;
+    }
+    std::lock_guard<std::mutex> lock(slotsMutex());
+    // Read-only: the lock still matters (parseSlots reads the session value
+    // a concurrent consume() may be mid-rewrite on).
+    const auto slots = parseSlots(session);
+    for (const auto &slot : slots)
+    {
+        if (slot.state == state && (nowSeconds - slot.ts) <= kTtlSeconds)
+        {
+            return slot.orgId;
+        }
+    }
+    return std::nullopt;
+}
+
 }  // namespace fulla::drogon::utils

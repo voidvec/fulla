@@ -152,6 +152,7 @@ const std::string &expectedFingerprint()
       "GET /health/live\n"
       "GET /health/ready\n"
       "GET /oauth2/authorize\n"
+      "GET /oauth2/consent/context\n"
       "GET /oauth2/end_session\n"
       "GET /oauth2/userinfo\n"
       "PATCH /api/me/applications/{clientId}\n"

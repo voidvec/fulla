@@ -10,7 +10,6 @@
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
 #include <fulla/drogon/utils/PortalUrl.h>
-#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 #include <algorithm>
@@ -833,50 +832,15 @@ void AuthorizationEndpointController::authorize(
                                 )
                               );
                           }
-                          // v1.4.0 open platform (M3): surface WHO offers the
-                          // app on the consent screen — an org app shows the
-                          // org name, a personal app the creator's display
-                          // name (username fallback), admin-seeded clients
-                          // show nothing (official first-party apps). Lookup
-                          // failure or memory-mode (no DB) degrades to no
-                          // owner_name, exactly the pre-v1.4.0 consent URL.
-                          auto sendConsentRedirect =
-                            [callback, location](const std::string &ownerName) {
-                                std::string finalLocation = location;
-                                if (!ownerName.empty())
-                                {
-                                    finalLocation +=
-                                      "&owner_name=" + ::drogon::utils::urlEncode(ownerName);
-                                }
-                                callback(::drogon::HttpResponse::newRedirectionResponse(
-                                  finalLocation));
-                            };
-                          try
-                          {
-                              // #222 (v1.5.0 M0): the owner->label fan-out
-                              // (org app -> org name, personal app ->
-                              // creator display_name with username fallback,
-                              // admin-seeded -> nothing) moved into the
-                              // shared ClientOwnersRepository. Mechanical
-                              // extraction, zero behavior change: any lookup
-                              // failure or memory-mode (no DB) still degrades
-                              // to no owner_name, exactly the pre-v1.4.0
-                              // consent URL.
-                              ::fulla::storage::postgres::ClientOwnersRepository
-                                ownersRepo(::drogon::app().getDbClient());
-                              ownersRepo.resolveOwnerLabel(
-                                clientId,
-                                [sendConsentRedirect](const std::string &label) {
-                                    sendConsentRedirect(label);
-                                }
-                              );
-                          }
-                          catch (...)
-                          {
-                              // No DB (memory mode) — consent proceeds without
-                              // owner attribution.
-                              sendConsentRedirect("");
-                          }
+                          // v1.5.0 M1b (#223 second half): owner attribution
+                          // no longer rides the redirect URL (a phisher could
+                          // forge owner_name=Your Bank on a fake consent
+                          // link). The consent screen pulls it from GET
+                          // /oauth2/consent/context, which derives the label
+                          // server-side from session state
+                          // (ClientOwnersRepository::resolveOwnerLabel);
+                          // the redirect is emitted immediately.
+                          callback(::drogon::HttpResponse::newRedirectionResponse(location));
                           return;
                       }
 

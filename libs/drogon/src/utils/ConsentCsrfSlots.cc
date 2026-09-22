@@ -139,4 +139,28 @@ bool ConsentCsrfSlots::consume(
     return false;
 }
 
+bool ConsentCsrfSlots::peek(
+  const ::drogon::SessionPtr &session,
+  const std::string &nonce,
+  int64_t nowSeconds
+)
+{
+    if (!session || nonce.empty())
+    {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(slotsMutex());
+    // Read-only: the lock still matters (parseSlots reads the session value
+    // a concurrent consume() may be mid-rewrite on).
+    const auto slots = parseSlots(session);
+    for (const auto &slot : slots)
+    {
+        if (slot.nonce == nonce && (nowSeconds - slot.ts) <= kTtlSeconds)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace fulla::drogon::utils

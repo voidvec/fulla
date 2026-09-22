@@ -1537,6 +1537,34 @@ std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 };
 }
+=== libs/drogon/include/fulla/drogon/controllers/ConsentContextController.h
+#pragma once
+#include <drogon/HttpController.h>
+#include <fulla/drogon/plugin/OAuth2Plugin.h>
+namespace fulla::drogon::controllers
+{
+class ConsentContextController
+: public ::drogon::HttpController<ConsentContextController, false>
+{
+public:
+static void initApiDocs();
+void setPlugin(::OAuth2Plugin *plugin)
+;
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(
+ConsentContextController::context, "/oauth2/consent/context", ::drogon::Get
+);
+METHOD_LIST_END
+void context(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+private:
+static void initApiDocsImpl();
+::OAuth2Plugin *plugin_ = nullptr;
+::OAuth2Plugin *resolvePlugin() const;
+};
+}
 === libs/drogon/include/fulla/drogon/controllers/DeviceAuthController.h
 #pragma once
 #include <drogon/HttpController.h>
@@ -3399,6 +3427,11 @@ const ::drogon::SessionPtr &session,
 const std::string &nonce,
 int64_t nowSeconds
 );
+static bool peek(
+const ::drogon::SessionPtr &session,
+const std::string &nonce,
+int64_t nowSeconds
+);
 };
 }
 === libs/drogon/include/fulla/drogon/utils/CryptoUtils.h
@@ -3514,6 +3547,11 @@ int32_t orgId,
 int64_t nowSeconds
 );
 static std::optional<int32_t> consume(
+const ::drogon::SessionPtr &session,
+const std::string &state,
+int64_t nowSeconds
+);
+static std::optional<int32_t> peek(
 const ::drogon::SessionPtr &session,
 const std::string &state,
 int64_t nowSeconds

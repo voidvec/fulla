@@ -76,6 +76,7 @@ static void flushGcovIfInstrumented()
 #include <fulla/drogon/controllers/TokenAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
+#include <fulla/drogon/controllers/ConsentContextController.h>
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/controllers/DiscoveryController.h>
 #include <fulla/drogon/authz/ResourceScopeRegistry.h>
@@ -375,6 +376,9 @@ int main(int argc, char **argv)
       std::make_shared<fulla::drogon::controllers::AuthorizationEndpointController>()
     );
     drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::ConsentContextController>()
+    );
+    drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::TokenEndpointController>()
     );
     drogon::app().registerController(
@@ -386,6 +390,7 @@ int main(int argc, char **argv)
     // OAuth2Server/main.cc already does, so OpenAPI docs are registered
     // before app().run() below.
     fulla::drogon::controllers::AuthorizationEndpointController::initApiDocs();
+    fulla::drogon::controllers::ConsentContextController::initApiDocs();
     fulla::drogon::controllers::TokenEndpointController::initApiDocs();
     fulla::drogon::controllers::DiscoveryController::initApiDocs();
     // #43: admin + user-self-service controllers declare per-route scopes.

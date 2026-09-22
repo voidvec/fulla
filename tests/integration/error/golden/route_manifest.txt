@@ -46,6 +46,7 @@ GET /health/ready
 GET /login
 GET /metrics
 GET /oauth2/authorize
+GET /oauth2/consent/context
 GET /oauth2/end_session
 GET /oauth2/userinfo
 OPTIONS /api/github/login
