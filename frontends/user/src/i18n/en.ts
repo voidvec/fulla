@@ -363,6 +363,18 @@ export default {
       accept: 'Accept',
       accepted: 'Invitation accepted — welcome aboard!',
       created: 'Organization created',
+      consents: 'Org authorizations',
+      consentsEmpty: 'No organization authorizations yet',
+      consentsGrantedBy: 'granted by user {id}',
+      consentsRevoke: 'Revoke',
+      consentsRevokeConfirm:
+        'Revoke this organization\'s authorization? Members will be asked for consent again on their next authorization. Already issued tokens are not affected.',
+      consentsRevoked: 'Organization authorization revoked',
+      consentsStart: 'Grant authorization',
+      consentsClientId: 'Client ID of an org application',
+      consentsRedirectUri: 'Registered redirect URI',
+      consentsLinkTitle: 'Authorization link (open while signed in as an org owner/admin)',
+      consentsGenerate: 'Generate link',
     },
   },
 }

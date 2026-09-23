@@ -3146,6 +3146,131 @@ paths:
       summary: Invite Organization Member
       tags:
       - Organization
+  /api/me/organizations/{slug}/consents:
+    get:
+      description: Active organization consents grouped by client, each scope
+        with its own granted_by / granted_at (org owner/admin; v1.5.0 M2).
+        Members of the org skip the personal consent prompt for scopes
+        covered by these rows.
+      operationId: get_api_me_organizations_{slug}_consents
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  consents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        client_id:
+                          type: string
+                        scopes:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              scope:
+                                type: string
+                              granted_by:
+                                type: integer
+                              granted_at:
+                                type: string
+                  total:
+                    type: integer
+          description: Active org consents grouped by client
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Owner or admin role required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: List Organization Consents
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/consents/{clientId}:
+    delete:
+      description: 'Revoke every active consent of the (org, client) pair (org
+        owner/admin). Revocation only affects FUTURE authorizations; issued
+        tokens are not revoked (O4). 404 when no active rows remain.'
+      operationId: delete_api_me_organizations_{slug}_consents_{clientId}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Client identifier whose org consents are revoked
+        in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  client_id:
+                    type: string
+                  revoked:
+                    type: integer
+                  message:
+                    type: string
+          description: Consents revoked (future authorizations only)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Owner or admin role required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found, or no active consents for this client
+      security:
+      - bearerAuth: []
+      summary: Revoke Organization Consents
+      tags:
+      - Organization
   /api/me/organizations/{slug}/invitations/{invitationId}:
     delete:
       description: Revoke a pending invitation (org owner/admin).

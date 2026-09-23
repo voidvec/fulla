@@ -1,6 +1,9 @@
 """Contains all the data models used in inputs/outputs"""
 
 from .delete_api_me_applications_client_id_response_200 import DeleteApiMeApplicationsClientIdResponse200
+from .delete_api_me_organizations_slug_consents_client_id_response_200 import (
+    DeleteApiMeOrganizationsSlugConsentsClientIdResponse200,
+)
 from .delete_api_me_organizations_slug_invitations_invitation_id_response_200 import (
     DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse200,
 )
@@ -38,6 +41,13 @@ from .get_api_me_organizations_response_200 import GetApiMeOrganizationsResponse
 from .get_api_me_organizations_response_200_organizations_item import GetApiMeOrganizationsResponse200OrganizationsItem
 from .get_api_me_organizations_response_200_organizations_item_role import (
     GetApiMeOrganizationsResponse200OrganizationsItemRole,
+)
+from .get_api_me_organizations_slug_consents_response_200 import GetApiMeOrganizationsSlugConsentsResponse200
+from .get_api_me_organizations_slug_consents_response_200_consents_item import (
+    GetApiMeOrganizationsSlugConsentsResponse200ConsentsItem,
+)
+from .get_api_me_organizations_slug_consents_response_200_consents_item_scopes_item import (
+    GetApiMeOrganizationsSlugConsentsResponse200ConsentsItemScopesItem,
 )
 from .get_api_me_organizations_slug_invitations_response_200 import GetApiMeOrganizationsSlugInvitationsResponse200
 from .get_api_me_organizations_slug_invitations_response_200_invitations_item import (
@@ -165,6 +175,7 @@ from .web_authn_registration_credential_response import WebAuthnRegistrationCred
 
 __all__ = (
     "DeleteApiMeApplicationsClientIdResponse200",
+    "DeleteApiMeOrganizationsSlugConsentsClientIdResponse200",
     "DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse200",
     "DeleteApiMeOrganizationsSlugMembersUserIdResponse200",
     "DeleteApiMeSocialLinksProviderProvider",
@@ -191,6 +202,9 @@ __all__ = (
     "GetApiMeOrganizationsResponse200",
     "GetApiMeOrganizationsResponse200OrganizationsItem",
     "GetApiMeOrganizationsResponse200OrganizationsItemRole",
+    "GetApiMeOrganizationsSlugConsentsResponse200",
+    "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItem",
+    "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItemScopesItem",
     "GetApiMeOrganizationsSlugInvitationsResponse200",
     "GetApiMeOrganizationsSlugInvitationsResponse200InvitationsItem",
     "GetApiMeOrganizationsSlugMembersResponse200",

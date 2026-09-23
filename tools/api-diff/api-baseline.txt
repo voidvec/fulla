@@ -493,6 +493,26 @@ double value
 ) = 0;
 };
 }
+=== libs/common/include/fulla/common/ports/IOrgConsentResolver.h
+#pragma once
+#include <cstdint>
+#include <functional>
+#include <string>
+namespace fulla::common::ports
+{
+class IOrgConsentResolver
+{
+public:
+using BoolCallback = std::function<void(bool)>;
+virtual ~IOrgConsentResolver() = default;
+virtual void hasOrgConsentForUser(
+int32_t internalUserId,
+const std::string &clientId,
+const std::string &scope,
+BoolCallback &&cb
+) = 0;
+};
+}
 === libs/common/include/fulla/common/ports/IOrgContextResolver.h
 #pragma once
 #include <cstdint>
@@ -933,6 +953,30 @@ int ttlSeconds_;
 };
 }
 #endif
+=== libs/drogon/include/fulla/drogon/adapters/StorageOrgConsentResolver.h
+#pragma once
+#include <fulla/common/ports/IOrgConsentResolver.h>
+#include <drogon/orm/DbClient.h>
+#include <memory>
+#include <string>
+namespace fulla::drogon::adapters
+{
+class StorageOrgConsentResolver : public fulla::common::ports::IOrgConsentResolver
+{
+public:
+explicit StorageOrgConsentResolver(::drogon::orm::DbClientPtr dbClient)
+: dbClient_(std::move(dbClient))
+;
+void hasOrgConsentForUser(
+int32_t internalUserId,
+const std::string &clientId,
+const std::string &scope,
+fulla::common::ports::IOrgConsentResolver::BoolCallback &&cb
+) override;
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
 === libs/drogon/include/fulla/drogon/adapters/StorageOrgContextResolver.h
 #pragma once
 #include <fulla/common/ports/IOrgContextResolver.h>
@@ -5385,6 +5429,7 @@ bool isValidCodeChallengeFormat(const std::string &codeChallenge);
 }
 === libs/oauth2/include/fulla/oauth2/protocol/AuthorizationService.h
 #pragma once
+#include <fulla/common/ports/IOrgConsentResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
 #include <fulla/oauth2/access/ScopeDecision.h>
@@ -5415,12 +5460,15 @@ std::function<void(fulla::oauth2::access::ScopeValidationSummary)> &&callback
 );
 void setAdminScopes(std::unordered_set<std::string> adminScopes)
 ;
+void setOrgConsentResolver(std::shared_ptr<fulla::common::ports::IOrgConsentResolver> resolver)
+;
 private:
 std::shared_ptr<fulla::oauth2::repository::IClientRepository> clients_;
 std::shared_ptr<fulla::oauth2::repository::IConsentRepository> consents_;
 std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
 std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
 std::unordered_set<std::string> adminScopes_;
+std::shared_ptr<fulla::common::ports::IOrgConsentResolver> orgConsentResolver_;
 };
 }
 === libs/oauth2/include/fulla/oauth2/protocol/ClientService.h
@@ -6033,6 +6081,24 @@ std::unordered_map<std::string, ::fulla::oauth2::model::OAuth2RefreshToken> refr
 int64_t getCurrentTimestamp() const;
 };
 }
+=== libs/storage-postgres/include/fulla/storage/postgres/AdvisoryLock.h
+#pragma once
+#include <drogon/orm/DbClient.h>
+#include <functional>
+#include <string>
+#include <vector>
+namespace fulla::storage::postgres
+{
+using AdvisoryLockContinuation =
+std::function<void(const ::drogon::orm::DbClientPtr &)>;
+using AdvisoryLockError = std::function<void(const std::string &)>;
+void withAdvisoryXactLock(
+const ::drogon::orm::DbClientPtr &db,
+const std::vector<std::string> &keys,
+AdvisoryLockContinuation &&onLocked,
+AdvisoryLockError &&onError
+);
+}
 === libs/storage-postgres/include/fulla/storage/postgres/ClientOwnersRepository.h
 #pragma once
 #include <drogon/orm/DbClient.h>
@@ -6083,6 +6149,45 @@ const std::string &subject,
 std::function<void(std::optional<int32_t>)> &&cb
 );
 void resolveOwnerLabel(const std::string &clientId, OwnerLabelCallback &&cb);
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/OrgConsentRepository.h
+#pragma once
+#include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/models/OrganizationConsents.h>
+#include <functional>
+#include <string>
+#include <vector>
+namespace fulla::storage::postgres
+{
+class OrgConsentRepository
+{
+public:
+using BoolCallback = std::function<void(bool)>;
+using RowsCallback = std::function<void(const std::vector<::drogon_model::fulla_db::OrganizationConsents> &)>;
+using CountCallback = std::function<void(size_t)>;
+explicit OrgConsentRepository(::drogon::orm::DbClientPtr dbClient);
+void hasActiveConsentForUser(
+int32_t internalUserId,
+const std::string &clientId,
+const std::string &scope,
+BoolCallback &&cb
+);
+void saveConsent(
+int32_t orgId,
+int32_t grantedBy,
+const std::string &clientId,
+const std::string &scope,
+BoolCallback &&cb
+);
+void revokeClientConsents(
+int32_t orgId,
+const std::string &clientId,
+CountCallback &&cb
+);
+void listActiveByOrg(int32_t orgId, RowsCallback &&cb);
 private:
 ::drogon::orm::DbClientPtr dbClient_;
 };

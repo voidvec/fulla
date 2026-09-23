@@ -128,3 +128,81 @@ test.describe('My Organizations', () => {
     await expect(page.getByText('Accept an invitation')).toBeVisible()
   })
 })
+
+// v1.5.0 M2: the org-consents panel (list / revoke / grant-link).
+test.describe('My Organizations — org authorizations', () => {
+  const MOCK_CONSENTS: any[] = [
+    {
+      client_id: 'app_orgmock1',
+      scopes: [
+        { scope: 'openid', granted_by: 1, granted_at: '2026-09-23 10:00:00' },
+        { scope: 'profile', granted_by: 1, granted_at: '2026-09-23 10:00:00' },
+      ],
+    },
+  ]
+
+  async function setupOrgConsentMocks(page: any) {
+    await setupOpenPlatformMocks(page)
+    MOCK_ORGS.length = 0
+    MOCK_ORGS.push({ id: 7, slug: 'qa-consent-org', name: 'QA Consent Org', role: 'owner' })
+    // NOTE: Playwright globs' single '*' does not cross '/', so the
+    // pattern needs '**' to also capture the /{clientId} DELETE.
+    await page.route('**/api/me/organizations/qa-consent-org/consents**', async (route: any) => {
+      const method = route.request().method()
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ slug: 'qa-consent-org', consents: [...MOCK_CONSENTS], total: MOCK_CONSENTS.length }),
+        })
+        return
+      }
+      if (method === 'DELETE') {
+        MOCK_CONSENTS.length = 0
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ slug: 'qa-consent-org', client_id: 'app_orgmock1', revoked: 2 }),
+        })
+        return
+      }
+      await route.fulfill({ status: 404, body: '{}' })
+    })
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await setupOrgConsentMocks(page)
+    await loginUser(page)
+    await page.click('nav a:has-text("My Organizations")')
+    await page.waitForURL('/organizations')
+    await page.click('button:has-text("Org authorizations")')
+    await expect(page.getByTestId('org-consents-panel')).toBeVisible()
+  })
+
+  test('lists grouped org consents (owner/admin only)', async ({ page }) => {
+    await expect(page.getByText('app_orgmock1')).toBeVisible()
+    await expect(page.getByText('openid, profile')).toBeVisible()
+  })
+
+  test('revoke removes the client group', async ({ page }) => {
+    page.on('dialog', (dialog: any) => dialog.accept())
+    await page.getByTestId('revoke-org-consent').click()
+    await expect(page.getByText('No organization authorizations yet')).toBeVisible()
+  })
+
+  test('grant-link generation carries org_id and prompt=consent', async ({ page }) => {
+    await page.getByPlaceholder('Client ID of an org application').fill('app_orgmock1')
+    await page
+      .getByPlaceholder('Registered redirect URI')
+      .fill('https://qa.example/callback')
+    await page.click('button:has-text("Generate link")')
+    const link = page.getByTestId('org-grant-link')
+    await expect(link).toBeVisible()
+    const text = await link.textContent()
+    expect(text).toContain('/oauth2/authorize?')
+    expect(text).toContain('org_id=qa-consent-org')
+    expect(text).toContain('prompt=consent')
+    expect(text).toContain('client_id=app_orgmock1')
+    expect(text).toContain(encodeURIComponent('https://qa.example/callback'))
+  })
+})

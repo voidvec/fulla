@@ -34,6 +34,70 @@ const lastInviteToken = ref('')
 const acceptToken = ref('')
 const accepting = ref(false)
 
+// v1.5.0 M2: organization consents panel (owner/admin).
+const expandedConsentsSlug = ref('')
+const consents = ref<any[]>([])
+const grantClientId = ref('')
+const grantRedirectUri = ref('')
+const grantLink = ref('')
+let consentsRequestSeq = 0
+
+function isManager(role: string | undefined): boolean {
+  return role === 'owner' || role === 'admin'
+}
+
+async function toggleConsents(slug: string) {
+  if (expandedConsentsSlug.value === slug) {
+    expandedConsentsSlug.value = ''
+    return
+  }
+  const seq = ++consentsRequestSeq
+  expandedConsentsSlug.value = slug
+  consents.value = []
+  grantClientId.value = ''
+  grantRedirectUri.value = ''
+  grantLink.value = ''
+  try {
+    const resp = await http.get(`/api/me/organizations/${slug}/consents`)
+    if (seq !== consentsRequestSeq || expandedConsentsSlug.value !== slug) return
+    consents.value = resp.data?.consents || []
+  } catch (e: unknown) {
+    if (seq === consentsRequestSeq) error.value = normalizeError(e)
+  }
+}
+
+async function revokeConsents(slug: string, clientId: string) {
+  if (!confirm(t('account.organizations.consentsRevokeConfirm'))) return
+  error.value = null
+  try {
+    await http.delete(`/api/me/organizations/${slug}/consents/${clientId}`)
+    success.value = t('account.organizations.consentsRevoked')
+    setTimeout(() => { success.value = '' }, 3000)
+    const resp = await http.get(`/api/me/organizations/${slug}/consents`)
+    consents.value = resp.data?.consents || []
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  }
+}
+
+// R-M2-3: the portal's entire "start an org authorization" surface is a
+// generated authorize link carrying the org hint -- the org manager opens
+// it in their own browser session; the consent screen then records the
+// grant on the organization's behalf (R-M2-2 server-side).
+function generateGrantLink(slug: string) {
+  if (!grantClientId.value || !grantRedirectUri.value) return
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: grantClientId.value,
+    redirect_uri: grantRedirectUri.value,
+    scope: 'openid profile org',
+    state: `orggrant-${Date.now()}`,
+    prompt: 'consent',
+    org_id: slug,
+  })
+  grantLink.value = `${window.location.origin}/oauth2/authorize?${params.toString()}`
+}
+
 async function fetchOrgs() {
   loading.value = true
   try {
@@ -273,13 +337,23 @@ onMounted(fetchOrgs)
               class="mt-1"
             >{{ org.role }}</AppBadge>
           </div>
-          <button
-            class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
-                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
-            @click="toggleMembers(org.slug)"
-          >
-            {{ $t('account.organizations.members') }}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+              @click="toggleMembers(org.slug)"
+            >
+              {{ $t('account.organizations.members') }}
+            </button>
+            <button
+              v-if="isManager(org.role)"
+              class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+              @click="toggleConsents(org.slug)"
+            >
+              {{ $t('account.organizations.consents') }}
+            </button>
+          </div>
         </div>
         <div
           v-if="expandedSlug === org.slug"
@@ -340,6 +414,70 @@ onMounted(fetchOrgs)
               {{ $t('common.dismiss') }}
             </button>
           </p>
+        </div>
+        <div
+          v-if="expandedConsentsSlug === org.slug"
+          class="mt-4 border-t border-neutral-100 pt-4 space-y-3"
+          data-testid="org-consents-panel"
+        >
+          <div
+            v-for="group in consents"
+            :key="group.client_id"
+            class="flex items-center justify-between gap-2"
+          >
+            <span class="text-neutral-900 break-all">
+              {{ group.client_id }}
+              <span class="text-xs text-neutral-500 ml-1">
+                {{ group.scopes?.map((s: any) => s.scope).join(', ') }}
+              </span>
+            </span>
+            <button
+              class="text-sm text-error-600 hover:text-error-800 whitespace-nowrap"
+              data-testid="revoke-org-consent"
+              @click="revokeConsents(org.slug, group.client_id)"
+            >
+              {{ $t('account.organizations.consentsRevoke') }}
+            </button>
+          </div>
+          <p
+            v-if="consents.length === 0"
+            class="text-sm text-neutral-500"
+          >
+            {{ $t('account.organizations.consentsEmpty') }}
+          </p>
+          <div class="pt-2 border-t border-neutral-100 space-y-2">
+            <p class="font-medium text-neutral-900">
+              {{ $t('account.organizations.consentsStart') }}
+            </p>
+            <input
+              v-model="grantClientId"
+              :placeholder="$t('account.organizations.consentsClientId')"
+              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            >
+            <input
+              v-model="grantRedirectUri"
+              :placeholder="$t('account.organizations.consentsRedirectUri')"
+              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            >
+            <button
+              class="px-4 py-2 text-sm text-white bg-brand-600 rounded-ctl hover:bg-brand-700 transition-colors
+                     disabled:opacity-50"
+              :disabled="!grantClientId || !grantRedirectUri"
+              @click="generateGrantLink(org.slug)"
+            >
+              {{ $t('account.organizations.consentsGenerate') }}
+            </button>
+            <p
+              v-if="grantLink"
+              class="text-xs text-neutral-500 break-all"
+              data-testid="org-grant-link"
+            >
+              {{ $t('account.organizations.consentsLinkTitle') }}:
+              {{ grantLink }}
+            </p>
+          </div>
         </div>
       </AppCard>
     </div>
