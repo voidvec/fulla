@@ -2,6 +2,7 @@
 #include <fulla/drogon/filters/OAuth2AuthFilter.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <fulla/drogon/adapters/DrogonLogger.h>
+#include <fulla/drogon/adapters/StorageOrgConsentResolver.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/adapters/StorageOrgContextResolver.h>
 #include <fulla/drogon/adapters/OpenSslCryptoProvider.h>
@@ -260,6 +261,29 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
         }
         tokenService_->setOrgContextResolver(
           std::make_shared<fulla::drogon::adapters::StorageOrgContextResolver>(orgCtxDb)
+        );
+    }
+    // v1.5.0 M2 (design §2.2, R-M2-1): the org-consent half of the
+    // authorize-time consent UNION. Same storage-type guard and the same
+    // single Postgres home as the M1 org-context resolver above -- org
+    // rows live in Postgres regardless of the oauth2 storage type, so a
+    // redis deployment resolves the union through here too; memory mode
+    // keeps the personal-consent-only decision (nullptr -> no org half).
+    {
+        ::drogon::orm::DbClientPtr orgConsentDb;
+        if (storageType_ != "memory")
+        {
+            try
+            {
+                orgConsentDb = ::drogon::app().getDbClient();
+            }
+            catch (...)
+            {
+                orgConsentDb = nullptr;
+            }
+        }
+        authorizationService_->setOrgConsentResolver(
+          std::make_shared<fulla::drogon::adapters::StorageOrgConsentResolver>(orgConsentDb)
         );
     }
     clientService_ = std::make_shared<fulla::oauth2::protocol::ClientService>(clientRepo_);

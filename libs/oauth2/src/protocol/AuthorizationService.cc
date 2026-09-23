@@ -169,18 +169,19 @@ void AuthorizationService::evaluateScopes(
                     fulla::oauth2::model::UserRef userRef{*internalUserId};
                     for (const auto &scope : requestedScopes)
                     {
-                        consents_->hasUserConsent(
-                          userRef,
-                          clientId,
-                          scope,
-                          [this,
-                           consentMap,
-                           remaining,
-                           scope,
-                           client,
-                           hasAdminRole,
-                           requestedScopes,
-                           callback](bool hasConsent) mutable {
+                        // v1.5.0 M2 (design §2.2, R-M2-1): the consent
+                        // tier is a UNION -- a scope is consented when a
+                        // personal row exists OR any org the user
+                        // currently belongs to holds an active org
+                        // consent row. The personal lookup stays first
+                        // and short-circuits (org memberships are the
+                        // minority case, and an unset resolver -- memory
+                        // mode / unit tests -- keeps the decision exactly
+                        // pre-M2). shared_ptr finisher: both hops funnel
+                        // into it exactly once each.
+                        auto finisher = std::make_shared<std::function<void(bool)>>(
+                          [this, consentMap, remaining, scope, client, hasAdminRole,
+                           requestedScopes, callback](bool hasConsent) mutable {
                               try
                               {
                                   (*consentMap)[scope] = hasConsent;
@@ -206,6 +207,27 @@ void AuthorizationService::evaluateScopes(
                               {
                                   callback(allInvalid(requestedScopes, "internal_error"));
                               }
+                          }
+                        );
+                        consents_->hasUserConsent(
+                          userRef,
+                          clientId,
+                          scope,
+                          [orgResolver = orgConsentResolver_, internalUserId, clientId, scope,
+                           finisher](bool hasConsent) mutable {
+                              if (hasConsent || !orgResolver)
+                              {
+                                  (*finisher)(hasConsent);
+                                  return;
+                              }
+                              orgResolver->hasOrgConsentForUser(
+                                *internalUserId,
+                                clientId,
+                                scope,
+                                [finisher](bool orgConsent) mutable {
+                                    (*finisher)(orgConsent);
+                                }
+                              );
                           }
                         );
                     }

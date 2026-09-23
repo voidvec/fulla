@@ -7,6 +7,9 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/EmailService.h>
+#include <fulla/storage/postgres/AdvisoryLock.h>
+#include <fulla/storage/postgres/OrgConsentRepository.h>
+#include <fulla/storage/postgres/models/OrganizationConsents.h>
 #include <fulla/storage/postgres/models/OrganizationInvitations.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <fulla/storage/postgres/models/Organizations.h>
@@ -37,6 +40,8 @@ using UserModel = ::drogon_model::fulla_db::Users;
 using OrgModel = ::drogon_model::fulla_db::Organizations;
 using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
 using InviteModel = ::drogon_model::fulla_db::OrganizationInvitations;
+using OrgConsentModel = ::drogon_model::fulla_db::OrganizationConsents;
+using ::fulla::storage::postgres::withAdvisoryXactLock;
 
 constexpr int64_t kInviteTtlSeconds = 72 * 3600;
 
@@ -213,7 +218,7 @@ bool isManagerRole(const std::string &role)
 void proceedWithInvitationInsert(
   const ::drogon::HttpRequestPtr &req,
   const organization::OrgMemberService::ResponseCallback &cb,
-  const ::drogon::orm::DbClientPtr &db,
+  const std::shared_ptr<::drogon::orm::Transaction> &db,
   const ::drogon_model::fulla_db::Organizations &org,
   const std::string &email,
   const std::string &role,
@@ -303,82 +308,112 @@ void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCa
       [req, cb, db, cfg, slug, name, logoUri, primaryColor](bool found, const ResolvedUser &caller) {
           if (!found)
               return;
-          // Quota: orgs where the caller is owner.
-          try
-          {
-              Mapper<MemberModel>(db).findBy(
-                Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, caller.id) &&
-                  Criteria(MemberModel::Cols::_role, CompareOperator::EQ, "owner"),
-                [req, cb, db, cfg, slug, name, logoUri, primaryColor, caller](
-                  const std::vector<MemberModel> &owned) {
-                    if (static_cast<int>(owned.size()) >= cfg.maxOrgsPerUser)
-                    {
-                        respondError(
-                          req, cb, "VALIDATION_RESOURCE_CONFLICT",
-                          "create org: organization quota exceeded (" +
-                            std::to_string(cfg.maxOrgsPerUser) + ")"
-                        );
-                        return;
+          // #219 (R-M2-5): the quota count and BOTH inserts run inside one
+          // transaction holding the per-user advisory lock
+          // (quota:user:<id>) -- concurrent createOrg calls serialize, so
+          // max_orgs_per_user cannot be exceeded at the boundary. Side
+          // effect: org row + owner membership are now atomic (previously
+          // two independent statements).
+          withAdvisoryXactLock(
+            db,
+            {"quota:user:" + std::to_string(caller.id)},
+            [req, cb, cfg, slug, name, logoUri, primaryColor, caller](
+              const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+              // Quota: orgs where the caller is owner.
+              try
+              {
+                  Mapper<MemberModel>(txn).findBy(
+                    Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, caller.id) &&
+                      Criteria(MemberModel::Cols::_role, CompareOperator::EQ, "owner"),
+                    [req, cb, txn, cfg, slug, name, logoUri, primaryColor, caller](
+                      const std::vector<MemberModel> &owned) {
+                      if (static_cast<int>(owned.size()) >= cfg.maxOrgsPerUser)
+                      {
+                          respondError(
+                            req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                            "create org: organization quota exceeded (" +
+                              std::to_string(cfg.maxOrgsPerUser) + ")"
+                          );
+                          return;
+                      }
+                      OrgModel row;
+                      row.setSlug(slug);
+                      row.setName(name);
+                      row.setLogoUri(logoUri);
+                      row.setPrimaryColor(primaryColor);
+                      try
+                      {
+                          Mapper<OrgModel>(txn).insert(
+                            row,
+                            [req, cb, txn, slug, caller](const OrgModel &inserted) {
+                                MemberModel member;
+                                member.setOrganizationId(inserted.getValueOfId());
+                                member.setUserId(caller.id);
+                                member.setRole("owner");
+                                try
+                                {
+                                    Mapper<MemberModel>(txn).insert(
+                                      member,
+                                      [req, cb, txn, slug](const MemberModel &) {
+                                          // #219: the 201 fires from the COMMIT
+                                          // callback (an inline response races
+                                          // the commit; an immediate follow-up
+                                          // read could miss the new org).
+                                          txn->setCommitCallback(
+                                            [req, cb, slug](bool committed) {
+                                                if (!committed)
+                                                {
+                                                    respondError(
+                                                      req, cb, "DB_QUERY_ERROR",
+                                                      "create org: commit failed");
+                                                    return;
+                                                }
+                                                audit(req, "organization_created", slug);
+                                                Json::Value json;
+                                                json["slug"] = slug;
+                                                json["role"] = "owner";
+                                                json["message"] = "Organization created";
+                                                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                                                resp->setStatusCode(::drogon::k201Created);
+                                                (*cb)(resp);
+                                            });
+                                      },
+                                      [req, cb](const DrogonDbException &e) {
+                                          respondError(req, cb, "DB_QUERY_ERROR",
+                                            std::string("create org: owner membership insert failed: ") + e.base().what());
+                                      }
+                                    );
+                                }
+                                catch (...)
+                                {
+                                    respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+                                }
+                            },
+                            [req, cb](const DrogonDbException &e) {
+                                respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                  std::string("create org: slug already exists or DB error: ") + e.base().what());
+                            }
+                          );
+                      }
+                      catch (...)
+                      {
+                          respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+                      }
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(req, cb, "DB_QUERY_ERROR", std::string("quota check failed: ") + e.base().what());
                     }
-                    OrgModel row;
-                    row.setSlug(slug);
-                    row.setName(name);
-                    row.setLogoUri(logoUri);
-                    row.setPrimaryColor(primaryColor);
-                    try
-                    {
-                        Mapper<OrgModel>(db).insert(
-                          row,
-                          [req, cb, db, slug, caller](const OrgModel &inserted) {
-                              MemberModel member;
-                              member.setOrganizationId(inserted.getValueOfId());
-                              member.setUserId(caller.id);
-                              member.setRole("owner");
-                              try
-                              {
-                                  Mapper<MemberModel>(db).insert(
-                                    member,
-                                    [req, cb, slug](const MemberModel &) {
-                                        audit(req, "organization_created", slug);
-                                        Json::Value json;
-                                        json["slug"] = slug;
-                                        json["role"] = "owner";
-                                        json["message"] = "Organization created";
-                                        auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
-                                        resp->setStatusCode(::drogon::k201Created);
-                                        (*cb)(resp);
-                                    },
-                                    [req, cb](const DrogonDbException &e) {
-                                        respondError(req, cb, "DB_QUERY_ERROR",
-                                          std::string("create org: owner membership insert failed: ") + e.base().what());
-                                    }
-                                  );
-                              }
-                              catch (...)
-                              {
-                                  respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
-                              }
-                          },
-                          [req, cb](const DrogonDbException &e) {
-                              respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
-                                std::string("create org: slug already exists or DB error: ") + e.base().what());
-                          }
-                        );
-                    }
-                    catch (...)
-                    {
-                        respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
-                    }
-                },
-                [req, cb](const DrogonDbException &e) {
-                    respondError(req, cb, "DB_QUERY_ERROR", std::string("quota check failed: ") + e.base().what());
-                }
-              );
-          }
-          catch (...)
-          {
-              respondError(req, cb, "DB_QUERY_ERROR", "quota check: Mapper construction failed");
-          }
+                  );
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR", "quota check: Mapper construction failed");
+              }
+            },
+            [req, cb](const std::string &err) {
+                respondError(req, cb, "DB_QUERY_ERROR",
+                  "create org: quota serialization failed: " + err);
+            });
       });
 }
 
@@ -717,38 +752,50 @@ void OrgMemberService::createInvitation(
                           return;
                       }
                       // Review M6: bound the mail relay — at most N pending
-                      // invitations per org (config, default 20). count()
-                      // yields the single gate value; the insert continues
-                      // from its success callback.
+                      // invitations per org (config, default 20). #219
+                      // (R-M2-5): the count gate and the insert run inside
+                      // one transaction holding the per-org advisory lock
+                      // (quota:org:<id>), so concurrent invites cannot push
+                      // past the cap at the boundary.
                       const int pendingCap =
                         openplatform::OpenPlatformConfig::load().maxPendingInvitationsPerOrg;
-                      try
-                      {
-                          Mapper<InviteModel>(db).count(
-                            Criteria(InviteModel::Cols::_organization_id,
-                                     CompareOperator::EQ, org.getValueOfId()) &&
-                              Criteria(InviteModel::Cols::_accepted_at,
-                                       CompareOperator::IsNull),
-                            [req, cb, db, org, email, role, caller, pendingCap](
-                              const size_t pending) {
-                                if (static_cast<int>(pending) >= pendingCap)
-                                {
-                                    respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
-                                      "invite: too many pending invitations for this organization");
-                                    return;
-                                }
-                                proceedWithInvitationInsert(req, cb, db, org, email, role, caller);
-                            },
-                            [req, cb](const DrogonDbException &e) {
-                                respondError(req, cb, "DB_QUERY_ERROR",
-                                  std::string("invite: pending count failed: ") + e.base().what());
-                            });
-                      }
-                      catch (...)
-                      {
-                          respondError(req, cb, "DB_QUERY_ERROR",
-                            "invite: count Mapper construction failed");
-                      }
+                      withAdvisoryXactLock(
+                        db,
+                        {"quota:org:" + std::to_string(org.getValueOfId())},
+                        [req, cb, org, email, role, caller, pendingCap](
+                          const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+                          try
+                          {
+                              Mapper<InviteModel>(txn).count(
+                                Criteria(InviteModel::Cols::_organization_id,
+                                         CompareOperator::EQ, org.getValueOfId()) &&
+                                  Criteria(InviteModel::Cols::_accepted_at,
+                                           CompareOperator::IsNull),
+                                [req, cb, txn, org, email, role, caller, pendingCap](
+                                  const size_t pending) {
+                                    if (static_cast<int>(pending) >= pendingCap)
+                                    {
+                                        respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                          "invite: too many pending invitations for this organization");
+                                        return;
+                                    }
+                                    proceedWithInvitationInsert(req, cb, txn, org, email, role, caller);
+                                },
+                                [req, cb](const DrogonDbException &e) {
+                                    respondError(req, cb, "DB_QUERY_ERROR",
+                                      std::string("invite: pending count failed: ") + e.base().what());
+                                });
+                          }
+                          catch (...)
+                          {
+                              respondError(req, cb, "DB_QUERY_ERROR",
+                                "invite: count Mapper construction failed");
+                          }
+                        },
+                        [req, cb](const std::string &err) {
+                            respondError(req, cb, "DB_QUERY_ERROR",
+                              "invite: cap serialization failed: " + err);
+                        });
                   });
             });
       });
@@ -756,12 +803,13 @@ void OrgMemberService::createInvitation(
 
 // createInvitation tail: the actual insert, split out so the pending-cap
 // count() callback can continue into it (re-opened anonymous namespace to
-// match the forward declaration above).
+// match the forward declaration above). Runs inside the #219 advisory
+// transaction; the 201 + email delivery fire from the COMMIT callback.
 namespace {
 void proceedWithInvitationInsert(
   const ::drogon::HttpRequestPtr &req,
   const organization::OrgMemberService::ResponseCallback &cb,
-  const ::drogon::orm::DbClientPtr &db,
+  const std::shared_ptr<::drogon::orm::Transaction> &db,
   const ::drogon_model::fulla_db::Organizations &org,
   const std::string &email,
   const std::string &role,
@@ -779,44 +827,57 @@ void proceedWithInvitationInsert(
                       {
                           Mapper<InviteModel>(db).insert(
                             invite,
-                            [req, cb, org](const InviteModel &inserted) {
-                                audit(req, "org_invitation_created", org.getValueOfSlug());
-                                // Fire-and-forget delivery (same pattern as
-                                // EmailVerificationService): with SMTP
-                                // configured the invitee gets the token by
-                                // mail; in Console mode (no SMTP) it just
-                                // logs — the admin UI response still carries
-                                // the token for out-of-band delivery.
-                                const std::string mailBody =
-                                  "You have been invited to join the organization \"" +
-                                  org.getValueOfName() +
-                                  "\" on Fulla.\n\n"
-                                  "Invitation token (valid for 72 hours, single use):\n  " +
-                                  inserted.getValueOfToken() +
-                                  "\n\n"
-                                  "Sign in to the portal, open My Organizations, and paste "
-                                  "the token under \"Accept an invitation\". If you did not "
-                                  "expect this invitation you can ignore this email.";
-                                ::fulla::drogon::utils::getEmailService().sendEmail(
-                                  inserted.getValueOfEmail(),
-                                  "Fulla Organization Invitation",
-                                  mailBody,
-                                  [](bool ok) {
-                                      if (!ok)
+                            [req, cb, db, org](const InviteModel &inserted) {
+                                // #219: the 201 + email fire from the COMMIT
+                                // callback (an inline response races the
+                                // commit; the email must reference a durable
+                                // invitation row).
+                                db->setCommitCallback(
+                                  [req, cb, org, inserted](bool committed) {
+                                      if (!committed)
                                       {
-                                          LOG_WARN << "org invitation email delivery failed";
+                                          respondError(req, cb, "DB_QUERY_ERROR",
+                                            "invite: commit failed");
+                                          return;
                                       }
+                                      audit(req, "org_invitation_created", org.getValueOfSlug());
+                                      // Fire-and-forget delivery (same pattern as
+                                      // EmailVerificationService): with SMTP
+                                      // configured the invitee gets the token by
+                                      // mail; in Console mode (no SMTP) it just
+                                      // logs — the admin UI response still carries
+                                      // the token for out-of-band delivery.
+                                      const std::string mailBody =
+                                        "You have been invited to join the organization \"" +
+                                        org.getValueOfName() +
+                                        "\" on Fulla.\n\n"
+                                        "Invitation token (valid for 72 hours, single use):\n  " +
+                                        inserted.getValueOfToken() +
+                                        "\n\n"
+                                        "Sign in to the portal, open My Organizations, and paste "
+                                        "the token under \"Accept an invitation\". If you did not "
+                                        "expect this invitation you can ignore this email.";
+                                      ::fulla::drogon::utils::getEmailService().sendEmail(
+                                        inserted.getValueOfEmail(),
+                                        "Fulla Organization Invitation",
+                                        mailBody,
+                                        [](bool ok) {
+                                            if (!ok)
+                                            {
+                                                LOG_WARN << "org invitation email delivery failed";
+                                            }
+                                        });
+                                      Json::Value json;
+                                      json["id"] = inserted.getValueOfId();
+                                      json["email"] = inserted.getValueOfEmail();
+                                      json["role"] = inserted.getValueOfRole();
+                                      json["token"] = inserted.getValueOfToken();
+                                      json["expires_at"] = inserted.getValueOfExpiresAt().toDbStringLocal();
+                                      json["message"] = "Invitation created; deliver the token out-of-band";
+                                      auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                                      resp->setStatusCode(::drogon::k201Created);
+                                      (*cb)(resp);
                                   });
-                                Json::Value json;
-                                json["id"] = inserted.getValueOfId();
-                                json["email"] = inserted.getValueOfEmail();
-                                json["role"] = inserted.getValueOfRole();
-                                json["token"] = inserted.getValueOfToken();
-                                json["expires_at"] = inserted.getValueOfExpiresAt().toDbStringLocal();
-                                json["message"] = "Invitation created; deliver the token out-of-band";
-                                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
-                                resp->setStatusCode(::drogon::k201Created);
-                                (*cb)(resp);
                             },
                             [req, cb](const DrogonDbException &e) {
                                 respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
@@ -967,6 +1028,135 @@ void OrgMemberService::revokeInvitation(
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// GET /api/me/organizations/{slug}/consents — v1.5.0 M2 (R-M2-4): active
+// org consents grouped by client, each scope with its own granted_by /
+// granted_at (rows of one client may carry different grantors after a
+// partial re-grant). Owner/admin only. Queries live in the shared
+// OrgConsentRepository (storage-postgres; arch-guard R4 keeps this
+// service Mapper-free here).
+// ---------------------------------------------------------------------------
+void OrgMemberService::listOrgConsents(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org](bool isMember, const std::string &memberRole) {
+                      if (!isManagerRole(memberRole) || !isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRepository>(db);
+                      repo->listActiveByOrg(
+                        org.getValueOfId(),
+                        [repo, req, cb, org](const std::vector<OrgConsentModel> &rows) {
+                            // Group by client preserving first-seen order.
+                            std::map<std::string, Json::Value> byClient;
+                            for (const auto &r : rows)
+                            {
+                                const std::string cid = r.getValueOfClientId();
+                                if (byClient.find(cid) == byClient.end())
+                                {
+                                    Json::Value group;
+                                    group["client_id"] = cid;
+                                    group["scopes"] = Json::Value(Json::arrayValue);
+                                    byClient[cid] = group;
+                                }
+                                Json::Value sc;
+                                sc["scope"] = r.getValueOfScopeName();
+                                sc["granted_by"] = r.getValueOfGrantedBy();
+                                sc["granted_at"] = r.getValueOfGrantedAt().toDbStringLocal();
+                                byClient[cid]["scopes"].append(sc);
+                            }
+                            Json::Value json;
+                            Json::Value arr(Json::arrayValue);
+                            for (const auto &kv : byClient)
+                                arr.append(kv.second);
+                            json["slug"] = org.getValueOfSlug();
+                            json["consents"] = arr;
+                            json["total"] = static_cast<int>(arr.size());
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        }
+                      );
+                  });
+            });
+      });
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/me/organizations/{slug}/consents/{clientId} — R-M2-4: revoke
+// the whole (org, client) pair (every active row, revoked_at = now; never
+// a physical delete -- history lives on for the audit trail). O4: only
+// future authorizations are affected; issued tokens are NOT revoked.
+// 404 when no active rows remain (the removeMember count==0 convention).
+// ---------------------------------------------------------------------------
+void OrgMemberService::revokeOrgConsents(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug,
+  const std::string &clientId
+)
+{
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, clientId](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, clientId](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, clientId](
+                    bool isMember, const std::string &memberRole) {
+                      if (!isManagerRole(memberRole) || !isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRepository>(db);
+                      repo->revokeClientConsents(
+                        org.getValueOfId(),
+                        clientId,
+                        [repo, req, cb, org, clientId](const size_t revoked) {
+                            if (revoked == 0)
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                  "no active organization consents for this client");
+                                return;
+                            }
+                            audit(req, "org_consent_revoked",
+                              org.getValueOfSlug() + ":" + clientId);
+                            Json::Value json;
+                            json["slug"] = org.getValueOfSlug();
+                            json["client_id"] = clientId;
+                            json["revoked"] = static_cast<Json::Int64>(revoked);
+                            json["message"] =
+                              "Organization consents revoked (future authorizations only)";
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        }
+                      );
+                  });
+            });
+      });
+}
+
 // POST /api/me/organizations/invitations/accept  {token}
 // Requires the caller's email to equal the invite email (normalized). Single
 // use; expired invites are rejected. Adding the member and marking the

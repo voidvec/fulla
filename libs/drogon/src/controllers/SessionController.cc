@@ -6,6 +6,8 @@
 #include <fulla/drogon/utils/OrgContextSlots.h>
 #include <fulla/drogon/utils/PasswordHasher.h>
 #include <fulla/drogon/utils/PortalUrl.h>
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
+#include <fulla/storage/postgres/OrgConsentRepository.h>
 #include <fulla/storage/postgres/models/Users.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 
@@ -1487,10 +1489,71 @@ void SessionController::consent(
               std::function<void(const ::drogon::HttpResponsePtr &)>>(
               std::move(callback)
             );
-          auto issueConsentCode = [plugin, req, clientId, userId, scope, redirectUri,
-                                   state, codeChallenge, codeChallengeMethod, nonce,
-                                   internalUserId, sessAuthTime, sessAmr,
-                                   sharedCb](std::optional<int32_t> orgId) {
+          // The code-minting tail shared by every save path (personal,
+          // org, empty-scope). F-020: code + state are urlEncoded on the
+          // redirect (the empty-scope leg previously skipped the
+          // encoding -- unified here, strictly toward the documented
+          // correct form).
+          auto mintCode =
+            [plugin, clientId, userId, scope, redirectUri, state, codeChallenge,
+             codeChallengeMethod, nonce, req, sharedCb, sessAuthTime, sessAmr](
+              std::optional<int32_t> orgId) {
+              plugin->generateAuthorizationCode(
+                clientId,
+                userId,
+                scope,
+                redirectUri,
+                codeChallenge,
+                codeChallengeMethod,
+                nonce,
+                [clientId, redirectUri, state, req, sharedCb](
+                  bool success, std::string code, std::string error
+                ) mutable {
+                    if (!success)
+                    {
+                        LOG_ERROR << "consent: failed to generate authorization code: "
+                                  << error;
+                        // F-007: server_error redirects back to the client
+                        // per RFC 6749 §4.1.2.1.
+                        sendOAuthErrorRedirect(
+                          *sharedCb,
+                          redirectUri,
+                          "server_error",
+                          "Failed to generate authorization code",
+                          state
+                        );
+                        return;
+                    }
+
+                    // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode code + state.
+                    std::string location =
+                      redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                    if (!state.empty())
+                        location += "&state=" + ::drogon::utils::urlEncode(state);
+                    auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
+                    if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
+                        m->incrementCounter(
+                          "oauth2_requests_total",
+                          fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
+                          static_cast<double>(302)
+                        );
+                    (*sharedCb)(resp);
+                },
+                sessAuthTime,
+                sessAmr,
+                orgId
+              );
+            };
+          // writeOrgConsent (R-M2-2, v1.5.0 M2): an org-bound approve
+          // records organization_consents rows instead of personal ones
+          // when the session user is the org's owner/admin (they speak
+          // for the org; the M2 union already covers them personally).
+          // A regular member's org-bound approve keeps writing personal
+          // rows (a member cannot grant on the org's behalf).
+          auto issueConsentCode = [plugin, req, clientId, scope,
+                                   internalUserId, sharedCb,
+                                   mintCode](std::optional<int32_t> orgId,
+                                             bool writeOrgConsent) {
           std::vector<std::string> scopes;
           std::stringstream ss(scope);
           std::string scopeItem;
@@ -1506,6 +1569,69 @@ void SessionController::consent(
           {
               std::string firstScope = scopes[0];
               int32_t uid = *internalUserId;
+              if (orgId.has_value() && writeOrgConsent)
+              {
+                  // R-M2-2 org path: one row per scope in
+                  // organization_consents (V036), granted_by = the session
+                  // user, each upsert serialized per (org, client) under
+                  // the #219 advisory lock. The org-bound flow only gets
+                  // here with a live DB (OrgContextGate validated against
+                  // it at authorize AND at this POST), so a missing client
+                  // now is a genuine mid-flight failure -> fail visibly.
+                  ::drogon::orm::DbClientPtr orgConsentDb;
+                  auto *orgPlugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                  if (orgPlugin && orgPlugin->getStorageType() != "memory")
+                  {
+                      try
+                      {
+                          orgConsentDb = ::drogon::app().getDbClient();
+                      }
+                      catch (...)
+                      {
+                          orgConsentDb = nullptr;
+                      }
+                  }
+                  if (!orgConsentDb)
+                  {
+                      respondError(
+                        req,
+                        *sharedCb,
+                        "INTERNAL_ERROR",
+                        "consent: organization consent storage unavailable"
+                      );
+                      return;
+                  }
+                  auto repo = std::make_shared<
+                    ::fulla::storage::postgres::OrgConsentRepository>(orgConsentDb);
+                  repo->saveConsent(
+                    *orgId,
+                    uid,
+                    clientId,
+                    firstScope,
+                    [repo, orgId, uid, clientId, scopes, firstScope, req, sharedCb, mintCode](
+                      bool success) {
+                        if (!success)
+                        {
+                            respondError(
+                              req,
+                              *sharedCb,
+                              "INTERNAL_ERROR",
+                              "consent: failed to save organization consent for scope: " +
+                                firstScope
+                            );
+                            return;
+                        }
+
+                        for (size_t i = 1; i < scopes.size(); ++i)
+                        {
+                            repo->saveConsent(*orgId, uid, clientId, scopes[i], [](bool) {});
+                        }
+
+                        mintCode(orgId);
+                    }
+                  );
+                  return;
+              }
               plugin->saveUserConsent(
                 uid,
                 clientId,
@@ -1513,20 +1639,12 @@ void SessionController::consent(
                 [plugin,
                  uid,
                  clientId,
-                 userId,
-                 scope,
-                 redirectUri,
-                 state,
-                 codeChallenge,
-                 codeChallengeMethod,
-                 nonce,
-                 firstScope,
                  scopes,
+                 firstScope,
                  req,
-                 sessAuthTime,
-                 sessAmr,
+                 sharedCb,
                  orgId,
-                 sharedCb](bool success) {
+                 mintCode](bool success) {
                     if (!success)
                     {
                         respondError(
@@ -1543,98 +1661,13 @@ void SessionController::consent(
                         plugin->saveUserConsent(uid, clientId, scopes[i], [](bool) {});
                     }
 
-                    plugin->generateAuthorizationCode(
-                      clientId,
-                      userId,
-                      scope,
-                      redirectUri,
-                      codeChallenge,
-                      codeChallengeMethod,
-                      nonce,
-                      [clientId, redirectUri, state, req, sharedCb](
-                        bool success, std::string code, std::string error
-                      ) mutable {
-                          if (!success)
-                          {
-                              LOG_ERROR << "consent: failed to generate authorization code: "
-                                        << error;
-                              // F-007: server_error redirects back to the
-                              // client per RFC 6749 §4.1.2.1.
-                              sendOAuthErrorRedirect(
-                                *sharedCb,
-                                redirectUri,
-                                "server_error",
-                                "Failed to generate authorization code",
-                                state
-                              );
-                              return;
-                          }
-
-                          // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode code + state.
-                          std::string location =
-                            redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
-                          if (!state.empty())
-                              location += "&state=" + ::drogon::utils::urlEncode(state);
-                          auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
-                          if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                              m->incrementCounter(
-                                "oauth2_requests_total",
-                                fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                                static_cast<double>(302)
-                              );
-                          (*sharedCb)(resp);
-                      },
-                      sessAuthTime,
-                      sessAmr,
-                      orgId
-                    );
+                    mintCode(orgId);
                 }
               );
           }
           else
           {
-              plugin->generateAuthorizationCode(
-                clientId,
-                userId,
-                scope,
-                redirectUri,
-                codeChallenge,
-                codeChallengeMethod,
-                nonce,
-                [clientId, redirectUri, state, req, sharedCb](
-                  bool success, std::string code, std::string error
-                ) mutable {
-                    if (!success)
-                    {
-                        LOG_ERROR << "consent: failed to generate authorization code: " << error;
-                        // F-007: server_error redirects back to the client
-                        // per RFC 6749 §4.1.2.1.
-                        sendOAuthErrorRedirect(
-                          *sharedCb,
-                          redirectUri,
-                          "server_error",
-                          "Failed to generate authorization code",
-                          state
-                        );
-                        return;
-                    }
-
-                    std::string location = redirectUri + "?code=" + code;
-                    if (!state.empty())
-                        location += "&state=" + state;
-                    auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
-                    if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                        m->incrementCounter(
-                          "oauth2_requests_total",
-                          fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                          static_cast<double>(302)
-                        );
-                    (*sharedCb)(resp);
-                },
-                sessAuthTime,
-                sessAmr,
-                orgId
-              );
+              mintCode(std::nullopt);
           }
           };  // issueConsentCode
 
@@ -1642,7 +1675,7 @@ void SessionController::consent(
           // gate (uniform rejections in this endpoint's error style).
           if (!orgStashed.has_value())
           {
-              issueConsentCode(std::nullopt);
+              issueConsentCode(std::nullopt, false);
               return;
           }
           ::fulla::drogon::authz::OrgContextGate::validate(
@@ -1650,14 +1683,83 @@ void SessionController::consent(
             clientId,
             *internalUserId,
             sessAmr,
-            [req, state,
+            [req, state, internalUserId,
              issueConsentCode = std::move(issueConsentCode),
              sharedCb](
               const ::fulla::drogon::authz::OrgContextDecision &d) mutable {
                 using Kind = ::fulla::drogon::authz::OrgContextDecision::Kind;
                 if (d.kind == Kind::Proceed)
                 {
-                    issueConsentCode(d.orgId);
+                    // R-M2-2 write gate: a live owner/admin of the bound
+                    // org grants on the ORG's behalf (org consent rows);
+                    // any other member grants personally. The gate above
+                    // just re-confirmed membership; this second lookup
+                    // reads the ROLE for the write decision. A NoRow here
+                    // means the membership vanished between the gate and
+                    // this read -- render the SAME uniform rejection the
+                    // gate itself uses (never a wrong-mode write); a real
+                    // DB failure fails the request visibly.
+                    ::drogon::orm::DbClientPtr roleDb;
+                    auto *rolePlugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                    if (rolePlugin && rolePlugin->getStorageType() != "memory")
+                    {
+                        try
+                        {
+                            roleDb = ::drogon::app().getDbClient();
+                        }
+                        catch (...)
+                        {
+                            roleDb = nullptr;
+                        }
+                    }
+                    if (!roleDb)
+                    {
+                        respondError(
+                          req,
+                          *sharedCb,
+                          "INTERNAL_ERROR",
+                          "consent: organization membership storage unavailable"
+                        );
+                        return;
+                    }
+                    auto roleRepo =
+                      std::make_shared<::fulla::storage::postgres::ClientOwnersRepository>(
+                        roleDb
+                      );
+                    roleRepo->findMembership(
+                      d.orgId,
+                      *internalUserId,
+                      [roleRepo, req, sharedCb,
+                       issueConsentCode = std::move(issueConsentCode), d](
+                        const ::fulla::storage::postgres::MembershipLookup &m) {
+                          using ::fulla::storage::postgres::LookupStatus;
+                          if (m.status == LookupStatus::Error)
+                          {
+                              respondError(
+                                req,
+                                *sharedCb,
+                                "INTERNAL_ERROR",
+                                std::string("consent: membership role lookup failed: ") +
+                                  m.error
+                              );
+                              return;
+                          }
+                          if (m.status == LookupStatus::NoRow)
+                          {
+                              // Same uniform rejection the gate uses for a
+                              // membership that is no longer current.
+                              respondError(
+                                req,
+                                *sharedCb,
+                                "VALIDATION_INVALID_INPUT",
+                                "consent: invalid or unauthorized org context"
+                              );
+                              return;
+                          }
+                          const std::string role = m.row.getValueOfRole();
+                          issueConsentCode(d.orgId, role == "owner" || role == "admin");
+                      }
+                    );
                     return;
                 }
                 if (d.kind == Kind::MfaRequired)

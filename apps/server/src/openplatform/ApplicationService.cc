@@ -7,6 +7,7 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/validation/RuleSet.h>
+#include <fulla/storage/postgres/AdvisoryLock.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <fulla/storage/postgres/models/Oauth2ClientOwners.h>
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
@@ -19,6 +20,7 @@
 #include <drogon/drogon.h>
 
 #include <algorithm>
+#include <atomic>
 #include <map>
 #include <set>
 #include <sstream>
@@ -48,6 +50,7 @@ using ::fulla::storage::postgres::ClientOwnersRepository;
 using ::fulla::storage::postgres::LookupStatus;
 using ::fulla::storage::postgres::MembershipLookup;
 using ::fulla::storage::postgres::OwnerRowLookup;
+using ::fulla::storage::postgres::withAdvisoryXactLock;
 
 // The grant types a self-registered app may declare (design §4.2); the
 // password grant does not exist in fulla and is never addable here.
@@ -482,6 +485,14 @@ void replaceClientScopes(
   std::function<void()> &&onDone
 )
 {
+    // Parallel inserts with a completion counter. The previous recursive
+    // insertNext helper captured its own shared_ptr (a cycle: the lambda
+    // owned the shared_ptr owning the lambda) -- a benign leak when `db`
+    // was the process-lifetime pool client, but under the #219 advisory
+    // transactions `db` IS the transaction: a leaked reference means the
+    // transaction never destructs and never commits. No self-references
+    // here; each callback holds the transaction until its statement
+    // completes, and the last one releases it for commit.
     try
     {
         Mapper<ClientScopeModel>(db).deleteBy(
@@ -492,16 +503,10 @@ void replaceClientScopes(
                   onDone();
                   return;
               }
-              auto insertNext = std::make_shared<std::function<void()>>();
-              auto remaining = std::make_shared<std::set<std::string>>(scopes);
-              *insertNext = [req, cb, db, clientId, remaining, insertNext, onDone]() {
-                  if (remaining->empty())
-                  {
-                      onDone();
-                      return;
-                  }
-                  const std::string name = *remaining->begin();
-                  remaining->erase(remaining->begin());
+              auto remaining = std::make_shared<std::atomic<int>>(
+                static_cast<int>(scopes.size()));
+              for (const auto &name : scopes)
+              {
                   ClientScopeModel row;
                   row.setClientId(clientId);
                   row.setScopeName(name);
@@ -509,7 +514,10 @@ void replaceClientScopes(
                   {
                       Mapper<ClientScopeModel>(db).insert(
                         row,
-                        [insertNext](const ClientScopeModel &) { (*insertNext)(); },
+                        [remaining, onDone, db](const ClientScopeModel &) {
+                            if (remaining->fetch_sub(1) == 1)
+                                onDone();
+                        },
                         [req, cb](const DrogonDbException &e) {
                             respondError(req, cb, "DB_QUERY_ERROR",
                               std::string("scope write failed: ") + e.base().what());
@@ -520,8 +528,7 @@ void replaceClientScopes(
                   {
                       respondError(req, cb, "DB_QUERY_ERROR", "scope write: Mapper construction failed");
                   }
-              };
-              (*insertNext)();
+              }
           },
           [req, cb](const DrogonDbException &e) {
               respondError(req, cb, "DB_QUERY_ERROR",
@@ -629,11 +636,16 @@ Json::Value appJsonFromRow(const ClientModel &client, const OwnerModel &owner)
 }
 
 // Create the client + owner rows + scope rows. orgId == nullptr -> personal.
-// The secret (CONFIDENTIAL only) is part of the single 201 response.
+// The secret (CONFIDENTIAL only) is part of the single 201 response, which
+// fires from the transaction's COMMIT callback (#219): an inline response
+// would race the commit and an immediate follow-up read could miss the new
+// rows; the cache invalidation also defers to the callback (a pre-commit DEL
+// lets a concurrent read refill the cache with the stale row for a full
+// TTL -- ClientManagementService's ordering note).
 void insertApplication(
   const ::drogon::HttpRequestPtr &req,
   const ResponseCallback &cb,
-  const DbClientPtr &db,
+  const std::shared_ptr<::drogon::orm::Transaction> &db,
   const std::string &name,
   const std::string &clientType,
   const std::string &redirectUris,
@@ -699,30 +711,47 @@ void insertApplication(
                     [req, cb, db, clientId, secret, confidential, scopes, orgId, caller](
                       const OwnerModel &) {
                         replaceClientScopes(db, clientId, scopes, req, cb,
-                          [req, cb, clientId, secret, confidential, orgId, caller]() {
-                              audit(req, "application_created",
-                                clientId);
-                              // Review C2: every client write invalidates the
-                              // Redis client cache or a rotated/created row
-                              // stays trusted for up to the cache TTL.
-                              ::fulla::drogon::ClientCacheInvalidator::instance().invalidate(
-                                clientId);
-                              Json::Value json;
-                              json["client_id"] = clientId;
-                              json["client_type"] = confidential ? "CONFIDENTIAL" : "PUBLIC";
-                              if (confidential)
-                              {
-                                  // Shown EXACTLY once (design §3/§8).
-                                  json["client_secret"] = secret;
-                              }
-                              if (orgId != nullptr)
-                                  json["org_id"] = *orgId;
-                              json["message"] = confidential
-                                                  ? "Application created; store the secret now — it is not shown again"
-                                                  : "Application created";
-                              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
-                              resp->setStatusCode(::drogon::k201Created);
-                              (*cb)(resp);
+                          [req, cb, db, clientId, secret, confidential, orgId, caller]() {
+                              // #219: respond + invalidate from the COMMIT
+                              // callback -- the terminal scope insert's
+                              // callback returns while the transaction is
+                              // still open (it commits when this chain's
+                              // last db reference drops, i.e. right after
+                              // this callback returns).
+                              db->setCommitCallback(
+                                [req, cb, clientId, secret, confidential, orgId, caller](
+                                  bool committed) {
+                                    if (!committed)
+                                    {
+                                        respondError(req, cb, "DB_QUERY_ERROR",
+                                          "application creation commit failed");
+                                        return;
+                                    }
+                                    audit(req, "application_created",
+                                      clientId);
+                                    // Review C2: every client write invalidates the
+                                    // Redis client cache or a rotated/created row
+                                    // stays trusted for up to the cache TTL.
+                                    // (After the commit -- see the function comment.)
+                                    ::fulla::drogon::ClientCacheInvalidator::instance().invalidate(
+                                      clientId);
+                                    Json::Value json;
+                                    json["client_id"] = clientId;
+                                    json["client_type"] = confidential ? "CONFIDENTIAL" : "PUBLIC";
+                                    if (confidential)
+                                    {
+                                        // Shown EXACTLY once (design §3/§8).
+                                        json["client_secret"] = secret;
+                                    }
+                                    if (orgId != nullptr)
+                                        json["org_id"] = *orgId;
+                                    json["message"] = confidential
+                                                        ? "Application created; store the secret now — it is not shown again"
+                                                        : "Application created";
+                                    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                                    resp->setStatusCode(::drogon::k201Created);
+                                    (*cb)(resp);
+                                });
                           });
                     },
                     [req, cb, db, clientId](const DrogonDbException &e) {
@@ -970,122 +999,162 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                 if (!found)
                     return;
                 const int64_t nowSec = ::trantor::Date::now().secondsSinceEpoch();
-                // Rate limit + personal quota both key off "my creations".
-                findOwners(db,
-                  Criteria(OwnerModel::Cols::_creator_user_id, CompareOperator::EQ, caller.id),
-                  req, cb,
-                  [req, cb, db, cfg, name, clientType, redirectUris, grantTypes, scopes,
-                   caller, hasOrgSlug, jsonBody, nowSec](const std::vector<OwnerModel> &mine) {
-                      std::size_t recent = 0;
-                      std::vector<std::string> personalIds;
-                      for (const auto &o : mine)
-                      {
-                          if (o.getValueOfCreatedAt().secondsSinceEpoch() > nowSec - 86400)
-                              ++recent;
-                          if (o.getOrgId() == nullptr)
-                              personalIds.push_back(o.getValueOfClientId());
-                      }
-                      if (static_cast<int>(recent) >= cfg.creationRatePerDay)
-                      {
-                          respondError(req, cb, "VALIDATION_RATE_LIMITED",
-                            "application creation rate limit reached; try again later");
-                          return;
-                      }
-                      if (!hasOrgSlug)
-                      {
-                          countAliveClients(db, personalIds, req, cb,
-                            [req, cb, db, name, clientType, redirectUris, grantTypes, scopes,
-                             caller, cfg](std::size_t alive) {
-                                if (static_cast<int>(alive) >= cfg.maxAppsPerUser)
-                                {
-                                    respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
-                                      "application quota exceeded (" +
-                                        std::to_string(cfg.maxAppsPerUser) + ")");
-                                    return;
-                                }
-                                insertApplication(req, cb, db, name, clientType, redirectUris,
-                                  grantTypes, scopes, caller, nullptr);
+
+                // #219 (R-M2-5): rate limit + quota checks and the insert
+                // run inside ONE advisory-locked transaction per quota
+                // domain. Personal branch: quota:user:<id> (24h rate limit
+                // + personal quota share the user domain). Org branch:
+                // quota:user:<id> THEN quota:org:<org_id> in the SAME
+                // transaction (consistent user-before-org order everywhere
+                // prevents cross-flow deadlocks).
+                auto runCreationChecks =
+                  [req, cb, cfg, caller, nowSec, name, clientType, redirectUris, grantTypes,
+                   scopes](const std::shared_ptr<::drogon::orm::Transaction> &txn,
+                           std::shared_ptr<int32_t> orgId) {
+                      // Rate limit + personal quota both key off "my creations".
+                      findOwners(txn,
+                        Criteria(OwnerModel::Cols::_creator_user_id, CompareOperator::EQ, caller.id),
+                        req, cb,
+                        [req, cb, txn, cfg, name, clientType, redirectUris, grantTypes, scopes,
+                         caller, nowSec, orgId](const std::vector<OwnerModel> &mine) {
+                          std::size_t recent = 0;
+                          std::vector<std::string> personalIds;
+                          for (const auto &o : mine)
+                          {
+                              if (o.getValueOfCreatedAt().secondsSinceEpoch() > nowSec - 86400)
+                                  ++recent;
+                              if (o.getOrgId() == nullptr)
+                                  personalIds.push_back(o.getValueOfClientId());
+                          }
+                          if (static_cast<int>(recent) >= cfg.creationRatePerDay)
+                          {
+                              respondError(req, cb, "VALIDATION_RATE_LIMITED",
+                                "application creation rate limit reached; try again later");
+                              return;
+                          }
+                          if (orgId == nullptr)
+                          {
+                              countAliveClients(txn, personalIds, req, cb,
+                                [req, cb, txn, name, clientType, redirectUris, grantTypes, scopes,
+                                 caller, cfg](std::size_t alive) {
+                                    if (static_cast<int>(alive) >= cfg.maxAppsPerUser)
+                                    {
+                                        respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                          "application quota exceeded (" +
+                                            std::to_string(cfg.maxAppsPerUser) + ")");
+                                        return;
+                                    }
+                                    insertApplication(req, cb, txn, name, clientType, redirectUris,
+                                      grantTypes, scopes, caller, nullptr);
+                                });
+                              return;
+                          }
+                          // Org context: the org must be under its app quota.
+                          findOwners(txn,
+                            Criteria(OwnerModel::Cols::_org_id,
+                                     CompareOperator::EQ, *orgId),
+                            req, cb,
+                            [req, cb, txn, cfg, name, clientType, redirectUris, grantTypes,
+                             scopes, caller, orgId](
+                              const std::vector<OwnerModel> &orgApps) {
+                                std::vector<std::string> ids;
+                                for (const auto &o : orgApps)
+                                    ids.push_back(o.getValueOfClientId());
+                                countAliveClients(txn, ids, req, cb,
+                                  [req, cb, txn, cfg, name, clientType, redirectUris,
+                                   grantTypes, scopes, caller, orgId](std::size_t alive) {
+                                      if (static_cast<int>(alive) >= cfg.maxOrgApps)
+                                      {
+                                          respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                            "organization application quota exceeded (" +
+                                              std::to_string(cfg.maxOrgApps) + ")");
+                                          return;
+                                      }
+                                      insertApplication(req, cb, txn, name, clientType,
+                                        redirectUris, grantTypes, scopes, caller,
+                                        orgId);
+                                  });
                             });
                           return;
+                      });
+                  };
+                auto lockFailed = [req, cb](const std::string &err) {
+                    respondError(req, cb, "DB_QUERY_ERROR",
+                      "create application: quota serialization failed: " + err);
+                };
+
+                if (!hasOrgSlug)
+                {
+                    withAdvisoryXactLock(
+                      db,
+                      {"quota:user:" + std::to_string(caller.id)},
+                      [runCreationChecks](const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+                          runCreationChecks(txn, nullptr);
+                      },
+                      lockFailed);
+                    return;
+                }
+                // Org context: caller must be owner/admin of the target
+                // org (checked outside the lock -- an authz decision, not
+                // a quota), and the org must be under its app quota.
+                const std::string orgSlug = (*jsonBody)["org_slug"].asString();
+                try
+                {
+                    Mapper<OrgModel>(db).findOne(
+                      Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, orgSlug),
+                      [req, cb, db, cfg, name, clientType, redirectUris, grantTypes,
+                       scopes, caller, runCreationChecks, lockFailed](const OrgModel &org) {
+                          const int32_t orgId = org.getValueOfId();
+                          try
+                          {
+                              Mapper<MemberModel>(db).findBy(
+                                Criteria(MemberModel::Cols::_organization_id,
+                                         CompareOperator::EQ, orgId) &&
+                                  Criteria(MemberModel::Cols::_user_id,
+                                           CompareOperator::EQ, caller.id),
+                                [req, cb, db, cfg, name, clientType, redirectUris, grantTypes,
+                                 scopes, caller, orgId, runCreationChecks, lockFailed](
+                                  const std::vector<MemberModel> &rows) {
+                                  if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
+                                  {
+                                      respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                                        "org owner or admin role required to register an application for it");
+                                      return;
+                                  }
+                                  withAdvisoryXactLock(
+                                    db,
+                                    {"quota:user:" + std::to_string(caller.id),
+                                     "quota:org:" + std::to_string(orgId)},
+                                    [runCreationChecks, orgId](
+                                      const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+                                        runCreationChecks(
+                                          txn, std::make_shared<int32_t>(orgId));
+                                    },
+                                    lockFailed);
+                              },
+                              [req, cb](const DrogonDbException &e) {
+                                  respondError(req, cb, "DB_QUERY_ERROR",
+                                    std::string("membership lookup failed: ") + e.base().what());
+                              }
+                            );
+                          }
+                          catch (...)
+                          {
+                              respondError(req, cb, "DB_QUERY_ERROR",
+                                "membership lookup: Mapper construction failed");
+                          }
+                      },
+                      [req, cb](const DrogonDbException &) {
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                            "organization not found");
                       }
-                      // Org context: caller must be owner/admin of the target
-                      // org, and the org must be under its app quota.
-                      const std::string orgSlug = (*jsonBody)["org_slug"].asString();
-                      try
-                      {
-                          Mapper<OrgModel>(db).findOne(
-                            Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, orgSlug),
-                            [req, cb, db, cfg, name, clientType, redirectUris, grantTypes,
-                             scopes, caller](const OrgModel &org) {
-                                const int32_t orgId = org.getValueOfId();
-                                try
-                                {
-                                    Mapper<MemberModel>(db).findBy(
-                                      Criteria(MemberModel::Cols::_organization_id,
-                                               CompareOperator::EQ, orgId) &&
-                                        Criteria(MemberModel::Cols::_user_id,
-                                                 CompareOperator::EQ, caller.id),
-                                      [req, cb, db, cfg, name, clientType, redirectUris,
-                                       grantTypes, scopes, caller, orgId](
-                                        const std::vector<MemberModel> &rows) {
-                                          if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
-                                          {
-                                              respondError(req, cb, "AUTHZ_ACCESS_DENIED",
-                                                "org owner or admin role required to register an application for it");
-                                              return;
-                                          }
-                                          findOwners(db,
-                                            Criteria(OwnerModel::Cols::_org_id,
-                                                     CompareOperator::EQ, orgId),
-                                            req, cb,
-                                            [req, cb, db, cfg, name, clientType, redirectUris,
-                                             grantTypes, scopes, caller, orgId](
-                                              const std::vector<OwnerModel> &orgApps) {
-                                                std::vector<std::string> ids;
-                                                for (const auto &o : orgApps)
-                                                    ids.push_back(o.getValueOfClientId());
-                                                countAliveClients(db, ids, req, cb,
-                                                  [req, cb, db, cfg, name, clientType, redirectUris,
-                                                   grantTypes, scopes, caller, orgId](
-                                                    std::size_t alive) {
-                                                      if (static_cast<int>(alive) >= cfg.maxOrgApps)
-                                                      {
-                                                          respondError(req, cb,
-                                                            "VALIDATION_RESOURCE_CONFLICT",
-                                                            "organization application quota exceeded (" +
-                                                              std::to_string(cfg.maxOrgApps) + ")");
-                                                          return;
-                                                      }
-                                                      insertApplication(req, cb, db, name, clientType,
-                                                        redirectUris, grantTypes, scopes, caller,
-                                                        std::make_shared<int32_t>(orgId));
-                                                  });
-                                            });
-                                      },
-                                      [req, cb](const DrogonDbException &e) {
-                                          respondError(req, cb, "DB_QUERY_ERROR",
-                                            std::string("membership lookup failed: ") + e.base().what());
-                                      }
-                                    );
-                                }
-                                catch (...)
-                                {
-                                    respondError(req, cb, "DB_QUERY_ERROR",
-                                      "membership lookup: Mapper construction failed");
-                                }
-                            },
-                            [req, cb](const DrogonDbException &) {
-                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
-                                  "organization not found");
-                            }
-                          );
-                      }
-                      catch (...)
-                      {
-                          respondError(req, cb, "DB_QUERY_ERROR", "org lookup: Mapper construction failed");
-                      }
-                  });
-            });
+                    );
+                }
+                catch (...)
+                {
+                    respondError(req, cb, "DB_QUERY_ERROR", "org lookup: Mapper construction failed");
+                }
+          });
       });
 }
 
