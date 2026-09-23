@@ -28,7 +28,8 @@
         "organization_members",
         "organization_invitations",
         "oauth2_client_owners",
-        "organization_consents"
+        "organization_consents",
+        "organization_succession_nominations"
     ],
     "relationships": {
         "enabled": true,
