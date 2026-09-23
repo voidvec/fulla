@@ -290,6 +290,20 @@ DROGON_TEST(Integration_P1_OrgSuccession_NominateAcceptWorkflow)
         CHECK(statusIs(r, ::drogon::k403Forbidden));
     }
 
+    // 1b) Self-nomination is refused (the delete-time auto-effect would
+    // hand the seat back to the deleting owner's own dying account --
+    // review finding 5).
+    {
+        const auto ownerId = userIdOf(owner);
+        REQUIRE(ownerId.has_value());
+        Json::Value body;
+        body["user_id"] = static_cast<Json::Int64>(*ownerId);
+        auto r = sendPostJson(
+          "/api/me/organizations/" + fx.slug + "/successor-nomination", body, *ownerBearer);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, ::drogon::k400BadRequest));
+    }
+
     // 2) Owner nominates the NON-member outsider (overwrites nothing yet).
     {
         Json::Value body;

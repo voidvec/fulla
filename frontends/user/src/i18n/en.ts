@@ -382,6 +382,7 @@ export default {
       successionNominateAction: 'Nominate',
       successionPending: 'Pending successor nomination: user {id}',
       successionWithdraw: 'Withdraw nomination',
+      successionAccepted: 'You are now the owner',
     },
   },
 }

@@ -502,9 +502,15 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                                 managerOrgIds,
                                 [req, cb, roleByOrg, caller, orgs, repos](
                                   const std::vector<SuccessionModel> &pendingRows) {
-                                    std::map<int32_t, const SuccessionModel *> pendingByOrg;
+                                    // Store BY VALUE: the rows vector is
+                                    // destroyed when this callback returns,
+                                    // and the continuation below dereferences
+                                    // the entries two async hops later
+                                    // (pointers would dangle -- review
+                                    // finding 3).
+                                    std::map<int32_t, SuccessionModel> pendingByOrg;
                                     for (const auto &n : pendingRows)
-                                        pendingByOrg[n.getValueOfOrganizationId()] = &n;
+                                        pendingByOrg[n.getValueOfOrganizationId()] = n;
                                     repos->findPendingWithOrgForNominee(
                                       caller.id,
                                       [req, cb, roleByOrg, orgs, pendingByOrg](
@@ -541,11 +547,11 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                                                       nomination =
                                                         Json::Value(Json::objectValue);
                                                       nomination["nominee_user_id"] =
-                                                        it->second->getValueOfNomineeUserId();
+                                                        it->second.getValueOfNomineeUserId();
                                                       nomination["nominated_by"] =
-                                                        it->second->getValueOfNominatedBy();
+                                                        it->second.getValueOfNominatedBy();
                                                       nomination["created_at"] =
-                                                        it->second->getValueOfCreatedAt()
+                                                        it->second.getValueOfCreatedAt()
                                                           .toDbStringLocal();
                                                   }
                                               }
@@ -1305,6 +1311,16 @@ void OrgMemberService::nominateSuccessor(
                       {
                           respondError(req, cb, "AUTHZ_ACCESS_DENIED",
                             "only the organization owner may nominate a successor");
+                          return;
+                      }
+                      // Self-nomination re-creates the #221 freeze: the
+                      // delete-time auto-effect would pass the seat to the
+                      // deleting owner's own (about-to--soft-delete) account
+                      // (review finding 5).
+                      if (targetUserId == caller.id)
+                      {
+                          respondError(req, cb, "VALIDATION_INVALID_INPUT",
+                            "nominate successor: the owner cannot nominate themselves");
                           return;
                       }
                       auto repos = std::make_shared<

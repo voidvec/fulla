@@ -115,13 +115,22 @@ void effectPendingSuccessionsForUser(
     auto repos = std::make_shared<OrgSuccessionRepository>(db);
     repos->findOrgIdsWithPendingForOwner(
       userId,
-      [repos, sharedDone, req](const std::vector<int32_t> &orgIds) {
-          if (orgIds.empty())
+      [repos, sharedDone, req](const std::optional<std::vector<int32_t>> &orgIdsOpt) {
+          if (!orgIdsOpt.has_value())
+          {
+              // Read failure: DISTINCT from "nothing pending" (the repo
+              // reports empty lists as an engaged optional). Proceeding
+              // would soft-delete the owner past a possibly-pending
+              // nomination -- fail closed (review finding 4).
+              (*sharedDone)(false, "succession lookup failed");
+              return;
+          }
+          if (orgIdsOpt->empty())
           {
               (*sharedDone)(true, "");
               return;
           }
-          auto ids = std::make_shared<std::vector<int32_t>>(orgIds);
+          auto ids = std::make_shared<std::vector<int32_t>>(*orgIdsOpt);
           processNextOrg(repos, ids, 0, req, sharedDone);
       }
     );

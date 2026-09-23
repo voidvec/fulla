@@ -369,6 +369,7 @@ export default {
       successionNominateAction: '提名',
       successionPending: '待接受的继任提名：用户 {id}',
       successionWithdraw: '撤回提名',
+      successionAccepted: '你已成为所有者',
     },
   },
 }

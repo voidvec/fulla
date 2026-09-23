@@ -6247,8 +6247,9 @@ struct NomineeNomination
 using NomineeNominationsCallback =
 std::function<void(const std::vector<NomineeNomination> &)>;
 void findPendingWithOrgForNominee(int32_t userId, NomineeNominationsCallback &&cb);
-void findOrgIdsWithPendingForOwner(int32_t userId,
-const std::function<void(const std::vector<int32_t> &)> &&cb);
+void findOrgIdsWithPendingForOwner(
+int32_t userId,
+const std::function<void(const std::optional<std::vector<int32_t>> &)> &&cb);
 void withdrawPending(int32_t orgId, CountCallback &&cb);
 void effectSuccession(int32_t orgId,
 int32_t nomineeUserId,

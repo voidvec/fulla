@@ -43,7 +43,7 @@ async function acceptSuccession(slug: string) {
   error.value = null
   try {
     await http.post(`/api/me/organizations/${slug}/successor-nomination/accept`, {})
-    success.value = t('account.organizations.created')
+    success.value = t('account.organizations.successionAccepted')
     setTimeout(() => { success.value = '' }, 3000)
     await fetchOrgs()
   } catch (e: unknown) {

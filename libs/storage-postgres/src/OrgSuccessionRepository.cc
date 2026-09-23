@@ -43,19 +43,37 @@ void demoteAndMark(
     txn->execSqlAsync(
       "UPDATE organization_members SET role = 'admin' "
       "WHERE organization_id = $1 AND role = 'owner' AND user_id <> $2",
-      [txn, orgId, sharedCb](const Result &) {
-          // Step 3: mark the nomination accepted. The accepted_at IS
-          // NULL predicate is the optimistic guard against a concurrent
-          // acceptance -- zero affected rows means someone else took the
-          // seat first and this transaction rolls back whole.
+      [txn, orgId, nomineeUserId, sharedCb](const Result &) {
+          // Step 3: mark the nomination accepted. The predicates are the
+          // optimistic arbitration for BOTH concurrent-acceptance races:
+          // accepted_at IS NULL (withdrawn or already accepted -> 0 rows)
+          // AND nominee_user_id = $2 (the nomination was OVERWRITTEN to a
+          // different nominee between the caller's identity check and
+          // this transaction -> 0 rows; without it, a stale acceptor
+          // would promote themselves and consume someone else's
+          // nomination -- review finding 2).
+          //
+          // RETURNING id (unused result) rides the UPDATE...RETURNING
+          // raw-SQL exemption: the conditional single-row update with a
+          // partial-index predicate cannot be expressed through Mapper
+          // (update-by-PK would drop the accepted_at/nominee guards).
           txn->execSqlAsync(
             "UPDATE organization_succession_nominations SET accepted_at = "
-            "CURRENT_TIMESTAMP WHERE organization_id = $1 AND accepted_at IS NULL",
-            [sharedCb](const Result &r) {
-                if (r.affectedRows() == 0)
+            "CURRENT_TIMESTAMP WHERE organization_id = $1 "
+            "AND nominee_user_id = $2 AND accepted_at IS NULL RETURNING id",
+            [txn, sharedCb](const Result &r) {
+                if (r.size() == 0)
                 {
-                    LOG_WARN << "effectSuccession: nomination no longer pending "
-                                "(concurrent acceptance?); rolling back";
+                    LOG_WARN << "effectSuccession: nomination no longer "
+                                "matches (withdrawn/accepted/overwritten); "
+                                "rolling back";
+                    // Roll back the promote+demote: a soft failure is a
+                    // statement SUCCESS (the guard UPDATE matched zero
+                    // rows), so Drogon's destructor-time auto-COMMIT
+                    // would otherwise persist the half-swap AND re-fire
+                    // the commit callback after our inline false
+                    // (review finding 1).
+                    txn->rollback();
                     (*sharedCb)(false);
                 }
                 // Success: the caller's callback fires from the commit
@@ -65,7 +83,8 @@ void demoteAndMark(
                 LOG_ERROR << "effectSuccession nomination mark failed: " << e.base().what();
                 (*sharedCb)(false);
             },
-            orgId
+            orgId,
+            nomineeUserId
           );
       },
       [sharedCb](const DrogonDbException &e) {
@@ -333,19 +352,23 @@ void OrgSuccessionRepository::findPendingWithOrgForNominee(
 
 void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
   int32_t userId,
-  const std::function<void(const std::vector<int32_t> &)> &&cb
+  const std::function<void(const std::optional<std::vector<int32_t>> &)> &&cb
 )
 {
-    auto sharedCb =
-      std::make_shared<std::function<void(const std::vector<int32_t> &)>>(std::move(cb));
+    auto sharedCb = std::make_shared<
+      std::function<void(const std::optional<std::vector<int32_t>> &)>>(
+      std::move(cb)
+    );
 
     if (!dbClient_)
     {
-        (*sharedCb)({});
+        (*sharedCb)(std::nullopt);
         return;
     }
 
-    // Hop 1: the user's CURRENT owner seats.
+    // Hop 1: the user's CURRENT owner seats. Errors surface as nullopt
+    // (distinct from an empty list) -- the SuccessionGuard aborts the
+    // deletion on a read failure rather than proceeding fail-open.
     try
     {
         Mapper<OrganizationMembers> memberMapper(dbClient_);
@@ -359,7 +382,7 @@ void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
                   orgIds.push_back(m.getValueOfOrganizationId());
               if (orgIds.empty())
               {
-                  (*sharedCb)({});
+                  (*sharedCb)(std::vector<int32_t>{});
                   return;
               }
               // Hop 2: pending nominations among those orgs.
@@ -387,7 +410,7 @@ void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
                     [sharedCb](const DrogonDbException &e) {
                         LOG_ERROR << "findOrgIdsWithPendingForOwner nomination hop failed: "
                                   << e.base().what();
-                        (*sharedCb)({});
+                        (*sharedCb)(std::nullopt);
                     }
                   );
               }
@@ -395,20 +418,20 @@ void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
               {
                   LOG_ERROR << "findOrgIdsWithPendingForOwner nomination Mapper "
                                "construction failed";
-                  (*sharedCb)({});
+                  (*sharedCb)(std::nullopt);
               }
           },
           [sharedCb](const DrogonDbException &e) {
               LOG_ERROR << "findOrgIdsWithPendingForOwner membership hop failed: "
                         << e.base().what();
-              (*sharedCb)({});
+              (*sharedCb)(std::nullopt);
           }
         );
     }
     catch (...)
     {
         LOG_ERROR << "findOrgIdsWithPendingForOwner membership Mapper construction failed";
-        (*sharedCb)({});
+        (*sharedCb)(std::nullopt);
     }
 }
 
@@ -499,7 +522,13 @@ void OrgSuccessionRepository::effectSuccession(
                               if (count == 0)
                               {
                                   // The nominee left between findOne and
-                                  // update; fail (rollback).
+                                  // update. Same soft-failure shape as
+                                  // the guard: roll back explicitly or
+                                  // Drogon's destructor auto-commit
+                                  // persists the buffered statements and
+                                  // re-fires the commit callback (review
+                                  // finding 1).
+                                  txn->rollback();
                                   (*sharedCb)(false);
                                   return;
                               }
