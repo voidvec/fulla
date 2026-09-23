@@ -108,6 +108,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/PostgresRepositoryBase.cc
     src/ClientOwnersRepository.cc
     src/OrgConsentRepository.cc
+    src/OrgSuccessionRepository.cc
     src/AdvisoryLock.cc
     src/PostgresClientRepository.cc
     src/PostgresGrantRepository.cc
