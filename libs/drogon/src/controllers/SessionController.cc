@@ -1667,7 +1667,11 @@ void SessionController::consent(
           }
           else
           {
-              mintCode(std::nullopt);
+              // Review 1.4 (adversarial): keep the stashed org binding on
+              // the empty-scope leg too -- the base code passed orgId
+              // through here; minting with nullopt silently dropped the
+              // binding (fail-closed claim loss, no test pinned it).
+              mintCode(orgId);
           }
           };  // issueConsentCode
 

@@ -1063,7 +1063,7 @@ void OrgMemberService::listOrgConsents(
                       repo->listActiveByOrg(
                         org.getValueOfId(),
                         [repo, req, cb, org](const std::vector<OrgConsentModel> &rows) {
-                            // Group by client preserving first-seen order.
+                            // Group by client (std::map: ordered by client_id).
                             std::map<std::string, Json::Value> byClient;
                             for (const auto &r : rows)
                             {

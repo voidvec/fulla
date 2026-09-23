@@ -6090,7 +6090,7 @@ int64_t getCurrentTimestamp() const;
 namespace fulla::storage::postgres
 {
 using AdvisoryLockContinuation =
-std::function<void(const ::drogon::orm::DbClientPtr &)>;
+std::function<void(const std::shared_ptr<::drogon::orm::Transaction> &)>;
 using AdvisoryLockError = std::function<void(const std::string &)>;
 void withAdvisoryXactLock(
 const ::drogon::orm::DbClientPtr &db,
