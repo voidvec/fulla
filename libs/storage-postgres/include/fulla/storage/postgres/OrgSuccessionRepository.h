@@ -87,8 +87,13 @@ class OrgSuccessionRepository
     /// Orgs where `userId` is a live owner AND a pending nomination
     /// exists (the soft-delete paths' auto-effect input). Two Mapper
     /// hops (owned memberships, then pending nominations by org ids).
-    void findOrgIdsWithPendingForOwner(int32_t userId,
-                                       const std::function<void(const std::vector<int32_t> &)> &&cb);
+    /// Error semantics: a failure on either hop reports nullopt --
+    /// DISTINCT from an empty list -- so the SuccessionGuard can abort
+    /// the deletion instead of silently proceeding past a read error
+    /// (fail-closed).
+    void findOrgIdsWithPendingForOwner(
+      int32_t userId,
+      const std::function<void(const std::optional<std::vector<int32_t>> &)> &&cb);
 
     /// Owner withdraws the pending nomination (physical delete of the
     /// pending row -- it is a state, not history; the audit trail keeps
