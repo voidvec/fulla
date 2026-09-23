@@ -1077,8 +1077,9 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentContext_ServerDerived)
     const auto orgIdOpt = sqlInt("SELECT id FROM organizations WHERE slug = '" + slug + "'");
     REQUIRE(orgIdOpt.has_value());
 
-    // Org app (PUBLIC: authorize only validates PUBLIC clients with an
-    // empty secret today, tracked as #233) + a personal app for the no-org
+    // Org app (kept PUBLIC so this case pins the consent-context contract
+    // independently of client type; the confidential authorize legs are
+    // covered elsewhere once #233 lands) + a personal app for the no-org
     // leg. (No IIFEs here: the DROGON_TEST REQUIRE/CHECK macros expand to
     // void early-returns, which a value-returning lambda cannot mix with.)
     std::string orgClientId;
