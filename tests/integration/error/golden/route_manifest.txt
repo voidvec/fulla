@@ -6,6 +6,7 @@ DELETE /api/admin/users/{userId}
 DELETE /api/me
 DELETE /api/me/applications/{clientId}
 DELETE /api/me/authorized-apps/{clientId}
+DELETE /api/me/organizations/{slug}/consents/{clientId}
 DELETE /api/me/organizations/{slug}/invitations/{invitationId}
 DELETE /api/me/organizations/{slug}/members/{userId}
 DELETE /api/me/social/links/{provider}
@@ -32,6 +33,7 @@ GET /api/me
 GET /api/me/applications
 GET /api/me/authorized-apps
 GET /api/me/organizations
+GET /api/me/organizations/{slug}/consents
 GET /api/me/organizations/{slug}/invitations
 GET /api/me/organizations/{slug}/members
 GET /api/me/social/links

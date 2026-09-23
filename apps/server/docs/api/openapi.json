@@ -1776,6 +1776,54 @@
         ]
       }
     },
+    "/api/me/organizations/{slug}/consents" : 
+    {
+      "get" : 
+      {
+        "description" : "Active organization consents grouped by client, each scope with its granted_by/granted_at (owner/admin).",
+        "operationId" : "get_api_me_organizations_{slug}_consents",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Organization Consents",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/consents/{clientId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "Revoke every active consent of the (org, client) pair (owner/admin). Revocation only affects FUTURE authorizations; issued tokens are not revoked (O4).",
+        "operationId" : "delete_api_me_organizations_{slug}_consents_{clientId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Revoke Organization Consents",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
     "/api/me/organizations/{slug}/invitations" : 
     {
       "get" : 

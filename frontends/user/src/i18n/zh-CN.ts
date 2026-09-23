@@ -350,6 +350,18 @@ export default {
       accept: '接受',
       accepted: '已接受邀请，欢迎加入！',
       created: '组织已创建',
+      consents: '组织授权',
+      consentsEmpty: '暂无组织授权',
+      consentsGrantedBy: '由用户 {id} 授权',
+      consentsRevoke: '撤销',
+      consentsRevokeConfirm:
+        '撤销该组织的这项授权？成员下次授权时会重新弹出同意页。已签发的令牌不受影响。',
+      consentsRevoked: '组织授权已撤销',
+      consentsStart: '发起授权',
+      consentsClientId: '组织应用的 Client ID',
+      consentsRedirectUri: '已登记的回调地址',
+      consentsLinkTitle: '授权链接（以组织 owner/admin 身份登录后打开）',
+      consentsGenerate: '生成链接',
     },
   },
 }
