@@ -35,7 +35,8 @@
     "V033__users_profile_fields.sql": "3d4ca36db49294687d5cf8592bf88814d010fdd9544d02dd6d291af8e01f6c90",
     "V034__organization_members_invitations.sql": "9d4f9a6566d7a309604bcdd64610291dc13b7be965fc5058b9c0d801760345ae",
     "V035__client_owners_open_platform.sql": "0d9958365fba04e4fd994ba1d5621157a4ba29774a933dcf90fa614eaf3dd954",
-    "V036__organization_consents_org_context.sql": "ddfd63b6638e25d9c3d8c2e8adbfc6e18d899a31eca9572abce3fdcd76708731"
+    "V036__organization_consents_org_context.sql": "ddfd63b6638e25d9c3d8c2e8adbfc6e18d899a31eca9572abce3fdcd76708731",
+    "V037__organization_succession_nominations.sql": "86d052f3cc98fc4acd4e8b4317869bea1c1533bfacdce8325f800eb84aa1e045"
   },
   "ratified_destructive": [
     "V036__organization_consents_org_context.sql"

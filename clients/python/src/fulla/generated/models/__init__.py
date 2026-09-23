@@ -10,6 +10,9 @@ from .delete_api_me_organizations_slug_invitations_invitation_id_response_200 im
 from .delete_api_me_organizations_slug_members_user_id_response_200 import (
     DeleteApiMeOrganizationsSlugMembersUserIdResponse200,
 )
+from .delete_api_me_organizations_slug_successor_nomination_response_200 import (
+    DeleteApiMeOrganizationsSlugSuccessorNominationResponse200,
+)
 from .delete_api_me_social_links_provider_provider import DeleteApiMeSocialLinksProviderProvider
 from .device_authorization_response import DeviceAuthorizationResponse
 from .error import Error
@@ -41,6 +44,12 @@ from .get_api_me_organizations_response_200 import GetApiMeOrganizationsResponse
 from .get_api_me_organizations_response_200_organizations_item import GetApiMeOrganizationsResponse200OrganizationsItem
 from .get_api_me_organizations_response_200_organizations_item_role import (
     GetApiMeOrganizationsResponse200OrganizationsItemRole,
+)
+from .get_api_me_organizations_response_200_organizations_item_successor_nomination_type_0 import (
+    GetApiMeOrganizationsResponse200OrganizationsItemSuccessorNominationType0,
+)
+from .get_api_me_organizations_response_200_pending_succession_nominations_item import (
+    GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem,
 )
 from .get_api_me_organizations_slug_consents_response_200 import GetApiMeOrganizationsSlugConsentsResponse200
 from .get_api_me_organizations_slug_consents_response_200_consents_item import (
@@ -128,6 +137,16 @@ from .post_api_me_organizations_response_201 import PostApiMeOrganizationsRespon
 from .post_api_me_organizations_slug_invitations_body import PostApiMeOrganizationsSlugInvitationsBody
 from .post_api_me_organizations_slug_invitations_body_role import PostApiMeOrganizationsSlugInvitationsBodyRole
 from .post_api_me_organizations_slug_invitations_response_201 import PostApiMeOrganizationsSlugInvitationsResponse201
+from .post_api_me_organizations_slug_successor_nomination_accept_body import (
+    PostApiMeOrganizationsSlugSuccessorNominationAcceptBody,
+)
+from .post_api_me_organizations_slug_successor_nomination_accept_response_200 import (
+    PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse200,
+)
+from .post_api_me_organizations_slug_successor_nomination_body import PostApiMeOrganizationsSlugSuccessorNominationBody
+from .post_api_me_organizations_slug_successor_nomination_response_200 import (
+    PostApiMeOrganizationsSlugSuccessorNominationResponse200,
+)
 from .post_api_me_social_links_provider_authorize_body import PostApiMeSocialLinksProviderAuthorizeBody
 from .post_api_me_social_links_provider_authorize_provider import PostApiMeSocialLinksProviderAuthorizeProvider
 from .post_api_me_social_links_provider_authorize_response_200 import PostApiMeSocialLinksProviderAuthorizeResponse200
@@ -178,6 +197,7 @@ __all__ = (
     "DeleteApiMeOrganizationsSlugConsentsClientIdResponse200",
     "DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse200",
     "DeleteApiMeOrganizationsSlugMembersUserIdResponse200",
+    "DeleteApiMeOrganizationsSlugSuccessorNominationResponse200",
     "DeleteApiMeSocialLinksProviderProvider",
     "DeviceAuthorizationResponse",
     "Error",
@@ -202,6 +222,8 @@ __all__ = (
     "GetApiMeOrganizationsResponse200",
     "GetApiMeOrganizationsResponse200OrganizationsItem",
     "GetApiMeOrganizationsResponse200OrganizationsItemRole",
+    "GetApiMeOrganizationsResponse200OrganizationsItemSuccessorNominationType0",
+    "GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem",
     "GetApiMeOrganizationsSlugConsentsResponse200",
     "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItem",
     "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItemScopesItem",
@@ -270,6 +292,10 @@ __all__ = (
     "PostApiMeOrganizationsSlugInvitationsBody",
     "PostApiMeOrganizationsSlugInvitationsBodyRole",
     "PostApiMeOrganizationsSlugInvitationsResponse201",
+    "PostApiMeOrganizationsSlugSuccessorNominationAcceptBody",
+    "PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse200",
+    "PostApiMeOrganizationsSlugSuccessorNominationBody",
+    "PostApiMeOrganizationsSlugSuccessorNominationResponse200",
     "PostApiMeOrgInvitationsAcceptBody",
     "PostApiMeOrgInvitationsAcceptResponse200",
     "PostApiMeSocialLinksProviderAuthorizeBody",

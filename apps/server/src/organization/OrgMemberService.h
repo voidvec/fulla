@@ -94,6 +94,27 @@ class OrgMemberService
       const std::string &slug,
       const std::string &clientId
     );
+
+    /// POST /api/me/organizations/{slug}/successor-nomination {user_id}
+    /// — v1.5.0 M3 (R-M3-3): owner nominates a successor (any live user,
+    /// may be a non-member). Overwrites any previous pending nomination
+    /// (idempotent 200).
+    static void nominateSuccessor(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
+
+    /// DELETE /api/me/organizations/{slug}/successor-nomination — owner
+    /// withdraws the pending nomination (404 when none is pending).
+    static void withdrawSuccessionNomination(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
+
+    /// POST /api/me/organizations/{slug}/successor-nomination/accept —
+    /// only the nominee; the seat swap is ONE transaction (promote +
+    /// demote + accept-mark; R-M3-3).
+    static void acceptSuccession(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
 };
 
 }  // namespace organization

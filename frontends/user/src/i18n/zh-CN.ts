@@ -362,6 +362,13 @@ export default {
       consentsRedirectUri: '已登记的回调地址',
       consentsLinkTitle: '授权链接（以组织 owner/admin 身份登录后打开）',
       consentsGenerate: '生成链接',
+      successionBannerTitle: '所有权继任',
+      successionBannerDesc: '你被提名为「{name}」的继任所有者。',
+      successionAccept: '接受所有权',
+      successionNominate: '提名继任者（用户 ID）',
+      successionNominateAction: '提名',
+      successionPending: '待接受的继任提名：用户 {id}',
+      successionWithdraw: '撤回提名',
     },
   },
 }

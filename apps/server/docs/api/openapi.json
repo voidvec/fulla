@@ -1941,6 +1941,75 @@
         ]
       }
     },
+    "/api/me/organizations/{slug}/successor-nomination" : 
+    {
+      "delete" : 
+      {
+        "description" : "The organization owner withdraws the pending successor nomination (404 when none is pending).",
+        "operationId" : "delete_api_me_organizations_{slug}_successor-nomination",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Withdraw Successor Nomination",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).",
+        "operationId" : "post_api_me_organizations_{slug}_successor-nomination",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Nominate Successor",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/successor-nomination/accept" : 
+    {
+      "post" : 
+      {
+        "description" : "The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).",
+        "operationId" : "post_api_me_organizations_{slug}_successor-nomination_accept",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Accept Succession",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
     "/api/me/password" : 
     {
       "put" : 

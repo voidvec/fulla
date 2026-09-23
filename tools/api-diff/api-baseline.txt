@@ -3667,6 +3667,21 @@ static bool isValid(const std::string &subject)
 ;
 };
 }
+=== libs/drogon/include/fulla/drogon/utils/SuccessionGuard.h
+#pragma once
+#include <drogon/HttpRequest.h>
+#include <drogon/orm/DbClient.h>
+#include <functional>
+#include <string>
+namespace fulla::drogon::utils
+{
+void effectPendingSuccessionsForUser(
+const ::drogon::orm::DbClientPtr &db,
+int32_t userId,
+const ::drogon::HttpRequestPtr &req,
+std::function<void(bool, const std::string &)> &&done
+);
+}
 === libs/drogon/include/fulla/drogon/validation/HttpResponder.h
 #pragma once
 #include <drogon/HttpRequest.h>
@@ -6188,6 +6203,56 @@ const std::string &clientId,
 CountCallback &&cb
 );
 void listActiveByOrg(int32_t orgId, RowsCallback &&cb);
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/OrgSuccessionRepository.h
+#pragma once
+#include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/models/OrganizationSuccessionNominations.h>
+#include <fulla/storage/postgres/models/Organizations.h>
+#include <functional>
+#include <optional>
+#include <vector>
+namespace fulla::storage::postgres
+{
+class OrgSuccessionRepository
+{
+public:
+using BoolCallback = std::function<void(bool)>;
+using CountCallback = std::function<void(size_t)>;
+using RowOptCallback = std::function<void(
+const std::optional<::drogon_model::fulla_db::OrganizationSuccessionNominations> &)>;
+using RowsCallback = std::function<void(
+const std::vector<::drogon_model::fulla_db::OrganizationSuccessionNominations> &)>;
+explicit OrgSuccessionRepository(::drogon::orm::DbClientPtr dbClient);
+void upsertNomination(
+int32_t orgId,
+int32_t nomineeUserId,
+int32_t nominatedBy,
+BoolCallback &&cb
+);
+void isLiveUser(int32_t userId, BoolCallback &&cb);
+void findPending(int32_t orgId, RowOptCallback &&cb);
+void findPendingForOrgs(
+const std::vector<int32_t> &orgIds,
+RowsCallback &&cb
+);
+struct NomineeNomination
+{
+::drogon_model::fulla_db::OrganizationSuccessionNominations nomination;
+::drogon_model::fulla_db::Organizations org;
+};
+using NomineeNominationsCallback =
+std::function<void(const std::vector<NomineeNomination> &)>;
+void findPendingWithOrgForNominee(int32_t userId, NomineeNominationsCallback &&cb);
+void findOrgIdsWithPendingForOwner(int32_t userId,
+const std::function<void(const std::vector<int32_t> &)> &&cb);
+void withdrawPending(int32_t orgId, CountCallback &&cb);
+void effectSuccession(int32_t orgId,
+int32_t nomineeUserId,
+BoolCallback &&cb);
 private:
 ::drogon::orm::DbClientPtr dbClient_;
 };
@@ -9076,6 +9141,154 @@ const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
 bool dirtyFlag_[5]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/models/OrganizationSuccessionNominations.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class Organizations;
+class Users;
+class OrganizationSuccessionNominations
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _organization_id;
+static const std::string _nominee_user_id;
+static const std::string _nominated_by;
+static const std::string _created_at;
+static const std::string _accepted_at;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit OrganizationSuccessionNominations(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit OrganizationSuccessionNominations(const Json::Value &pJson) noexcept(false);
+OrganizationSuccessionNominations(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+OrganizationSuccessionNominations() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const int32_t &getValueOfOrganizationId() const noexcept;
+const std::shared_ptr<int32_t> &getOrganizationId() const noexcept;
+void setOrganizationId(const int32_t &pOrganizationId) noexcept;
+const int32_t &getValueOfNomineeUserId() const noexcept;
+const std::shared_ptr<int32_t> &getNomineeUserId() const noexcept;
+void setNomineeUserId(const int32_t &pNomineeUserId) noexcept;
+const int32_t &getValueOfNominatedBy() const noexcept;
+const std::shared_ptr<int32_t> &getNominatedBy() const noexcept;
+void setNominatedBy(const int32_t &pNominatedBy) noexcept;
+const ::trantor::Date &getValueOfCreatedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getCreatedAt() const noexcept;
+void setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept;
+void setCreatedAtToNull() noexcept;
+const ::trantor::Date &getValueOfAcceptedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getAcceptedAt() const noexcept;
+void setAcceptedAt(const ::trantor::Date &pAcceptedAt) noexcept;
+void setAcceptedAtToNull() noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Users getUsers(const drogon::orm::DbClientPtr &clientPtr) const;
+void getUsers(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Users)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+private:
+friend drogon::orm::Mapper<OrganizationSuccessionNominations>;
+friend drogon::orm::BaseBuilder<OrganizationSuccessionNominations, true, true>;
+friend drogon::orm::BaseBuilder<OrganizationSuccessionNominations, true, false>;
+friend drogon::orm::BaseBuilder<OrganizationSuccessionNominations, false, true>;
+friend drogon::orm::BaseBuilder<OrganizationSuccessionNominations, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<OrganizationSuccessionNominations>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<int32_t> organizationId_;
+std::shared_ptr<int32_t> nomineeUserId_;
+std::shared_ptr<int32_t> nominatedBy_;
+std::shared_ptr<::trantor::Date> createdAt_;
+std::shared_ptr<::trantor::Date> acceptedAt_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[6]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

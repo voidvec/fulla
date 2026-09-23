@@ -9,6 +9,7 @@
 #include <fulla/drogon/utils/EmailService.h>
 #include <fulla/storage/postgres/AdvisoryLock.h>
 #include <fulla/storage/postgres/OrgConsentRepository.h>
+#include <fulla/storage/postgres/OrgSuccessionRepository.h>
 #include <fulla/storage/postgres/models/OrganizationConsents.h>
 #include <fulla/storage/postgres/models/OrganizationInvitations.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
@@ -41,6 +42,7 @@ using OrgModel = ::drogon_model::fulla_db::Organizations;
 using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
 using InviteModel = ::drogon_model::fulla_db::OrganizationInvitations;
 using OrgConsentModel = ::drogon_model::fulla_db::OrganizationConsents;
+using SuccessionModel = ::drogon_model::fulla_db::OrganizationSuccessionNominations;
 using ::fulla::storage::postgres::withAdvisoryXactLock;
 
 constexpr int64_t kInviteTtlSeconds = 72 * 3600;
@@ -438,10 +440,36 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                 [req, cb, db, caller](const std::vector<MemberModel> &memberships) {
                     if (memberships.empty())
                     {
-                        Json::Value json;
-                        json["organizations"] = Json::Value(Json::arrayValue);
-                        json["total"] = 0;
-                        (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        // Not a member anywhere -- but they may still be a
+                        // pending succession NOMINEE (a nominee need not be a
+                        // member; M3's discovery surface must not dead-end
+                        // here).
+                        auto repos = std::make_shared<
+                          ::fulla::storage::postgres::OrgSuccessionRepository>(db);
+                        repos->findPendingWithOrgForNominee(
+                          caller.id,
+                          [req, cb](
+                            const std::vector<
+                              ::fulla::storage::postgres::OrgSuccessionRepository::
+                                NomineeNomination> &forYou) {
+                              Json::Value json;
+                              json["organizations"] = Json::Value(Json::arrayValue);
+                              json["total"] = 0;
+                              Json::Value forYouArr(Json::arrayValue);
+                              for (const auto &n : forYou)
+                              {
+                                  Json::Value fy;
+                                  fy["organization_id"] = n.org.getValueOfId();
+                                  fy["slug"] = n.org.getValueOfSlug();
+                                  fy["name"] = n.org.getValueOfName();
+                                  fy["created_at"] =
+                                    n.nomination.getValueOfCreatedAt().toDbStringLocal();
+                                  forYouArr.append(fy);
+                              }
+                              json["pending_succession_nominations"] = forYouArr;
+                              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                          }
+                        );
                         return;
                     }
                     std::vector<int32_t> orgIds;
@@ -455,25 +483,98 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                     {
                         Mapper<OrgModel>(db).findBy(
                           Criteria(OrgModel::Cols::_id, CompareOperator::In, orgIds),
-                          [req, cb, roleByOrg](const std::vector<OrgModel> &orgs) {
-                              Json::Value json;
-                              Json::Value arr(Json::arrayValue);
-                              for (const auto &org : orgs)
+                          [req, cb, db, roleByOrg, caller](const std::vector<OrgModel> &orgs) {
+                              // v1.5.0 M3 (R-M3-3 visibility): owner/admin
+                              // entries carry the org's pending succession
+                              // nomination; the caller's own pending
+                              // nominations (they may be a NON-member
+                              // nominee -- the accept banner's discovery
+                              // surface) ride as a sibling array.
+                              std::vector<int32_t> managerOrgIds;
+                              for (const auto &kv : roleByOrg)
                               {
-                                  Json::Value o;
-                                  o["id"] = org.getValueOfId();
-                                  o["slug"] = org.getValueOfSlug();
-                                  o["name"] = org.getValueOfName();
-                                  o["logo_uri"] = org.getValueOfLogoUri();
-                                  o["primary_color"] = org.getValueOfPrimaryColor();
-                                  o["role"] = roleByOrg.count(org.getValueOfId())
-                                                ? roleByOrg.at(org.getValueOfId())
-                                                : "member";
-                                  arr.append(o);
+                                  if (isManagerRole(kv.second))
+                                      managerOrgIds.push_back(kv.first);
                               }
-                              json["organizations"] = arr;
-                              json["total"] = static_cast<int>(arr.size());
-                              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                              auto repos = std::make_shared<
+                                ::fulla::storage::postgres::OrgSuccessionRepository>(db);
+                              repos->findPendingForOrgs(
+                                managerOrgIds,
+                                [req, cb, roleByOrg, caller, orgs, repos](
+                                  const std::vector<SuccessionModel> &pendingRows) {
+                                    std::map<int32_t, const SuccessionModel *> pendingByOrg;
+                                    for (const auto &n : pendingRows)
+                                        pendingByOrg[n.getValueOfOrganizationId()] = &n;
+                                    repos->findPendingWithOrgForNominee(
+                                      caller.id,
+                                      [req, cb, roleByOrg, orgs, pendingByOrg](
+                                        const std::vector<
+                                          ::fulla::storage::postgres::OrgSuccessionRepository::
+                                            NomineeNomination> &forYou) {
+                                          Json::Value json;
+                                          Json::Value arr(Json::arrayValue);
+                                          for (const auto &org : orgs)
+                                          {
+                                              Json::Value o;
+                                              o["id"] = org.getValueOfId();
+                                              o["slug"] = org.getValueOfSlug();
+                                              o["name"] = org.getValueOfName();
+                                              o["logo_uri"] = org.getValueOfLogoUri();
+                                              o["primary_color"] =
+                                                org.getValueOfPrimaryColor();
+                                              o["role"] = roleByOrg.count(org.getValueOfId())
+                                                            ? roleByOrg.at(org.getValueOfId())
+                                                            : "member";
+                                              Json::Value nomination =
+                                                Json::Value(Json::nullValue);
+                                              const bool manager =
+                                                roleByOrg.count(org.getValueOfId()) > 0 &&
+                                                isManagerRole(
+                                                  roleByOrg.at(org.getValueOfId())
+                                                );
+                                              if (manager)
+                                              {
+                                                  auto it =
+                                                    pendingByOrg.find(org.getValueOfId());
+                                                  if (it != pendingByOrg.end())
+                                                  {
+                                                      nomination =
+                                                        Json::Value(Json::objectValue);
+                                                      nomination["nominee_user_id"] =
+                                                        it->second->getValueOfNomineeUserId();
+                                                      nomination["nominated_by"] =
+                                                        it->second->getValueOfNominatedBy();
+                                                      nomination["created_at"] =
+                                                        it->second->getValueOfCreatedAt()
+                                                          .toDbStringLocal();
+                                                  }
+                                              }
+                                              o["successor_nomination"] = nomination;
+                                              arr.append(o);
+                                          }
+                                          json["organizations"] = arr;
+                                          json["total"] = static_cast<int>(arr.size());
+                                          Json::Value forYouArr(Json::arrayValue);
+                                          for (const auto &n : forYou)
+                                          {
+                                              Json::Value fy;
+                                              fy["organization_id"] =
+                                                n.org.getValueOfId();
+                                              fy["slug"] = n.org.getValueOfSlug();
+                                              fy["name"] = n.org.getValueOfName();
+                                              fy["created_at"] =
+                                                n.nomination.getValueOfCreatedAt()
+                                                  .toDbStringLocal();
+                                              forYouArr.append(fy);
+                                          }
+                                          json["pending_succession_nominations"] = forYouArr;
+                                          (*cb)(
+                                            ::drogon::HttpResponse::newHttpJsonResponse(json)
+                                          );
+                                      }
+                                    );
+                                }
+                              );
                           },
                           [req, cb](const DrogonDbException &e) {
                               respondError(req, cb, "DB_QUERY_ERROR",
@@ -1153,6 +1254,212 @@ void OrgMemberService::revokeOrgConsents(
                         }
                       );
                   });
+            });
+      });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/me/organizations/{slug}/successor-nomination {user_id} —
+// v1.5.0 M3 (R-M3-3): the owner nominates a successor (any LIVE user --
+// may be a non-member; a soft-deleted target would recreate the #221
+// deadlock). Overwrites a previous pending nomination (idempotent).
+// ---------------------------------------------------------------------------
+void OrgMemberService::nominateSuccessor(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody || !(*jsonBody).isMember("user_id") || !(*jsonBody)["user_id"].isIntegral())
+    {
+        respondError(
+          req, cb, "VALIDATION_INVALID_INPUT",
+          "nominate successor: JSON body with integer user_id required"
+        );
+        return;
+    }
+    const int64_t requestedUserId = (*jsonBody)["user_id"].asInt64();
+    // Range-check before narrowing (a static_cast would wrap 2^32+1 onto
+    // a different real user -- the #228 review's D1 lesson).
+    if (requestedUserId <= 0 || requestedUserId > (std::numeric_limits<int32_t>::max)())
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "nominate successor: user_id is out of range");
+        return;
+    }
+    const int32_t targetUserId = static_cast<int32_t>(requestedUserId);
+
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, targetUserId](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, targetUserId](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, caller, targetUserId](
+                    bool isMember, const std::string &memberRole) {
+                      if (!isMember || memberRole != "owner")
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                            "only the organization owner may nominate a successor");
+                          return;
+                      }
+                      auto repos = std::make_shared<
+                        ::fulla::storage::postgres::OrgSuccessionRepository>(db);
+                      repos->isLiveUser(
+                        targetUserId,
+                        [repos, req, cb, org, caller, targetUserId](bool live) {
+                            if (!live)
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                  "nominate successor: user not found");
+                                return;
+                            }
+                            repos->upsertNomination(
+                              org.getValueOfId(),
+                              targetUserId,
+                              caller.id,
+                              [req, cb, org, targetUserId](bool ok) {
+                                  if (!ok)
+                                  {
+                                      respondError(req, cb, "DB_QUERY_ERROR",
+                                        "nominate successor: write failed");
+                                      return;
+                                  }
+                                  audit(req, "org_successor_nominated",
+                                    org.getValueOfSlug() + ":" + std::to_string(targetUserId));
+                                  Json::Value json;
+                                  json["slug"] = org.getValueOfSlug();
+                                  json["nominee_user_id"] = targetUserId;
+                                  json["message"] =
+                                    "Successor nominated; the nominee must accept to take the seat";
+                                  (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                              }
+                            );
+                        }
+                      );
+                  });
+            });
+      });
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/me/organizations/{slug}/successor-nomination — the owner
+// withdraws the pending nomination. 404 when none is pending (the
+// family's count==0 convention).
+// ---------------------------------------------------------------------------
+void OrgMemberService::withdrawSuccessionNomination(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org](bool isMember, const std::string &memberRole) {
+                      if (!isMember || memberRole != "owner")
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                            "only the organization owner may withdraw a nomination");
+                          return;
+                      }
+                      auto repos = std::make_shared<
+                        ::fulla::storage::postgres::OrgSuccessionRepository>(db);
+                      repos->withdrawPending(
+                        org.getValueOfId(),
+                        [req, cb, org](const size_t withdrawn) {
+                            if (withdrawn == 0)
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                  "no pending successor nomination");
+                                return;
+                            }
+                            audit(req, "org_successor_nomination_withdrawn",
+                              org.getValueOfSlug());
+                            Json::Value json;
+                            json["slug"] = org.getValueOfSlug();
+                            json["message"] = "Successor nomination withdrawn";
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        }
+                      );
+                  });
+            });
+      });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/me/organizations/{slug}/successor-nomination/accept — only
+// the pending nominee. The seat swap is ONE transaction (R-M3-3): the
+// nominee's membership becomes owner, every other owner row demotes to
+// admin, the nomination row is marked accepted; any failure rolls the
+// whole thing back (no #228-style fail-open -- two-step confirmation
+// makes atomicity the right bias). False from the swap maps to 409
+// (the common cause is the optimistic guard: a concurrent acceptance).
+// ---------------------------------------------------------------------------
+void OrgMemberService::acceptSuccession(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller](bool, const OrgModel &org) {
+                auto repos = std::make_shared<
+                  ::fulla::storage::postgres::OrgSuccessionRepository>(db);
+                repos->findPending(
+                  org.getValueOfId(),
+                  [repos, req, cb, org, caller](
+                    const std::optional<SuccessionModel> &pending) {
+                      if (!pending.has_value())
+                      {
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                            "no pending successor nomination");
+                          return;
+                      }
+                      if (pending->getValueOfNomineeUserId() != caller.id)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                            "only the nominated successor may accept");
+                          return;
+                      }
+                      repos->effectSuccession(
+                        org.getValueOfId(),
+                        caller.id,
+                        [req, cb, org, caller](bool ok) {
+                            if (!ok)
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                  "succession no longer pending or the swap failed; retry");
+                                return;
+                            }
+                            audit(req, "org_successor_accepted", org.getValueOfSlug());
+                            Json::Value json;
+                            json["slug"] = org.getValueOfSlug();
+                            json["owner_user_id"] = caller.id;
+                            json["message"] = "Ownership transferred";
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        }
+                      );
+                  }
+                );
             });
       });
 }

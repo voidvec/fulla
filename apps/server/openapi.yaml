@@ -2925,8 +2925,36 @@ paths:
                         role:
                           type: string
                           enum: [owner, admin, member]
+                        successor_nomination:
+                          description: The org's pending succession nomination;
+                            visible to owner/admin callers only (null otherwise).
+                          type: object
+                          nullable: true
+                          properties:
+                            nominee_user_id:
+                              type: integer
+                            nominated_by:
+                              type: integer
+                            created_at:
+                              type: string
                   total:
                     type: integer
+                  pending_succession_nominations:
+                    description: Orgs where the CALLER is the pending nominee
+                      (the accept banner's discovery surface; the caller may be
+                      a non-member). v1.5.0 M3.
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        organization_id:
+                          type: integer
+                        slug:
+                          type: string
+                        name:
+                          type: string
+                        created_at:
+                          type: string
           description: Organization memberships
         '401':
           content:
@@ -3269,6 +3297,182 @@ paths:
       security:
       - bearerAuth: []
       summary: Revoke Organization Consents
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/successor-nomination:
+    post:
+      description: 'The organization owner nominates a successor (any live user,
+        may be a non-member). Replaces any previous pending nomination (idempotent);
+        the nominee must accept before the seat moves (v1.5.0 M3).'
+      operationId: post_api_me_organizations_{slug}_successor-nomination
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  nominee_user_id:
+                    type: integer
+                  message:
+                    type: string
+          description: Nomination recorded (pending the nominee's acceptance)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Only the organization owner may nominate
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization or target user not found
+      security:
+      - bearerAuth: []
+      summary: Nominate Successor
+      tags:
+      - Organization
+    delete:
+      description: The organization owner withdraws the pending successor
+        nomination (404 when none is pending).
+      operationId: delete_api_me_organizations_{slug}_successor-nomination
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  message:
+                    type: string
+          description: Nomination withdrawn
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Only the organization owner may withdraw
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found, or no pending nomination
+      security:
+      - bearerAuth: []
+      summary: Withdraw Successor Nomination
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/successor-nomination/accept:
+    post:
+      description: 'The nominated successor accepts. The seat swap is one
+        transaction: the nominee''s membership becomes owner, every other owner
+        row demotes to admin, and the nomination is marked accepted (all or
+        nothing).'
+      operationId: post_api_me_organizations_{slug}_successor-nomination_accept
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  owner_user_id:
+                    type: integer
+                  message:
+                    type: string
+          description: Ownership transferred
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Only the nominated successor may accept
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found, or no pending nomination
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Succession no longer pending or the swap failed; retry
+      security:
+      - bearerAuth: []
+      summary: Accept Succession
       tags:
       - Organization
   /api/me/organizations/{slug}/invitations/{invitationId}:

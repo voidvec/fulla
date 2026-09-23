@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from ..models.get_api_me_organizations_response_200_organizations_item import (
         GetApiMeOrganizationsResponse200OrganizationsItem,
     )
+    from ..models.get_api_me_organizations_response_200_pending_succession_nominations_item import (
+        GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem,
+    )
 
 
 T = TypeVar("T", bound="GetApiMeOrganizationsResponse200")
@@ -23,10 +26,16 @@ class GetApiMeOrganizationsResponse200:
     Attributes:
         organizations (list[GetApiMeOrganizationsResponse200OrganizationsItem] | Unset):
         total (int | Unset):
+        pending_succession_nominations (list[GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem] | Unset):
+            Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-
+            member). v1.5.0 M3.
     """
 
     organizations: list[GetApiMeOrganizationsResponse200OrganizationsItem] | Unset = UNSET
     total: int | Unset = UNSET
+    pending_succession_nominations: list[GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem] | Unset = (
+        UNSET
+    )
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,6 +48,13 @@ class GetApiMeOrganizationsResponse200:
 
         total = self.total
 
+        pending_succession_nominations: list[dict[str, Any]] | Unset = UNSET
+        if not isinstance(self.pending_succession_nominations, Unset):
+            pending_succession_nominations = []
+            for pending_succession_nominations_item_data in self.pending_succession_nominations:
+                pending_succession_nominations_item = pending_succession_nominations_item_data.to_dict()
+                pending_succession_nominations.append(pending_succession_nominations_item)
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({})
@@ -46,6 +62,8 @@ class GetApiMeOrganizationsResponse200:
             field_dict["organizations"] = organizations
         if total is not UNSET:
             field_dict["total"] = total
+        if pending_succession_nominations is not UNSET:
+            field_dict["pending_succession_nominations"] = pending_succession_nominations
 
         return field_dict
 
@@ -53,6 +71,9 @@ class GetApiMeOrganizationsResponse200:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.get_api_me_organizations_response_200_organizations_item import (
             GetApiMeOrganizationsResponse200OrganizationsItem,
+        )
+        from ..models.get_api_me_organizations_response_200_pending_succession_nominations_item import (
+            GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem,
         )
 
         d = dict(src_dict)
@@ -69,9 +90,25 @@ class GetApiMeOrganizationsResponse200:
 
         total = d.pop("total", UNSET)
 
+        _pending_succession_nominations = d.pop("pending_succession_nominations", UNSET)
+        pending_succession_nominations: (
+            list[GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem] | Unset
+        ) = UNSET
+        if _pending_succession_nominations is not UNSET:
+            pending_succession_nominations = []
+            for pending_succession_nominations_item_data in _pending_succession_nominations:
+                pending_succession_nominations_item = (
+                    GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem.from_dict(
+                        pending_succession_nominations_item_data
+                    )
+                )
+
+                pending_succession_nominations.append(pending_succession_nominations_item)
+
         get_api_me_organizations_response_200 = cls(
             organizations=organizations,
             total=total,
+            pending_succession_nominations=pending_succession_nominations,
         )
 
         get_api_me_organizations_response_200.additional_properties = d

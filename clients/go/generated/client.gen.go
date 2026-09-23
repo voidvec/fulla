@@ -1053,6 +1053,14 @@ type PostApiMeOrganizationsSlugInvitationsJSONBodyRole string
 // GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole defines parameters for GetApiMeOrganizationsSlugMembers.
 type GetApiMeOrganizationsSlugMembers200JSONResponseBodyMembersRole string
 
+// PostApiMeOrganizationsSlugSuccessorNominationJSONBody defines parameters for PostApiMeOrganizationsSlugSuccessorNomination.
+type PostApiMeOrganizationsSlugSuccessorNominationJSONBody struct {
+	UserId int64 `json:"user_id"`
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONBody defines parameters for PostApiMeOrganizationsSlugSuccessorNominationAccept.
+type PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONBody = map[string]interface{}
+
 // PutApiMePasswordJSONBody defines parameters for PutApiMePassword.
 type PutApiMePasswordJSONBody = map[string]interface{}
 
@@ -1395,6 +1403,12 @@ type PostApiMeOrganizationsJSONRequestBody PostApiMeOrganizationsJSONBody
 
 // PostApiMeOrganizationsSlugInvitationsJSONRequestBody defines body for PostApiMeOrganizationsSlugInvitations for application/json ContentType.
 type PostApiMeOrganizationsSlugInvitationsJSONRequestBody PostApiMeOrganizationsSlugInvitationsJSONBody
+
+// PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody defines body for PostApiMeOrganizationsSlugSuccessorNomination for application/json ContentType.
+type PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody PostApiMeOrganizationsSlugSuccessorNominationJSONBody
+
+// PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody defines body for PostApiMeOrganizationsSlugSuccessorNominationAccept for application/json ContentType.
+type PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody = PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONBody
 
 // PutApiMePasswordJSONRequestBody defines body for PutApiMePassword for application/json ContentType.
 type PutApiMePasswordJSONRequestBody = PutApiMePasswordJSONBody
@@ -2455,6 +2469,49 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
 	DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiMeOrganizationsSlugSuccessorNomination Withdraw Successor Nomination
+	//
+	// The organization owner withdraws the pending successor nomination (404 when none is pending).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/successor-nomination (the `DeleteApiMeOrganizationsSlugSuccessorNomination` operationId).
+	DeleteApiMeOrganizationsSlugSuccessorNomination(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationWithBody Nominate Successor
+	//
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNomination Nominate Successor
+	//
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+	PostApiMeOrganizationsSlugSuccessorNomination(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBody Accept Succession
+	//
+	// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationAccept Accept Succession
+	//
+	// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationAccept(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutApiMePasswordWithBody Change Password
 	//
@@ -4792,6 +4849,99 @@ func (c *Client) GetApiMeOrganizationsSlugMembers(ctx context.Context, slug stri
 // Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
 func (c *Client) DeleteApiMeOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteApiMeOrganizationsSlugMembersUserIdRequest(c.Server, slug, userId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiMeOrganizationsSlugSuccessorNomination Withdraw Successor Nomination
+//
+// The organization owner withdraws the pending successor nomination (404 when none is pending).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/successor-nomination (the `DeleteApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *Client) DeleteApiMeOrganizationsSlugSuccessorNomination(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeOrganizationsSlugSuccessorNominationRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationWithBody Nominate Successor
+//
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *Client) PostApiMeOrganizationsSlugSuccessorNominationWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugSuccessorNominationRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNomination Nominate Successor
+//
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *Client) PostApiMeOrganizationsSlugSuccessorNomination(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugSuccessorNominationRequest(c.Server, slug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBody Accept Succession
+//
+// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+func (c *Client) PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationAccept Accept Succession
+//
+// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+func (c *Client) PostApiMeOrganizationsSlugSuccessorNominationAccept(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequest(c.Server, slug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8561,6 +8711,134 @@ func NewDeleteApiMeOrganizationsSlugMembersUserIdRequest(server string, slug str
 	return req, nil
 }
 
+// NewDeleteApiMeOrganizationsSlugSuccessorNominationRequest constructs an http.Request for the DeleteApiMeOrganizationsSlugSuccessorNomination method
+func NewDeleteApiMeOrganizationsSlugSuccessorNominationRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/successor-nomination", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugSuccessorNominationRequest calls the generic PostApiMeOrganizationsSlugSuccessorNomination builder with application/json body
+func NewPostApiMeOrganizationsSlugSuccessorNominationRequest(server string, slug string, body PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugSuccessorNominationRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugSuccessorNominationRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugSuccessorNomination method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugSuccessorNominationRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/successor-nomination", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequest calls the generic PostApiMeOrganizationsSlugSuccessorNominationAccept builder with application/json body
+func NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequest(server string, slug string, body PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugSuccessorNominationAccept method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugSuccessorNominationAcceptRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/successor-nomination/accept", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPutApiMePasswordRequest calls the generic PutApiMePassword builder with application/json body
 func NewPutApiMePasswordRequest(server string, body PutApiMePasswordJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11293,6 +11571,51 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /api/me/organizations/{slug}/members/{userId} (the `DeleteApiMeOrganizationsSlugMembersUserId` operationId).
 	DeleteApiMeOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugMembersUserIdResponse, error)
+
+	// DeleteApiMeOrganizationsSlugSuccessorNominationWithResponse Withdraw Successor Nomination
+	//
+	// The organization owner withdraws the pending successor nomination (404 when none is pending).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/successor-nomination (the `DeleteApiMeOrganizationsSlugSuccessorNomination` operationId).
+	DeleteApiMeOrganizationsSlugSuccessorNominationWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugSuccessorNominationResponse, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse Nominate Successor
+	//
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationResponse, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationWithResponse Nominate Successor
+	//
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationResponse, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBodyWithResponse Accept Succession
+	//
+	// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse, error)
+
+	// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithResponse Accept Succession
+	//
+	// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+	PostApiMeOrganizationsSlugSuccessorNominationAcceptWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse, error)
 
 	// PutApiMePasswordWithBodyWithResponse Change Password
 	//
@@ -14570,7 +14893,22 @@ type GetApiMeOrganizationsResponse struct {
 			PrimaryColor *string                                                    `json:"primary_color,omitempty"`
 			Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
 			Slug         *string                                                    `json:"slug,omitempty"`
+
+			// SuccessorNomination The org's pending succession nomination; visible to owner/admin callers only (null otherwise).
+			SuccessorNomination *struct {
+				CreatedAt     *string `json:"created_at,omitempty"`
+				NominatedBy   *int    `json:"nominated_by,omitempty"`
+				NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+			} `json:"successor_nomination,omitempty"`
 		} `json:"organizations,omitempty"`
+
+		// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+		PendingSuccessionNominations *[]struct {
+			CreatedAt      *string `json:"created_at,omitempty"`
+			Name           *string `json:"name,omitempty"`
+			OrganizationId *int    `json:"organization_id,omitempty"`
+			Slug           *string `json:"slug,omitempty"`
+		} `json:"pending_succession_nominations,omitempty"`
 		Total *int `json:"total,omitempty"`
 	}
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -14586,7 +14924,22 @@ func (r GetApiMeOrganizationsResponse) GetJSON200() *struct {
 		PrimaryColor *string                                                    `json:"primary_color,omitempty"`
 		Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
 		Slug         *string                                                    `json:"slug,omitempty"`
+
+		// SuccessorNomination The org's pending succession nomination; visible to owner/admin callers only (null otherwise).
+		SuccessorNomination *struct {
+			CreatedAt     *string `json:"created_at,omitempty"`
+			NominatedBy   *int    `json:"nominated_by,omitempty"`
+			NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+		} `json:"successor_nomination,omitempty"`
 	} `json:"organizations,omitempty"`
+
+	// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+	PendingSuccessionNominations *[]struct {
+		CreatedAt      *string `json:"created_at,omitempty"`
+		Name           *string `json:"name,omitempty"`
+		OrganizationId *int    `json:"organization_id,omitempty"`
+		Slug           *string `json:"slug,omitempty"`
+	} `json:"pending_succession_nominations,omitempty"`
 	Total *int `json:"total,omitempty"`
 } {
 	return r.JSON200
@@ -15249,6 +15602,228 @@ func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeleteApiMeOrganizationsSlugMembersUserIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiMeOrganizationsSlugSuccessorNominationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message *string `json:"message,omitempty"`
+		Slug    *string `json:"slug,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON200() *struct {
+	Message *string `json:"message,omitempty"`
+	Slug    *string `json:"slug,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeOrganizationsSlugSuccessorNominationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugSuccessorNominationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message       *string `json:"message,omitempty"`
+		NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+		Slug          *string `json:"slug,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON200() *struct {
+	Message       *string `json:"message,omitempty"`
+	NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+	Slug          *string `json:"slug,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugSuccessorNominationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Message     *string `json:"message,omitempty"`
+		OwnerUserId *int    `json:"owner_user_id,omitempty"`
+		Slug        *string `json:"slug,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetJSON200() *struct {
+	Message     *string `json:"message,omitempty"`
+	OwnerUserId *int    `json:"owner_user_id,omitempty"`
+	Slug        *string `json:"slug,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18628,6 +19203,81 @@ func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugMembersUserIdWithRespo
 	return ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp)
 }
 
+// DeleteApiMeOrganizationsSlugSuccessorNominationWithResponse Withdraw Successor Nomination
+//
+// The organization owner withdraws the pending successor nomination (404 when none is pending).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/successor-nomination (the `DeleteApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugSuccessorNominationWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugSuccessorNominationResponse, error) {
+	rsp, err := c.DeleteApiMeOrganizationsSlugSuccessorNomination(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeOrganizationsSlugSuccessorNominationResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse Nominate Successor
+//
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugSuccessorNominationWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugSuccessorNominationResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationWithResponse Nominate Successor
+//
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination (the `PostApiMeOrganizationsSlugSuccessorNomination` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugSuccessorNominationWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugSuccessorNomination(ctx, slug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugSuccessorNominationResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBodyWithResponse Accept Succession
+//
+// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugSuccessorNominationAcceptWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugSuccessorNominationAcceptResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugSuccessorNominationAcceptWithResponse Accept Succession
+//
+// The nominated successor accepts. The seat swap is one transaction: the nominee's membership becomes owner, every other owner row demotes to admin, and the nomination is marked accepted (all or nothing).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/successor-nomination/accept (the `PostApiMeOrganizationsSlugSuccessorNominationAccept` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugSuccessorNominationAcceptWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugSuccessorNominationAcceptJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugSuccessorNominationAccept(ctx, slug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugSuccessorNominationAcceptResponse(rsp)
+}
+
 // PutApiMePasswordWithBodyWithResponse Change Password
 //
 // Change the current user's password. A successful change also clears the must_change_password flag (#145) and revokes all existing tokens. For the forced first-login flow (no Bearer token available) use POST /oauth2/password/change instead.
@@ -21223,7 +21873,22 @@ func ParseGetApiMeOrganizationsResponse(rsp *http.Response) (*GetApiMeOrganizati
 				PrimaryColor *string                                                    `json:"primary_color,omitempty"`
 				Role         *GetApiMeOrganizations200JSONResponseBodyOrganizationsRole `json:"role,omitempty"`
 				Slug         *string                                                    `json:"slug,omitempty"`
+
+				// SuccessorNomination The org's pending succession nomination; visible to owner/admin callers only (null otherwise).
+				SuccessorNomination *struct {
+					CreatedAt     *string `json:"created_at,omitempty"`
+					NominatedBy   *int    `json:"nominated_by,omitempty"`
+					NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+				} `json:"successor_nomination,omitempty"`
 			} `json:"organizations,omitempty"`
+
+			// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+			PendingSuccessionNominations *[]struct {
+				CreatedAt      *string `json:"created_at,omitempty"`
+				Name           *string `json:"name,omitempty"`
+				OrganizationId *int    `json:"organization_id,omitempty"`
+				Slug           *string `json:"slug,omitempty"`
+			} `json:"pending_succession_nominations,omitempty"`
 			Total *int `json:"total,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21697,6 +22362,172 @@ func ParseDeleteApiMeOrganizationsSlugMembersUserIdResponse(rsp *http.Response) 
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiMeOrganizationsSlugSuccessorNominationResponse parses an HTTP response from a DeleteApiMeOrganizationsSlugSuccessorNominationWithResponse call
+func ParseDeleteApiMeOrganizationsSlugSuccessorNominationResponse(rsp *http.Response) (*DeleteApiMeOrganizationsSlugSuccessorNominationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeOrganizationsSlugSuccessorNominationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+			Slug    *string `json:"slug,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugSuccessorNominationResponse parses an HTTP response from a PostApiMeOrganizationsSlugSuccessorNominationWithResponse call
+func ParsePostApiMeOrganizationsSlugSuccessorNominationResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugSuccessorNominationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugSuccessorNominationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message       *string `json:"message,omitempty"`
+			NomineeUserId *int    `json:"nominee_user_id,omitempty"`
+			Slug          *string `json:"slug,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugSuccessorNominationAcceptResponse parses an HTTP response from a PostApiMeOrganizationsSlugSuccessorNominationAcceptWithResponse call
+func ParsePostApiMeOrganizationsSlugSuccessorNominationAcceptResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugSuccessorNominationAcceptResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message     *string `json:"message,omitempty"`
+			OwnerUserId *int    `json:"owner_user_id,omitempty"`
+			Slug        *string `json:"slug,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 
