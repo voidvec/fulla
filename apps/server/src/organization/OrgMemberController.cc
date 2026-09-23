@@ -68,6 +68,16 @@ void OrgMemberController::initApiDocsImpl()
       "/api/me/org-invitations/accept", "POST", "Accept Organization Invitation",
       "Accept an invitation by token. The caller's account email must match "
       "the invitation email (normalized)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consents", "GET", "List Organization Consents",
+      "Active organization consents grouped by client, each scope with its "
+      "granted_by/granted_at (owner/admin)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consents/{clientId}", "DELETE",
+      "Revoke Organization Consents",
+      "Revoke every active consent of the (org, client) pair (owner/admin). "
+      "Revocation only affects FUTURE authorizations; issued tokens are not "
+      "revoked (O4)."));
 }
 
 void OrgMemberController::createOrg(
@@ -155,6 +165,29 @@ void OrgMemberController::acceptInvitation(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     OrgMemberService::acceptInvitation(req, sharedCb);
+}
+
+void OrgMemberController::listOrgConsents(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::listOrgConsents(req, sharedCb, slug);
+}
+
+void OrgMemberController::revokeOrgConsents(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug,
+  const std::string &clientId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::revokeOrgConsents(req, sharedCb, slug, clientId);
 }
 
 }  // namespace organization

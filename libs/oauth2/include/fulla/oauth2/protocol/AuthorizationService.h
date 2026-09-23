@@ -27,6 +27,7 @@
 // deferred until libs/identity's remaining services are filled in (see
 // PROGRESS.md). This class is additive and independently unit-tested.
 
+#include <fulla/common/ports/IOrgConsentResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
 #include <fulla/oauth2/access/ScopeDecision.h>
@@ -90,12 +91,24 @@ class AuthorizationService
         adminScopes_ = std::move(adminScopes);
     }
 
+    /// v1.5.0 M2 (design §2.2, R-M2-1): inject the org-consent half of
+    /// the consent UNION. Unset (or a scope with a personal consent
+    /// already recorded -- the common case short-circuits) keeps the
+    /// decision exactly as before this milestone. Setter-injected like
+    /// TokenService::setOrgContextResolver (M1): the composition root
+    /// wires it at plugin init; memory-mode deployments pass nothing.
+    void setOrgConsentResolver(std::shared_ptr<fulla::common::ports::IOrgConsentResolver> resolver)
+    {
+        orgConsentResolver_ = std::move(resolver);
+    }
+
   private:
     std::shared_ptr<fulla::oauth2::repository::IClientRepository> clients_;
     std::shared_ptr<fulla::oauth2::repository::IConsentRepository> consents_;
     std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
     std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
     std::unordered_set<std::string> adminScopes_;  // #43 §5.5
+    std::shared_ptr<fulla::common::ports::IOrgConsentResolver> orgConsentResolver_;  // M2
 };
 
 }  // namespace fulla::oauth2::protocol

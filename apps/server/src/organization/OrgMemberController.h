@@ -63,6 +63,19 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       ::drogon::Post,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
+    // v1.5.0 M2 (design §2.2, R-M2-4): org-consent management surface.
+    ADD_METHOD_TO(
+      OrgMemberController::listOrgConsents,
+      "/api/me/organizations/{slug}/consents",
+      ::drogon::Get,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::revokeOrgConsents,
+      "/api/me/organizations/{slug}/consents/{clientId}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
     METHOD_LIST_END
 
     void createOrg(
@@ -103,6 +116,23 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
     void acceptInvitation(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+
+    /// GET /api/me/organizations/{slug}/consents — active org consents
+    /// grouped by client (owner/admin).
+    void listOrgConsents(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    /// DELETE /api/me/organizations/{slug}/consents/{clientId} — revoke
+    /// every active consent of the (org, client) pair (owner/admin).
+    void revokeOrgConsents(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug,
+      const std::string &clientId
     );
 
     /// #43 pattern: declare the /api/me org routes' scope requirements for

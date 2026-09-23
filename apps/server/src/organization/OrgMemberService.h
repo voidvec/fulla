@@ -77,6 +77,23 @@ class OrgMemberService
     /// POST /api/me/organizations/invitations/accept — body {token}; requires
     /// the caller's verified-bound email to match the invite email.
     static void acceptInvitation(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
+
+    /// GET /api/me/organizations/{slug}/consents — active organization
+    /// consents grouped by client (v1.5.0 M2, R-M2-4; owner/admin).
+    static void listOrgConsents(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
+
+    /// DELETE /api/me/organizations/{slug}/consents/{clientId} — revoke
+    /// every active consent of the (org, client) pair; only affects future
+    /// authorizations (O4). 404 when no active rows remain (the family's
+    /// count==0 convention).
+    static void revokeOrgConsents(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug,
+      const std::string &clientId
+    );
 };
 
 }  // namespace organization
