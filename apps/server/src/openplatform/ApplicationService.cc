@@ -505,6 +505,11 @@ void replaceClientScopes(
               }
               auto remaining = std::make_shared<std::atomic<int>>(
                 static_cast<int>(scopes.size()));
+              // Parallel fan-out: exactly one response per request even
+              // when several buffered inserts fail together (a rollback
+              // fails every buffered command -- the same hazard list()
+              // documents for its parallel findOwners).
+              auto errored = std::make_shared<std::atomic<bool>>(false);
               for (const auto &name : scopes)
               {
                   ClientScopeModel row;
@@ -518,7 +523,9 @@ void replaceClientScopes(
                             if (remaining->fetch_sub(1) == 1)
                                 onDone();
                         },
-                        [req, cb](const DrogonDbException &e) {
+                        [req, cb, errored](const DrogonDbException &e) {
+                            if (errored->exchange(true))
+                                return;
                             respondError(req, cb, "DB_QUERY_ERROR",
                               std::string("scope write failed: ") + e.base().what());
                         }
@@ -526,7 +533,8 @@ void replaceClientScopes(
                   }
                   catch (...)
                   {
-                      respondError(req, cb, "DB_QUERY_ERROR", "scope write: Mapper construction failed");
+                      if (!errored->exchange(true))
+                          respondError(req, cb, "DB_QUERY_ERROR", "scope write: Mapper construction failed");
                   }
               }
           },

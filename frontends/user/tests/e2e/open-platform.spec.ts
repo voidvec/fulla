@@ -190,7 +190,7 @@ test.describe('My Organizations — org authorizations', () => {
     await expect(page.getByText('No organization authorizations yet')).toBeVisible()
   })
 
-  test('grant-link generation carries org_id and prompt=consent', async ({ page }) => {
+  test('grant-link generation carries org_id, prompt=consent and a PKCE challenge', async ({ page }) => {
     await page.getByPlaceholder('Client ID of an org application').fill('app_orgmock1')
     await page
       .getByPlaceholder('Registered redirect URI')
@@ -198,11 +198,19 @@ test.describe('My Organizations — org authorizations', () => {
     await page.click('button:has-text("Generate link")')
     const link = page.getByTestId('org-grant-link')
     await expect(link).toBeVisible()
-    const text = await link.textContent()
+    const text = (await link.textContent()) || ''
     expect(text).toContain('/oauth2/authorize?')
     expect(text).toContain('org_id=qa-consent-org')
     expect(text).toContain('prompt=consent')
     expect(text).toContain('client_id=app_orgmock1')
     expect(text).toContain(encodeURIComponent('https://qa.example/callback'))
+    // The link must clear the consent POST's PKCE gate (43+ char S256
+    // challenge) or the org grant can never complete.
+    const marker = 'code_challenge='
+    const start = text.indexOf(marker)
+    expect(start).toBeGreaterThan(-1)
+    const challenge = text.slice(start + marker.length).split('&')[0]
+    expect(challenge.length).toBeGreaterThanOrEqual(43)
+    expect(text).toContain('code_challenge_method=S256')
   })
 })

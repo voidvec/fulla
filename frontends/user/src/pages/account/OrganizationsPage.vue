@@ -84,6 +84,19 @@ async function revokeConsents(slug: string, clientId: string) {
 // generated authorize link carrying the org hint -- the org manager opens
 // it in their own browser session; the consent screen then records the
 // grant on the organization's behalf (R-M2-2 server-side).
+// The PKCE challenge is a ceremony-only value: every shipped config
+// requires a code_challenge at the consent POST, but the code produced by
+// this grant flow is never exchanged (R-M2-3) -- it expires unused. A
+// random S256-shaped challenge (43+ chars of the PKCE alphabet) satisfies
+// the gate; no verifier is kept because nothing redeems the code.
+function randomPkceChallenge(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  bytes.forEach((b) => { binary += String.fromCharCode(b) })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 function generateGrantLink(slug: string) {
   if (!grantClientId.value || !grantRedirectUri.value) return
   const params = new URLSearchParams({
@@ -94,6 +107,8 @@ function generateGrantLink(slug: string) {
     state: `orggrant-${Date.now()}`,
     prompt: 'consent',
     org_id: slug,
+    code_challenge: randomPkceChallenge(),
+    code_challenge_method: 'S256',
   })
   grantLink.value = `${window.location.origin}/oauth2/authorize?${params.toString()}`
 }
