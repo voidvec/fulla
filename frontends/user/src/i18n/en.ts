@@ -375,6 +375,13 @@ export default {
       consentsRedirectUri: 'Registered redirect URI',
       consentsLinkTitle: 'Authorization link (open while signed in as an org owner/admin)',
       consentsGenerate: 'Generate link',
+      successionBannerTitle: 'Ownership succession',
+      successionBannerDesc: 'You have been nominated as the successor owner of "{name}".',
+      successionAccept: 'Accept ownership',
+      successionNominate: 'Nominate successor (user ID)',
+      successionNominateAction: 'Nominate',
+      successionPending: 'Pending successor nomination: user {id}',
+      successionWithdraw: 'Withdraw nomination',
     },
   },
 }

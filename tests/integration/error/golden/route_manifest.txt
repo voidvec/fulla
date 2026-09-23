@@ -9,6 +9,7 @@ DELETE /api/me/authorized-apps/{clientId}
 DELETE /api/me/organizations/{slug}/consents/{clientId}
 DELETE /api/me/organizations/{slug}/invitations/{invitationId}
 DELETE /api/me/organizations/{slug}/members/{userId}
+DELETE /api/me/organizations/{slug}/successor-nomination
 DELETE /api/me/social/links/{provider}
 GET /.well-known/jwks.json
 GET /.well-known/oauth-authorization-server
@@ -80,6 +81,8 @@ POST /api/me/mfa/verify
 POST /api/me/org-invitations/accept
 POST /api/me/organizations
 POST /api/me/organizations/{slug}/invitations
+POST /api/me/organizations/{slug}/successor-nomination
+POST /api/me/organizations/{slug}/successor-nomination/accept
 POST /api/me/social/links/{provider}
 POST /api/me/social/links/{provider}/authorize
 POST /api/me/webauthn/register/begin

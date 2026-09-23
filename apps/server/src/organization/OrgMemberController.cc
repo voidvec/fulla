@@ -78,6 +78,24 @@ void OrgMemberController::initApiDocsImpl()
       "Revoke every active consent of the (org, client) pair (owner/admin). "
       "Revocation only affects FUTURE authorizations; issued tokens are not "
       "revoked (O4)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/successor-nomination", "POST",
+      "Nominate Successor",
+      "The organization owner nominates a successor (any live user, may be a "
+      "non-member). Replaces any previous pending nomination (idempotent); "
+      "the nominee must accept before the seat moves (v1.5.0 M3)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/successor-nomination", "DELETE",
+      "Withdraw Successor Nomination",
+      "The organization owner withdraws the pending successor nomination "
+      "(404 when none is pending)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/successor-nomination/accept", "POST",
+      "Accept Succession",
+      "The nominated successor accepts. The seat swap is one transaction: "
+      "the nominee's membership becomes owner, every other owner row "
+      "demotes to admin, and the nomination is marked accepted (all or "
+      "nothing)."));
 }
 
 void OrgMemberController::createOrg(
@@ -188,6 +206,39 @@ void OrgMemberController::revokeOrgConsents(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     OrgMemberService::revokeOrgConsents(req, sharedCb, slug, clientId);
+}
+
+void OrgMemberController::nominateSuccessor(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::nominateSuccessor(req, sharedCb, slug);
+}
+
+void OrgMemberController::withdrawSuccessionNomination(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::withdrawSuccessionNomination(req, sharedCb, slug);
+}
+
+void OrgMemberController::acceptSuccession(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::acceptSuccession(req, sharedCb, slug);
 }
 
 }  // namespace organization

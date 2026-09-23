@@ -34,6 +34,52 @@ const lastInviteToken = ref('')
 const acceptToken = ref('')
 const accepting = ref(false)
 
+// v1.5.0 M3: ownership succession (R-M3-5) -- the nominee-facing accept
+// banner rides the org list response (the nominee may be a non-member).
+const pendingNominations = ref<any[]>([])
+const nominateUserId = ref('')
+
+async function acceptSuccession(slug: string) {
+  error.value = null
+  try {
+    await http.post(`/api/me/organizations/${slug}/successor-nomination/accept`, {})
+    success.value = t('account.organizations.created')
+    setTimeout(() => { success.value = '' }, 3000)
+    await fetchOrgs()
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  }
+}
+
+async function nominateSuccessor(slug: string) {
+  const parsed = Number.parseInt(nominateUserId.value, 10)
+  if (Number.isNaN(parsed)) return
+  error.value = null
+  try {
+    await http.post(`/api/me/organizations/${slug}/successor-nomination`, {
+      user_id: parsed,
+    })
+    success.value = t('account.organizations.successionPending', { id: nominateUserId.value })
+    setTimeout(() => { success.value = '' }, 3000)
+    nominateUserId.value = ''
+    await fetchOrgs()
+    await toggleMembers(slug)
+    await toggleMembers(slug)
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  }
+}
+
+async function withdrawSuccession(slug: string) {
+  error.value = null
+  try {
+    await http.delete(`/api/me/organizations/${slug}/successor-nomination`)
+    await fetchOrgs()
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  }
+}
+
 // v1.5.0 M2: organization consents panel (owner/admin).
 const expandedConsentsSlug = ref('')
 const consents = ref<any[]>([])
@@ -118,6 +164,7 @@ async function fetchOrgs() {
   try {
     const resp = await http.get('/api/me/organizations')
     orgs.value = resp.data?.organizations || []
+    pendingNominations.value = resp.data?.pending_succession_nominations || []
   } catch {
     error.value = t('account.organizations.loadFailed')
   } finally {
@@ -250,6 +297,31 @@ onMounted(fetchOrgs)
     >
       {{ errorText }}
     </AppAlert>
+
+    <AppCard
+      v-if="pendingNominations.length > 0"
+      class="mb-6"
+      data-testid="succession-banner"
+    >
+      <p class="font-medium text-neutral-900 mb-2">
+        {{ $t('account.organizations.successionBannerTitle') }}
+      </p>
+      <div
+        v-for="n in pendingNominations"
+        :key="n.slug"
+        class="flex items-center justify-between gap-2 py-1"
+      >
+        <span class="text-neutral-700">
+          {{ $t('account.organizations.successionBannerDesc', { name: n.name }) }}
+        </span>
+        <button
+          class="px-4 py-2 text-sm text-white bg-brand-600 rounded-ctl hover:bg-brand-700 transition-colors"
+          @click="acceptSuccession(n.slug)"
+        >
+          {{ $t('account.organizations.successionAccept') }}
+        </button>
+      </div>
+    </AppCard>
 
     <AppCard class="mb-6">
       <p class="font-medium text-neutral-900 mb-2">
@@ -411,11 +483,45 @@ onMounted(fetchOrgs)
               <option value="admin">admin</option>
             </select>
             <button
-              class="px-3 py-2 text-sm text-white bg-brand-600 rounded-ctl hover:bg-brand-700"
+              class="px-4 py-2 text-sm text-white bg-brand-600 rounded-ctl hover:bg-brand-700"
               @click="invite(org.slug)"
             >
               {{ $t('account.organizations.invite') }}
             </button>
+          </div>
+          <div
+            v-if="org.role === 'owner'"
+            class="pt-2 border-t border-neutral-100 space-y-2"
+            data-testid="succession-nominate"
+          >
+            <p
+              v-if="org.successor_nomination"
+              class="text-sm text-neutral-500"
+            >
+              {{ $t('account.organizations.successionPending', { id: org.successor_nomination.nominee_user_id }) }}
+              <button
+                class="ml-2 underline text-neutral-400 hover:text-neutral-600"
+                @click="withdrawSuccession(org.slug)"
+              >
+                {{ $t('account.organizations.successionWithdraw') }}
+              </button>
+            </p>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="nominateUserId"
+                :placeholder="$t('account.organizations.successionNominate')"
+                class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                       focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+              >
+              <button
+                class="px-4 py-2 text-sm text-white bg-brand-600 rounded-ctl hover:bg-brand-700
+                       disabled:opacity-50"
+                :disabled="!nominateUserId"
+                @click="nominateSuccessor(org.slug)"
+              >
+                {{ $t('account.organizations.successionNominateAction') }}
+              </button>
+            </div>
           </div>
           <p
             v-if="lastInviteToken"

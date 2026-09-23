@@ -7,6 +7,7 @@
 #include <fulla/storage/postgres/models/Users.h>
 #include <fulla/drogon/utils/PasswordHasher.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
+#include <fulla/drogon/utils/SuccessionGuard.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/admin/UserAdminService.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
@@ -1106,7 +1107,7 @@ void UserSelfServiceController::deleteAccount(
                   ::fulla::drogon::admin::isLastActiveAdmin(
                     db,
                     internalId,
-                    [proceedWithDelete, sharedCb, req](bool lastAdmin) {
+                    [proceedWithDelete, sharedCb, req, db, internalId](bool lastAdmin) {
                         if (lastAdmin)
                         {
                             respondError(
@@ -1117,7 +1118,30 @@ void UserSelfServiceController::deleteAccount(
                             );
                             return;
                         }
-                        proceedWithDelete();
+                        // v1.5.0 M3 (R-M3-4): auto-effect any pending
+                        // succession nomination the deleting owner holds
+                        // BEFORE the soft delete lands; failure aborts the
+                        // deletion (a frozen seat is the #221 deadlock).
+                        // Orgs without a pending nomination fall to the
+                        // admin-takeover state by design (#228 fallback).
+                        ::fulla::drogon::utils::effectPendingSuccessionsForUser(
+                          db,
+                          internalId,
+                          req,
+                          [proceedWithDelete, sharedCb, req](bool ok, const std::string &detail) {
+                              if (!ok)
+                              {
+                                  respondError(
+                                    req,
+                                    sharedCb,
+                                    "DB_QUERY_ERROR",
+                                    "deleteAccount: ownership succession failed for " + detail
+                                  );
+                                  return;
+                              }
+                              proceedWithDelete();
+                          }
+                        );
                     },
                     [sharedCb, req]() {
                         respondError(

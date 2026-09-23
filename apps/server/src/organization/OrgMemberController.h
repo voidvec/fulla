@@ -76,6 +76,27 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       ::drogon::Delete,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
+    // v1.5.0 M3 (design §1.3 item 2, R-M3-3): ownership succession.
+    ADD_METHOD_TO(
+      OrgMemberController::nominateSuccessor,
+      "/api/me/organizations/{slug}/successor-nomination",
+      ::drogon::Post,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::withdrawSuccessionNomination,
+      "/api/me/organizations/{slug}/successor-nomination",
+      ::drogon::Delete,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    // Literal path so the accept route can never be captured by the
+    // nomination resource routes above.
+    ADD_METHOD_TO(
+      OrgMemberController::acceptSuccession,
+      "/api/me/organizations/{slug}/successor-nomination/accept",
+      ::drogon::Post,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
     METHOD_LIST_END
 
     void createOrg(
@@ -133,6 +154,30 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &slug,
       const std::string &clientId
+    );
+
+    /// POST /api/me/organizations/{slug}/successor-nomination — owner
+    /// nominates a successor (body {user_id}, v1.5.0 M3).
+    void nominateSuccessor(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    /// DELETE /api/me/organizations/{slug}/successor-nomination — owner
+    /// withdraws the pending nomination.
+    void withdrawSuccessionNomination(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    /// POST /api/me/organizations/{slug}/successor-nomination/accept —
+    /// the nominee accepts; single-transaction seat swap.
+    void acceptSuccession(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
     );
 
     /// #43 pattern: declare the /api/me org routes' scope requirements for

@@ -6,6 +6,7 @@
 #include <fulla/storage/postgres/models/Roles.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/utils/PasswordHasher.h>
+#include <fulla/drogon/utils/SuccessionGuard.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/common/utils/EmailNormalizer.h>
@@ -1244,7 +1245,26 @@ void UserAdminService::deleteUser(
                         );
                         return;
                     }
-                    row.setDeletedAt(::trantor::Date::now());
+                    // v1.5.0 M3 (R-M3-4): auto-effect any pending succession
+                    // nomination the deleting owner holds BEFORE the soft
+                    // delete; failure aborts. Orgs without a pending
+                    // nomination fall to the admin-takeover state (#228 is
+                    // this endpoint's sibling fallback).
+                    ::fulla::drogon::utils::effectPendingSuccessionsForUser(
+                      db,
+                      id,
+                      req,
+                      [cb, req, db, id, row = std::move(row)](
+                        bool successionOk, const std::string &detail) mutable {
+                          if (!successionOk)
+                          {
+                              respondError(
+                                req, cb, "DB_QUERY_ERROR",
+                                "deleteUser: ownership succession failed for " + detail
+                              );
+                              return;
+                          }
+                          row.setDeletedAt(::trantor::Date::now());
                     std::string publicSub = row.getValueOfPublicSub();
                     try
                     {
@@ -1332,6 +1352,8 @@ void UserAdminService::deleteUser(
                     {
                         respondError(req, cb, "DB_QUERY_ERROR", "Failed to construct update Mapper");
                     }
+                      }
+                      );
                 },
                 [cb, req]() {
                     respondError(req, cb, "DB_QUERY_ERROR", "Failed to evaluate last-admin guard");

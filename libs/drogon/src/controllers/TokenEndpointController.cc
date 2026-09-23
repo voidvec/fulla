@@ -1309,49 +1309,106 @@ void TokenEndpointController::token(
                         }
                     }
 
-                    // Generate access token (no refresh token for client_credentials)
-                    auto tokenStr = fulla::drogon::utils::generateSecureToken();
-                    auto now = std::chrono::duration_cast<std::chrono::seconds>(
-                                 std::chrono::system_clock::now().time_since_epoch()
-                    )
-                                 .count();
-                    // P1 #6: use the configured TTL instead of a hardcoded 3600 so
-                    // expiresAt and the advertised expires_in stay consistent with
-                    // the real token lifetime (RFC 6749 §5.1).
-                    auto accessTokenTtl = plugin->getAccessTokenTtl();
+                    // v1.5.0 M3 (design §2.3, R-M3-1): an org-owned
+                    // client's CC token carries the org anchor
+                    // (oauth2_access_tokens.org_id; introspection exposes
+                    // it -- the M1 DTO plumbing already persists the field
+                    // across PG/memory/redis storages). sub stays the
+                    // client itself (V4). Personal apps carry no org
+                    // context. Storage-type-guarded like the M1 resolver
+                    // wiring: memory mode has no org rows and must not
+                    // reach getDbClient() (Debug builds assert, not
+                    // throw). The ruling's org_name JWT claim has no
+                    // carrier here -- fulla access tokens are opaque
+                    // (only id_tokens are JWTs) and the ruling itself
+                    // caps introspection at org_id; org_name is dropped
+                    // from the CC surface (PR body records this).
+                    auto mintCcToken =
+                      [plugin, clientId, grantedScope, sharedCb](
+                          std::optional<int32_t> orgId) {
+                        // Generate access token (no refresh token for client_credentials)
+                        auto tokenStr = fulla::drogon::utils::generateSecureToken();
+                        auto nowSecs = std::chrono::duration_cast<std::chrono::seconds>(
+                                         std::chrono::system_clock::now().time_since_epoch()
+                        )
+                                         .count();
+                        // P1 #6: use the configured TTL instead of a hardcoded 3600 so
+                        // expiresAt and the advertised expires_in stay consistent with
+                        // the real token lifetime (RFC 6749 §5.1).
+                        auto accessTokenTtl = plugin->getAccessTokenTtl();
 
-                    fulla::oauth2::model::OAuth2AccessToken token;
-                    token.token = fulla::drogon::utils::hashToken(tokenStr);
-                    token.clientId = clientId;
-                    token.userId = "client:" + clientId;  // M2M: subject is the client itself
-                    token.scope = grantedScope;
-                    token.issuedAt = now;  // P2 #10: introspection iat
-                    token.expiresAt = now + accessTokenTtl;
-                    // F-016: M2M tokens get the configured issuer too (the
-                    // controller constructs these tokens outside TokenService,
-                    // so the stamp happens here via plugin->getIssuer()).
-                    token.issuer = plugin->getIssuer();
+                        fulla::oauth2::model::OAuth2AccessToken token;
+                        token.token = fulla::drogon::utils::hashToken(tokenStr);
+                        token.clientId = clientId;
+                        token.userId = "client:" + clientId;  // M2M: subject is the client itself
+                        token.scope = grantedScope;
+                        token.issuedAt = nowSecs;  // P2 #10: introspection iat
+                        token.expiresAt = nowSecs + accessTokenTtl;
+                        // F-016: M2M tokens get the configured issuer too (the
+                        // controller constructs these tokens outside TokenService,
+                        // so the stamp happens here via plugin->getIssuer()).
+                        token.issuer = plugin->getIssuer();
+                        token.orgId = orgId;  // M3 org anchor (nullopt = personal)
 
-                    // Phase 4.3: route through plugin->saveAccessToken (NEW
-                    // ITokenRepository) instead of getStorage()->saveAccessToken.
-                    plugin->saveAccessToken(
-                      token, [sharedCb, tokenStr, grantedScope, accessTokenTtl]() {
-                          Json::Value json;
-                          json["access_token"] = tokenStr;
-                          json["token_type"] = "Bearer";
-                          json["expires_in"] = (Json::Int64)accessTokenTtl;
-                          json["scope"] = grantedScope;
-                          // No refresh_token for client_credentials
-                          auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
-                          if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                              m->incrementCounter(
-                                "oauth2_requests_total",
-                                fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                static_cast<double>(200)
-                              );
-                          // F-019 (RFC 6749 §5.1): token responses MUST NOT be cached.
-                          applyNoStoreHeaders(resp);
-                          (*sharedCb)(resp);
+                        // Phase 4.3: route through plugin->saveAccessToken (NEW
+                        // ITokenRepository) instead of getStorage()->saveAccessToken.
+                        plugin->saveAccessToken(
+                          token, [sharedCb, tokenStr, grantedScope, accessTokenTtl]() {
+                              Json::Value json;
+                              json["access_token"] = tokenStr;
+                              json["token_type"] = "Bearer";
+                              json["expires_in"] = (Json::Int64)accessTokenTtl;
+                              json["scope"] = grantedScope;
+                              // No refresh_token for client_credentials
+                              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                              if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
+                                  m->incrementCounter(
+                                    "oauth2_requests_total",
+                                    fulla::common::ports::MetricLabels{{"endpoint", "token"}},
+                                    static_cast<double>(200)
+                                  );
+                              // F-019 (RFC 6749 §5.1): token responses MUST NOT be cached.
+                              applyNoStoreHeaders(resp);
+                              (*sharedCb)(resp);
+                          }
+                        );
+                    };
+
+                    ::drogon::orm::DbClientPtr ccOrgDb;
+                    if (plugin->getStorageType() != "memory")
+                    {
+                        try
+                        {
+                            ccOrgDb = ::drogon::app().getDbClient();
+                        }
+                        catch (...)
+                        {
+                            ccOrgDb = nullptr;
+                        }
+                    }
+                    if (!ccOrgDb)
+                    {
+                        mintCcToken(std::nullopt);
+                        return;
+                    }
+                    auto ccOwnersRepo =
+                      std::make_shared<::fulla::storage::postgres::ClientOwnersRepository>(
+                        ccOrgDb
+                      );
+                    ccOwnersRepo->findOwnerRow(
+                      clientId,
+                      [ccOwnersRepo, mintCcToken = std::move(mintCcToken)](
+                        const ::fulla::storage::postgres::OwnerRowLookup &o) {
+                          using ::fulla::storage::postgres::LookupStatus;
+                          std::optional<int32_t> orgId;
+                          if (o.status == LookupStatus::Found && o.row.getOrgId() != nullptr)
+                          {
+                              orgId = *o.row.getOrgId();
+                          }
+                          // NoRow (admin-seeded client) or Error both mean
+                          // "no org context": the token still issues (the
+                          // org anchor is claim data, not a gate).
+                          mintCcToken(orgId);
                       }
                     );
                 }
