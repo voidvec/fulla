@@ -41,6 +41,14 @@ void OrgConsentRepository::hasActiveConsentForUser(
     // Hop 1: the user's CURRENT memberships (the org a user was removed
     // from stops contributing to the union immediately -- R-M2-1's
     // "当前所属" wording, same real-time semantics as O7).
+    //
+    // Self-keeping: hop 1's callback dereferences the repository again
+    // (hop 2's mapper reads dbClient_), and the caller may drop its last
+    // reference as soon as this method returns -- the chain therefore
+    // holds its own copy instead of capturing [this] (the CI ASan leg
+    // caught exactly that shape as a heap-use-after-free in the
+    // succession repository).
+    auto self = std::make_shared<OrgConsentRepository>(dbClient_);
     try
     {
         Mapper<OrganizationMembers> mapper(dbClient_);
@@ -48,7 +56,7 @@ void OrgConsentRepository::hasActiveConsentForUser(
           Criteria(
             OrganizationMembers::Cols::_user_id, CompareOperator::EQ, internalUserId
           ),
-          [this, sharedCb, clientId, scope](const std::vector<OrganizationMembers> &rows) {
+          [self, sharedCb, clientId, scope](const std::vector<OrganizationMembers> &rows) {
               std::vector<int32_t> orgIds;
               orgIds.reserve(rows.size());
               for (const auto &m : rows)
@@ -63,7 +71,7 @@ void OrgConsentRepository::hasActiveConsentForUser(
               // backs this exact shape.
               try
               {
-                  Mapper<OrganizationConsents> consentMapper(dbClient_);
+                  Mapper<OrganizationConsents> consentMapper(self->dbClient_);
                   consentMapper.findBy(
                     Criteria(
                       OrganizationConsents::Cols::_organization_id, CompareOperator::In,
