@@ -275,6 +275,14 @@ void OrgSuccessionRepository::findPendingWithOrgForNominee(
     }
 
     // Hop 1: the caller's pending nominations.
+    //
+    // Self-keeping: hop 1's callback dereferences the repository again
+    // (hop 2's mapper reads dbClient_), and listMyOrgs drops its last
+    // reference when its outer callback returns -- before hop 1's DB
+    // result arrives. The chain holds its own copy instead of capturing
+    // [this] (the CI ASan leg caught the [this] capture as a
+    // heap-use-after-free at the hop-2 mapper construction).
+    auto self = std::make_shared<OrgSuccessionRepository>(dbClient_);
     try
     {
         Mapper<OrganizationSuccessionNominations> nomMapper(dbClient_);
@@ -288,7 +296,7 @@ void OrgSuccessionRepository::findPendingWithOrgForNominee(
               OrganizationSuccessionNominations::Cols::_accepted_at,
               CompareOperator::IsNull
             ),
-          [this, sharedCb](const std::vector<OrganizationSuccessionNominations> &rows) {
+          [self, sharedCb](const std::vector<OrganizationSuccessionNominations> &rows) {
               if (rows.empty())
               {
                   (*sharedCb)({});
@@ -301,7 +309,7 @@ void OrgSuccessionRepository::findPendingWithOrgForNominee(
               // Hop 2: the org rows for the banner (slug/name).
               try
               {
-                  Mapper<Organizations> orgMapper(dbClient_);
+                  Mapper<Organizations> orgMapper(self->dbClient_);
                   orgMapper.findBy(
                     Criteria(Organizations::Cols::_id, CompareOperator::In, orgIds),
                     [sharedCb, rows](const std::vector<Organizations> &orgs) {
@@ -369,13 +377,16 @@ void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
     // Hop 1: the user's CURRENT owner seats. Errors surface as nullopt
     // (distinct from an empty list) -- the SuccessionGuard aborts the
     // deletion on a read failure rather than proceeding fail-open.
+    // Self-keeping (see findPendingWithOrgForNominee): the chain holds
+    // its own repository copy across the hops.
+    auto self = std::make_shared<OrgSuccessionRepository>(dbClient_);
     try
     {
         Mapper<OrganizationMembers> memberMapper(dbClient_);
         memberMapper.findBy(
           Criteria(OrganizationMembers::Cols::_user_id, CompareOperator::EQ, userId) &&
             Criteria(OrganizationMembers::Cols::_role, CompareOperator::EQ, "owner"),
-          [this, sharedCb](const std::vector<OrganizationMembers> &owned) {
+          [self, sharedCb](const std::vector<OrganizationMembers> &owned) {
               std::vector<int32_t> orgIds;
               orgIds.reserve(owned.size());
               for (const auto &m : owned)
@@ -388,7 +399,7 @@ void OrgSuccessionRepository::findOrgIdsWithPendingForOwner(
               // Hop 2: pending nominations among those orgs.
               try
               {
-                  Mapper<OrganizationSuccessionNominations> nomMapper(dbClient_);
+                  Mapper<OrganizationSuccessionNominations> nomMapper(self->dbClient_);
                   nomMapper.findBy(
                     Criteria(
                       OrganizationSuccessionNominations::Cols::_organization_id,
