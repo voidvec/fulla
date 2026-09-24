@@ -20,10 +20,12 @@
 // the union read is the IOrgConsentResolver port adapted by
 // StorageOrgConsentResolver (libs/drogon).
 //
-// Concurrency: saveConsent serializes per (org, client) with an
+// Concurrency: saveConsent serializes GRANTS per (org, client) with an
 // advisory transaction lock (#219 / R-M2-5 key
-// "orgconsent:<org_id>:<client_id>") so a concurrent grant/revoke pair
-// cannot interleave an upsert against a revocation.
+// "orgconsent:<org_id>:<client_id>"). revokeClientConsents deliberately
+// takes no lock: it is one atomic batch UPDATE, and a grant racing a
+// revoke resolves last-writer-wins per row (the end state is exactly
+// one of the two intents, never a mix -- O4 semantics unaffected).
 
 #include <drogon/orm/DbClient.h>
 
