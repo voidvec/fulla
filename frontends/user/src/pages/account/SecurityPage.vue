@@ -14,6 +14,7 @@ import AppAlert from '../../components/ui/AppAlert.vue'
 import AppBadge from '../../components/ui/AppBadge.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppModal from '../../components/ui/AppModal.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 import DData from '../../components/ui/DData.vue'
 // U-5: renders the backend-provided otpauth:// URI as a scannable QR code
 // (the setup panel's copy promised a QR but only showed the manual key).
@@ -58,6 +59,23 @@ const unlinkingProvider = ref('')
 const linkingProvider = ref('')
 const providerLabels: Record<string, string> = { github: 'GitHub', google: 'Google', wechat: 'WeChat' }
 
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
+
 // #71: the link entry point goes through the server, which mints a one-time
 // state bound to (user, provider) and returns the full authorize URL (the
 // VITE_GITHUB_CLIENT_ID env dependency is gone).
@@ -90,21 +108,22 @@ async function fetchSocialLinks() {
   }
 }
 
-async function unlinkSocial(provider: string) {
+function unlinkSocial(provider: string) {
   const label = providerLabels[provider] || provider
   // W4: after unlinking, sign-in with this identity fails until it is
   // linked to an account again -- say so up front, not after the fact.
-  if (!window.confirm(t('account.security.social.unlinkConfirm', { provider: label }))) return
-  unlinkingProvider.value = provider
-  try {
-    await userService.unlinkSocialAccount(provider)
-    showSuccess(t('account.security.social.unlinked', { provider: label }))
-    await fetchSocialLinks()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  } finally {
-    unlinkingProvider.value = ''
-  }
+  askConfirm(t('account.security.social.unlinkConfirm', { provider: label }), async () => {
+    unlinkingProvider.value = provider
+    try {
+      await userService.unlinkSocialAccount(provider)
+      showSuccess(t('account.security.social.unlinked', { provider: label }))
+      await fetchSocialLinks()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    } finally {
+      unlinkingProvider.value = ''
+    }
+  })
 }
 
 async function fetchProfile() {
@@ -743,6 +762,14 @@ onMounted(fetchProfile)
           {{ $t('account.security.backup.saved') }}
         </button>
       </AppModal>
+
+      <AppConfirmDialog
+        :open="confirmOpen"
+        :message="confirmMessage"
+        danger
+        @confirm="runConfirm"
+        @cancel="confirmOpen = false"
+      />
     </div>
   </div>
 </template>

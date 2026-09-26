@@ -22,6 +22,11 @@ export default {
     modal: {
       close: '关闭对话框',
     },
+    confirm: {
+      title: '确认操作',
+      confirm: '确认',
+      cancel: '取消',
+    },
     table: {
       empty: '暂无数据',
     },

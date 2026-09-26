@@ -78,10 +78,11 @@ test.describe('User management click-through (gap-fix P1 tests)', () => {
   })
 
   test('deletes a user after confirmation', async ({ page }) => {
-    // Native confirm() must be accepted for the flow to proceed.
-    page.on('dialog', (dialog) => dialog.accept())
+    // The shared AppConfirmDialog (#181) must be confirmed for the flow to
+    // proceed.
     const deleteRequest = page.waitForRequest('**/api/admin/users/*')
     await page.locator('button:has-text("Delete")').first().click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     const request = await deleteRequest
     expect(request.method()).toBe('DELETE')
@@ -89,12 +90,12 @@ test.describe('User management click-through (gap-fix P1 tests)', () => {
   })
 
   test('disables a user from the detail page', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
     await page.locator('a:has-text("Details")').first().click()
     await page.waitForURL('**/admin/users/*')
 
     const disableRequest = page.waitForRequest('**/api/admin/users/*/disable')
     await page.locator('button:has-text("Disable Account")').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     const request = await disableRequest
     expect(request.method()).toBe('PUT')
   })
@@ -138,13 +139,13 @@ test.describe('Bulk token revocation (gap-fix P1 tests)', () => {
     await page.route('**/api/admin/tokens/revoke-by-client', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', count: 5 }) })
     })
-    await page.click('button:has-text("Revoke All by App")')
+    await page.click('button:has-text("Revoke All…")')
     const revokeRequest = page.waitForRequest('**/api/admin/tokens/revoke-by-client')
     await page.locator('button:has-text("fulla-portal")').click()
 
-    // The custom confirm dialog guards the destructive action; the request
-    // fires only after Confirm.
-    await page.click('button:has-text("Confirm")')
+    // The shared confirm dialog (#181) guards the destructive action; the
+    // request fires only after Confirm.
+    await page.getByTestId('confirm-dialog-confirm').click()
     const request = await revokeRequest
     expect(request.method()).toBe('POST')
     expect(request.postDataJSON()).toEqual({ client_id: 'fulla-portal' })

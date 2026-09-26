@@ -28,8 +28,8 @@ test.describe('Applications governance (open platform)', () => {
         suspendCalled = true
       }
     })
-    page.once('dialog', (d) => d.accept())
     await page.getByRole('button', { name: 'Suspend' }).first().click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect
       .poll(() => suspendCalled, { timeout: 5000 })
       .toBe(true)

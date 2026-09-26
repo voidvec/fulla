@@ -22,6 +22,11 @@ export default {
     modal: {
       close: 'Close dialog',
     },
+    confirm: {
+      title: 'Confirm action',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+    },
     table: {
       empty: 'No data found',
     },
