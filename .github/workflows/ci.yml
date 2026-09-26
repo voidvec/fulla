@@ -43,6 +43,16 @@ jobs:
         # include each other. Pure source scan, platform-independent.
         run: python3 tools/arch-guard/arch_guard.py
 
+      - name: Check double-move lambda captures (double_move_guard)
+        # A-2 crash guard (#183): one callback std::move'd into BOTH sibling
+        # lambdas of a single call expression -- the loser holds an empty
+        # std::function and aborts when its branch runs. Only same-call
+        # sibling captures are flagged; nested serial chains, mutually
+        # exclusive branches, and direct-argument moves are legal shapes.
+        run: |
+          python3 tools/arch-guard/double_move_guard.py --selftest
+          python3 tools/arch-guard/double_move_guard.py
+
       - name: Check Migration Hygiene (migration-check)
         # Guards the assumptions both migration executors rely on but never
         # verify: V<NNN> zero-padded contiguous naming, idempotent/non-

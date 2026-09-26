@@ -13,7 +13,8 @@ Push/PR to master (and workflow_dispatch)
         │
         ├── FAST gate
         │     ├── static-checks (ubuntu-24.04) — source-level guards:
-        │     │     arch-guard / migration-check / api-diff /
+        │     │     arch-guard / double-move capture guard (#183) /
+        │     │     migration-check / api-diff /
         │     │     test naming / manage-script parity / OpenAPI checks /
         │     │     OpenAPI governance gate (three-layer consistency + version sync)
         │     └── frontend (_frontend.yml) — vitest unit/property tests, ESLint,

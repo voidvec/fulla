@@ -23,6 +23,7 @@ run_gate() {
 run_gate "spec-governance" python tools/openapi-governance/check_spec_governance.py
 run_gate "sdk-drift"      python tools/clients/regen_clients.py --check
 run_gate "api-diff"       python tools/api-diff/api_diff.py
+run_gate "double-move"    python tools/arch-guard/double_move_guard.py
 run_gate "migration"      python tools/migration-check/migration_check.py
 run_gate "test-naming"    bash tools/test/scripts/naming_validator.sh
 
