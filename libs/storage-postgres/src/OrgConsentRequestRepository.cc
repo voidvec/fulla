@@ -262,6 +262,7 @@ void OrgConsentRequestRepository::resolveOtherPending(
 }
 
 void OrgConsentRequestRepository::withdrawOwnPending(
+  int32_t orgId,
   int32_t requestId,
   int32_t requesterId,
   CountCallback &&cb
@@ -276,15 +277,18 @@ void OrgConsentRequestRepository::withdrawOwnPending(
     }
 
     // B7: physical delete of the caller's OWN pending row only (the
-    // compound criteria makes another user's id resolve to 0 rows = the
-    // service's uniform 404). Mapper::deleteBy precedent:
-    // OrgSuccessionRepository.cc.
+    // compound criteria makes another user's id -- or the same request
+    // through a DIFFERENT org's URL -- resolve to 0 rows = the service's
+    // uniform 404, and the audit event names the org that actually owns
+    // the row). Mapper::deleteBy precedent: OrgSuccessionRepository.cc.
     try
     {
         Mapper<OrganizationConsentRequests> mapper(dbClient_);
         mapper.deleteBy(
           Criteria(OrganizationConsentRequests::Cols::_id,
                    CompareOperator::EQ, requestId) &&
+            Criteria(OrganizationConsentRequests::Cols::_organization_id,
+                     CompareOperator::EQ, orgId) &&
             Criteria(OrganizationConsentRequests::Cols::_requested_by,
                      CompareOperator::EQ, requesterId) &&
             Criteria(OrganizationConsentRequests::Cols::_status,
