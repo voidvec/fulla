@@ -14184,6 +14184,8 @@ type PostApiMeApplicationsResponse struct {
 	JSON401 *ErrorEnvelope
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorEnvelope
 	// JSON429 the response for an HTTP 429 `application/json` response
@@ -14216,6 +14218,11 @@ func (r PostApiMeApplicationsResponse) GetJSON401() *ErrorEnvelope {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r PostApiMeApplicationsResponse) GetJSON403() *ErrorEnvelope {
 	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
@@ -21392,6 +21399,13 @@ func ParsePostApiMeApplicationsResponse(rsp *http.Response) (*PostApiMeApplicati
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest ErrorEnvelope
