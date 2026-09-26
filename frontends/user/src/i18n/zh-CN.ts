@@ -308,6 +308,12 @@ export default {
       revoke: '吊销',
       revokeConfirm: '确定吊销“{app}”的访问权限？该应用将无法再访问您的数据。',
       revoked: '已吊销“{app}”的访问权限',
+      requestOrgAuth: '申请组织授权',
+      requestOrgAuthTitle: '申请组织授权',
+      requestOrgAuthPick: '选择组织',
+      requestOrgAuthSubmit: '提交申请',
+      requestOrgAuthNoOrgs: '加入组织后才能为该应用申请组织授权。',
+      requestOrgAuthSuccess: '申请已提交，等待管理员审批',
     },
     applications: {
       title: '我的应用',
@@ -332,6 +338,12 @@ export default {
       deleteConfirm: '确定删除“{app}”？已有的用户授权和已签发的令牌将立即失效。',
       secretTitle: '{id} 的密钥',
       secretOnce: '请立即复制——此后不再显示。',
+      requestOrgAuth: '申请组织授权',
+      requestOrgAuthTitle: '申请组织授权',
+      requestOrgAuthPick: '选择组织',
+      requestOrgAuthSubmit: '提交申请',
+      requestOrgAuthNoOrgs: '加入组织后才能为该应用申请组织授权。',
+      requestOrgAuthSuccess: '申请已提交，等待管理员审批',
     },
     organizations: {
       title: '我的组织',
@@ -375,6 +387,15 @@ export default {
       successionPending: '待接受的继任提名：用户 {id}',
       successionWithdraw: '撤回提名',
       successionAccepted: '你已成为所有者',
+      pendingRequests: '待审批申请',
+      approve: '批准',
+      reject: '拒绝',
+      approved: '已批准：该应用现已获得组织授权',
+      rejected: '已拒绝该申请',
+      pendingApproveConfirm:
+        '批准“{requester}”为“{client}”提交的授权申请？该应用将获得组织同意。',
+      pendingRejectConfirm:
+        '拒绝“{requester}”为“{client}”提交的授权申请？申请人之后仍可重新提交。',
     },
   },
 }

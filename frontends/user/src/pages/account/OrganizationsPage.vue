@@ -106,8 +106,35 @@ const grantRedirectUri = ref('')
 const grantLink = ref('')
 let consentsRequestSeq = 0
 
+// Org consent-requests approval queue (manager side): members file requests
+// from their app lists; owners/admins approve/reject them here. Fetched
+// alongside the consents list when the panel opens; the section hides
+// entirely while the queue is empty.
+const pendingRequests = ref<any[]>([])
+let pendingRequestsSeq = 0
+
 function isManager(role: string | undefined): boolean {
   return role === 'owner' || role === 'admin'
+}
+
+// Consent-request timestamps arrive as Postgres "YYYY-MM-DD HH:MM:SS";
+// an approval queue only needs it short — date + minutes, verbatim (no
+// locale-dependent Date parsing surprises in the e2e suite).
+function shortDateTime(value: unknown): string {
+  if (typeof value !== 'string' || !value) return ''
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(value)
+  return m ? `${m[1]} ${m[2]}` : value
+}
+
+async function fetchPendingRequests(slug: string) {
+  const seq = ++pendingRequestsSeq
+  try {
+    const resp = await http.get(`/api/me/organizations/${slug}/consent-requests`)
+    if (seq !== pendingRequestsSeq || expandedConsentsSlug.value !== slug) return
+    pendingRequests.value = resp.data?.requests || []
+  } catch (e: unknown) {
+    if (seq === pendingRequestsSeq && expandedConsentsSlug.value === slug) error.value = normalizeError(e)
+  }
 }
 
 async function toggleConsents(slug: string) {
@@ -118,9 +145,11 @@ async function toggleConsents(slug: string) {
   const seq = ++consentsRequestSeq
   expandedConsentsSlug.value = slug
   consents.value = []
+  pendingRequests.value = []
   grantClientId.value = ''
   grantRedirectUri.value = ''
   grantLink.value = ''
+  fetchPendingRequests(slug)
   try {
     const resp = await http.get(`/api/me/organizations/${slug}/consents`)
     if (seq !== consentsRequestSeq || expandedConsentsSlug.value !== slug) return
@@ -128,6 +157,57 @@ async function toggleConsents(slug: string) {
   } catch (e: unknown) {
     if (seq === consentsRequestSeq) error.value = normalizeError(e)
   }
+}
+
+// An approval resolves the request AND creates consent rows — refresh both
+// lists (and drop the resolved request from the pending queue via refetch).
+async function refreshConsentPanel(slug: string) {
+  const [consentsResp, requestsResp] = await Promise.all([
+    http.get(`/api/me/organizations/${slug}/consents`),
+    http.get(`/api/me/organizations/${slug}/consent-requests`),
+  ])
+  consents.value = consentsResp.data?.consents || []
+  pendingRequests.value = requestsResp.data?.requests || []
+}
+
+function approveConsentRequest(slug: string, req: any) {
+  askConfirm(
+    t('account.organizations.pendingApproveConfirm', {
+      requester: req.requester_username || req.requested_by,
+      client: req.client_id,
+    }),
+    async () => {
+      error.value = null
+      try {
+        await http.post(`/api/me/organizations/${slug}/consent-requests/${req.id}/approve`, {})
+        success.value = t('account.organizations.approved')
+        setTimeout(() => { success.value = '' }, 3000)
+        await refreshConsentPanel(slug)
+      } catch (e: unknown) {
+        error.value = normalizeError(e)
+      }
+    },
+  )
+}
+
+function rejectConsentRequest(slug: string, req: any) {
+  askConfirm(
+    t('account.organizations.pendingRejectConfirm', {
+      requester: req.requester_username || req.requested_by,
+      client: req.client_id,
+    }),
+    async () => {
+      error.value = null
+      try {
+        await http.post(`/api/me/organizations/${slug}/consent-requests/${req.id}/reject`, {})
+        success.value = t('account.organizations.rejected')
+        setTimeout(() => { success.value = '' }, 3000)
+        await refreshConsentPanel(slug)
+      } catch (e: unknown) {
+        error.value = normalizeError(e)
+      }
+    },
+  )
 }
 
 function revokeConsents(slug: string, clientId: string) {
@@ -561,6 +641,43 @@ onMounted(fetchOrgs)
           class="mt-4 border-t border-neutral-100 pt-4 space-y-3"
           data-testid="org-consents-panel"
         >
+          <div
+            v-if="pendingRequests.length > 0"
+            class="space-y-2 pb-3 border-b border-neutral-100"
+            data-testid="org-pending-requests"
+          >
+            <p class="font-medium text-neutral-900">
+              {{ $t('account.organizations.pendingRequests') }}
+            </p>
+            <div
+              v-for="r in pendingRequests"
+              :key="r.id"
+              class="flex items-center justify-between gap-2"
+            >
+              <span class="text-sm text-neutral-900 break-all">
+                {{ r.requester_username || r.requested_by }} · {{ r.client_id }} ·
+                {{ shortDateTime(r.requested_at) }}
+              </span>
+              <span class="flex items-center gap-2 whitespace-nowrap">
+                <button
+                  class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
+                         focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                  data-testid="approve-consent-request"
+                  @click="approveConsentRequest(org.slug, r)"
+                >
+                  {{ $t('account.organizations.approve') }}
+                </button>
+                <button
+                  class="px-3 py-1.5 text-sm text-error-600 border border-error-200 rounded-ctl hover:bg-error-50 transition-colors
+                         focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                  data-testid="reject-consent-request"
+                  @click="rejectConsentRequest(org.slug, r)"
+                >
+                  {{ $t('account.organizations.reject') }}
+                </button>
+              </span>
+            </div>
+          </div>
           <div
             v-for="group in consents"
             :key="group.client_id"
