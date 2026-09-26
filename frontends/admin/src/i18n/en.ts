@@ -374,7 +374,6 @@ export default {
     },
     tokens: {
       title: 'Tokens',
-      revokeAllByApp: 'Revoke All by App ▾',
       revokeAll: 'Revoke All…',
       noClientsInResults: 'No clients in current results',
       clientIdLabel: 'Client ID:',
@@ -392,7 +391,6 @@ export default {
       expires: 'Expires',
       revoke: 'Revoke',
       pageTotal: 'Page {page} · {total} total',
-      confirmTitle: 'Confirm Action',
       revokeTokenConfirm: 'Revoke token starting with "{prefix}"?',
       revokeClientConfirm: 'Revoke ALL tokens for client "{name}"?',
       revokeUserConfirm: 'Revoke ALL tokens for user "{name}"?',

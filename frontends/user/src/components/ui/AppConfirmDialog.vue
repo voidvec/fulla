@@ -13,8 +13,6 @@ defineProps<{
   cancelLabel?: string
   /** Danger styling on the confirm button (destructive actions). */
   danger?: boolean
-  /** Disables both buttons while the confirmed action is running. */
-  busy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +32,6 @@ const emit = defineEmits<{
     <template #footer>
       <AppButton
         variant="secondary"
-        :disabled="busy"
         data-testid="confirm-dialog-cancel"
         @click="emit('cancel')"
       >
@@ -42,7 +39,6 @@ const emit = defineEmits<{
       </AppButton>
       <AppButton
         :variant="danger ? 'danger' : 'primary'"
-        :loading="busy"
         data-testid="confirm-dialog-confirm"
         @click="emit('confirm')"
       >

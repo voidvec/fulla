@@ -28,6 +28,9 @@ Known blind spots (documented, accepted -- closing them needs a real AST):
   - moves as plain function arguments (`respondError(req, std::move(cb), ...)`)
     -- not init-captures, and the mutual-exclusion style is legal
   - sequential statement-level lambda captures (each `auto l = [m(x)]{};`)
+  - `std:: move(x)` with whitespace after the scope operator escapes the
+    regex -- no formatter produces it; accepted rather than complicating
+    the pattern
 Scan scope mirrors the arch-guard caliber: production trees
 libs/<lib>/{include,src} and apps/server/src; tests are excluded by design.
 
