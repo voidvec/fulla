@@ -6203,6 +6203,11 @@ const std::string &clientId,
 CountCallback &&cb
 );
 void listActiveByOrg(int32_t orgId, RowsCallback &&cb);
+void hasActiveConsentForOrg(
+int32_t orgId,
+const std::string &clientId,
+BoolCallback &&cb
+);
 private:
 ::drogon::orm::DbClientPtr dbClient_;
 };
