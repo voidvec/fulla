@@ -599,6 +599,14 @@ The backend overrides configuration-file values with environment variables (prec
 - Rate limiting rules (login: 5 requests/min/IP; API: 30 requests/s/IP)
 - `/metrics` endpoint restricted to internal-network access
 - HSTS headers
+- Runtime DNS resolution (`resolver 127.0.0.11 valid=10s ipv6=off` + variable
+  `proxy_pass` targets): upstream hostnames (`fulla-backend`, `fulla-frontend`,
+  `fulla-admin`) are re-resolved with at most 10s of staleness, so recreating any
+  upstream container no longer requires an `oauth2-nginx` restart. Without this,
+  nginx resolves each name once at config load and keeps proxying to the old IP
+  after the container behind it is recreated — and Docker may hand that freed IP
+  to a different container (observed as `/` 302-redirecting to `/admin/` and a
+  blank admin console after an SPA image upgrade).
 
 ### Frontend configuration
 
@@ -910,6 +918,30 @@ ls -la deploy/nginx/ssl/
 # Check the certificate validity period
 openssl x509 -in deploy/nginx/ssl/fullchain.pem -noout -dates
 ```
+
+### Stale routing after recreating containers
+
+**Symptom**: after recreating `fulla-frontend`/`fulla-admin`/`fulla-backend`
+(image upgrade), the root URL 302-redirects to `/admin/`, the admin console is
+blank, or API routes hit the wrong service.
+
+**Mechanism**: nginx resolves `proxy_pass` hostnames once at config load and
+caches the IP for the life of the worker; Docker may reuse the freed IP for a
+different container, so the cached address now serves another service.
+
+**Current state**: fixed — nginx.conf routes all upstreams through the runtime
+resolver (`resolver 127.0.0.11 valid=10s ipv6=off`), so re-resolution happens
+within 10s of a recreation and no nginx restart is needed.
+
+```bash
+# After upgrading a stack that still runs a pre-resolver nginx.conf, restart
+# nginx once to drop the cached IPs:
+docker compose -f deploy/docker/docker-compose.prod.yml restart nginx
+```
+
+> Note: the dev compose file (`docker-compose.yml`) has no edge nginx — the SPA
+> images' built-in nginx proxies directly to `fulla-backend:5555` and still
+> exhibits the load-time resolution behavior there.
 
 ### Frontend 404
 
