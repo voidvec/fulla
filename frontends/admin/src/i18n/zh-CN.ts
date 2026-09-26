@@ -364,7 +364,6 @@ export default {
     },
     tokens: {
       title: '令牌管理',
-      revokeAllByApp: '按应用全部吊销 ▾',
       revokeAll: '批量撤销…',
       noClientsInResults: '当前结果中没有客户端',
       clientIdLabel: '客户端 ID：',
@@ -382,7 +381,6 @@ export default {
       expires: '过期时间',
       revoke: '吊销',
       pageTotal: '第 {page} 页 · 共 {total} 条',
-      confirmTitle: '确认操作',
       revokeTokenConfirm: '确定吊销以“{prefix}”开头的令牌？',
       revokeClientConfirm: '确定吊销客户端“{name}”的全部令牌？',
       revokeUserConfirm: '确定吊销用户“{name}”的全部令牌？',
