@@ -2433,7 +2433,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Open platform disabled / org role missing
+          description: Open platform disabled / org registration required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found (#229 — an org_slug the caller cannot manage returns the same 404)
         '409':
           content:
             application/json:
