@@ -6212,6 +6212,69 @@ private:
 ::drogon::orm::DbClientPtr dbClient_;
 };
 }
+=== libs/storage-postgres/include/fulla/storage/postgres/OrgConsentRequestRepository.h
+#pragma once
+#include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/models/OrganizationConsentRequests.h>
+#include <fulla/storage/postgres/models/OrganizationMembers.h>
+#include <functional>
+#include <string>
+#include <vector>
+namespace fulla::storage::postgres
+{
+class OrgConsentRequestRepository
+{
+public:
+using RowsCallback =
+std::function<void(const std::vector<::drogon_model::fulla_db::OrganizationConsentRequests> &)>;
+using RowCallback =
+std::function<void(bool found, ::drogon_model::fulla_db::OrganizationConsentRequests row)>;
+using CountCallback = std::function<void(std::size_t)>;
+using BoolCallback = std::function<void(bool)>;
+explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient)
+: dbClient_(std::move(dbClient))
+;
+void fileRequest(
+int32_t orgId,
+const std::string &clientId,
+int32_t requesterId,
+CountCallback &&cb
+);
+void findPending(
+int32_t orgId,
+const std::string &clientId,
+int32_t requesterId,
+RowCallback &&cb
+);
+void listPendingByOrg(int32_t orgId, RowsCallback &&cb);
+void findById(int64_t requestId, RowCallback &&cb);
+void decidePending(
+int64_t requestId,
+const std::string &status,
+int32_t decidedBy,
+const std::string &rejectReason,
+CountCallback &&cb
+);
+void resolveOtherPending(
+int32_t orgId,
+const std::string &clientId,
+int64_t exceptRequestId,
+int32_t decidedBy,
+CountCallback &&cb
+);
+void withdrawOwnPending(
+int64_t requestId,
+int32_t requesterId,
+CountCallback &&cb
+);
+void findClientScopes(
+const std::string &clientId,
+std::function<void(const std::vector<std::string> &)> &&cb
+);
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+}
 === libs/storage-postgres/include/fulla/storage/postgres/OrgSuccessionRepository.h
 #pragma once
 #include <drogon/orm/DbClient.h>
@@ -8673,6 +8736,179 @@ const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
 bool dirtyFlag_[5]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/models/OrganizationConsentRequests.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class Oauth2Clients;
+class Organizations;
+class Users;
+class OrganizationConsentRequests
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _organization_id;
+static const std::string _client_id;
+static const std::string _requested_by;
+static const std::string _requested_at;
+static const std::string _status;
+static const std::string _decided_by;
+static const std::string _decided_at;
+static const std::string _reject_reason;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit OrganizationConsentRequests(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit OrganizationConsentRequests(const Json::Value &pJson) noexcept(false);
+OrganizationConsentRequests(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+OrganizationConsentRequests() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const int32_t &getValueOfOrganizationId() const noexcept;
+const std::shared_ptr<int32_t> &getOrganizationId() const noexcept;
+void setOrganizationId(const int32_t &pOrganizationId) noexcept;
+const std::string &getValueOfClientId() const noexcept;
+const std::shared_ptr<std::string> &getClientId() const noexcept;
+void setClientId(const std::string &pClientId) noexcept;
+void setClientId(std::string &&pClientId) noexcept;
+const int32_t &getValueOfRequestedBy() const noexcept;
+const std::shared_ptr<int32_t> &getRequestedBy() const noexcept;
+void setRequestedBy(const int32_t &pRequestedBy) noexcept;
+const ::trantor::Date &getValueOfRequestedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getRequestedAt() const noexcept;
+void setRequestedAt(const ::trantor::Date &pRequestedAt) noexcept;
+void setRequestedAtToNull() noexcept;
+const std::string &getValueOfStatus() const noexcept;
+const std::shared_ptr<std::string> &getStatus() const noexcept;
+void setStatus(const std::string &pStatus) noexcept;
+void setStatus(std::string &&pStatus) noexcept;
+const int32_t &getValueOfDecidedBy() const noexcept;
+const std::shared_ptr<int32_t> &getDecidedBy() const noexcept;
+void setDecidedBy(const int32_t &pDecidedBy) noexcept;
+void setDecidedByToNull() noexcept;
+const ::trantor::Date &getValueOfDecidedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getDecidedAt() const noexcept;
+void setDecidedAt(const ::trantor::Date &pDecidedAt) noexcept;
+void setDecidedAtToNull() noexcept;
+const std::string &getValueOfRejectReason() const noexcept;
+const std::shared_ptr<std::string> &getRejectReason() const noexcept;
+void setRejectReason(const std::string &pRejectReason) noexcept;
+void setRejectReason(std::string &&pRejectReason) noexcept;
+void setRejectReasonToNull() noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+Organizations getOrganizations(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOrganizations(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Organizations)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Oauth2Clients getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr) const;
+void getOauth2Clients(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Oauth2Clients)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+Users getUsers(const drogon::orm::DbClientPtr &clientPtr) const;
+void getUsers(const drogon::orm::DbClientPtr &clientPtr,
+const std::function<void(Users)> &rcb,
+const drogon::orm::ExceptionCallback &ecb) const;
+private:
+friend drogon::orm::Mapper<OrganizationConsentRequests>;
+friend drogon::orm::BaseBuilder<OrganizationConsentRequests, true, true>;
+friend drogon::orm::BaseBuilder<OrganizationConsentRequests, true, false>;
+friend drogon::orm::BaseBuilder<OrganizationConsentRequests, false, true>;
+friend drogon::orm::BaseBuilder<OrganizationConsentRequests, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<OrganizationConsentRequests>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<int32_t> organizationId_;
+std::shared_ptr<std::string> clientId_;
+std::shared_ptr<int32_t> requestedBy_;
+std::shared_ptr<::trantor::Date> requestedAt_;
+std::shared_ptr<std::string> status_;
+std::shared_ptr<int32_t> decidedBy_;
+std::shared_ptr<::trantor::Date> decidedAt_;
+std::shared_ptr<std::string> rejectReason_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[9]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
