@@ -24,6 +24,7 @@
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -114,6 +115,16 @@ class OrgConsentRequestRepository
     void findClientScopes(
       const std::string &clientId,
       std::function<void(const std::vector<std::string> &)> &&cb
+    );
+
+    /// Manager-list hop 2 (the no-JOIN pairing): requester display names
+    /// keyed by user id. Ids missing from the users table resolve to
+    /// absent map entries (the caller renders an empty name). Lives here
+    /// (not in the service) to keep the arch-guard R4 apps/server Mapper
+    /// cap intact.
+    void findUsernames(
+      const std::vector<int32_t> &userIds,
+      std::function<void(const std::map<int32_t, std::string> &)> &&cb
     );
 
   private:
