@@ -737,15 +737,22 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_ApproveRejectWithdraw_FullCircle)
     REQUIRE(withdrawApproved != nullptr);
     CHECK(statusIs(withdrawApproved, drogon::k404NotFound));
 
-    // Cleanup.
-    sqlExec("DELETE FROM organization_consent_requests WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM organization_consents WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_codes WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_access_tokens WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_refresh_tokens WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_client_owners WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_client_scopes WHERE client_id = '" + appId + "'");
-    sqlExec("DELETE FROM oauth2_clients WHERE client_id = '" + appId + "'");
+    // Cleanup (both apps' rows first -- requested_by pins the users, so the
+    // request rows must go before the user delete; the fileD3 pending row
+    // and the rejected requestD2 are both app2 rows).
+    const std::string bothApps = "('" + appId + "', '" + app2Id + "')";
+    sqlExec("DELETE FROM organization_consent_requests WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM organization_consents WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_codes WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_access_tokens WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_refresh_tokens WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_client_owners WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_client_scopes WHERE client_id IN " + bothApps);
+    sqlExec("DELETE FROM oauth2_clients WHERE client_id IN " + bothApps);
     sqlExec("DELETE FROM users WHERE username IN ('" + userA + "', '" + userB +
             "', '" + userD + "')");
+    // Guard the cleanup itself (B8: a silent FK failure would leak users).
+    CHECK(!sqlInt("SELECT 1 FROM users WHERE username IN ('" + userA + "', '" +
+                  userB + "', '" + userD + "')")
+               .has_value());
 }

@@ -69,8 +69,9 @@ class OrgConsentRequestRepository
       RowCallback &&cb
     );
 
-    /// B9 manager list: every PENDING request of the org, oldest first
-    /// (single hop; ordering is index-friendly).
+    /// B9 manager list: every PENDING request of the org (single hop;
+    /// ordering unspecified -- the UI renders by requested_at client-side
+    /// if it needs an order).
     void listPendingByOrg(int32_t orgId, RowsCallback &&cb);
 
     /// Single row by id (approve/reject/withdraw entry lookup). Single hop.
@@ -99,10 +100,12 @@ class OrgConsentRequestRepository
       CountCallback &&cb
     );
 
-    /// B7 withdrawal: physically delete the caller's OWN pending row.
-    /// Reports the number of rows deleted (0 = nothing matched, which the
-    /// service renders as the anti-enumeration 404).
+    /// B7 withdrawal: physically delete the caller's OWN pending row,
+    /// scoped to the URL's organization (a cross-org id is 0 rows = the
+    /// caller's uniform 404 -- and the audit event then names the right
+    /// org). Reports the number of rows deleted.
     void withdrawOwnPending(
+      int32_t orgId,
       int32_t requestId,
       int32_t requesterId,
       CountCallback &&cb
