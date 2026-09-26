@@ -375,11 +375,13 @@ export default {
     tokens: {
       title: 'Tokens',
       revokeAllByApp: 'Revoke All by App ▾',
+      revokeAll: 'Revoke All…',
       noClientsInResults: 'No clients in current results',
       clientIdLabel: 'Client ID:',
       userIdLabel: 'User ID:',
       clientFilterPlaceholder: 'Filter by client_id',
       userFilterPlaceholder: 'Filter by user_id',
+      revokeAllForUserLabel: 'Revoke All for User',
       revokeAllForUser: 'Revoke All for User',
       emptyTitle: 'No active tokens found',
       emptyDescription: 'Issued access tokens will be listed here.',

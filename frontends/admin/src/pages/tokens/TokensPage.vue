@@ -6,6 +6,8 @@ import { normalizeError, type NormalizedError } from '@/services/errorAdapter'
 import { getErrorMessage } from '@/services/messages'
 import AppEmptyState from '@/components/ui/AppEmptyState.vue'
 import DData from '@/components/ui/DData.vue'
+import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
+import AppButton from '@/components/ui/AppButton.vue'
 
 const { t } = useI18n()
 
@@ -40,10 +42,26 @@ const userIdFilter = ref('')
 // Bulk action dropdown
 const showBulkMenu = ref(false)
 
-// Confirmation dialog
-const confirmDialog = ref(false)
-const confirmAction = ref<(() => Promise<void>) | null>(null)
+// #182: bulk "revoke all for user" — the target user id is typed directly in
+// the bulk dropdown, independent of the results filter.
+const bulkUserId = ref('')
+
+// #181: the hand-rolled inline confirm modal is replaced by the shared
+// AppConfirmDialog (Esc/backdrop/X map to cancel; testids confirm-dialog-*).
+const confirmOpen = ref(false)
 const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 const uniqueClientIds = computed(() => {
   const ids = new Set(tokens.value.map(t => t.client_id).filter(Boolean))
@@ -82,22 +100,7 @@ function clearFilters() {
 }
 
 function showConfirm(message: string, action: () => Promise<void>) {
-  confirmMessage.value = message
-  confirmAction.value = action
-  confirmDialog.value = true
-}
-
-async function executeConfirm() {
-  if (confirmAction.value) {
-    await confirmAction.value()
-  }
-  confirmDialog.value = false
-  confirmAction.value = null
-}
-
-function cancelConfirm() {
-  confirmDialog.value = false
-  confirmAction.value = null
+  askConfirm(message, action)
 }
 
 async function revokeToken(tokenPrefix: string) {
@@ -135,19 +138,25 @@ async function revokeByClient(clientId: string) {
   })
 }
 
-async function revokeByUser() {
-  if (!userIdFilter.value) return
-  showConfirm(t('admin.tokens.revokeUserConfirm', { name: userIdFilter.value }), async () => {
-    errorMessage.value = null
-    successMessage.value = ''
-    try {
-      const resp = await axios.post('/api/admin/tokens/revoke-by-user', { user_id: userIdFilter.value })
-      successMessage.value = t('admin.tokens.revokedCountForUser', { count: resp.data?.count ?? 0, name: userIdFilter.value })
-      await fetchTokens()
-    } catch (e) {
-      const normalized = normalizeError(e)
-      errorMessage.value = normalized
-    }
+// Core revocation, parameterized so both the bulk dropdown section and any
+// future caller go through the same guarded path (#182).
+async function doRevokeByUser(userId: string) {
+  if (!userId) return
+  errorMessage.value = null
+  successMessage.value = ''
+  try {
+    const resp = await axios.post('/api/admin/tokens/revoke-by-user', { user_id: userId })
+    successMessage.value = t('admin.tokens.revokedCountForUser', { count: resp.data?.count ?? 0, name: userId })
+    await fetchTokens()
+  } catch (e) {
+    const normalized = normalizeError(e)
+    errorMessage.value = normalized
+  }
+}
+
+function revokeByUser() {
+  showConfirm(t('admin.tokens.revokeUserConfirm', { name: bulkUserId.value.trim() }), async () => {
+    await doRevokeByUser(bulkUserId.value.trim())
   })
 }
 
@@ -178,11 +187,11 @@ onMounted(fetchTokens)
           class="inline-flex items-center px-4 py-2 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-surface hover:bg-neutral-50"
           @click="showBulkMenu = !showBulkMenu"
         >
-          {{ $t('admin.tokens.revokeAllByApp') }}
+          {{ $t('admin.tokens.revokeAll') }}
         </button>
         <div
           v-if="showBulkMenu"
-          class="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-surface ring-1 ring-black ring-opacity-5 z-10"
+          class="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-surface ring-1 ring-black ring-opacity-5 z-10"
         >
           <div class="py-1">
             <button
@@ -199,6 +208,27 @@ onMounted(fetchTokens)
             >
               {{ $t('admin.tokens.noClientsInResults') }}
             </p>
+          </div>
+          <!-- #182: revoke all tokens for an explicitly typed user id -->
+          <div class="border-t border-neutral-200 px-4 py-3 space-y-2">
+            <label class="block text-xs font-medium text-neutral-500">
+              {{ $t('admin.tokens.revokeAllForUserLabel') }}
+            </label>
+            <input
+              v-model="bulkUserId"
+              type="text"
+              placeholder="user_id"
+              class="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
+            >
+            <AppButton
+              variant="danger"
+              size="sm"
+              block
+              :disabled="!bulkUserId.trim()"
+              @click="revokeByUser"
+            >
+              {{ $t('admin.tokens.revokeAllForUser') }}
+            </AppButton>
           </div>
         </div>
       </div>
@@ -275,13 +305,6 @@ onMounted(fetchTokens)
         @click="clearFilters"
       >
         {{ $t('common.clear') }}
-      </button>
-      <button
-        v-if="userIdFilter"
-        class="px-4 py-1.5 bg-error-600 text-white text-sm font-medium rounded-md hover:bg-error-700 ml-auto"
-        @click="revokeByUser"
-      >
-        {{ $t('admin.tokens.revokeAllForUser') }}
       </button>
     </div>
 
@@ -397,37 +420,12 @@ onMounted(fetchTokens)
       </div>
     </div>
 
-    <!-- Confirmation Dialog -->
-    <div
-      v-if="confirmDialog"
-      class="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      <div
-        class="fixed inset-0 bg-black bg-opacity-30"
-        @click="cancelConfirm"
-      />
-      <div class="relative bg-surface rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-        <h3 class="text-lg font-medium text-neutral-900 mb-2">
-          {{ $t('admin.tokens.confirmTitle') }}
-        </h3>
-        <p class="text-sm text-neutral-600 mb-4">
-          {{ confirmMessage }}
-        </p>
-        <div class="flex justify-end gap-3">
-          <button
-            class="px-4 py-2 text-sm font-medium text-neutral-700 border border-neutral-300 rounded-md hover:bg-neutral-50"
-            @click="cancelConfirm"
-          >
-            {{ $t('common.cancel') }}
-          </button>
-          <button
-            class="px-4 py-2 text-sm font-medium text-white bg-error-600 rounded-md hover:bg-error-700"
-            @click="executeConfirm"
-          >
-            {{ $t('common.confirm') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>
