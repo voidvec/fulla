@@ -44,10 +44,7 @@ class OrgConsentRequestRepository
     /// site is the intended use for SINGLE-hop methods (same lifetime
     /// contract as ClientOwnersRepository). Multi-hop methods keep
     /// themselves alive internally.
-    explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient)
-        : dbClient_(std::move(dbClient))
-    {
-    }
+    explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient);
 
     /// B3 filing: INSERT ... ON CONFLICT DO NOTHING (bare conflict target
     /// -- the partial unique index uq_org_consent_requests_pending cannot
@@ -76,14 +73,14 @@ class OrgConsentRequestRepository
     void listPendingByOrg(int32_t orgId, RowsCallback &&cb);
 
     /// Single row by id (approve/reject/withdraw entry lookup). Single hop.
-    void findById(int64_t requestId, RowCallback &&cb);
+    void findById(int32_t requestId, RowCallback &&cb);
 
     /// B4 decision: flips a PENDING row to the decided status. Reports the
     /// number of rows flipped (0 = the row was concurrently decided or is
     /// gone -- the callers translate that to their own 409/404 semantics).
     /// One scoped UPDATE (no raw SQL needed via the Mapper).
     void decidePending(
-      int64_t requestId,
+      int32_t requestId,
       const std::string &status,
       int32_t decidedBy,
       const std::string &rejectReason,
@@ -96,7 +93,7 @@ class OrgConsentRequestRepository
     void resolveOtherPending(
       int32_t orgId,
       const std::string &clientId,
-      int64_t exceptRequestId,
+      int32_t exceptRequestId,
       int32_t decidedBy,
       CountCallback &&cb
     );
@@ -105,7 +102,7 @@ class OrgConsentRequestRepository
     /// Reports the number of rows deleted (0 = nothing matched, which the
     /// service renders as the anti-enumeration 404).
     void withdrawOwnPending(
-      int64_t requestId,
+      int32_t requestId,
       int32_t requesterId,
       CountCallback &&cb
     );

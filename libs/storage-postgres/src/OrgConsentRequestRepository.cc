@@ -153,7 +153,7 @@ void OrgConsentRequestRepository::listPendingByOrg(
     }
 }
 
-void OrgConsentRequestRepository::findById(int64_t requestId, RowCallback &&cb)
+void OrgConsentRequestRepository::findById(int32_t requestId, RowCallback &&cb)
 {
     auto sharedCb = std::make_shared<RowCallback>(std::move(cb));
 
@@ -185,7 +185,7 @@ void OrgConsentRequestRepository::findById(int64_t requestId, RowCallback &&cb)
 }
 
 void OrgConsentRequestRepository::decidePending(
-  int64_t requestId,
+  int32_t requestId,
   const std::string &status,
   int32_t decidedBy,
   const std::string &rejectReason,
@@ -225,7 +225,7 @@ void OrgConsentRequestRepository::decidePending(
 void OrgConsentRequestRepository::resolveOtherPending(
   int32_t orgId,
   const std::string &clientId,
-  int64_t exceptRequestId,
+  int32_t exceptRequestId,
   int32_t decidedBy,
   CountCallback &&cb
 )
@@ -261,7 +261,7 @@ void OrgConsentRequestRepository::resolveOtherPending(
 }
 
 void OrgConsentRequestRepository::withdrawOwnPending(
-  int64_t requestId,
+  int32_t requestId,
   int32_t requesterId,
   CountCallback &&cb
 )

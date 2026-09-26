@@ -6231,9 +6231,7 @@ using RowCallback =
 std::function<void(bool found, ::drogon_model::fulla_db::OrganizationConsentRequests row)>;
 using CountCallback = std::function<void(std::size_t)>;
 using BoolCallback = std::function<void(bool)>;
-explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient)
-: dbClient_(std::move(dbClient))
-;
+explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient);
 void fileRequest(
 int32_t orgId,
 const std::string &clientId,
@@ -6247,9 +6245,9 @@ int32_t requesterId,
 RowCallback &&cb
 );
 void listPendingByOrg(int32_t orgId, RowsCallback &&cb);
-void findById(int64_t requestId, RowCallback &&cb);
+void findById(int32_t requestId, RowCallback &&cb);
 void decidePending(
-int64_t requestId,
+int32_t requestId,
 const std::string &status,
 int32_t decidedBy,
 const std::string &rejectReason,
@@ -6258,12 +6256,12 @@ CountCallback &&cb
 void resolveOtherPending(
 int32_t orgId,
 const std::string &clientId,
-int64_t exceptRequestId,
+int32_t exceptRequestId,
 int32_t decidedBy,
 CountCallback &&cb
 );
 void withdrawOwnPending(
-int64_t requestId,
+int32_t requestId,
 int32_t requesterId,
 CountCallback &&cb
 );
