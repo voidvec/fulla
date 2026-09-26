@@ -614,6 +614,186 @@ DROGON_TEST(Integration_P1_OrgContext_Gate_UniformRejection)
 }
 
 // ---------------------------------------------------------------------------
+// #236: the condition-3 org-consent alternative. A THIRD-PARTY client (no
+// oauth2_client_owners.org_id) must be accepted at authorize time with an
+// org_id hint when the org holds an ACTIVE org consent row for it, and the
+// resulting code must carry the org binding into the token chain. With the
+// row revoked, or the user not a member of the (consenting) org, the
+// rejection must be the SAME uniform body as every other gate cause.
+// (The write path for such rows is the M2 consent ceremony; the entry-point
+// half of #236 is tracked separately -- this test seeds the row directly.)
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_OrgContext_Gate_ConsentAlternative)
+{
+    ORGCTX_SKIP_GUARD;
+
+    const std::string suffix = uniqueSuffix();
+    const std::string slug = "qa-orgctx-consent-" + suffix;
+    const std::string userA = "qa_orgctx6_" + suffix;  // org owner (grantor)
+    const std::string userB = "qa_orgctx7_" + suffix;  // plain member
+    const std::string userC = "qa_orgctx8_" + suffix;  // non-member
+    const std::string passA = randomPassword();
+    const std::string passB = randomPassword();
+    const std::string passC = randomPassword();
+    REQUIRE(createVerifiedUser(userA, userA + "@qa.example", passA));
+    REQUIRE(createVerifiedUser(userB, userB + "@qa.example", passB));
+    REQUIRE(createVerifiedUser(userC, userC + "@qa.example", passC));
+
+    auto bearerA = consoleBearer(userA, passA);
+    REQUIRE(bearerA.has_value());
+
+    // org (owner A) + member B.
+    {
+        Json::Value orgBody;
+        orgBody["slug"] = slug;
+        orgBody["name"] = "QA OrgCtx Consent " + suffix;
+        auto r = sendPostJson("/api/me/organizations", orgBody, *bearerA);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+    }
+    {
+        Json::Value invite;
+        invite["email"] = userB + "@qa.example";
+        invite["role"] = "member";
+        auto r =
+          sendPostJson("/api/me/organizations/" + slug + "/invitations", invite, *bearerA);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+        Json::Value inviteBody;
+        REQUIRE(parseJsonBody(r, inviteBody));
+        auto bearerB = consoleBearer(userB, passB);
+        REQUIRE(bearerB.has_value());
+        Json::Value accept;
+        accept["token"] = inviteBody["token"].asString();
+        auto r2 = sendPostJson("/api/me/org-invitations/accept", accept, *bearerB);
+        REQUIRE(r2 != nullptr);
+        CHECK(statusIs(r2, drogon::k200OK));
+    }
+
+    // THIRD-PARTY client: A's personal app, never transferred to any org
+    // (oauth2_client_owners.org_id stays NULL).
+    std::string thirdPartyId, thirdPartySecret;
+    {
+        Json::Value app;
+        app["name"] = "QA ThirdParty " + suffix;
+        app["client_type"] = "CONFIDENTIAL";
+        Json::Value uris(Json::arrayValue);
+        uris.append(kRedirect);
+        app["redirect_uris"] = uris;
+        Json::Value scopes(Json::arrayValue);
+        scopes.append("openid");
+        scopes.append("profile");
+        scopes.append("org");
+        app["scopes"] = scopes;
+        Json::Value grants(Json::arrayValue);
+        grants.append("authorization_code");
+        grants.append("refresh_token");
+        app["allowed_grant_types"] = grants;
+        auto r = sendPostJson("/api/me/applications", app, *bearerA);
+        REQUIRE(r != nullptr);
+        dumpBody(r, "create third-party app");
+        CHECK(statusIs(r, drogon::k201Created));
+        Json::Value b;
+        REQUIRE(parseJsonBody(r, b));
+        thirdPartyId = b["client_id"].asString();
+        thirdPartySecret = b["client_secret"].asString();
+        CHECK(!thirdPartyId.empty());
+    }
+
+    const auto orgIdOpt = sqlInt(
+      "SELECT id FROM organizations WHERE slug = '" + slug + "'");
+    REQUIRE(orgIdOpt.has_value());
+    const auto grantorIdOpt = sqlInt(
+      "SELECT id FROM users WHERE username = '" + userA + "'");
+    REQUIRE(grantorIdOpt.has_value());
+
+    // Seed the ACTIVE org consent row the M2 grant ceremony would produce.
+    REQUIRE(sqlExec(
+      "INSERT INTO organization_consents "
+      "(organization_id, client_id, scope_name, granted_by) VALUES (" +
+      std::to_string(*orgIdOpt) + ", '" + thirdPartyId + "', 'org', " +
+      std::to_string(*grantorIdOpt) + ")"));
+
+    // Normalized comparison (request_id stripped): every rejection cause
+    // must be byte-identical (same caliber as Gate_UniformRejection).
+    auto normalized = [](::drogon::HttpResponsePtr resp) -> std::string {
+        Json::Value body;
+        if (!parseJsonBody(resp, body))
+            return "<unparseable>";
+        if (body.isObject() && body["error"].isObject())
+            body["error"].removeMember("request_id");
+        Json::StreamWriterBuilder w;
+        w["indentation"] = "";
+        return Json::writeString(w, body);
+    };
+
+    // 1) POSITIVE: plain member B + third-party client + the consenting org.
+    //    The org-consent alternative must accept the hint and the code must
+    //    be org-bound through the exchange (introspection org_id).
+    auto legOk = pkceLogin(userB, passB, thirdPartyId, kRedirect, "openid profile org", slug);
+    REQUIRE(legOk.resp != nullptr);
+    if (legOk.resp->getStatusCode() != ::drogon::k200OK)
+        dumpBody(legOk.resp, "consent-alternative login");
+    CHECK(statusIs(legOk.resp, ::drogon::k200OK));
+    Json::Value okJson;
+    REQUIRE(parseJsonBody(legOk.resp, okJson));
+    const std::string okCode = okJson.get("code", "").asString();
+    CHECK(!okCode.empty());
+    if (!okCode.empty())
+    {
+        Json::Value tokens =
+          exchangeCode(okCode, legOk.verifier, thirdPartyId, thirdPartySecret, kRedirect);
+        const std::string access = tokens.get("access_token", "").asString();
+        CHECK(!access.empty());
+        if (!access.empty())
+        {
+            Json::Value intro =
+              introspectWith(access, thirdPartyId, thirdPartySecret);
+            CHECK(intro.get("active", false).asBool());
+            CHECK(intro.get("org_id", 0).asInt64() == *orgIdOpt);
+        }
+    }
+
+    // 2) NON-MEMBER: user C is not a member of the consenting org -- the
+    //    membership hop must reject even with the active consent row, in the
+    //    uniform shape.
+    auto legNonMember =
+      pkceLogin(userC, passC, thirdPartyId, kRedirect, "openid profile org", slug);
+    REQUIRE(legNonMember.resp != nullptr);
+    CHECK(statusIs(legNonMember.resp, ::drogon::k400BadRequest));
+
+    // 3) REVOKED: B again, but the consent row is now revoked -- rejected in
+    //    the uniform shape (no residual acceptance).
+    REQUIRE(sqlExec(
+      "UPDATE organization_consents SET revoked_at = CURRENT_TIMESTAMP "
+      "WHERE organization_id = " + std::to_string(*orgIdOpt) +
+      " AND client_id = '" + thirdPartyId + "'"));
+    auto legRevoked =
+      pkceLogin(userB, passB, thirdPartyId, kRedirect, "openid profile org", slug);
+    REQUIRE(legRevoked.resp != nullptr);
+    CHECK(statusIs(legRevoked.resp, ::drogon::k400BadRequest));
+
+    // Reference rejection: nonexistent org (same endpoint, same client).
+    auto legBogus =
+      pkceLogin(userB, passB, thirdPartyId, kRedirect, "openid profile org",
+                "no-such-org-" + suffix);
+    REQUIRE(legBogus.resp != nullptr);
+    CHECK(statusIs(legBogus.resp, ::drogon::k400BadRequest));
+
+    // Uniformity: non-member, revoked-row and unknown-org rejections are
+    // byte-identical once request_id is stripped (anti-enumeration, O1).
+    const std::string uniformBody = normalized(legBogus.resp);
+    CHECK(normalized(legNonMember.resp) == uniformBody);
+    CHECK(normalized(legRevoked.resp) == uniformBody);
+
+    // Cleanup (consent row first -- granted_by FK has no ON DELETE).
+    sqlExec("DELETE FROM organization_consents WHERE organization_id = " +
+            std::to_string(*orgIdOpt) + " AND client_id = '" + thirdPartyId + "'");
+    sqlExec("DELETE FROM users WHERE username IN ('" + userA + "', '" + userB +
+            "', '" + userC + "')");
+}
+
+// ---------------------------------------------------------------------------
 // Scope gating: org_id WITHOUT the org scope still binds the token
 // (introspection org_id) but releases no org_ctx (userinfo, id_token).
 // ---------------------------------------------------------------------------

@@ -7,20 +7,22 @@
 //
 //   1. the referenced org exists (integer id or slug, normalized to id),
 //   2. the authorizing user is a CURRENT member of that org, and
-//   3. the client is that org's application (oauth2_client_owners.org_id).
-//      (The M2 org-consent alternative to condition 3 is not wired yet.)
+//   3. the client is that org's application (oauth2_client_owners.org_id)
+//      OR the org holds an active org consent row for the client under any
+//      scope (#236, design §2.2 -- third-party apps granted at org level).
 //
 // plus the §2.5 org MFA policy: an org flagged require_mfa only lends its
 // context to an MFA-elevated session (amr contains "mfa").
 //
 // Anti-enumeration (O1): EVERY failure cause -- unknown org, non-member,
-// unrelated client, even a DB error -- produces the SAME decision
-// (Invalid); the caller renders ONE uniform inline error page with no
-// redirect, so the endpoint cannot be used as a membership/provenance
+// unrelated client, no consent row, even a DB error -- produces the SAME
+// decision (Invalid); the caller renders ONE uniform inline error page with
+// no redirect, so the endpoint cannot be used as a membership/provenance
 // oracle (#229's authorize-side face).
 //
-// Storage reads go through the shared ClientOwnersRepository (#222); the
-// data access lives in storage, the POLICY lives here.
+// Storage reads go through the shared ClientOwnersRepository (#222) and
+// OrgConsentRepository (M2); the data access lives in storage, the POLICY
+// lives here.
 
 #include <cstdint>
 #include <functional>
