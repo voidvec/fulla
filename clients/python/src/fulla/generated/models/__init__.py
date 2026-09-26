@@ -1,6 +1,9 @@
 """Contains all the data models used in inputs/outputs"""
 
 from .delete_api_me_applications_client_id_response_200 import DeleteApiMeApplicationsClientIdResponse200
+from .delete_api_me_organizations_slug_consent_requests_request_id_response_200 import (
+    DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse200,
+)
 from .delete_api_me_organizations_slug_consents_client_id_response_200 import (
     DeleteApiMeOrganizationsSlugConsentsClientIdResponse200,
 )
@@ -50,6 +53,12 @@ from .get_api_me_organizations_response_200_organizations_item_successor_nominat
 )
 from .get_api_me_organizations_response_200_pending_succession_nominations_item import (
     GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem,
+)
+from .get_api_me_organizations_slug_consent_requests_response_200 import (
+    GetApiMeOrganizationsSlugConsentRequestsResponse200,
+)
+from .get_api_me_organizations_slug_consent_requests_response_200_requests_item import (
+    GetApiMeOrganizationsSlugConsentRequestsResponse200RequestsItem,
 )
 from .get_api_me_organizations_slug_consents_response_200 import GetApiMeOrganizationsSlugConsentsResponse200
 from .get_api_me_organizations_slug_consents_response_200_consents_item import (
@@ -134,6 +143,22 @@ from .post_api_me_org_invitations_accept_body import PostApiMeOrgInvitationsAcce
 from .post_api_me_org_invitations_accept_response_200 import PostApiMeOrgInvitationsAcceptResponse200
 from .post_api_me_organizations_body import PostApiMeOrganizationsBody
 from .post_api_me_organizations_response_201 import PostApiMeOrganizationsResponse201
+from .post_api_me_organizations_slug_consent_requests_body import PostApiMeOrganizationsSlugConsentRequestsBody
+from .post_api_me_organizations_slug_consent_requests_request_id_approve_body import (
+    PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveBody,
+)
+from .post_api_me_organizations_slug_consent_requests_request_id_approve_response_200 import (
+    PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse200,
+)
+from .post_api_me_organizations_slug_consent_requests_request_id_reject_body import (
+    PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectBody,
+)
+from .post_api_me_organizations_slug_consent_requests_request_id_reject_response_200 import (
+    PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse200,
+)
+from .post_api_me_organizations_slug_consent_requests_response_200 import (
+    PostApiMeOrganizationsSlugConsentRequestsResponse200,
+)
 from .post_api_me_organizations_slug_invitations_body import PostApiMeOrganizationsSlugInvitationsBody
 from .post_api_me_organizations_slug_invitations_body_role import PostApiMeOrganizationsSlugInvitationsBodyRole
 from .post_api_me_organizations_slug_invitations_response_201 import PostApiMeOrganizationsSlugInvitationsResponse201
@@ -194,6 +219,7 @@ from .web_authn_registration_credential_response import WebAuthnRegistrationCred
 
 __all__ = (
     "DeleteApiMeApplicationsClientIdResponse200",
+    "DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse200",
     "DeleteApiMeOrganizationsSlugConsentsClientIdResponse200",
     "DeleteApiMeOrganizationsSlugInvitationsInvitationIdResponse200",
     "DeleteApiMeOrganizationsSlugMembersUserIdResponse200",
@@ -224,6 +250,8 @@ __all__ = (
     "GetApiMeOrganizationsResponse200OrganizationsItemRole",
     "GetApiMeOrganizationsResponse200OrganizationsItemSuccessorNominationType0",
     "GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem",
+    "GetApiMeOrganizationsSlugConsentRequestsResponse200",
+    "GetApiMeOrganizationsSlugConsentRequestsResponse200RequestsItem",
     "GetApiMeOrganizationsSlugConsentsResponse200",
     "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItem",
     "GetApiMeOrganizationsSlugConsentsResponse200ConsentsItemScopesItem",
@@ -289,6 +317,12 @@ __all__ = (
     "PostApiMeMfaVerifyResponse200",
     "PostApiMeOrganizationsBody",
     "PostApiMeOrganizationsResponse201",
+    "PostApiMeOrganizationsSlugConsentRequestsBody",
+    "PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveBody",
+    "PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse200",
+    "PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectBody",
+    "PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse200",
+    "PostApiMeOrganizationsSlugConsentRequestsResponse200",
     "PostApiMeOrganizationsSlugInvitationsBody",
     "PostApiMeOrganizationsSlugInvitationsBodyRole",
     "PostApiMeOrganizationsSlugInvitationsResponse201",
