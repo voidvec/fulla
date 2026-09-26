@@ -1714,6 +1714,16 @@ void OrgMemberService::fileConsentRequest(
                           clientId,
                           [repo, req, cb, db, org, caller, clientId](
                             const OwnerRowLookup &o) {
+                              // A DB failure must surface as a retryable
+                              // 5xx, never as the uniform 404 (the #230
+                              // invariant this PR series established --
+                              // only a genuine no-row means "not found").
+                              if (o.status == LookupStatus::Error)
+                              {
+                                  respondError(req, cb, "DB_QUERY_ERROR",
+                                    std::string("owner lookup failed: ") + o.error);
+                                  return;
+                              }
                               if (o.status != LookupStatus::Found)
                               {
                                   respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
@@ -1759,13 +1769,15 @@ void OrgMemberService::fileConsentRequest(
                                                   {
                                                       // affected==0 AND the
                                                       // pending row is gone:
-                                                      // either a real DB
-                                                      // failure on the insert
-                                                      // or the row vanished
-                                                      // concurrently -- the
-                                                      // caller retries.
-                                                      respondError(req, cb, "DB_QUERY_ERROR",
-                                                        "consent request insert failed");
+                                                      // a concurrent decide/
+                                                      // withdraw won the race
+                                                      // (a real insert failure
+                                                      // would leave the row
+                                                      // absent too, but that
+                                                      // window is the retryable
+                                                      // 409 either way -- B3).
+                                                      respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                                        "request state changed concurrently; retry");
                                                       return;
                                                   }
                                                   if (affected == 0)
@@ -2141,6 +2153,7 @@ void OrgMemberService::withdrawConsentRequest(
                       auto repo = std::make_shared<
                         ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
                       repo->withdrawOwnPending(
+                        org.getValueOfId(),
                         requestId,
                         caller.id,
                         [repo, req, cb, org, requestId](std::size_t deleted) {

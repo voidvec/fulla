@@ -6262,6 +6262,7 @@ int32_t decidedBy,
 CountCallback &&cb
 );
 void withdrawOwnPending(
+int32_t orgId,
 int32_t requestId,
 int32_t requesterId,
 CountCallback &&cb
