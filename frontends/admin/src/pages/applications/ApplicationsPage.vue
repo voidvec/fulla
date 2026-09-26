@@ -5,6 +5,7 @@ import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 
@@ -43,6 +44,23 @@ const AVAILABLE_GRANT_TYPES = computed(() => [
 function showError(msg: NormalizedError | string) {
   errorMessage.value = msg
   setTimeout(() => { errorMessage.value = null }, 5000)
+}
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
 }
 
 async function fetchClients() {
@@ -87,38 +105,42 @@ async function createClient() {
   }
 }
 
-async function deleteClient(clientId: string) {
-  if (!confirm(t('admin.applications.deleteConfirm', { name: clientId }))) return
-  try {
-    await axios.delete(`/api/admin/clients/${clientId}`)
-    await fetchClients()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function deleteClient(clientId: string) {
+  askConfirm(t('admin.applications.deleteConfirm', { name: clientId }), async () => {
+    try {
+      await axios.delete(`/api/admin/clients/${clientId}`)
+      await fetchClients()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
-async function resetSecret(clientId: string) {
-  if (!confirm(t('admin.applications.resetSecretConfirm', { name: clientId }))) return
-  try {
-    const resp = await axios.post(`/api/admin/clients/${clientId}/reset-secret`)
-    newClientSecret.value = resp.data.client_secret || ''
-    showSecretModal.value = true
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function resetSecret(clientId: string) {
+  askConfirm(t('admin.applications.resetSecretConfirm', { name: clientId }), async () => {
+    try {
+      const resp = await axios.post(`/api/admin/clients/${clientId}/reset-secret`)
+      newClientSecret.value = resp.data.client_secret || ''
+      showSecretModal.value = true
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 // v1.4.0 open platform governance: suspend/resume self-registered apps.
 // The status lives on the owners row; admin-seeded clients have none.
-async function setSuspended(client: any, suspended: boolean) {
+// The message and endpoint use the action decided at click time.
+function setSuspended(client: any, suspended: boolean) {
   const action = suspended ? 'suspend' : 'resume'
-  if (!confirm(t(`admin.applications.${action}Confirm`, { name: client.name || client.client_id }))) return
-  try {
-    await axios.post(`/api/admin/clients/${client.client_id}/${action}`)
-    await fetchClients()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+  askConfirm(t(`admin.applications.${action}Confirm`, { name: client.name || client.client_id }), async () => {
+    try {
+      await axios.post(`/api/admin/clients/${client.client_id}/${action}`)
+      await fetchClients()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 function ownerLabel(client: any): string {
@@ -386,5 +408,13 @@ onMounted(fetchClients)
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

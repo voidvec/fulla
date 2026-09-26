@@ -8,6 +8,7 @@ import AppAlert from '../../components/ui/AppAlert.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
 import DData from '../../components/ui/DData.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const apps = ref<any[]>([])
@@ -22,6 +23,23 @@ const errorText = computed(() => {
   return typeof e === 'string' ? e : getErrorMessage(e.code)
 })
 const success = ref('')
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 async function fetchApps() {
   loading.value = true
@@ -39,16 +57,17 @@ async function fetchApps() {
   }
 }
 
-async function revokeApp(clientId: string, appName: string) {
-  if (!confirm(t('account.authorizedApps.revokeConfirm', { app: appName }))) return
-  try {
-    await http.delete(`/api/me/authorized-apps/${clientId}`)
-    success.value = t('account.authorizedApps.revoked', { app: appName })
-    setTimeout(() => { success.value = '' }, 3000)
-    await fetchApps()
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-  }
+function revokeApp(clientId: string, appName: string) {
+  askConfirm(t('account.authorizedApps.revokeConfirm', { app: appName }), async () => {
+    try {
+      await http.delete(`/api/me/authorized-apps/${clientId}`)
+      success.value = t('account.authorizedApps.revoked', { app: appName })
+      setTimeout(() => { success.value = '' }, 3000)
+      await fetchApps()
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 onMounted(fetchApps)
@@ -135,6 +154,14 @@ onMounted(fetchApps)
         </div>
       </AppCard>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>
 

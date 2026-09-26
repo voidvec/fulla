@@ -8,6 +8,7 @@ import AppAlert from '../../components/ui/AppAlert.vue'
 import AppBadge from '../../components/ui/AppBadge.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const orgs = ref<any[]>([])
@@ -19,6 +20,23 @@ const errorText = computed(() => {
   return typeof e === 'string' ? e : getErrorMessage(e.code)
 })
 const success = ref('')
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 const showCreate = ref(false)
 const creating = ref(false)
@@ -112,18 +130,19 @@ async function toggleConsents(slug: string) {
   }
 }
 
-async function revokeConsents(slug: string, clientId: string) {
-  if (!confirm(t('account.organizations.consentsRevokeConfirm'))) return
-  error.value = null
-  try {
-    await http.delete(`/api/me/organizations/${slug}/consents/${clientId}`)
-    success.value = t('account.organizations.consentsRevoked')
-    setTimeout(() => { success.value = '' }, 3000)
-    const resp = await http.get(`/api/me/organizations/${slug}/consents`)
-    consents.value = resp.data?.consents || []
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-  }
+function revokeConsents(slug: string, clientId: string) {
+  askConfirm(t('account.organizations.consentsRevokeConfirm'), async () => {
+    error.value = null
+    try {
+      await http.delete(`/api/me/organizations/${slug}/consents/${clientId}`)
+      success.value = t('account.organizations.consentsRevoked')
+      setTimeout(() => { success.value = '' }, 3000)
+      const resp = await http.get(`/api/me/organizations/${slug}/consents`)
+      consents.value = resp.data?.consents || []
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 // R-M2-3: the portal's entire "start an org authorization" surface is a
@@ -234,15 +253,16 @@ async function invite(slug: string) {
   }
 }
 
-async function removeMember(slug: string, userId: string | number) {
-  if (!confirm(t('account.organizations.removeConfirm'))) return
-  try {
-    await http.delete(`/api/me/organizations/${slug}/members/${userId}`)
-    await toggleMembers(slug)
-    await toggleMembers(slug)
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-  }
+function removeMember(slug: string, userId: string | number) {
+  askConfirm(t('account.organizations.removeConfirm'), async () => {
+    try {
+      await http.delete(`/api/me/organizations/${slug}/members/${userId}`)
+      await toggleMembers(slug)
+      await toggleMembers(slug)
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 async function acceptInvite() {
@@ -602,5 +622,13 @@ onMounted(fetchOrgs)
         </div>
       </AppCard>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

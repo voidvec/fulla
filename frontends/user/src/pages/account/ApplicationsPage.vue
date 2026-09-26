@@ -9,6 +9,7 @@ import AppBadge from '../../components/ui/AppBadge.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
 import DData from '../../components/ui/DData.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const apps = ref<any[]>([])
@@ -29,6 +30,23 @@ const newName = ref('')
 const newType = ref<'PUBLIC' | 'CONFIDENTIAL'>('PUBLIC')
 const newRedirectUris = ref('')
 const newScopes = ref('openid profile')
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 async function fetchApps() {
   loading.value = true
@@ -69,31 +87,33 @@ async function createApp() {
   }
 }
 
-async function rotateSecret(app: any) {
-  if (!confirm(t('account.applications.rotateConfirm', { app: app.name || app.client_id }))) return
-  try {
-    const resp = await http.post(`/api/me/applications/${app.client_id}/rotate-secret`, {})
-    oneTimeSecret.value = resp.data?.client_secret || ''
-    oneTimeSecretFor.value = app.client_id
-    success.value = t('account.applications.rotated', { app: app.name || app.client_id })
-    setTimeout(() => { success.value = '' }, 3000)
-    // M11 (review): the list still shows the pre-rotation state — refresh.
-    await fetchApps()
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-  }
+function rotateSecret(app: any) {
+  askConfirm(t('account.applications.rotateConfirm', { app: app.name || app.client_id }), async () => {
+    try {
+      const resp = await http.post(`/api/me/applications/${app.client_id}/rotate-secret`, {})
+      oneTimeSecret.value = resp.data?.client_secret || ''
+      oneTimeSecretFor.value = app.client_id
+      success.value = t('account.applications.rotated', { app: app.name || app.client_id })
+      setTimeout(() => { success.value = '' }, 3000)
+      // M11 (review): the list still shows the pre-rotation state — refresh.
+      await fetchApps()
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
-async function deleteApp(app: any) {
-  if (!confirm(t('account.applications.deleteConfirm', { app: app.name || app.client_id }))) return
-  try {
-    await http.delete(`/api/me/applications/${app.client_id}`)
-    success.value = t('account.applications.deleted', { app: app.name || app.client_id })
-    setTimeout(() => { success.value = '' }, 3000)
-    await fetchApps()
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-  }
+function deleteApp(app: any) {
+  askConfirm(t('account.applications.deleteConfirm', { app: app.name || app.client_id }), async () => {
+    try {
+      await http.delete(`/api/me/applications/${app.client_id}`)
+      success.value = t('account.applications.deleted', { app: app.name || app.client_id })
+      setTimeout(() => { success.value = '' }, 3000)
+      await fetchApps()
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 onMounted(fetchApps)
@@ -281,5 +301,13 @@ onMounted(fetchApps)
         </div>
       </AppCard>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

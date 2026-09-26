@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 
@@ -37,6 +38,23 @@ function showError(msg: NormalizedError | string) {
   errorMessage.value = msg
   successMessage.value = ''
   setTimeout(() => { errorMessage.value = null }, 5000)
+}
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
 }
 
 async function fetchRoles() {
@@ -94,15 +112,16 @@ async function updateRole() {
   }
 }
 
-async function deleteRole(role: any) {
-  if (!confirm(t('admin.roles.deleteConfirm', { name: role.name }))) return
-  try {
-    await axios.delete(`/api/admin/roles/${role.id}`)
-    showSuccess(t('admin.roles.deleted', { name: role.name }))
-    await fetchRoles()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function deleteRole(role: any) {
+  askConfirm(t('admin.roles.deleteConfirm', { name: role.name }), async () => {
+    try {
+      await axios.delete(`/api/admin/roles/${role.id}`)
+      showSuccess(t('admin.roles.deleted', { name: role.name }))
+      await fetchRoles()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 const BUILTIN_ROLES = ['admin', 'user']
@@ -293,5 +312,13 @@ onMounted(fetchRoles)
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

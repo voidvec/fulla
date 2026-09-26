@@ -8,6 +8,7 @@ import { getErrorMessage } from '../../services/messages'
 import AppAlert from '../../components/ui/AppAlert.vue'
 import AppBadge from '../../components/ui/AppBadge.vue'
 import DData from '../../components/ui/DData.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -52,6 +53,23 @@ function showError(msg: NormalizedError | string) {
   errorMessage.value = msg
   successMessage.value = ''
   setTimeout(() => { errorMessage.value = null }, 5000)
+}
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
 }
 
 async function fetchUser() {
@@ -113,15 +131,16 @@ async function saveRoles() {
   }
 }
 
-async function disableUser() {
-  if (!confirm(t('admin.users.disableConfirm', { name: user.value.username }))) return
-  try {
-    await axios.put(`/api/admin/users/${userId.value}/disable`)
-    showSuccess(t('admin.users.userDisabled'))
-    await fetchUser()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function disableUser() {
+  askConfirm(t('admin.users.disableConfirm', { name: user.value.username }), async () => {
+    try {
+      await axios.put(`/api/admin/users/${userId.value}/disable`)
+      showSuccess(t('admin.users.userDisabled'))
+      await fetchUser()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 async function enableUser() {
@@ -421,5 +440,13 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

@@ -110,9 +110,9 @@ test.describe('Roles Page - Custom Role', () => {
   })
 
   test('can delete a custom role with confirmation', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
     const editorRow = page.locator('tbody tr').filter({ hasText: 'editor' })
     await editorRow.locator('button:has-text("Delete")').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect(page.locator('text=Role "editor" deleted')).toBeVisible()
   })
 
@@ -137,10 +137,10 @@ test.describe('Roles Page - Custom Role', () => {
   })
 
   test('delete role cancel preserves role', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.dismiss())
     const deleteButton = page.locator('tbody tr').first().locator('button:has-text("Delete")')
     if (await deleteButton.isVisible()) {
       await deleteButton.click()
+      await page.getByTestId('confirm-dialog-cancel').click()
       await page.waitForTimeout(300)
       // Role should still be in the list
       await expect(page.locator('tbody tr').first()).toBeVisible()

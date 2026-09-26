@@ -185,8 +185,8 @@ test.describe('My Organizations — org authorizations', () => {
   })
 
   test('revoke removes the client group', async ({ page }) => {
-    page.on('dialog', (dialog: any) => dialog.accept())
     await page.getByTestId('revoke-org-consent').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect(page.getByText('No organization authorizations yet')).toBeVisible()
   })
 
