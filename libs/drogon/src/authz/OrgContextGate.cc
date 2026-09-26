@@ -10,6 +10,7 @@
 
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
+#include <fulla/storage/postgres/OrgConsentRepository.h>
 
 #include <drogon/drogon.h>
 
@@ -137,32 +138,78 @@ void OrgContextGate::validate(
 
                 ClientOwnersRepository(db).findOwnerRow(
                   clientId,
-                  [sharedCb, amr, orgId, orgName, requireMfa](
+                  [db, sharedCb, clientId, amr, orgId, orgName, requireMfa](
                     const ::fulla::storage::postgres::OwnerRowLookup &o) {
-                      const bool related =
-                        o.status == LookupStatus::Found && o.row.getOrgId() != nullptr &&
-                        *o.row.getOrgId() == orgId;
-                      if (!related)
+                      // A genuine DB failure on the owner-row lookup stays
+                      // the StorageError decision (logged here, rendered
+                      // identically by the callers) -- it must not fall
+                      // through into the consent query.
+                      if (o.status == LookupStatus::Error)
                       {
                           (*sharedCb)(uniformReject(o.status, o.error));
                           return;
                       }
+                      // §2.1 item 5, condition 3 (v1.5.0 M1 + #236): the org
+                      // hint is related to this client when the client is the
+                      // org's OWN application (oauth2_client_owners.org_id)
+                      // OR the org holds an ACTIVE org consent row for the
+                      // client (design §2.2, any scope). The MFA policy and
+                      // the acceptance decision are shared by both paths so
+                      // every acceptance renders identically; every rejection
+                      // (including a consent-lookup failure, which the
+                      // BoolCallback folds into false) stays the uniform
+                      // Invalid decision -- no new oracle.
+                      const bool ownerRelated =
+                        o.status == LookupStatus::Found && o.row.getOrgId() != nullptr &&
+                        *o.row.getOrgId() == orgId;
 
-                      if (requireMfa && !amrHasMfa(amr))
-                      {
+                      // One shared continuation: the two relatedness paths
+                      // converge here so the require_mfa policy and the
+                      // Proceed shape cannot drift apart.
+                      const auto acceptOrMfa = [sharedCb, amr, orgId, orgName, requireMfa]() {
+                          if (requireMfa && !amrHasMfa(amr))
+                          {
+                              Decision d;
+                              d.kind = Decision::Kind::MfaRequired;
+                              d.orgId = orgId;
+                              d.orgName = orgName;
+                              (*sharedCb)(d);
+                              return;
+                          }
                           Decision d;
-                          d.kind = Decision::Kind::MfaRequired;
+                          d.kind = Decision::Kind::Proceed;
                           d.orgId = orgId;
                           d.orgName = orgName;
                           (*sharedCb)(d);
+                      };
+
+                      if (ownerRelated)
+                      {
+                          acceptOrMfa();
                           return;
                       }
 
-                      Decision d;
-                      d.kind = Decision::Kind::Proceed;
-                      d.orgId = orgId;
-                      d.orgName = orgName;
-                      (*sharedCb)(d);
+                      // Not the org's own application: fall back to the
+                      // org-consent alternative. A DB error resolves to
+                      // false -> uniform Invalid (logged in the repository).
+                      ::fulla::storage::postgres::OrgConsentRepository(db)
+                        .hasActiveConsentForOrg(
+                          orgId,
+                          clientId,
+                          [sharedCb, acceptOrMfa](bool hasConsent) {
+                              if (!hasConsent)
+                              {
+                                  // Unknown org / non-member / unrelated
+                                  // client / no consent row / lookup failure
+                                  // all render identically (O1).
+                                  Decision d;
+                                  d.kind = Decision::Kind::Invalid;
+                                  (*sharedCb)(d);
+                                  return;
+                              }
+                              acceptOrMfa();
+                          }
+                        );
                   }
                 );
             }

@@ -96,6 +96,37 @@ void OrgMemberController::initApiDocsImpl()
       "the nominee's membership becomes owner, every other owner row "
       "demotes to admin, and the nomination is marked accepted (all or "
       "nothing)."));
+    // #236 plan B: member-files-manager-approves org consent requests.
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consent-requests", "POST",
+      "File Organization Consent Request",
+      "A member asks the org managers to grant an organization consent for "
+      "an application (body {client_id}). Idempotent: re-filing with an "
+      "identical pending request returns 200 with the existing row. 404 for "
+      "unknown clients, 409 when the client is already org-owned or "
+      "already consented."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consent-requests", "GET",
+      "List Pending Consent Requests",
+      "Every pending consent request of the organization with requester "
+      "names (owner/admin)."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consent-requests/{requestId}/approve",
+      "POST", "Approve Consent Request",
+      "Approve a pending request (owner/admin): one organization_consents "
+      "row per scope of the client's registered set is written and sibling "
+      "pending requests for the same (org, client) are auto-approved. "
+      "Idempotent on already-approved rows; 409 on rejected rows."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consent-requests/{requestId}/reject",
+      "POST", "Reject Consent Request",
+      "Reject a pending request (owner/admin); optional body {reason}. "
+      "Does not cascade to sibling requests; the member may re-file."));
+    openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
+      "/api/me/organizations/{slug}/consent-requests/{requestId}", "DELETE",
+      "Withdraw Consent Request",
+      "The requester withdraws their OWN pending request. Any other id "
+      "resolves to the same 404 (anti-enumeration)."));
 }
 
 void OrgMemberController::createOrg(
@@ -239,6 +270,64 @@ void OrgMemberController::acceptSuccession(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     OrgMemberService::acceptSuccession(req, sharedCb, slug);
+}
+
+void OrgMemberController::fileConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::fileConsentRequest(req, sharedCb, slug);
+}
+
+void OrgMemberController::listConsentRequests(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::listConsentRequests(req, sharedCb, slug);
+}
+
+void OrgMemberController::approveConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug,
+  const std::string &requestId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::approveConsentRequest(req, sharedCb, slug, requestId);
+}
+
+void OrgMemberController::rejectConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug,
+  const std::string &requestId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::rejectConsentRequest(req, sharedCb, slug, requestId);
+}
+
+void OrgMemberController::withdrawConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug,
+  const std::string &requestId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrgMemberService::withdrawConsentRequest(req, sharedCb, slug, requestId);
 }
 
 }  // namespace organization

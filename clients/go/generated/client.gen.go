@@ -1041,6 +1041,19 @@ type PostApiMeOrganizationsJSONBody struct {
 	Slug         string  `json:"slug"`
 }
 
+// PostApiMeOrganizationsSlugConsentRequestsJSONBody defines parameters for PostApiMeOrganizationsSlugConsentRequests.
+type PostApiMeOrganizationsSlugConsentRequestsJSONBody struct {
+	ClientId string `json:"client_id"`
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONBody defines parameters for PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove.
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONBody = map[string]interface{}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONBody defines parameters for PostApiMeOrganizationsSlugConsentRequestsRequestIdReject.
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONBody struct {
+	Reason *string `json:"reason,omitempty"`
+}
+
 // PostApiMeOrganizationsSlugInvitationsJSONBody defines parameters for PostApiMeOrganizationsSlugInvitations.
 type PostApiMeOrganizationsSlugInvitationsJSONBody struct {
 	Email openapi_types.Email                                `json:"email"`
@@ -1400,6 +1413,15 @@ type PostApiMeOrgInvitationsAcceptJSONRequestBody PostApiMeOrgInvitationsAcceptJ
 
 // PostApiMeOrganizationsJSONRequestBody defines body for PostApiMeOrganizations for application/json ContentType.
 type PostApiMeOrganizationsJSONRequestBody PostApiMeOrganizationsJSONBody
+
+// PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody defines body for PostApiMeOrganizationsSlugConsentRequests for application/json ContentType.
+type PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody PostApiMeOrganizationsSlugConsentRequestsJSONBody
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody defines body for PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove for application/json ContentType.
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody = PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONBody
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody defines body for PostApiMeOrganizationsSlugConsentRequestsRequestIdReject for application/json ContentType.
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONBody
 
 // PostApiMeOrganizationsSlugInvitationsJSONRequestBody defines body for PostApiMeOrganizationsSlugInvitations for application/json ContentType.
 type PostApiMeOrganizationsSlugInvitationsJSONRequestBody PostApiMeOrganizationsSlugInvitationsJSONBody
@@ -2409,6 +2431,74 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
 	PostApiMeOrganizations(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiMeOrganizationsSlugConsentRequests List Pending Consent Requests
+	//
+	// Every pending consent request of the organization with requester names (org owner/admin;
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/consent-requests (the `GetApiMeOrganizationsSlugConsentRequests` operationId).
+	GetApiMeOrganizationsSlugConsentRequests(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsWithBody File Organization Consent Request
+	//
+	// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequests File Organization Consent Request
+	//
+	// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+	PostApiMeOrganizationsSlugConsentRequests(ctx context.Context, slug string, body PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiMeOrganizationsSlugConsentRequestsRequestId Withdraw Consent Request
+	//
+	// The requester withdraws their OWN pending request (#236 plan B). Any other id resolves to the same 404 (anti-enumeration).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/consent-requests/{requestId} (the `DeleteApiMeOrganizationsSlugConsentRequestsRequestId` operationId).
+	DeleteApiMeOrganizationsSlugConsentRequestsRequestId(ctx context.Context, slug string, requestId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBody Approve Consent Request
+	//
+	// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBody(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove Approve Consent Request
+	//
+	// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBody Reject Consent Request
+	//
+	// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBody(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdReject Reject Consent Request
+	//
+	// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdReject(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiMeOrganizationsSlugConsents List Organization Consents
 	//
@@ -4709,6 +4799,154 @@ func (c *Client) PostApiMeOrganizationsWithBody(ctx context.Context, contentType
 // Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
 func (c *Client) PostApiMeOrganizations(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiMeOrganizationsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiMeOrganizationsSlugConsentRequests List Pending Consent Requests
+//
+// Every pending consent request of the organization with requester names (org owner/admin;
+//
+// Corresponds with GET /api/me/organizations/{slug}/consent-requests (the `GetApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *Client) GetApiMeOrganizationsSlugConsentRequests(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeOrganizationsSlugConsentRequestsRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsWithBody File Organization Consent Request
+//
+// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequestsWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequests File Organization Consent Request
+//
+// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequests(ctx context.Context, slug string, body PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequest(c.Server, slug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiMeOrganizationsSlugConsentRequestsRequestId Withdraw Consent Request
+//
+// The requester withdraws their OWN pending request (#236 plan B). Any other id resolves to the same 404 (anti-enumeration).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/consent-requests/{requestId} (the `DeleteApiMeOrganizationsSlugConsentRequestsRequestId` operationId).
+func (c *Client) DeleteApiMeOrganizationsSlugConsentRequestsRequestId(ctx context.Context, slug string, requestId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeOrganizationsSlugConsentRequestsRequestIdRequest(c.Server, slug, requestId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBody Approve Consent Request
+//
+// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBody(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequestWithBody(c.Server, slug, requestId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove Approve Consent Request
+//
+// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequest(c.Server, slug, requestId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBody Reject Consent Request
+//
+// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBody(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequestWithBody(c.Server, slug, requestId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdReject Reject Consent Request
+//
+// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+func (c *Client) PostApiMeOrganizationsSlugConsentRequestsRequestIdReject(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequest(c.Server, slug, requestId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8439,6 +8677,236 @@ func NewPostApiMeOrganizationsRequestWithBody(server string, contentType string,
 	return req, nil
 }
 
+// NewGetApiMeOrganizationsSlugConsentRequestsRequest constructs an http.Request for the GetApiMeOrganizationsSlugConsentRequests method
+func NewGetApiMeOrganizationsSlugConsentRequestsRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/consent-requests", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequest calls the generic PostApiMeOrganizationsSlugConsentRequests builder with application/json body
+func NewPostApiMeOrganizationsSlugConsentRequestsRequest(server string, slug string, body PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugConsentRequestsRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugConsentRequests method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugConsentRequestsRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/consent-requests", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteApiMeOrganizationsSlugConsentRequestsRequestIdRequest constructs an http.Request for the DeleteApiMeOrganizationsSlugConsentRequestsRequestId method
+func NewDeleteApiMeOrganizationsSlugConsentRequestsRequestIdRequest(server string, slug string, requestId int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "requestId", requestId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/consent-requests/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequest calls the generic PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove builder with application/json body
+func NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequest(server string, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequestWithBody(server, slug, requestId, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugConsentRequestsRequestIdApproveRequestWithBody(server string, slug string, requestId int, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "requestId", requestId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/consent-requests/%s/approve", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequest calls the generic PostApiMeOrganizationsSlugConsentRequestsRequestIdReject builder with application/json body
+func NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequest(server string, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequestWithBody(server, slug, requestId, "application/json", bodyReader)
+}
+
+// NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequestWithBody constructs an http.Request for the PostApiMeOrganizationsSlugConsentRequestsRequestIdReject method, with any body, and a specified content type
+func NewPostApiMeOrganizationsSlugConsentRequestsRequestIdRejectRequestWithBody(server string, slug string, requestId int, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "requestId", requestId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/organizations/%s/consent-requests/%s/reject", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetApiMeOrganizationsSlugConsentsRequest constructs an http.Request for the GetApiMeOrganizationsSlugConsents method
 func NewGetApiMeOrganizationsSlugConsentsRequest(server string, slug string) (*http.Request, error) {
 	var err error
@@ -11500,6 +11968,78 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/me/organizations (the `PostApiMeOrganizations` operationId).
 	PostApiMeOrganizationsWithResponse(ctx context.Context, body PostApiMeOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsResponse, error)
 
+	// GetApiMeOrganizationsSlugConsentRequestsWithResponse List Pending Consent Requests
+	//
+	// Every pending consent request of the organization with requester names (org owner/admin;
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/organizations/{slug}/consent-requests (the `GetApiMeOrganizationsSlugConsentRequests` operationId).
+	GetApiMeOrganizationsSlugConsentRequestsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugConsentRequestsResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsWithBodyWithResponse File Organization Consent Request
+	//
+	// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsWithResponse File Organization Consent Request
+	//
+	// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsResponse, error)
+
+	// DeleteApiMeOrganizationsSlugConsentRequestsRequestIdWithResponse Withdraw Consent Request
+	//
+	// The requester withdraws their OWN pending request (#236 plan B). Any other id resolves to the same 404 (anti-enumeration).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/organizations/{slug}/consent-requests/{requestId} (the `DeleteApiMeOrganizationsSlugConsentRequestsRequestId` operationId).
+	DeleteApiMeOrganizationsSlugConsentRequestsRequestIdWithResponse(ctx context.Context, slug string, requestId int, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBodyWithResponse Approve Consent Request
+	//
+	// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBodyWithResponse(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithResponse Approve Consent Request
+	//
+	// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithResponse(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBodyWithResponse Reject Consent Request
+	//
+	// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBodyWithResponse(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse, error)
+
+	// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithResponse Reject Consent Request
+	//
+	// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+	PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithResponse(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse, error)
+
 	// GetApiMeOrganizationsSlugConsentsWithResponse List Organization Consents
 	//
 	// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
@@ -14184,6 +14724,8 @@ type PostApiMeApplicationsResponse struct {
 	JSON401 *ErrorEnvelope
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorEnvelope
 	// JSON429 the response for an HTTP 429 `application/json` response
@@ -14216,6 +14758,11 @@ func (r PostApiMeApplicationsResponse) GetJSON401() *ErrorEnvelope {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r PostApiMeApplicationsResponse) GetJSON403() *ErrorEnvelope {
 	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeApplicationsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
@@ -15050,6 +15597,442 @@ func (r PostApiMeOrganizationsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PostApiMeOrganizationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiMeOrganizationsSlugConsentRequestsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Requests *[]struct {
+			ClientId          *string `json:"client_id,omitempty"`
+			Id                *int    `json:"id,omitempty"`
+			OrganizationId    *int    `json:"organization_id,omitempty"`
+			RequestedAt       *string `json:"requested_at,omitempty"`
+			RequestedBy       *int    `json:"requested_by,omitempty"`
+			RequesterUsername *string `json:"requester_username,omitempty"`
+			Status            *string `json:"status,omitempty"`
+		} `json:"requests,omitempty"`
+		Slug  *string `json:"slug,omitempty"`
+		Total *int    `json:"total,omitempty"`
+	}
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) GetJSON200() *struct {
+	Requests *[]struct {
+		ClientId          *string `json:"client_id,omitempty"`
+		Id                *int    `json:"id,omitempty"`
+		OrganizationId    *int    `json:"organization_id,omitempty"`
+		RequestedAt       *string `json:"requested_at,omitempty"`
+		RequestedBy       *int    `json:"requested_by,omitempty"`
+		RequesterUsername *string `json:"requester_username,omitempty"`
+		Status            *string `json:"status,omitempty"`
+	} `json:"requests,omitempty"`
+	Slug  *string `json:"slug,omitempty"`
+	Total *int    `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeOrganizationsSlugConsentRequestsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugConsentRequestsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId       *string `json:"client_id,omitempty"`
+		Id             *int    `json:"id,omitempty"`
+		Message        *string `json:"message,omitempty"`
+		OrganizationId *int    `json:"organization_id,omitempty"`
+		RequestedAt    *string `json:"requested_at,omitempty"`
+		RequestedBy    *int    `json:"requested_by,omitempty"`
+		Status         *string `json:"status,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON200() *struct {
+	ClientId       *string `json:"client_id,omitempty"`
+	Id             *int    `json:"id,omitempty"`
+	Message        *string `json:"message,omitempty"`
+	OrganizationId *int    `json:"organization_id,omitempty"`
+	RequestedAt    *string `json:"requested_at,omitempty"`
+	RequestedBy    *int    `json:"requested_by,omitempty"`
+	Status         *string `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugConsentRequestsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Id      *int    `json:"id,omitempty"`
+		Message *string `json:"message,omitempty"`
+		Status  *string `json:"status,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetJSON200() *struct {
+	Id      *int    `json:"id,omitempty"`
+	Message *string `json:"message,omitempty"`
+	Status  *string `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId *string   `json:"client_id,omitempty"`
+		Id       *int      `json:"id,omitempty"`
+		Message  *string   `json:"message,omitempty"`
+		Scopes   *[]string `json:"scopes,omitempty"`
+		Status   *string   `json:"status,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON200() *struct {
+	ClientId *string   `json:"client_id,omitempty"`
+	Id       *int      `json:"id,omitempty"`
+	Message  *string   `json:"message,omitempty"`
+	Scopes   *[]string `json:"scopes,omitempty"`
+	Status   *string   `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetJSON500() *ErrorEnvelope {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientId *string `json:"client_id,omitempty"`
+		Id       *int    `json:"id,omitempty"`
+		Message  *string `json:"message,omitempty"`
+		Status   *string `json:"status,omitempty"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *ErrorEnvelope
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *ErrorEnvelope
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *ErrorEnvelope
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorEnvelope
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON200() *struct {
+	ClientId *string `json:"client_id,omitempty"`
+	Id       *int    `json:"id,omitempty"`
+	Message  *string `json:"message,omitempty"`
+	Status   *string `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON400() *ErrorEnvelope {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON401() *ErrorEnvelope {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON404() *ErrorEnvelope {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetJSON409() *ErrorEnvelope {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19083,6 +20066,126 @@ func (c *ClientWithResponses) PostApiMeOrganizationsWithResponse(ctx context.Con
 	return ParsePostApiMeOrganizationsResponse(rsp)
 }
 
+// GetApiMeOrganizationsSlugConsentRequestsWithResponse List Pending Consent Requests
+//
+// Every pending consent request of the organization with requester names (org owner/admin;
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/organizations/{slug}/consent-requests (the `GetApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *ClientWithResponses) GetApiMeOrganizationsSlugConsentRequestsWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiMeOrganizationsSlugConsentRequestsResponse, error) {
+	rsp, err := c.GetApiMeOrganizationsSlugConsentRequests(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeOrganizationsSlugConsentRequestsResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsWithBodyWithResponse File Organization Consent Request
+//
+// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequestsWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsWithResponse File Organization Consent Request
+//
+// A member asks the org managers to grant an organization consent for an application (body {client_id}; #236 plan B). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests (the `PostApiMeOrganizationsSlugConsentRequests` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsWithResponse(ctx context.Context, slug string, body PostApiMeOrganizationsSlugConsentRequestsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequests(ctx, slug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsResponse(rsp)
+}
+
+// DeleteApiMeOrganizationsSlugConsentRequestsRequestIdWithResponse Withdraw Consent Request
+//
+// The requester withdraws their OWN pending request (#236 plan B). Any other id resolves to the same 404 (anti-enumeration).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/organizations/{slug}/consent-requests/{requestId} (the `DeleteApiMeOrganizationsSlugConsentRequestsRequestId` operationId).
+func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugConsentRequestsRequestIdWithResponse(ctx context.Context, slug string, requestId int, reqEditors ...RequestEditorFn) (*DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse, error) {
+	rsp, err := c.DeleteApiMeOrganizationsSlugConsentRequestsRequestId(ctx, slug, requestId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBodyWithResponse Approve Consent Request
+//
+// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBodyWithResponse(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithBody(ctx, slug, requestId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithResponse Approve Consent Request
+//
+// Approve a pending request (org owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithResponse(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequestsRequestIdApprove(ctx, slug, requestId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBodyWithResponse Reject Consent Request
+//
+// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBodyWithResponse(ctx context.Context, slug string, requestId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithBody(ctx, slug, requestId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse(rsp)
+}
+
+// PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithResponse Reject Consent Request
+//
+// Reject a pending request (org owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject (the `PostApiMeOrganizationsSlugConsentRequestsRequestIdReject` operationId).
+func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithResponse(ctx context.Context, slug string, requestId int, body PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse, error) {
+	rsp, err := c.PostApiMeOrganizationsSlugConsentRequestsRequestIdReject(ctx, slug, requestId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse(rsp)
+}
+
 // GetApiMeOrganizationsSlugConsentsWithResponse List Organization Consents
 //
 // Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
@@ -21393,6 +22496,13 @@ func ParsePostApiMeApplicationsResponse(rsp *http.Response) (*PostApiMeApplicati
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest ErrorEnvelope
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21953,6 +23063,332 @@ func ParsePostApiMeOrganizationsResponse(rsp *http.Response) (*PostApiMeOrganiza
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetApiMeOrganizationsSlugConsentRequestsResponse parses an HTTP response from a GetApiMeOrganizationsSlugConsentRequestsWithResponse call
+func ParseGetApiMeOrganizationsSlugConsentRequestsResponse(rsp *http.Response) (*GetApiMeOrganizationsSlugConsentRequestsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeOrganizationsSlugConsentRequestsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Requests *[]struct {
+				ClientId          *string `json:"client_id,omitempty"`
+				Id                *int    `json:"id,omitempty"`
+				OrganizationId    *int    `json:"organization_id,omitempty"`
+				RequestedAt       *string `json:"requested_at,omitempty"`
+				RequestedBy       *int    `json:"requested_by,omitempty"`
+				RequesterUsername *string `json:"requester_username,omitempty"`
+				Status            *string `json:"status,omitempty"`
+			} `json:"requests,omitempty"`
+			Slug  *string `json:"slug,omitempty"`
+			Total *int    `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugConsentRequestsResponse parses an HTTP response from a PostApiMeOrganizationsSlugConsentRequestsWithResponse call
+func ParsePostApiMeOrganizationsSlugConsentRequestsResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugConsentRequestsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugConsentRequestsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId       *string `json:"client_id,omitempty"`
+			Id             *int    `json:"id,omitempty"`
+			Message        *string `json:"message,omitempty"`
+			OrganizationId *int    `json:"organization_id,omitempty"`
+			RequestedAt    *string `json:"requested_at,omitempty"`
+			RequestedBy    *int    `json:"requested_by,omitempty"`
+			Status         *string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse parses an HTTP response from a DeleteApiMeOrganizationsSlugConsentRequestsRequestIdWithResponse call
+func ParseDeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse(rsp *http.Response) (*DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Id      *int    `json:"id,omitempty"`
+			Message *string `json:"message,omitempty"`
+			Status  *string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse parses an HTTP response from a PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveWithResponse call
+func ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugConsentRequestsRequestIdApproveResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId *string   `json:"client_id,omitempty"`
+			Id       *int      `json:"id,omitempty"`
+			Message  *string   `json:"message,omitempty"`
+			Scopes   *[]string `json:"scopes,omitempty"`
+			Status   *string   `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse parses an HTTP response from a PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectWithResponse call
+func ParsePostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse(rsp *http.Response) (*PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiMeOrganizationsSlugConsentRequestsRequestIdRejectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientId *string `json:"client_id,omitempty"`
+			Id       *int    `json:"id,omitempty"`
+			Message  *string `json:"message,omitempty"`
+			Status   *string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest ErrorEnvelope

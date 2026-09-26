@@ -80,18 +80,18 @@ test.describe('Applications Management', () => {
   })
 
   test('delete client with confirmation', async ({ page }) => {
-    // Set up dialog handler
-    page.on('dialog', (dialog) => dialog.accept())
-
     await page.click('button:has-text("Delete")')
-    // After delete, page should still show (mock returns same list)
-    await expect(page.locator('h2')).toContainText('Applications')
+    // Confirm the shared AppConfirmDialog (#181).
+    await page.getByTestId('confirm-dialog-confirm').click()
+    // After delete, page should still show (mock returns same list).
+    // .first(): the confirm dialog's own h2 ("Confirm action") may still be
+    // mid-teardown when this assertion first polls.
+    await expect(page.locator('h2').first()).toContainText('Applications')
   })
 
   test('reset secret for confidential client', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
-
     await page.click('button:has-text("Reset Secret")')
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     // Should show new secret
     await expect(page.locator('h3:has-text("Client Secret")')).toBeVisible()
@@ -154,9 +154,10 @@ test.describe('Applications Management', () => {
   })
 
   test('delete client cancel preserves client', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.dismiss())
     const deleteButton = page.locator('button:has-text("Delete")').first()
     await deleteButton.click()
+    // Cancel in the shared AppConfirmDialog (#181) — no DELETE may fire.
+    await page.getByTestId('confirm-dialog-cancel').click()
     await page.waitForTimeout(300)
     // Client should still be visible (dialog was dismissed)
     await expect(page.locator('table tbody tr').first()).toBeVisible()

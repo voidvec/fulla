@@ -17,6 +17,9 @@ sharedCb 模式、`[this]` 分层约定）在 `.claude/rules/db-operations.md` �
 - **同一 callback 只能被 move 一次**。对同一 `std::function` double `std::move`（如错误分支与
   成功分支都 move）在 MSVC 下静默产出空回调 → 请求挂死无响应（DeviceCodeService 实案，A-2）。
   多分支共用时先 `auto sharedCb = std::make_shared<...>(std::move(cb))` 再按值捕获。
+  同一调用表达式的两个兄弟 lambda 各 move 同一 callback 的形状由 CI 守卫拦截
+  （`tools/arch-guard/double_move_guard.py --selftest` + 全树扫描，#183；嵌套串行链、
+  互斥分支、直调 move 是合法形状不报）。
 - **Drogon `Session::insert` 是 `std::map::insert` 语义：key 已存在静默不覆盖**。一切可重写
   session 值必须 `erase(key)` + `insert(...)`。新增可重写键后要 grep 全部可重写键的使用点，
   而非只看当前 diff 块。

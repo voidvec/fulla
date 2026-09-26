@@ -22,6 +22,11 @@ export default {
     modal: {
       close: 'Close dialog',
     },
+    confirm: {
+      title: 'Confirm action',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+    },
     table: {
       empty: 'No data found',
     },
@@ -316,6 +321,13 @@ export default {
       revokeConfirm:
         'Revoke access for "{app}"? This app will no longer be able to access your data.',
       revoked: 'Access revoked for "{app}"',
+      requestOrgAuth: 'Request organization authorization',
+      requestOrgAuthTitle: 'Request organization authorization',
+      requestOrgAuthPick: 'Choose organization',
+      requestOrgAuthSubmit: 'Send request',
+      requestOrgAuthNoOrgs:
+        'Join an organization before requesting organization authorization for this app.',
+      requestOrgAuthSuccess: 'Request submitted — awaiting a manager decision',
     },
     applications: {
       title: 'My Applications',
@@ -340,6 +352,13 @@ export default {
       deleteConfirm: 'Delete "{app}"? Existing user consents and issued tokens stop working.',
       secretTitle: 'Secret for {id}',
       secretOnce: 'Copy it now — it will not be shown again.',
+      requestOrgAuth: 'Request organization authorization',
+      requestOrgAuthTitle: 'Request organization authorization',
+      requestOrgAuthPick: 'Choose organization',
+      requestOrgAuthSubmit: 'Send request',
+      requestOrgAuthNoOrgs:
+        'Join an organization before requesting organization authorization for this app.',
+      requestOrgAuthSuccess: 'Request submitted — awaiting a manager decision',
     },
     organizations: {
       title: 'My Organizations',
@@ -383,6 +402,15 @@ export default {
       successionPending: 'Pending successor nomination: user {id}',
       successionWithdraw: 'Withdraw nomination',
       successionAccepted: 'You are now the owner',
+      pendingRequests: 'Pending approval requests',
+      approve: 'Approve',
+      reject: 'Reject',
+      approved: 'Request approved — the application now has the organization\'s authorization',
+      rejected: 'Request rejected',
+      pendingApproveConfirm:
+        'Approve "{requester}"\'s authorization request for "{client}"? The application will be granted the organization\'s consent.',
+      pendingRejectConfirm:
+        'Reject "{requester}"\'s authorization request for "{client}"? The requester will stay authorized to file a new one.',
     },
   },
 }

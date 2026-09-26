@@ -422,6 +422,167 @@ DROGON_TEST(Integration_P1_OpenPlatform_Org_CreateInviteAcceptFlow)
 }
 
 // ---------------------------------------------------------------------------
+// #229: an org_slug that EXISTS but is not manageable by the caller must be
+// indistinguishable from a nonexistent slug on the self-service create and
+// transfer endpoints — three-way uniformity (ghost slug / existent slug +
+// plain member / existent slug + non-member) on status, error code AND
+// catalog message, same caliber as the #223 client-provenance uniformity.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_OpenPlatform_OrgSlug_Uniform404)
+{
+    OPENPLATFORM_SKIP_GUARD;
+
+    const std::string suffix = uniqueSuffix();
+    const std::string slug = "qa-org-" + suffix;
+    const std::string ghostSlug = "qa-no-such-org-" + suffix;
+    const std::string userA = "qa_slug_a_" + suffix;  // org owner
+    const std::string userB = "qa_slug_b_" + suffix;  // plain member
+    const std::string userC = "qa_slug_c_" + suffix;  // non-member
+    const std::string passA = randomPassword();
+    const std::string passB = randomPassword();
+    const std::string passC = randomPassword();
+    REQUIRE(createVerifiedUser(userA, userA + "@qa.example", passA));
+    REQUIRE(createVerifiedUser(userB, userB + "@qa.example", passB));
+    REQUIRE(createVerifiedUser(userC, userC + "@qa.example", passC));
+    auto tokenA = loginTokenVerbose(userA, passA);
+    auto tokenB = loginTokenVerbose(userB, passB);
+    auto tokenC = loginTokenVerbose(userC, passC);
+    REQUIRE(tokenA.has_value());
+    REQUIRE(tokenB.has_value());
+    REQUIRE(tokenC.has_value());
+
+    // A creates the org and invites B as a PLAIN member.
+    Json::Value createBody;
+    createBody["slug"] = slug;
+    createBody["name"] = "QA Slug Org " + suffix;
+    auto createResp = sendPostJson("/api/me/organizations", createBody, *tokenA);
+    REQUIRE(createResp != nullptr);
+    dumpIfBad(createResp, "create org");
+    CHECK(statusIs(createResp, drogon::k201Created));
+    Json::Value invite;
+    invite["email"] = userB + "@qa.example";
+    invite["role"] = "member";
+    auto inviteResp =
+      sendPostJson("/api/me/organizations/" + slug + "/invitations", invite, *tokenA);
+    REQUIRE(inviteResp != nullptr);
+    CHECK(statusIs(inviteResp, drogon::k201Created));
+    Json::Value inviteBody;
+    REQUIRE(parseJsonBody(inviteResp, inviteBody));
+    Json::Value accept;
+    accept["token"] = inviteBody["token"].asString();
+    auto acceptResp = sendPostJson("/api/me/org-invitations/accept", accept, *tokenB);
+    REQUIRE(acceptResp != nullptr);
+    CHECK(statusIs(acceptResp, drogon::k200OK));
+
+    // Sanity guard for the uniformity legs: the org owner CAN still register
+    // an application under the org (the new 404 must not over-block).
+    Json::Value ownerApp;
+    ownerApp["name"] = "QA Slug Owner App " + suffix;
+    Json::Value cbUris(Json::arrayValue);
+    cbUris.append("https://qa.example/callback");
+    ownerApp["redirect_uris"] = cbUris;
+    ownerApp["org_slug"] = slug;
+    auto ownerCreate = sendPostJson("/api/me/applications", ownerApp, *tokenA);
+    REQUIRE(ownerCreate != nullptr);
+    dumpIfBad(ownerCreate, "owner create under org");
+    CHECK(statusIs(ownerCreate, drogon::k201Created));
+
+    // --- create probes: ghost slug / existent slug + plain member /
+    // existent slug + non-member must be byte-identical denials. ---
+    auto probeCreate = [&](const std::string &orgSlug, const std::string &name) {
+        Json::Value probe;
+        probe["name"] = name;
+        probe["redirect_uris"] = cbUris;
+        probe["org_slug"] = orgSlug;
+        return probe;
+    };
+    auto ghostCreate = sendPostJson(
+      "/api/me/applications", probeCreate(ghostSlug, "QA Slug Ghost " + suffix), *tokenB);
+    auto memberCreate = sendPostJson(
+      "/api/me/applications", probeCreate(slug, "QA Slug Member " + suffix), *tokenB);
+    auto outsiderCreate = sendPostJson(
+      "/api/me/applications", probeCreate(slug, "QA Slug Outsider " + suffix), *tokenC);
+    REQUIRE(ghostCreate != nullptr);
+    REQUIRE(memberCreate != nullptr);
+    REQUIRE(outsiderCreate != nullptr);
+    CHECK(statusIs(ghostCreate, drogon::k404NotFound));
+    CHECK(statusIs(memberCreate, drogon::k404NotFound));
+    CHECK(statusIs(outsiderCreate, drogon::k404NotFound));
+    Json::Value ghostCreateBody, memberCreateBody, outsiderCreateBody;
+    REQUIRE(parseJsonBody(ghostCreate, ghostCreateBody));
+    REQUIRE(parseJsonBody(memberCreate, memberCreateBody));
+    REQUIRE(parseJsonBody(outsiderCreate, outsiderCreateBody));
+    CHECK(ghostCreateBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(memberCreateBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(outsiderCreateBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(memberCreateBody["error"]["message"].asString() ==
+          ghostCreateBody["error"]["message"].asString());
+    CHECK(outsiderCreateBody["error"]["message"].asString() ==
+          ghostCreateBody["error"]["message"].asString());
+
+    // --- transfer probes: same three-way uniformity on the transfer target
+    // slug (the MOVED app is each caller's own personal app, so the only
+    // distinguishable cause left is the org side). ---
+    auto personalApp = [&](const std::string &name) {
+        Json::Value app;
+        app["name"] = name;
+        app["redirect_uris"] = cbUris;
+        return app;
+    };
+    auto bAppResp = sendPostJson(
+      "/api/me/applications", personalApp("QA Slug B App " + suffix), *tokenB);
+    auto cAppResp = sendPostJson(
+      "/api/me/applications", personalApp("QA Slug C App " + suffix), *tokenC);
+    REQUIRE(bAppResp != nullptr);
+    REQUIRE(cAppResp != nullptr);
+    CHECK(statusIs(bAppResp, drogon::k201Created));
+    CHECK(statusIs(cAppResp, drogon::k201Created));
+    Json::Value bAppBody, cAppBody;
+    REQUIRE(parseJsonBody(bAppResp, bAppBody));
+    REQUIRE(parseJsonBody(cAppResp, cAppBody));
+    const std::string bAppId = bAppBody["client_id"].asString();
+    const std::string cAppId = cAppBody["client_id"].asString();
+
+    auto probeTransfer = [&](const std::string &token,
+                             const std::string &clientId,
+                             const std::string &orgSlug) {
+        Json::Value to;
+        to["org_slug"] = orgSlug;
+        return sendPostJson("/api/me/applications/" + clientId + "/transfer", to, token);
+    };
+    auto ghostTransfer = probeTransfer(*tokenB, bAppId, ghostSlug);
+    auto memberTransfer = probeTransfer(*tokenB, bAppId, slug);
+    auto outsiderTransfer = probeTransfer(*tokenC, cAppId, slug);
+    REQUIRE(ghostTransfer != nullptr);
+    REQUIRE(memberTransfer != nullptr);
+    REQUIRE(outsiderTransfer != nullptr);
+    CHECK(statusIs(ghostTransfer, drogon::k404NotFound));
+    CHECK(statusIs(memberTransfer, drogon::k404NotFound));
+    CHECK(statusIs(outsiderTransfer, drogon::k404NotFound));
+    Json::Value ghostTransferBody, memberTransferBody, outsiderTransferBody;
+    REQUIRE(parseJsonBody(ghostTransfer, ghostTransferBody));
+    REQUIRE(parseJsonBody(memberTransfer, memberTransferBody));
+    REQUIRE(parseJsonBody(outsiderTransfer, outsiderTransferBody));
+    CHECK(ghostTransferBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(memberTransferBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(outsiderTransferBody["error"]["code"].asString() == "VALIDATION_RESOURCE_NOT_FOUND");
+    CHECK(memberTransferBody["error"]["message"].asString() ==
+          ghostTransferBody["error"]["message"].asString());
+    CHECK(outsiderTransferBody["error"]["message"].asString() ==
+          ghostTransferBody["error"]["message"].asString());
+
+    // cleanup users (org row stays; slug is timestamp-unique)
+    auto db = ::drogon::app().getDbClient();
+    std::promise<bool> cleaned;
+    db->execSqlAsync(
+      "DELETE FROM users WHERE username IN ($1, $2, $3)",
+      [&cleaned](const ::drogon::orm::Result &) { cleaned.set_value(true); },
+      [&cleaned](const ::drogon::orm::DrogonDbException &) { cleaned.set_value(false); },
+      userA, userB, userC);
+    CHECK(cleaned.get_future().get());
+}
+
+// ---------------------------------------------------------------------------
 // Open platform applications: PUBLIC app (no secret), CONFIDENTIAL app
 // (secret shown once), rotate-secret, admin suspend/resume, delete.
 // ---------------------------------------------------------------------------

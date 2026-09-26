@@ -91,6 +91,21 @@ class OrgConsentRepository
     /// by client).
     void listActiveByOrg(int32_t orgId, RowsCallback &&cb);
 
+    /// #236 (design §2.1 item 5, condition-3 alternative): does the org hold
+    /// an active (revoked_at IS NULL) consent row for the client under ANY
+    /// scope? Single Mapper hop. Index reality (V036):
+    /// idx_org_consents_active = (client_id, scope_name) WHERE revoked_at IS
+    /// NULL -- the query uses the client_id leading key with org equality as
+    /// a heap filter, acceptable at current scale; no migration for this.
+    /// Any lookup failure resolves to false: the gate's failure mode is
+    /// fail-closed rejection (the uniform Invalid decision), the dual of
+    /// hasActiveConsentForUser's "prompt the user".
+    void hasActiveConsentForOrg(
+      int32_t orgId,
+      const std::string &clientId,
+      BoolCallback &&cb
+    );
+
   private:
     ::drogon::orm::DbClientPtr dbClient_;
 };

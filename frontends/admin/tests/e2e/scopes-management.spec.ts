@@ -117,9 +117,9 @@ test.describe('Scopes Management - Custom Scope', () => {
   })
 
   test('can delete a custom scope with confirmation', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
     const customRow = page.locator('tbody tr').filter({ hasText: 'reports:read' })
     await customRow.locator('button:has-text("Delete")').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect(page.locator('text=Scope "reports:read" deleted')).toBeVisible()
   })
 })

@@ -115,6 +115,54 @@ class OrgMemberService
     static void acceptSuccession(
       const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
     );
+
+    /// POST /api/me/organizations/{slug}/consent-requests {client_id} —
+    /// #236 plan B: a member files an org-consent request for an
+    /// application. Idempotent: re-filing with an identical pending
+    /// request returns 200 with the existing row. 404 for unknown clients,
+    /// 409 when the client is already org-owned or already consented.
+    static void fileConsentRequest(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
+
+    /// GET /api/me/organizations/{slug}/consent-requests — pending
+    /// requests with requester names (owner/admin).
+    static void listConsentRequests(
+      const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+    );
+
+    /// POST /api/me/organizations/{slug}/consent-requests/{id}/approve —
+    /// owner/admin: writes one organization_consents row per scope of the
+    /// client's registered set (the #241 gate alternative then accepts
+    /// member authorizations) and auto-approves sibling pending requests
+    /// for the same (org, client). Idempotent on already-approved rows
+    /// (self-heal), 409 on rejected rows.
+    static void approveConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug,
+      const std::string &requestIdStr
+    );
+
+    /// POST /api/me/organizations/{slug}/consent-requests/{id}/reject —
+    /// owner/admin; optional body {reason}. Does NOT cascade to sibling
+    /// requests.
+    static void rejectConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug,
+      const std::string &requestIdStr
+    );
+
+    /// DELETE /api/me/organizations/{slug}/consent-requests/{id} — the
+    /// requester withdraws their OWN pending request; any other id
+    /// resolves to the anti-enumeration 404.
+    static void withdrawConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug,
+      const std::string &requestIdStr
+    );
 };
 
 }  // namespace organization

@@ -95,10 +95,9 @@ test.describe('Security', () => {
       const usernameInput = page.locator('input[placeholder*="username"], input[placeholder*="Username"]').last()
       if (await usernameInput.isVisible()) {
         await usernameInput.fill('testuser')
-        // Click delete
+        // Click delete. The typed-username flow guards this action; the page
+        // no longer uses any native confirm() (#181), so no dialog handler.
         const deleteButton = page.locator('button:has-text("Delete Account")')
-        // Handle the confirm dialog
-        page.on('dialog', dialog => dialog.accept())
         await deleteButton.click()
         await page.waitForTimeout(500)
         // Verify localStorage is cleared

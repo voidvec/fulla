@@ -20,10 +20,11 @@ test.describe('Connected Accounts (social links)', () => {
   test('unlink confirms then refreshes the list', async ({ page }) => {
     await setupMocks(page)
     await loginUser(page)
-    page.on('dialog', (dialog) => dialog.accept())
     await page.goto('/security')
 
     await page.getByRole('button', { name: 'Unlink' }).click()
+    // Confirm the shared AppConfirmDialog (#181).
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     // The mock DELETE always succeeds; after refresh the mock list still
     // returns the entry, so assert the request happened and the success
@@ -35,7 +36,6 @@ test.describe('Connected Accounts (social links)', () => {
   test('unlink cancelled at the confirm dialog sends no request', async ({ page }) => {
     await setupMocks(page)
     await loginUser(page)
-    page.on('dialog', (dialog) => dialog.dismiss())
     let deleteSeen = false
     await page.route('**/api/me/social/links/*', async (route) => {
       if (route.request().method() === 'DELETE') deleteSeen = true
@@ -44,6 +44,7 @@ test.describe('Connected Accounts (social links)', () => {
     await page.goto('/security')
 
     await page.getByRole('button', { name: 'Unlink' }).click()
+    await page.getByTestId('confirm-dialog-cancel').click()
     await page.waitForTimeout(500)
 
     expect(deleteSeen).toBe(false)
@@ -52,7 +53,6 @@ test.describe('Connected Accounts (social links)', () => {
   test('last-credential guard 409 surfaces the backend message', async ({ page }) => {
     await setupMocks(page)
     await loginUser(page)
-    page.on('dialog', (dialog) => dialog.accept())
     await mockApiError(page, '**/api/me/social/links/*', 409, {
       error: {
         code: 'VALIDATION_RESOURCE_CONFLICT',
@@ -65,6 +65,7 @@ test.describe('Connected Accounts (social links)', () => {
     await page.goto('/security')
 
     await page.getByRole('button', { name: 'Unlink' }).click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(page.locator('.bg-error-50')).toBeVisible({ timeout: 5000 })
   })

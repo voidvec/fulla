@@ -41,7 +41,10 @@ globs:
 6. （条件）`scripts/backend/test-{oauth2,admin}-endpoints.{ps1,sh}`——若列表端点受分页影响，
    调用处补 `?q=` 搜索参数（分页后目标用户不一定在第 1 页）
 7. （条件）`openapi.yaml` 任何改动后重生成 SDK：`python tools/clients/regen_clients.py`，
-   并再生成 `apps/server/docs/api/openapi.json`（从 `apps/server` 为 CWD 短暂运行 server）
+   并再生成 `apps/server/docs/api/openapi.json`（从 `apps/server` 为 CWD 短暂运行 server）。
+   注意：openapi.json 是 C++ 文档注册的**派生产物**——只改 yaml 的响应文档/描述
+   （不动路由、参数、schema）时它通常零 diff（该工件甚至不含 responses 表），
+   复核无 diff 即为合规，无需强行制造变更。
 
 ## 新增 DB 迁移 / 新增公共头
 

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 
@@ -36,6 +37,23 @@ function showError(msg: NormalizedError | string) {
   errorMessage.value = msg
   successMessage.value = ''
   setTimeout(() => { errorMessage.value = null }, 5000)
+}
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
 }
 
 async function fetchScopes() {
@@ -92,15 +110,16 @@ async function updateScope() {
   }
 }
 
-async function deleteScope(scope: any) {
-  if (!confirm(t('admin.scopes.deleteConfirm', { name: scope.name }))) return
-  try {
-    await axios.delete(`/api/admin/scopes/${scope.id}`)
-    showSuccess(t('admin.scopes.deleted', { name: scope.name }))
-    await fetchScopes()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function deleteScope(scope: any) {
+  askConfirm(t('admin.scopes.deleteConfirm', { name: scope.name }), async () => {
+    try {
+      await axios.delete(`/api/admin/scopes/${scope.id}`)
+      showSuccess(t('admin.scopes.deleted', { name: scope.name }))
+      await fetchScopes()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 // #43: system-seeded scopes are non-deletable (mirrors the backend's
@@ -365,5 +384,13 @@ onMounted(fetchScopes)
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

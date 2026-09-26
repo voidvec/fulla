@@ -9,6 +9,9 @@ import AppBadge from '../../components/ui/AppBadge.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
 import DData from '../../components/ui/DData.vue'
+import AppModal from '../../components/ui/AppModal.vue'
+import AppSelect from '../../components/ui/AppSelect.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const apps = ref<any[]>([])
@@ -29,6 +32,23 @@ const newName = ref('')
 const newType = ref<'PUBLIC' | 'CONFIDENTIAL'>('PUBLIC')
 const newRedirectUris = ref('')
 const newScopes = ref('openid profile')
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 async function fetchApps() {
   loading.value = true
@@ -69,30 +89,90 @@ async function createApp() {
   }
 }
 
-async function rotateSecret(app: any) {
-  if (!confirm(t('account.applications.rotateConfirm', { app: app.name || app.client_id }))) return
+function rotateSecret(app: any) {
+  askConfirm(t('account.applications.rotateConfirm', { app: app.name || app.client_id }), async () => {
+    try {
+      const resp = await http.post(`/api/me/applications/${app.client_id}/rotate-secret`, {})
+      oneTimeSecret.value = resp.data?.client_secret || ''
+      oneTimeSecretFor.value = app.client_id
+      success.value = t('account.applications.rotated', { app: app.name || app.client_id })
+      setTimeout(() => { success.value = '' }, 3000)
+      // M11 (review): the list still shows the pre-rotation state — refresh.
+      await fetchApps()
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
+}
+
+function deleteApp(app: any) {
+  askConfirm(t('account.applications.deleteConfirm', { app: app.name || app.client_id }), async () => {
+    try {
+      await http.delete(`/api/me/applications/${app.client_id}`)
+      success.value = t('account.applications.deleted', { app: app.name || app.client_id })
+      setTimeout(() => { success.value = '' }, 3000)
+      await fetchApps()
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
+}
+
+// Member-side "request organization authorization": files a consent-request
+// for one of this page's apps against an org the user belongs to. The org
+// list is fetched lazily when the dialog opens — no pre-flight on page load;
+// zero memberships swaps the form for an info message instead of an empty
+// select.
+const requestAuthOpen = ref(false)
+const requestAuthApp = ref<any>(null)
+const requestAuthOrgs = ref<any[]>([])
+const requestAuthSlug = ref('')
+const requestAuthLoading = ref(false)
+const requestAuthNoOrgs = ref(false)
+const requestAuthSubmitting = ref(false)
+
+const requestAuthOptions = computed(() =>
+  requestAuthOrgs.value.map((o: any) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
+)
+
+async function openRequestAuth(app: any) {
+  requestAuthApp.value = app
+  requestAuthOrgs.value = []
+  requestAuthSlug.value = ''
+  requestAuthNoOrgs.value = false
+  requestAuthOpen.value = true
+  requestAuthLoading.value = true
   try {
-    const resp = await http.post(`/api/me/applications/${app.client_id}/rotate-secret`, {})
-    oneTimeSecret.value = resp.data?.client_secret || ''
-    oneTimeSecretFor.value = app.client_id
-    success.value = t('account.applications.rotated', { app: app.name || app.client_id })
-    setTimeout(() => { success.value = '' }, 3000)
-    // M11 (review): the list still shows the pre-rotation state — refresh.
-    await fetchApps()
+    const resp = await http.get('/api/me/organizations')
+    requestAuthOrgs.value = resp.data?.organizations || []
+    requestAuthNoOrgs.value = requestAuthOrgs.value.length === 0
   } catch (e: unknown) {
+    requestAuthOpen.value = false
     error.value = normalizeError(e)
+  } finally {
+    requestAuthLoading.value = false
   }
 }
 
-async function deleteApp(app: any) {
-  if (!confirm(t('account.applications.deleteConfirm', { app: app.name || app.client_id }))) return
+async function submitRequestAuth() {
+  if (!requestAuthApp.value || !requestAuthSlug.value) return
+  requestAuthSubmitting.value = true
+  error.value = null
   try {
-    await http.delete(`/api/me/applications/${app.client_id}`)
-    success.value = t('account.applications.deleted', { app: app.name || app.client_id })
+    const resp = await http.post(
+      `/api/me/organizations/${requestAuthSlug.value}/consent-requests`,
+      { client_id: requestAuthApp.value.client_id },
+    )
+    // The backend's message distinguishes first filing from the idempotent
+    // already-pending replay — surface it verbatim.
+    success.value = resp.data?.message || t('account.applications.requestOrgAuthSuccess')
     setTimeout(() => { success.value = '' }, 3000)
-    await fetchApps()
+    requestAuthOpen.value = false
   } catch (e: unknown) {
     error.value = normalizeError(e)
+    requestAuthOpen.value = false
+  } finally {
+    requestAuthSubmitting.value = false
   }
 }
 
@@ -263,6 +343,14 @@ onMounted(fetchApps)
           </div>
           <div class="flex items-center gap-2">
             <button
+              class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+              data-testid="request-org-auth"
+              @click="openRequestAuth(app)"
+            >
+              {{ $t('account.applications.requestOrgAuth') }}
+            </button>
+            <button
               v-if="app.client_type === 'CONFIDENTIAL'"
               class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
@@ -281,5 +369,57 @@ onMounted(fetchApps)
         </div>
       </AppCard>
     </div>
+
+    <AppModal
+      :open="requestAuthOpen"
+      :title="$t('account.applications.requestOrgAuthTitle')"
+      size="sm"
+      @close="requestAuthOpen = false"
+    >
+      <p
+        v-if="requestAuthLoading"
+        class="text-sm text-neutral-500"
+      >
+        {{ $t('common.loading') }}
+      </p>
+      <p
+        v-else-if="requestAuthNoOrgs"
+        class="text-sm text-neutral-600"
+        data-testid="request-org-auth-no-orgs"
+      >
+        {{ $t('account.applications.requestOrgAuthNoOrgs') }}
+      </p>
+      <form
+        v-else
+        class="space-y-4"
+        @submit.prevent="submitRequestAuth"
+      >
+        <AppSelect
+          v-model="requestAuthSlug"
+          :label="$t('account.applications.requestOrgAuthPick')"
+          :options="requestAuthOptions"
+          :placeholder="$t('account.applications.requestOrgAuthPick')"
+          required
+        />
+        <button
+          type="submit"
+          :disabled="requestAuthSubmitting || !requestAuthSlug"
+          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700
+                 disabled:opacity-50 transition-colors
+                 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          data-testid="request-org-auth-submit"
+        >
+          {{ $t('account.applications.requestOrgAuthSubmit') }}
+        </button>
+      </form>
+    </AppModal>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

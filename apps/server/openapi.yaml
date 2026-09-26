@@ -2433,7 +2433,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Open platform disabled / org role missing
+          description: Open platform disabled / org registration required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found (#229 — an org_slug the caller cannot manage returns the same 404)
         '409':
           content:
             application/json:
@@ -3297,6 +3303,379 @@ paths:
       security:
       - bearerAuth: []
       summary: Revoke Organization Consents
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/consent-requests:
+    post:
+      description: 'A member asks the org managers to grant an organization consent
+        for an application (body {client_id}; #236 plan B). Idempotent: re-filing
+        with an identical pending request returns 200 with the existing row. 404
+        for unknown clients, 409 when the client is already org-owned or already
+        consented.'
+      operationId: post_api_me_organizations_{slug}_consent-requests
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - client_id
+              properties:
+                client_id:
+                  type: string
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  organization_id:
+                    type: integer
+                  client_id:
+                    type: string
+                  requested_by:
+                    type: integer
+                  requested_at:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+          description: Request filed, or an identical pending request already exists
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid input (client_id required)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Caller is not a member of this organization
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization or application not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Application already org-owned or already consented
+      security:
+      - bearerAuth: []
+      summary: File Organization Consent Request
+      tags:
+      - Organization
+    get:
+      description: Every pending consent request of the organization with requester
+        names (org owner/admin; #236 plan B).
+      operationId: get_api_me_organizations_{slug}_consent-requests
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        organization_id:
+                          type: integer
+                        client_id:
+                          type: string
+                        requested_by:
+                          type: integer
+                        requester_username:
+                          type: string
+                        requested_at:
+                          type: string
+                        status:
+                          type: string
+                  total:
+                    type: integer
+          description: Pending consent requests of the organization
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Owner or admin role required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: List Pending Consent Requests
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/consent-requests/{requestId}/approve:
+    post:
+      description: 'Approve a pending request (org owner/admin): one
+        organization_consents row per scope of the client''s registered set is
+        written and sibling pending requests for the same (org, client) are
+        auto-approved. Idempotent on already-approved rows; 409 on rejected rows.'
+      operationId: post_api_me_organizations_{slug}_consent-requests_{requestId}_approve
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Consent request id
+        in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  client_id:
+                    type: string
+                  status:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  message:
+                    type: string
+          description: Consent request approved and consent rows written
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid request id
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Owner or admin role required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization or request not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Request was rejected
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Failed to write the organization consent rows
+      security:
+      - bearerAuth: []
+      summary: Approve Consent Request
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/consent-requests/{requestId}/reject:
+    post:
+      description: 'Reject a pending request (org owner/admin); optional body
+        {reason}. Does not cascade to sibling requests; the member may re-file.'
+      operationId: post_api_me_organizations_{slug}_consent-requests_{requestId}_reject
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Consent request id
+        in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  client_id:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+          description: Consent request rejected
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid request id
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Owner or admin role required
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization or request not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Request is already decided
+      security:
+      - bearerAuth: []
+      summary: Reject Consent Request
+      tags:
+      - Organization
+  /api/me/organizations/{slug}/consent-requests/{requestId}:
+    delete:
+      description: The requester withdraws their OWN pending request (#236 plan
+        B). Any other id resolves to the same 404 (anti-enumeration).
+      operationId: delete_api_me_organizations_{slug}_consent-requests_{requestId}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Consent request id
+        in: path
+        name: requestId
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  status:
+                    type: string
+                  message:
+                    type: string
+          description: Consent request withdrawn
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Invalid request id
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Caller is not a member of this organization
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: Organization not found, or the request is not the caller's pending request
+      security:
+      - bearerAuth: []
+      summary: Withdraw Consent Request
       tags:
       - Organization
   /api/me/organizations/{slug}/successor-nomination:

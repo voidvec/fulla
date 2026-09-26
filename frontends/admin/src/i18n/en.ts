@@ -23,6 +23,11 @@ export default {
     modal: {
       close: 'Close dialog',
     },
+    confirm: {
+      title: 'Confirm action',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+    },
     table: {
       empty: 'No data found',
     },
@@ -369,12 +374,13 @@ export default {
     },
     tokens: {
       title: 'Tokens',
-      revokeAllByApp: 'Revoke All by App ▾',
+      revokeAll: 'Revoke All…',
       noClientsInResults: 'No clients in current results',
       clientIdLabel: 'Client ID:',
       userIdLabel: 'User ID:',
       clientFilterPlaceholder: 'Filter by client_id',
       userFilterPlaceholder: 'Filter by user_id',
+      revokeAllForUserLabel: 'Revoke All for User',
       revokeAllForUser: 'Revoke All for User',
       emptyTitle: 'No active tokens found',
       emptyDescription: 'Issued access tokens will be listed here.',
@@ -385,7 +391,6 @@ export default {
       expires: 'Expires',
       revoke: 'Revoke',
       pageTotal: 'Page {page} · {total} total',
-      confirmTitle: 'Confirm Action',
       revokeTokenConfirm: 'Revoke token starting with "{prefix}"?',
       revokeClientConfirm: 'Revoke ALL tokens for client "{name}"?',
       revokeUserConfirm: 'Revoke ALL tokens for user "{name}"?',

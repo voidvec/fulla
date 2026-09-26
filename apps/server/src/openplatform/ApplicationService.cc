@@ -1125,8 +1125,14 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                                   const std::vector<MemberModel> &rows) {
                                   if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
                                   {
-                                      respondError(req, cb, "AUTHZ_ACCESS_DENIED",
-                                        "org owner or admin role required to register an application for it");
+                                      // #229: a caller-named org_slug that
+                                      // exists but is not manageable must be
+                                      // indistinguishable from a nonexistent
+                                      // slug — same 404 shape as the lookup
+                                      // miss below; the distinguishable cause
+                                      // stays in the log detail only.
+                                      respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                        "org not found or caller not an owner/admin of it");
                                       return;
                                   }
                                   withAdvisoryXactLock(
@@ -1543,8 +1549,12 @@ void ApplicationService::transfer(
                                   const std::vector<MemberModel> &rows) {
                                     if (rows.empty() || !isManagerRole(rows[0].getValueOfRole()))
                                     {
-                                        respondError(req, cb, "AUTHZ_ACCESS_DENIED",
-                                          "org owner or admin role required to receive a transfer");
+                                        // #229: same uniform 404 as the create
+                                        // path — an existent-but-unmanaged
+                                        // org_slug must not be distinguishable
+                                        // from a nonexistent one.
+                                        respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                          "target org not found or caller not an owner/admin of it");
                                         return;
                                     }
                                     findOwners(db,

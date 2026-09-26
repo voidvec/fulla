@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 
@@ -47,6 +48,23 @@ function showError(msg: NormalizedError | string) {
 function showSuccess(msg: string) {
   successMessage.value = msg
   setTimeout(() => { successMessage.value = '' }, 3000)
+}
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
 }
 
 async function fetchUsers() {
@@ -149,24 +167,25 @@ async function createUser() {
   }
 }
 
-async function deleteUser(user: any) {
-  if (!confirm(t('admin.users.deleteConfirm', { name: user.username }))) return
-  try {
-    const resp = await axios.delete(`/api/admin/users/${user.id}`)
-    // Gap-fix: the delete response reports whether tokens were revoked; a
-    // tokens_revoked=false + warning means some tokens may outlive the user
-    // row — surface it instead of a blanket success.
-    if (resp.data?.tokens_revoked === false) {
-      showError(t('admin.users.deletedRevokeIssue', {
-        detail: resp.data?.warning || t('admin.users.someTokensNotRevoked'),
-      }))
-    } else {
-      showSuccess(t('admin.users.userDeleted'))
+function deleteUser(user: any) {
+  askConfirm(t('admin.users.deleteConfirm', { name: user.username }), async () => {
+    try {
+      const resp = await axios.delete(`/api/admin/users/${user.id}`)
+      // Gap-fix: the delete response reports whether tokens were revoked; a
+      // tokens_revoked=false + warning means some tokens may outlive the user
+      // row — surface it instead of a blanket success.
+      if (resp.data?.tokens_revoked === false) {
+        showError(t('admin.users.deletedRevokeIssue', {
+          detail: resp.data?.warning || t('admin.users.someTokensNotRevoked'),
+        }))
+      } else {
+        showSuccess(t('admin.users.userDeleted'))
+      }
+      await fetchUsers()
+    } catch (e: unknown) {
+      showError(normalizeError(e))
     }
-    await fetchUsers()
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+  })
 }
 
 onMounted(fetchUsers)
@@ -485,5 +504,13 @@ onMounted(fetchUsers)
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

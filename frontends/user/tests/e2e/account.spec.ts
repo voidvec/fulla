@@ -312,8 +312,8 @@ test.describe('Authorized Apps', () => {
   })
 
   test('can revoke an app', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
     await page.locator('button:has-text("Revoke")').first().click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect(page.locator('text=revoked')).toBeVisible()
   })
 
@@ -328,8 +328,8 @@ test.describe('Authorized Apps', () => {
   })
 
   test('revoke cancel preserves app', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.dismiss())
     await page.locator('button:has-text("Revoke")').first().click()
+    await page.getByTestId('confirm-dialog-cancel').click()
     await page.waitForTimeout(300)
     await expect(page.locator('text=Third Party App')).toBeVisible()
   })
@@ -340,8 +340,8 @@ test.describe('Authorized Apps', () => {
         await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INTERNAL_ERROR' } }) })
       } else { await route.continue() }
     })
-    page.on('dialog', (dialog) => dialog.accept())
     await page.locator('button:has-text("Revoke")').first().click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     // Assert the mounted error ALERT (role="alert") with its catalog
     // message — a [class*="error-"] substring also matched the page's
     // static Revoke button styling and passed unconditionally.
@@ -372,8 +372,8 @@ test.describe('Authorized Apps', () => {
   })
 
   test('revoke success message auto-dismisses', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept())
     await page.locator('button:has-text("Revoke")').first().click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     // Success message appears
     await expect(page.locator('.bg-success-50, [class*="success"]').first()).toBeVisible({ timeout: 3000 })
     // Should disappear after ~3 seconds

@@ -6,6 +6,7 @@ import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
 import DData from '../../components/ui/DData.vue'
+import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -25,6 +26,23 @@ const errorText = computed(() => {
   if (!e) return ''
   return typeof e === 'string' ? e : getErrorMessage(e.code)
 })
+
+// #181: destructive actions route through the shared confirm dialog instead
+// of native confirm() (which needed page.on('dialog') shims in the e2e suite).
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<(() => Promise<void>) | null>(null)
+function askConfirm(message: string, action: () => Promise<void>) {
+  confirmMessage.value = message
+  confirmAction.value = action
+  confirmOpen.value = true
+}
+async function runConfirm() {
+  confirmOpen.value = false
+  const action = confirmAction.value
+  confirmAction.value = null
+  if (action) await action()
+}
 
 // Client data
 const client = ref<any>({})
@@ -158,15 +176,16 @@ async function saveScopes() {
   }
 }
 
-async function resetSecret() {
-  if (!confirm(t('admin.applications.resetSecretConfirm', { name: clientId.value }))) return
-  try {
-    const resp = await axios.post(`/api/admin/clients/${clientId.value}/reset-secret`)
-    newClientSecret.value = resp.data.client_secret || ''
-    showSecretModal.value = true
-  } catch (e: unknown) {
-    showError(normalizeError(e))
-  }
+function resetSecret() {
+  askConfirm(t('admin.applications.resetSecretConfirm', { name: clientId.value }), async () => {
+    try {
+      const resp = await axios.post(`/api/admin/clients/${clientId.value}/reset-secret`)
+      newClientSecret.value = resp.data.client_secret || ''
+      showSecretModal.value = true
+    } catch (e: unknown) {
+      showError(normalizeError(e))
+    }
+  })
 }
 
 function copyToClipboard(text: string) {
@@ -468,5 +487,13 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <AppConfirmDialog
+      :open="confirmOpen"
+      :message="confirmMessage"
+      danger
+      @confirm="runConfirm"
+      @cancel="confirmOpen = false"
+    />
   </div>
 </template>

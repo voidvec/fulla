@@ -22,6 +22,11 @@ export default {
     modal: {
       close: '关闭对话框',
     },
+    confirm: {
+      title: '确认操作',
+      confirm: '确认',
+      cancel: '取消',
+    },
     table: {
       empty: '暂无数据',
     },
@@ -359,12 +364,13 @@ export default {
     },
     tokens: {
       title: '令牌管理',
-      revokeAllByApp: '按应用全部吊销 ▾',
+      revokeAll: '批量撤销…',
       noClientsInResults: '当前结果中没有客户端',
       clientIdLabel: '客户端 ID：',
       userIdLabel: '用户 ID：',
       clientFilterPlaceholder: '按 client_id 筛选',
       userFilterPlaceholder: '按 user_id 筛选',
+      revokeAllForUserLabel: '撤销指定用户全部令牌',
       revokeAllForUser: '吊销该用户全部令牌',
       emptyTitle: '未找到活跃令牌',
       emptyDescription: '已签发的访问令牌将显示在这里。',
@@ -375,7 +381,6 @@ export default {
       expires: '过期时间',
       revoke: '吊销',
       pageTotal: '第 {page} 页 · 共 {total} 条',
-      confirmTitle: '确认操作',
       revokeTokenConfirm: '确定吊销以“{prefix}”开头的令牌？',
       revokeClientConfirm: '确定吊销客户端“{name}”的全部令牌？',
       revokeUserConfirm: '确定吊销用户“{name}”的全部令牌？',

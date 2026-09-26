@@ -13,7 +13,9 @@ Every database operation in this codebase MUST be the **async callback + Mapper
 1. **Async callback** — prefer `Mapper::findOne` / `execSqlAsync` with a moved
    `std::function<...> &&callback` (last param). Synchronous
    `Mapper::findBy`-with-future is RESTRICTED, only when a sync result is truly
-   needed. `CoroMapper` is FORBIDDEN.
+   needed. `CoroMapper` is FORBIDDEN. Never move one callback into two sibling
+   lambdas of the same call (empty-function abort, A-2) — CI enforces it via
+   `tools/arch-guard/double_move_guard.py` (#183).
 2. **Mapper API** — SELECT via `Mapper::findBy` / `findOne`, INSERT via
    `Mapper::insert`, UPDATE via `Mapper::update`. No hand-rolled SQL for CRUD.
 3. **Criteria** — build WHERE conditions with `Criteria`, never by concatenating

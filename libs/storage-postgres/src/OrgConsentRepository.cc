@@ -244,4 +244,46 @@ void OrgConsentRepository::listActiveByOrg(int32_t orgId, RowsCallback &&cb)
     }
 }
 
+void OrgConsentRepository::hasActiveConsentForOrg(
+  int32_t orgId,
+  const std::string &clientId,
+  BoolCallback &&cb
+)
+{
+    auto sharedCb = std::make_shared<BoolCallback>(std::move(cb));
+
+    if (!dbClient_)
+    {
+        (*sharedCb)(false);
+        return;
+    }
+
+    // Single hop (see the header comment): any ACTIVE row for the
+    // (org, client) pair regardless of scope. The V036 partial index backs
+    // the client_id prefix; org equality filters the heap matches.
+    try
+    {
+        Mapper<OrganizationConsents> mapper(dbClient_);
+        mapper.findBy(
+          Criteria(
+            OrganizationConsents::Cols::_organization_id, CompareOperator::EQ, orgId
+          ) &&
+            Criteria(OrganizationConsents::Cols::_client_id, CompareOperator::EQ, clientId) &&
+            Criteria(OrganizationConsents::Cols::_revoked_at, CompareOperator::IsNull),
+          [sharedCb](const std::vector<OrganizationConsents> &rows) {
+              (*sharedCb)(!rows.empty());
+          },
+          [sharedCb](const DrogonDbException &e) {
+              LOG_ERROR << "hasActiveConsentForOrg failed: " << e.base().what();
+              (*sharedCb)(false);
+          }
+        );
+    }
+    catch (...)
+    {
+        LOG_ERROR << "hasActiveConsentForOrg Mapper construction failed";
+        (*sharedCb)(false);
+    }
+}
+
 }  // namespace fulla::storage::postgres
