@@ -293,3 +293,86 @@ export async function mockPasswordChangeError(page: Page, errorCode: string) {
     })
   })
 }
+
+/**
+ * Org consent-requests (v1.6): member filing + manager approval queue under
+ * one organization slug. Wire contract mirrored here:
+ *   GET  {base}                     → {slug, requests, total}
+ *   POST {base}                     → 200 pending request (idempotent: an
+ *                                     identical pending client_id replays the
+ *                                     SAME id with the already-pending message)
+ *   POST {base}/{id}/approve|reject → 200 {id, client_id, status, scopes?, message}
+ * The caller owns `state` (seed `requests` before the test); every mutating
+ * call is recorded in `state.calls` so specs can assert the wire traffic
+ * without waitForRequest plumbing. Trailing '**' on the glob so the
+ * sub-path action POSTs are captured (a single '*' cannot cross '/').
+ */
+export interface OrgConsentRequestState {
+  requests: any[]
+  calls: { method: string; path: string; body: any }[]
+}
+
+export async function mockOrgConsentRequests(page: Page, slug: string, state: OrgConsentRequestState) {
+  const base = `/api/me/organizations/${slug}/consent-requests`
+  await page.route(`**${base}**`, async (route) => {
+    const method = route.request().method()
+    const path = new URL(route.request().url()).pathname
+    if (method === 'GET' && path === base) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ slug, requests: state.requests, total: state.requests.length }),
+      })
+      return
+    }
+    if (method === 'POST' && path === base) {
+      const body = route.request().postDataJSON()
+      state.calls.push({ method, path, body })
+      const replay = state.requests.find((r) => r.client_id === body?.client_id && r.status === 'pending')
+      if (replay) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ...replay, message: 'An identical request is already pending' }),
+        })
+        return
+      }
+      const created = {
+        id: `cr_${state.calls.length}`,
+        organization_id: slug,
+        client_id: body?.client_id,
+        requested_by: 1,
+        requester_username: MOCK_PROFILE.username,
+        requested_at: '2026-09-26 10:00:00',
+        status: 'pending',
+        message: 'awaiting a manager decision',
+      }
+      state.requests.push(created)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(created) })
+      return
+    }
+    if (method === 'POST' && (path.endsWith('/approve') || path.endsWith('/reject'))) {
+      const action = path.endsWith('/approve') ? 'approve' : 'reject'
+      const status = action === 'approve' ? 'approved' : 'rejected'
+      const id = path.slice(base.length + 1, -(action.length + 1))
+      state.calls.push({ method, path, body: route.request().postDataJSON() })
+      const target = state.requests.find((r) => r.id === id)
+      // The backend auto-resolves the request on approve/reject — refetches
+      // after the action must see it gone from the pending queue.
+      state.requests = state.requests.filter((r) => r.id !== id)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id,
+          client_id: target?.client_id,
+          status,
+          scopes: status === 'approved' ? ['openid', 'profile'] : undefined,
+          message: status,
+        }),
+      })
+      return
+    }
+    await route.fulfill({ status: 404, body: '{}' })
+  })
+}
