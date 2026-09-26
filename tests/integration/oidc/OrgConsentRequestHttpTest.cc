@@ -93,6 +93,22 @@ std::optional<int64_t> sqlInt(const std::string &sql)
     return done.get_future().get();
 }
 
+// Poll sqlInt until it yields `want` (or attempts run out). The approve
+// response returns after the FIRST scope's upsert commits; the remaining
+// scopes are fire-and-forget writes that may land milliseconds later (the
+// M2 consent-write shape this workflow mirrors).
+std::optional<int64_t> awaitSqlInt(const std::string &sql, int64_t want, int attempts = 20)
+{
+    for (int i = 0; i < attempts; ++i)
+    {
+        const auto v = sqlInt(sql);
+        if (v.has_value() && *v == want)
+            return v;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    return sqlInt(sql);
+}
+
 bool createVerifiedUser(const std::string &username,
                         const std::string &email,
                         const std::string &password)
@@ -608,10 +624,10 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_ApproveRejectWithdraw_FullCircle)
     // Consent rows exist for the (org, client) pair.
     const auto orgId = sqlInt("SELECT id FROM organizations WHERE slug = '" + slug + "'");
     REQUIRE(orgId.has_value());
-    const auto consentCount = sqlInt(
+    const auto consentCount = awaitSqlInt(
       "SELECT COUNT(*) FROM organization_consents WHERE organization_id = " +
       std::to_string(*orgId) + " AND client_id = '" + appId +
-      "' AND revoked_at IS NULL");
+      "' AND revoked_at IS NULL", 3);
     REQUIRE(consentCount.has_value());
     CHECK(*consentCount == 3);
 

@@ -6,6 +6,7 @@ DELETE /api/admin/users/{userId}
 DELETE /api/me
 DELETE /api/me/applications/{clientId}
 DELETE /api/me/authorized-apps/{clientId}
+DELETE /api/me/organizations/{slug}/consent-requests/{requestId}
 DELETE /api/me/organizations/{slug}/consents/{clientId}
 DELETE /api/me/organizations/{slug}/invitations/{invitationId}
 DELETE /api/me/organizations/{slug}/members/{userId}
@@ -34,6 +35,7 @@ GET /api/me
 GET /api/me/applications
 GET /api/me/authorized-apps
 GET /api/me/organizations
+GET /api/me/organizations/{slug}/consent-requests
 GET /api/me/organizations/{slug}/consents
 GET /api/me/organizations/{slug}/invitations
 GET /api/me/organizations/{slug}/members
@@ -80,6 +82,9 @@ POST /api/me/mfa/setup
 POST /api/me/mfa/verify
 POST /api/me/org-invitations/accept
 POST /api/me/organizations
+POST /api/me/organizations/{slug}/consent-requests
+POST /api/me/organizations/{slug}/consent-requests/{requestId}/approve
+POST /api/me/organizations/{slug}/consent-requests/{requestId}/reject
 POST /api/me/organizations/{slug}/invitations
 POST /api/me/organizations/{slug}/successor-nomination
 POST /api/me/organizations/{slug}/successor-nomination/accept
