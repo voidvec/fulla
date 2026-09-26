@@ -6218,6 +6218,7 @@ private:
 #include <fulla/storage/postgres/models/OrganizationConsentRequests.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 namespace fulla::storage::postgres
@@ -6268,6 +6269,10 @@ CountCallback &&cb
 void findClientScopes(
 const std::string &clientId,
 std::function<void(const std::vector<std::string> &)> &&cb
+);
+void findUsernames(
+const std::vector<int32_t> &userIds,
+std::function<void(const std::map<int32_t, std::string> &)> &&cb
 );
 private:
 ::drogon::orm::DbClientPtr dbClient_;
