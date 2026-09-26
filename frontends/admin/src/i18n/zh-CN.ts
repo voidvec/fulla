@@ -365,11 +365,13 @@ export default {
     tokens: {
       title: '令牌管理',
       revokeAllByApp: '按应用全部吊销 ▾',
+      revokeAll: '批量撤销…',
       noClientsInResults: '当前结果中没有客户端',
       clientIdLabel: '客户端 ID：',
       userIdLabel: '用户 ID：',
       clientFilterPlaceholder: '按 client_id 筛选',
       userFilterPlaceholder: '按 user_id 筛选',
+      revokeAllForUserLabel: '撤销指定用户全部令牌',
       revokeAllForUser: '吊销该用户全部令牌',
       emptyTitle: '未找到活跃令牌',
       emptyDescription: '已签发的访问令牌将显示在这里。',

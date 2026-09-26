@@ -51,26 +51,26 @@ test.describe('Token Management', () => {
   test('revoke token shows confirmation dialog', async ({ page }) => {
     // Click first Revoke button in the table
     await page.locator('tbody button:has-text("Revoke")').first().click()
-    await expect(page.locator('h3:has-text("Confirm Action")')).toBeVisible()
+    await expect(page.getByTestId('confirm-dialog-confirm')).toBeVisible()
     await expect(page.locator('text=Revoke token starting with')).toBeVisible()
   })
 
   test('cancel confirmation closes dialog', async ({ page }) => {
     await page.locator('tbody button:has-text("Revoke")').first().click()
-    await expect(page.locator('h3:has-text("Confirm Action")')).toBeVisible()
-    await page.click('button:has-text("Cancel")')
-    await expect(page.locator('h3:has-text("Confirm Action")')).not.toBeVisible()
+    await expect(page.getByTestId('confirm-dialog-confirm')).toBeVisible()
+    await page.getByTestId('confirm-dialog-cancel').click()
+    await expect(page.getByTestId('confirm-dialog-confirm')).not.toBeVisible()
   })
 
   test('confirm revocation calls API', async ({ page }) => {
     await page.locator('tbody button:has-text("Revoke")').first().click()
-    await page.click('button:has-text("Confirm")')
+    await page.getByTestId('confirm-dialog-confirm').click()
     // Dialog should close after confirmation
-    await expect(page.locator('h3:has-text("Confirm Action")')).not.toBeVisible()
+    await expect(page.getByTestId('confirm-dialog-confirm')).not.toBeVisible()
   })
 
-  test('shows Revoke All by App dropdown', async ({ page }) => {
-    await page.click('button:has-text("Revoke All by App")')
+  test('shows Revoke All dropdown with per-client actions', async ({ page }) => {
+    await page.click('button:has-text("Revoke All…")')
     // Should show client IDs from current results
     await expect(page.locator('.absolute:has-text("fulla-portal")')).toBeVisible()
     await expect(page.locator('.absolute:has-text("api-service")')).toBeVisible()
@@ -100,14 +100,44 @@ test.describe('Token Management', () => {
     await expect(page.locator('text=No active tokens found')).toBeVisible()
   })
 
-  test('Revoke All for User button appears when user filter is set', async ({ page }) => {
-    // Initially not visible
-    await expect(page.locator('button:has-text("Revoke All for User")')).not.toBeVisible()
+  test('revoke all for a typed user id confirms and fires revoke-by-user', async ({ page }) => {
+    // Local override registered after setupAuthenticatedMocks — the shared
+    // `**/api/admin/tokens**` handler continues non-GET verbs to the proxy,
+    // so this test provides its own success fulfillment (same pattern as the
+    // gap-fixes revoke-by-client test).
+    await page.route('**/api/admin/tokens/revoke-by-user', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', count: 2 }) })
+    })
+    // #182: the bulk dropdown carries a text input for the target user id.
+    await page.click('button:has-text("Revoke All…")')
+    await page.getByPlaceholder('user_id', { exact: true }).fill('admin')
+    const revokeButton = page.getByRole('button', { name: 'Revoke All for User' })
+    await expect(revokeButton).toBeEnabled()
+    await revokeButton.click()
 
-    // Type a user ID filter
-    await page.fill('input[placeholder="Filter by user_id"]', 'admin')
-    // Now the button should appear
-    await expect(page.locator('button:has-text("Revoke All for User")')).toBeVisible()
+    // Confirm in the shared dialog; the request must carry the typed id.
+    const revokeRequest = page.waitForRequest('**/api/admin/tokens/revoke-by-user')
+    await page.getByTestId('confirm-dialog-confirm').click()
+    const request = await revokeRequest
+    expect(request.method()).toBe('POST')
+    expect(request.postDataJSON()).toEqual({ user_id: 'admin' })
+    // Success banner reports the backend count.
+    await expect(page.getByTestId('tokens-success')).toContainText('Revoked 2 token')
+  })
+
+  test('revoke all for user cancel sends no request', async ({ page }) => {
+    await page.click('button:has-text("Revoke All…")')
+    await page.getByPlaceholder('user_id', { exact: true }).fill('admin')
+    await page.getByRole('button', { name: 'Revoke All for User' }).click()
+
+    let revokeSeen = false
+    await page.route('**/api/admin/tokens/revoke-by-user', async (route) => {
+      revokeSeen = true
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', count: 1 }) })
+    })
+    await page.getByTestId('confirm-dialog-cancel').click()
+    await page.waitForTimeout(300)
+    expect(revokeSeen).toBe(false)
   })
 
   test('filter by client_id sends correct params', async ({ page }) => {
