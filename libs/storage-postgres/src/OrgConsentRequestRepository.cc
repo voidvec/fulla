@@ -12,6 +12,7 @@
 #include <fulla/storage/postgres/OrgConsentRequestRepository.h>
 
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
+#include <fulla/storage/postgres/models/Users.h>
 
 #include <drogon/drogon.h>
 
@@ -340,6 +341,48 @@ void OrgConsentRequestRepository::findClientScopes(
     {
         LOG_ERROR << "findClientScopes Mapper construction failed";
         (*sharedCb)({});
+    }
+}
+
+void OrgConsentRequestRepository::findUsernames(
+  const std::vector<int32_t> &userIds,
+  std::function<void(const std::map<int32_t, std::string> &)> &&cb
+)
+{
+    auto sharedCb =
+      std::make_shared<
+        std::function<void(const std::map<int32_t, std::string> &)>>(std::move(cb));
+
+    if (!dbClient_ || userIds.empty())
+    {
+        static const std::map<int32_t, std::string> kEmpty{};
+        (*sharedCb)(kEmpty);
+        return;
+    }
+
+    try
+    {
+        Mapper<Users> mapper(dbClient_);
+        mapper.findBy(
+          Criteria(Users::Cols::_id, CompareOperator::In, userIds),
+          [sharedCb](const std::vector<Users> &rows) {
+              std::map<int32_t, std::string> names;
+              for (const auto &u : rows)
+                  names[u.getValueOfId()] = u.getValueOfUsername();
+              (*sharedCb)(names);
+          },
+          [sharedCb](const DrogonDbException &e) {
+              LOG_ERROR << "findUsernames failed: " << e.base().what();
+              static const std::map<int32_t, std::string> kEmpty{};
+              (*sharedCb)(kEmpty);
+          }
+        );
+    }
+    catch (...)
+    {
+        LOG_ERROR << "findUsernames Mapper construction failed";
+        static const std::map<int32_t, std::string> kEmpty{};
+        (*sharedCb)(kEmpty);
     }
 }
 

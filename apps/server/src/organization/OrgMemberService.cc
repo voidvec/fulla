@@ -1825,58 +1825,33 @@ void OrgMemberService::listConsentRequests(
                         ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
                       repo->listPendingByOrg(
                         org.getValueOfId(),
-                        [repo, req, cb, db, org](const std::vector<RequestModel> &rows) {
+                        [repo, req, cb, org](const std::vector<RequestModel> &rows) {
                             // Hop 2 (no JOIN rule): requester usernames by
-                            // Criteria::In over the distinct requester ids.
-                            std::set<int32_t> ids;
+                            // Criteria::In over the distinct requester ids
+                            // (the query lives in the repository -- R4).
+                            std::vector<int32_t> ids;
                             for (const auto &r : rows)
-                                ids.insert(r.getValueOfRequestedBy());
-                            auto names = std::make_shared<std::map<int32_t, std::string>>();
-                            if (ids.empty())
-                            {
-                                Json::Value json;
-                                json["slug"] = org.getValueOfSlug();
-                                json["requests"] = Json::Value(Json::arrayValue);
-                                json["total"] = 0;
-                                (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
-                                return;
-                            }
-                            std::vector<int32_t> idVec(ids.begin(), ids.end());
-                            try
-                            {
-                                Mapper<UserModel> mapper(db);
-                                mapper.findBy(
-                                  Criteria(UserModel::Cols::_id, CompareOperator::In, idVec),
-                                  [repo, req, cb, org, rows, names](
-                                    const std::vector<UserModel> &users) {
-                                      for (const auto &u : users)
-                                          (*names)[u.getValueOfId()] = u.getValueOfUsername();
-                                      Json::Value json;
-                                      json["slug"] = org.getValueOfSlug();
-                                      Json::Value arr(Json::arrayValue);
-                                      for (const auto &r : rows)
-                                      {
-                                          Json::Value item = requestToJson(r);
-                                          auto it = names->find(r.getValueOfRequestedBy());
-                                          item["requester_username"] =
-                                            it != names->end() ? it->second : "";
-                                          arr.append(item);
-                                      }
-                                      json["requests"] = arr;
-                                      json["total"] = static_cast<int>(arr.size());
-                                      (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
-                                  },
-                                  [req, cb](const DrogonDbException &e) {
-                                      respondError(req, cb, "DB_QUERY_ERROR",
-                                        std::string("requester lookup failed: ") + e.base().what());
+                                ids.push_back(r.getValueOfRequestedBy());
+                            repo->findUsernames(
+                              ids,
+                              [repo, req, cb, org, rows](
+                                const std::map<int32_t, std::string> &names) {
+                                  Json::Value json;
+                                  json["slug"] = org.getValueOfSlug();
+                                  Json::Value arr(Json::arrayValue);
+                                  for (const auto &r : rows)
+                                  {
+                                      Json::Value item = requestToJson(r);
+                                      auto it = names.find(r.getValueOfRequestedBy());
+                                      item["requester_username"] =
+                                        it != names.end() ? it->second : "";
+                                      arr.append(item);
                                   }
-                                );
-                            }
-                            catch (...)
-                            {
-                                respondError(req, cb, "DB_QUERY_ERROR",
-                                  "requester lookup: Mapper construction failed");
-                            }
+                                  json["requests"] = arr;
+                                  json["total"] = static_cast<int>(arr.size());
+                                  (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                              }
+                            );
                         }
                       );
                   });
