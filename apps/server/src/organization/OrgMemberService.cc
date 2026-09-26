@@ -8,8 +8,11 @@
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/EmailService.h>
 #include <fulla/storage/postgres/AdvisoryLock.h>
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
 #include <fulla/storage/postgres/OrgConsentRepository.h>
+#include <fulla/storage/postgres/OrgConsentRequestRepository.h>
 #include <fulla/storage/postgres/OrgSuccessionRepository.h>
+#include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
 #include <fulla/storage/postgres/models/OrganizationConsents.h>
 #include <fulla/storage/postgres/models/OrganizationInvitations.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
@@ -1606,6 +1609,585 @@ void OrgMemberService::acceptInvitation(const ::drogon::HttpRequestPtr &req, Res
           {
               respondError(req, cb, "DB_QUERY_ERROR", "accept invite: Mapper construction failed");
           }
+      });
+}
+
+// ---------------------------------------------------------------------------
+// #236 entry half (plan B): member-files-manager-approves org consent
+// requests. Rulings B2-B8 of .zcode/plans/issues-batch-2/
+// 04-design-B-entry.md. All queries live in OrgConsentRequestRepository
+// (arch-guard R4); every hop is the resolveCaller -> findOrgBySlug ->
+// getMembership family chain; each failure path responds exactly once.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+using RequestModel = ::drogon_model::fulla_db::OrganizationConsentRequests;
+using ::fulla::storage::postgres::LookupStatus;
+using ::fulla::storage::postgres::OwnerRowLookup;
+
+Json::Value requestToJson(const RequestModel &row)
+{
+    Json::Value json;
+    json["id"] = static_cast<Json::Int64>(row.getValueOfId());
+    json["organization_id"] = row.getValueOfOrganizationId();
+    json["client_id"] = row.getValueOfClientId();
+    json["requested_by"] = row.getValueOfRequestedBy();
+    json["requested_at"] = row.getValueOfRequestedAt().toDbStringLocal();
+    json["status"] = row.getValueOfStatus();
+    return json;
+}
+
+// Path-id parser: non-numeric or non-positive ids are a client error; the
+// callers respond 400 before touching storage (request ids are SERIAL).
+bool parseRequestId(const std::string &raw, int32_t &out)
+{
+    if (raw.empty())
+        return false;
+    for (char c : raw)
+        if (c < '0' || c > '9')
+            return false;
+    try
+    {
+        std::size_t pos = 0;
+        const long long parsed = std::stoll(raw, &pos);
+        // The id column is SERIAL (int4): a wider bind param is rejected by
+        // the PG driver ("incorrect binary data in bind parameter"), so
+        // narrow here behind an explicit range check.
+        if (pos != raw.size() || parsed <= 0 ||
+            parsed > (std::numeric_limits<int32_t>::max)())
+            return false;
+        out = static_cast<int32_t>(parsed);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+}  // namespace
+
+void OrgMemberService::fileConsentRequest(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody || !(*jsonBody).isMember("client_id") ||
+        !(*jsonBody)["client_id"].isString() ||
+        (*jsonBody)["client_id"].asString().empty())
+    {
+        respondError(
+          req, cb, "VALIDATION_INVALID_INPUT",
+          "file consent request: JSON body with client_id required"
+        );
+        return;
+    }
+    const std::string clientId = (*jsonBody)["client_id"].asString();
+
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, clientId](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, clientId](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, caller, clientId](
+                    bool isMember, const std::string &) {
+                      if (!isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                            "not a member of this organization");
+                          return;
+                      }
+                      // B5: one owner-row read answers "client exists"
+                      // (unknown / admin-seeded -> the #223 uniform 404)
+                      // and "already org-owned" (409).
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
+                      ::fulla::storage::postgres::ClientOwnersRepository(db)
+                        .findOwnerRow(
+                          clientId,
+                          [repo, req, cb, db, org, caller, clientId](
+                            const OwnerRowLookup &o) {
+                              if (o.status != LookupStatus::Found)
+                              {
+                                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                    "application not found");
+                                  return;
+                              }
+                              if (o.row.getOrgId() != nullptr &&
+                                  *o.row.getOrgId() == org.getValueOfId())
+                              {
+                                  respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                    "application is already owned by the organization");
+                                  return;
+                              }
+                              ::fulla::storage::postgres::OrgConsentRepository(db)
+                                .hasActiveConsentForOrg(
+                                  org.getValueOfId(),
+                                  clientId,
+                                  [repo, req, cb, db, org, caller, clientId](
+                                    bool hasActive) {
+                                      // fail-open by design: a lookup
+                                      // failure resolves false, worst case
+                                      // one harmless doomed-successfully
+                                      // request.
+                                      if (hasActive)
+                                      {
+                                          respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                            "organization already holds an active consent for this application");
+                                          return;
+                                      }
+                                      repo->fileRequest(
+                                        org.getValueOfId(),
+                                        clientId,
+                                        caller.id,
+                                        [repo, req, cb, db, org, caller, clientId](
+                                          std::size_t affected) {
+                                            repo->findPending(
+                                              org.getValueOfId(),
+                                              clientId,
+                                              caller.id,
+                                              [repo, req, cb, org, caller, clientId, affected](
+                                                bool foundRow, const RequestModel &row) {
+                                                  if (!foundRow)
+                                                  {
+                                                      // affected==0 AND the
+                                                      // pending row is gone:
+                                                      // either a real DB
+                                                      // failure on the insert
+                                                      // or the row vanished
+                                                      // concurrently -- the
+                                                      // caller retries.
+                                                      respondError(req, cb, "DB_QUERY_ERROR",
+                                                        "consent request insert failed");
+                                                      return;
+                                                  }
+                                                  if (affected == 0)
+                                                  {
+                                                      // B3 idempotent re-file.
+                                                      Json::Value json = requestToJson(row);
+                                                      json["message"] =
+                                                        "An identical request is already pending";
+                                                      (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                                      return;
+                                                  }
+                                                  audit(req, "org_consent_request_filed",
+                                                    org.getValueOfSlug() + ":" + clientId);
+                                                  Json::Value json = requestToJson(row);
+                                                  json["message"] =
+                                                    "Consent request filed; awaiting a manager decision";
+                                                  (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                              }
+                                            );
+                                      }
+                                    );
+                                  }
+                                );
+                          }
+                        );
+                  });
+            });
+      });
+}
+
+void OrgMemberService::listConsentRequests(
+  const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
+)
+{
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org](bool isMember, const std::string &memberRole) {
+                      // Family-folded manager gate (same text as the
+                      // consents endpoints): non-member and non-manager
+                      // are indistinguishable here.
+                      if (!isManagerRole(memberRole) || !isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
+                      repo->listPendingByOrg(
+                        org.getValueOfId(),
+                        [repo, req, cb, db, org](const std::vector<RequestModel> &rows) {
+                            // Hop 2 (no JOIN rule): requester usernames by
+                            // Criteria::In over the distinct requester ids.
+                            std::set<int32_t> ids;
+                            for (const auto &r : rows)
+                                ids.insert(r.getValueOfRequestedBy());
+                            auto names = std::make_shared<std::map<int32_t, std::string>>();
+                            if (ids.empty())
+                            {
+                                Json::Value json;
+                                json["slug"] = org.getValueOfSlug();
+                                json["requests"] = Json::Value(Json::arrayValue);
+                                json["total"] = 0;
+                                (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                return;
+                            }
+                            std::vector<int32_t> idVec(ids.begin(), ids.end());
+                            try
+                            {
+                                Mapper<UserModel> mapper(db);
+                                mapper.findBy(
+                                  Criteria(UserModel::Cols::_id, CompareOperator::In, idVec),
+                                  [repo, req, cb, org, rows, names](
+                                    const std::vector<UserModel> &users) {
+                                      for (const auto &u : users)
+                                          (*names)[u.getValueOfId()] = u.getValueOfUsername();
+                                      Json::Value json;
+                                      json["slug"] = org.getValueOfSlug();
+                                      Json::Value arr(Json::arrayValue);
+                                      for (const auto &r : rows)
+                                      {
+                                          Json::Value item = requestToJson(r);
+                                          auto it = names->find(r.getValueOfRequestedBy());
+                                          item["requester_username"] =
+                                            it != names->end() ? it->second : "";
+                                          arr.append(item);
+                                      }
+                                      json["requests"] = arr;
+                                      json["total"] = static_cast<int>(arr.size());
+                                      (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                  },
+                                  [req, cb](const DrogonDbException &e) {
+                                      respondError(req, cb, "DB_QUERY_ERROR",
+                                        std::string("requester lookup failed: ") + e.base().what());
+                                  }
+                                );
+                            }
+                            catch (...)
+                            {
+                                respondError(req, cb, "DB_QUERY_ERROR",
+                                  "requester lookup: Mapper construction failed");
+                            }
+                        }
+                      );
+                  });
+            });
+      });
+}
+
+void OrgMemberService::approveConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug,
+  const std::string &requestIdStr
+)
+{
+    int32_t requestId = 0;
+    if (!parseRequestId(requestIdStr, requestId))
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT",
+          "approve consent request: numeric request id required");
+        return;
+    }
+
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, requestId](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, requestId](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, caller, requestId](
+                    bool isMember, const std::string &memberRole) {
+                      if (!isManagerRole(memberRole) || !isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
+                      repo->findById(
+                        requestId,
+                        [repo, req, cb, db, org, caller, requestId](
+                          bool foundRow, const RequestModel &row) {
+                            // Anti-enumeration: a request of another org
+                            // (or a nonexistent id) is the same 404.
+                            if (!foundRow ||
+                                row.getValueOfOrganizationId() != org.getValueOfId())
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                  "consent request not found");
+                                return;
+                            }
+                            if (row.getValueOfStatus() == "rejected")
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                  "consent request was rejected");
+                                return;
+                            }
+                            // pending -> normal approval; approved ->
+                            // B4 idempotent self-heal (re-run the consent
+                            // writes; saveConsent is an upsert).
+                            // B2: read the client's registered scope set
+                            // at approval time.
+                            repo->findClientScopes(
+                              row.getValueOfClientId(),
+                              [repo, req, cb, db, org, caller, row](
+                                const std::vector<std::string> &scopes) {
+                                  auto consentRepo = std::make_shared<
+                                    ::fulla::storage::postgres::OrgConsentRepository>(db);
+                                  if (scopes.empty())
+                                  {
+                                      // Degenerate (registered, review):
+                                      // nothing to authorize -- still mark
+                                      // decided so the workflow completes.
+                                      repo->decidePending(
+                                        row.getValueOfId(), "approved", caller.id, "",
+                                        [repo, req, cb, db, org, caller, row, scopes, consentRepo](
+                                          std::size_t) {
+                                              repo->resolveOtherPending(
+                                                org.getValueOfId(), row.getValueOfClientId(),
+                                                row.getValueOfId(), caller.id,
+                                                [repo, req, cb, org, row, scopes](
+                                                  std::size_t) {
+                                                      audit(req, "org_consent_request_approved",
+                                                        org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                                      Json::Value json;
+                                                      json["id"] = static_cast<Json::Int64>(row.getValueOfId());
+                                                      json["client_id"] = row.getValueOfClientId();
+                                                      json["status"] = "approved";
+                                                      json["scopes"] = Json::Value(Json::arrayValue);
+                                                      json["message"] =
+                                                        "Consent request approved (no registered scopes)";
+                                                      (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                                  }
+                                              );
+                                        }
+                                      );
+                                      return;
+                                  }
+                                  // M2 mirror (SessionController consent
+                                  // write): first scope error-gated, the
+                                  // rest fire-and-forget; the repo shared
+                                  // ptr keeps the heap copy alive.
+                                  consentRepo->saveConsent(
+                                    org.getValueOfId(),
+                                    caller.id,
+                                    row.getValueOfClientId(),
+                                    scopes[0],
+                                    [repo, consentRepo, req, cb, db, org, caller, row, scopes](
+                                      bool success) {
+                                          if (!success)
+                                          {
+                                              respondError(req, cb, "INTERNAL_ERROR",
+                                                "failed to save organization consent for scope: " + scopes[0]);
+                                              return;
+                                          }
+                                          for (std::size_t i = 1; i < scopes.size(); ++i)
+                                          {
+                                              consentRepo->saveConsent(
+                                                org.getValueOfId(), caller.id,
+                                                row.getValueOfClientId(), scopes[i],
+                                                [](bool) {});
+                                          }
+                                          repo->decidePending(
+                                            row.getValueOfId(), "approved", caller.id, "",
+                                            [repo, consentRepo, req, cb, org, caller, row, scopes](
+                                              std::size_t) {
+                                                  repo->resolveOtherPending(
+                                                    org.getValueOfId(), row.getValueOfClientId(),
+                                                    row.getValueOfId(), caller.id,
+                                                    [repo, consentRepo, req, cb, org, caller, row, scopes](
+                                                      std::size_t) {
+                                                          audit(req, "org_consent_request_approved",
+                                                            org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                                          Json::Value json;
+                                                          json["id"] = static_cast<Json::Int64>(row.getValueOfId());
+                                                          json["client_id"] = row.getValueOfClientId();
+                                                          json["status"] = "approved";
+                                                          Json::Value scopeArr(Json::arrayValue);
+                                                          for (const auto &s : scopes)
+                                                              scopeArr.append(s);
+                                                          json["scopes"] = scopeArr;
+                                                          json["message"] =
+                                                            "Consent request approved; organization consent rows written";
+                                                          (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                                      }
+                                                  );
+                                            }
+                                          );
+                                      }
+                                  );
+                              }
+                            );
+                        }
+                      );
+                  });
+            });
+      });
+}
+
+void OrgMemberService::rejectConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug,
+  const std::string &requestIdStr
+)
+{
+    int32_t requestId = 0;
+    if (!parseRequestId(requestIdStr, requestId))
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT",
+          "reject consent request: numeric request id required");
+        return;
+    }
+    std::string reason;
+    if (auto jsonBody = req->getJsonObject();
+        jsonBody && (*jsonBody).isMember("reason") && (*jsonBody)["reason"].isString())
+    {
+        reason = (*jsonBody)["reason"].asString();
+    }
+
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, requestId, reason](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, requestId, reason](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, caller, requestId, reason](
+                    bool isMember, const std::string &memberRole) {
+                      if (!isManagerRole(memberRole) || !isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "owner or admin role required");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
+                      repo->findById(
+                        requestId,
+                        [repo, req, cb, db, org, caller, requestId, reason](
+                          bool foundRow, const RequestModel &row) {
+                              if (!foundRow ||
+                                  row.getValueOfOrganizationId() != org.getValueOfId())
+                              {
+                                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                    "consent request not found");
+                                  return;
+                              }
+                              if (row.getValueOfStatus() != "pending")
+                              {
+                                  respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                    "consent request is already decided");
+                                  return;
+                              }
+                              repo->decidePending(
+                                row.getValueOfId(), "rejected", caller.id, reason,
+                                [repo, req, cb, org, row](std::size_t flipped) {
+                                    if (flipped == 0)
+                                    {
+                                        // Lost a decide race.
+                                        respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                          "consent request is already decided");
+                                        return;
+                                    }
+                                    audit(req, "org_consent_request_rejected",
+                                      org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                    Json::Value json;
+                                    json["id"] = static_cast<Json::Int64>(row.getValueOfId());
+                                    json["client_id"] = row.getValueOfClientId();
+                                    json["status"] = "rejected";
+                                    json["message"] =
+                                      "Consent request rejected";
+                                    (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                }
+                              );
+                          }
+                      );
+                  });
+            });
+      });
+}
+
+void OrgMemberService::withdrawConsentRequest(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug,
+  const std::string &requestIdStr
+)
+{
+    int32_t requestId = 0;
+    if (!parseRequestId(requestIdStr, requestId))
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT",
+          "withdraw consent request: numeric request id required");
+        return;
+    }
+
+    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    resolveCaller(db, userIdAttr, req, cb,
+      [req, cb, db, slug, requestId](bool found, const ResolvedUser &caller) {
+          if (!found)
+              return;
+          findOrgBySlug(db, slug, req, cb,
+            [req, cb, db, caller, requestId](bool, const OrgModel &org) {
+                getMembership(db, org.getValueOfId(), caller.id, req, cb,
+                  [req, cb, db, org, caller, requestId](
+                    bool isMember, const std::string &) {
+                      if (!isMember)
+                      {
+                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
+                            "not a member of this organization");
+                          return;
+                      }
+                      auto repo = std::make_shared<
+                        ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
+                      repo->withdrawOwnPending(
+                        requestId,
+                        caller.id,
+                        [repo, req, cb, org, requestId](std::size_t deleted) {
+                            // B7 anti-enumeration: not yours / not
+                            // pending / nonexistent are the same 404.
+                            if (deleted == 0)
+                            {
+                                respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                                  "consent request not found");
+                                return;
+                            }
+                            audit(req, "org_consent_request_withdrawn",
+                              org.getValueOfSlug());
+                            Json::Value json;
+                            json["id"] = static_cast<Json::Int64>(requestId);
+                            json["status"] = "withdrawn";
+                            json["message"] = "Consent request withdrawn";
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        }
+                      );
+                  });
+            });
       });
 }
 

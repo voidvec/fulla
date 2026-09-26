@@ -97,6 +97,39 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       ::drogon::Post,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
+    // #236 plan B: member-files-manager-approves org consent requests.
+    // consent-requests is a new 4th-segment literal; drogon's whole-segment
+    // matching keeps it disjoint from /consents/{clientId}.
+    ADD_METHOD_TO(
+      OrgMemberController::fileConsentRequest,
+      "/api/me/organizations/{slug}/consent-requests",
+      ::drogon::Post,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::listConsentRequests,
+      "/api/me/organizations/{slug}/consent-requests",
+      ::drogon::Get,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::approveConsentRequest,
+      "/api/me/organizations/{slug}/consent-requests/{requestId}/approve",
+      ::drogon::Post,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::rejectConsentRequest,
+      "/api/me/organizations/{slug}/consent-requests/{requestId}/reject",
+      ::drogon::Post,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      OrgMemberController::withdrawConsentRequest,
+      "/api/me/organizations/{slug}/consent-requests/{requestId}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
     METHOD_LIST_END
 
     void createOrg(
@@ -178,6 +211,49 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &slug
+    );
+
+    /// POST /api/me/organizations/{slug}/consent-requests {client_id} —
+    /// a member files an org-consent request (idempotent per B3, #236).
+    void fileConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    /// GET /api/me/organizations/{slug}/consent-requests — pending
+    /// requests with requester names (owner/admin).
+    void listConsentRequests(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+
+    /// POST .../consent-requests/{requestId}/approve — owner/admin; writes
+    /// the organization_consents rows and auto-approves siblings (B4).
+    void approveConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug,
+      const std::string &requestId
+    );
+
+    /// POST .../consent-requests/{requestId}/reject — owner/admin; optional
+    /// body {reason}.
+    void rejectConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug,
+      const std::string &requestId
+    );
+
+    /// DELETE .../consent-requests/{requestId} — the requester withdraws
+    /// their own pending request (B7 anti-enumeration 404 otherwise).
+    void withdrawConsentRequest(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug,
+      const std::string &requestId
     );
 
     /// #43 pattern: declare the /api/me org routes' scope requirements for
