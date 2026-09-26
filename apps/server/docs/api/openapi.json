@@ -1776,6 +1776,123 @@
         ]
       }
     },
+    "/api/me/organizations/{slug}/consent-requests" : 
+    {
+      "get" : 
+      {
+        "description" : "Every pending consent request of the organization with requester names (owner/admin).",
+        "operationId" : "get_api_me_organizations_{slug}_consent-requests",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Pending Consent Requests",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "A member asks the org managers to grant an organization consent for an application (body {client_id}). Idempotent: re-filing with an identical pending request returns 200 with the existing row. 404 for unknown clients, 409 when the client is already org-owned or already consented.",
+        "operationId" : "post_api_me_organizations_{slug}_consent-requests",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "File Organization Consent Request",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/consent-requests/{requestId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "The requester withdraws their OWN pending request. Any other id resolves to the same 404 (anti-enumeration).",
+        "operationId" : "delete_api_me_organizations_{slug}_consent-requests_{requestId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Withdraw Consent Request",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/consent-requests/{requestId}/approve" : 
+    {
+      "post" : 
+      {
+        "description" : "Approve a pending request (owner/admin): one organization_consents row per scope of the client's registered set is written and sibling pending requests for the same (org, client) are auto-approved. Idempotent on already-approved rows; 409 on rejected rows.",
+        "operationId" : "post_api_me_organizations_{slug}_consent-requests_{requestId}_approve",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Approve Consent Request",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/organizations/{slug}/consent-requests/{requestId}/reject" : 
+    {
+      "post" : 
+      {
+        "description" : "Reject a pending request (owner/admin); optional body {reason}. Does not cascade to sibling requests; the member may re-file.",
+        "operationId" : "post_api_me_organizations_{slug}_consent-requests_{requestId}_reject",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Reject Consent Request",
+        "tags" : 
+        [
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
     "/api/me/organizations/{slug}/consents" : 
     {
       "get" : 
