@@ -35,6 +35,11 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
    {"custom_config.external_auth.google.redirect_uri", "FULLA_GOOGLE_REDIRECT_URI", false},
    {"custom_config.external_auth.wechat.appid", "FULLA_WECHAT_APPID", false},
    {"custom_config.external_auth.wechat.secret", "FULLA_WECHAT_SECRET", false},
+   // v1.5.0 provider tiers: domestic gates WeChat, international gates
+   // GitHub/Google (both default true = every configured provider enabled).
+   // isNumeric rows: env values are 1/0 (same convention as open_platform).
+   {"custom_config.external_auth.tiers.domestic", "FULLA_EXTERNAL_TIER_DOMESTIC", true},
+   {"custom_config.external_auth.tiers.international", "FULLA_EXTERNAL_TIER_INTERNATIONAL", true},
    {"listeners.0.port", "FULLA_LISTEN_PORT", true},
    // "[name=OAuth2Plugin]" resolves the plugin by its drogon "name" field,
    // independent of array ordering — each config file inserts a different set

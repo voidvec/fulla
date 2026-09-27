@@ -31,6 +31,7 @@ GET /api/admin/tokens
 GET /api/admin/users
 GET /api/admin/users/{userId}
 GET /api/admin/users/{userId}/roles
+GET /api/auth/providers
 GET /api/me
 GET /api/me/applications
 GET /api/me/authorized-apps

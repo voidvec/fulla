@@ -1,6 +1,6 @@
 import http, { setTokens, clearTokens, getAccessToken } from './http'
 import { generatePkcePair } from '../utils/pkce'
-import type { LoginResult, TokenResponse } from '../types'
+import type { ExternalProviderInfo, LoginResult, TokenResponse } from '../types'
 
 const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin + '/callback'
@@ -180,6 +180,16 @@ export const authService = {
 
   async register(username: string, password: string, email: string): Promise<void> {
     await http.post('/api/register', new URLSearchParams({ username, password, email }))
+  },
+
+  // v1.5.0 provider tiers: public discovery (no auth) of the external login
+  // providers this deployment offers. The login page renders its social
+  // buttons from this instead of build-time env vars, so the same server-side
+  // gate (tier switch + credentials) that enforces the login endpoints
+  // decides what the page offers. An empty list = external login disabled.
+  async listExternalProviders(): Promise<ExternalProviderInfo[]> {
+    const resp = await http.get<{ providers?: ExternalProviderInfo[] }>('/api/auth/providers')
+    return resp.data.providers ?? []
   },
 
   async requestPasswordReset(email: string): Promise<void> {

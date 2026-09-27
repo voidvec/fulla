@@ -22,6 +22,7 @@
 #include <fulla/drogon/controllers/TokenAdminController.h>
 #include <fulla/drogon/controllers/RoleScopeAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
+#include <fulla/drogon/controllers/AuthProvidersController.h>
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
 #include <fulla/drogon/authz/ResourceScopeRegistry.h>
 #include <OrganizationController.h>  // #43: product-app org controller scope decls
@@ -289,6 +290,7 @@ int main(int argc, char *argv[])
     fulla::drogon::controllers::RoleScopeAdminController::initApiDocs();
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
+    fulla::drogon::controllers::AuthProvidersController::initApiDocs();
     // #43: OrganizationController (product-app level, namespace `organization`).
     ::organization::OrganizationController::initApiDocs();
     ::organization::OrgMemberController::initApiDocs();

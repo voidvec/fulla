@@ -47,6 +47,7 @@ static void flushGcovIfInstrumented()
 #include "../src/bootstrap/ControllerRegistration.h"
 #include "../src/bootstrap/IdentityAssembly.h"
 #include <fulla/drogon/controllers/HealthController.h>
+#include <fulla/drogon/controllers/AuthProvidersController.h>
 #ifdef WITH_SOCIAL
 #include <fulla/drogon/controllers/GoogleController.h>
 #include <fulla/drogon/controllers/WeChatController.h>
@@ -311,6 +312,12 @@ int main(int argc, char **argv)
     // 404.
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::HealthController>()
+    );
+    // v1.5.0 provider tiers: the route-manifest golden snapshot enumerates
+    // every registered handler, so the discovery controller must be
+    // registered here too (mirrors registerAllControllers()).
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::AuthProvidersController>()
     );
 #ifdef WITH_SOCIAL
     drogon::app().registerController(

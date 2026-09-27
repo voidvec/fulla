@@ -45,3 +45,12 @@ export interface SocialLink {
   subject: string
   linked_at?: string
 }
+
+// v1.5.0 provider tiers: one entry of the GET /api/auth/providers discovery
+// response. authorize_url is fully built server-side (redirect target from
+// the per-provider redirect_uri override or frontend.url) — the login page
+// redirects to it as-is.
+export interface ExternalProviderInfo {
+  provider: string
+  authorize_url: string
+}

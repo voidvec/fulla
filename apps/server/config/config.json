@@ -249,6 +249,10 @@
             "creation_rate_limit_per_day": 5
         },
         "external_auth": {
+            "tiers": {
+                "domestic": true,
+                "international": true
+            },
             "github": {
                 "client_id": "",
                 "client_secret": ""

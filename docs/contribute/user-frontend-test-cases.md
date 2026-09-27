@@ -19,7 +19,7 @@
 | U-LOGIN-009 | Redirect after login | Login with `?redirect=/profile` in URL | Redirect to `/profile` after login | P0 |
 | U-LOGIN-010 | Already authenticated | Navigate to `/login` while logged in | Redirect to Dashboard | P0 |
 | U-LOGIN-011 | GitHub social login | Click "Sign in with GitHub" | Redirected to GitHub OAuth page | P1 |
-| U-LOGIN-012 | GitHub client_id not configured | When `VITE_GITHUB_CLIENT_ID` is empty | GitHub button still visible, link has no client_id | P2 |
+| U-LOGIN-012 | GitHub not offered by deployment | Discovery endpoint (`GET /api/auth/providers`) does not report github (unconfigured credentials or tier off) | GitHub button hidden, no dead link rendered | P2 |
 | U-LOGIN-013 | Link to register | Click "create a new account" link | Navigate to `/register` | P1 |
 | U-LOGIN-014 | Link to forgot password | Click "Forgot password?" | Navigate to `/forgot-password` | P1 |
 | U-LOGIN-015 | Browser autofill | Use browser autofill for credentials | Form submits correctly with autofilled values | P2 |

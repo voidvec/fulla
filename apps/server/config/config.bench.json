@@ -206,6 +206,10 @@
         "rp_origins": ["http://localhost:5173"]
     },
     "external_auth": {
+        "tiers": {
+            "domestic": true,
+            "international": true
+        },
             "github": {
                 "client_id": "YOUR_GITHUB_CLIENT_ID",
                 "client_secret": "YOUR_GITHUB_CLIENT_SECRET"

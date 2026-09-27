@@ -68,6 +68,30 @@ export const MOCK_SLOW_TOKEN_PAIR = {
 }
 
 export async function setupMocks(page: Page) {
+  // v1.5.0 provider tiers: login-page discovery. Empty by default (password
+  // only); a test can opt into providers via E2E_EXTERNAL_PROVIDERS
+  // (comma-separated: github,google,wechat) — the LoginPage renders its
+  // social buttons from this response, not from build-time env vars.
+  await page.route('**/api/auth/providers', async (route) => {
+    const enabled = (process.env.E2E_EXTERNAL_PROVIDERS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const authorizeUrls: Record<string, string> = {
+      github: 'https://github.com/login/oauth/authorize?client_id=e2e-github-client',
+      google: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=e2e-google-client',
+      wechat: 'https://open.weixin.qq.com/connect/qrconnect?appid=e2e-wechat-appid',
+    }
+    const providers = enabled
+      .filter((p) => authorizeUrls[p])
+      .map((p) => ({ provider: p, authorize_url: authorizeUrls[p] }))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ providers }),
+    })
+  })
+
   await page.route('**/oauth2/login', async (route) => {
     const body = route.request().postData() || ''
     if (body.includes('password=wrong')) {

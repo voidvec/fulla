@@ -394,9 +394,6 @@ FULLA_SMTP_SSL=true
 VITE_API_BASE_URL=
 VITE_CLIENT_ID=fulla-portal
 VITE_REDIRECT_URI=https://your-domain.com/callback
-# Set to enable the "Continue with GitHub" button on the login page
-# (baked into the SPA bundle at image build time):
-VITE_GITHUB_CLIENT_ID=
 ```
 
 #### Enabling GitHub login (optional)
@@ -405,13 +402,17 @@ VITE_GITHUB_CLIENT_ID=
    **OAuth Apps** → *New OAuth App*. Homepage URL: `https://your-domain.com`;
    Authorization callback URL: `https://your-domain.com/callback/github`.
 2. Fill `.env.docker` with the client ID and client secret:
-   `FULLA_GITHUB_CLIENT_ID`, `FULLA_GITHUB_CLIENT_SECRET`, and — for the
-   login-page button — `VITE_GITHUB_CLIENT_ID` (same ID; it is compiled
-   into the SPA bundle).
-3. Rebuild and restart: `docker compose build frontend && docker compose up -d`
-   (the backend alone can pick the credentials up from a restart, but the
-   login-page button needs the frontend rebuild).
-4. Account linking is independent of the button: an authenticated user can
+   `FULLA_GITHUB_CLIENT_ID` and `FULLA_GITHUB_CLIENT_SECRET`. No frontend
+   variable is needed — since v1.5.0 the login page discovers external
+   login providers at runtime (`GET /api/auth/providers`) and renders the
+   button when the backend reports GitHub enabled.
+3. Restart the backend: `docker compose up -d` (the button appears/disappears
+   with the backend config; no frontend rebuild required).
+4. Provider tiers: `external_auth.tiers.domestic` gates WeChat,
+   `external_auth.tiers.international` gates GitHub/Google (config or the
+   `FULLA_EXTERNAL_TIER_DOMESTIC` / `FULLA_EXTERNAL_TIER_INTERNATIONAL` env
+   aliases; default `true` = every configured provider offered).
+5. Account linking is independent of the button: an authenticated user can
    connect GitHub from Portal → Security at any time.
 
 #### Enabling passkeys (WebAuthn, optional)
