@@ -45,7 +45,10 @@ docker exec -it fulla-postgres psql -U fulla_user -d fulla_db -c "\dt"
 
 # Expected output: list of OAuth2-related tables
 # oauth2_clients, oauth2_codes, oauth2_access_tokens, oauth2_refresh_tokens,
-# oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc. (21 tables in total after V026)
+# oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc.
+# (26 core tables after V038, plus the partitioned audit_logs family —
+# organizations now has the organization_consents /
+# organization_succession_nominations / organization_consent_requests companions)
 ```
 
 ### 4. Frontend Access Test
@@ -78,12 +81,17 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 "
 
-# Expected table list (V002-V026 actual schema, all with the oauth2_ prefix):
+# Expected table list (V001-V038 actual schema):
 # - oauth2_access_tokens, oauth2_refresh_tokens, oauth2_codes
 # - oauth2_clients, oauth2_scopes, oauth2_client_scopes
+# - oauth2_client_owners (v1.4.0 open platform)
 # - oauth2_user_consents, oauth2_subject_mappings, oauth2_device_codes
 # - users, roles, permissions, user_roles, role_permissions
-# - organizations, audit_logs, webauthn_credentials, etc.
+# - organizations + organization_members / organization_invitations (V034)
+# - organization_consents (V036) / organization_succession_nominations (V037)
+#   / organization_consent_requests (V038)
+# - audit_logs (partitioned), webauthn_credentials, email_verification_tokens,
+#   password_reset_tokens, schema_migrations
 
 # Database version check
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "SELECT version();"
@@ -485,8 +493,10 @@ curl -s -X POST http://localhost:5555/oauth2/token \
   -d "code_verifier=<PKCE verifier used at login>"
 
 # Expected response: returns an access_token and refresh_token
+# (access tokens are opaque random strings, NOT JWTs — only the id_token is a JWT;
+#  see docs/domains/token-lifecycle.md and ADR-0004)
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q",
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "xxx",

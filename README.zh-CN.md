@@ -20,17 +20,18 @@ Fulla 是以 C++17 构建的**高性能开源身份与访问管理（IAM）核�
 
 ## 能力地图（Capability Map）
 
-产品按领域能做什么。深入文档在 `docs/` 下（会话管理、令牌生命周期、多租户三篇深度文档在文档路线图中）。
+产品按领域能做什么。深入文档在 `docs/` 下。
 
 | 领域 | 能力 | 深入文档 |
 |------|------|----------|
 | **认证** | 登录/注册、邮箱验证、密码重置、TOTP MFA、WebAuthn (FIDO2)、Google/微信社交登录、渐进式账户锁定 | [安全架构](https://fulla.dev/zh-CN/docs/architecture/security-architecture) |
 | **授权（OAuth2/OIDC）** | 授权码 + PKCE、client-credentials、刷新轮换、设备流、动态客户端注册、用户同意、内省、吊销、OIDC discovery/JWKS/UserInfo、含前/后向通道登出的 end-session | [架构总览](https://fulla.dev/zh-CN/docs/architecture/architecture-overview) |
 | **访问控制** | RBAC（内置 admin/user + 自定义角色）、细粒度 scope、DB 驱动的资源 scope 注册表、三重校验（客户端限制 + 角色 + 同意） | [RBAC 指南](https://fulla.dev/zh-CN/docs/domains/rbac-guide) |
-| **令牌生命周期** | 签发、TTL 约束保留、基于家族的刷新轮换、按令牌/客户端/用户吊销、延迟双删的缓存旁路失效 | — |
-| **多租户** | 组织、组织级客户端与用户、租户感知的管理 | — |
+| **令牌生命周期** | 签发、TTL 约束保留、基于家族的刷新轮换、按令牌/客户端/用户吊销、延迟双删的缓存旁路失效 | [令牌生命周期](https://fulla.dev/zh-CN/docs/domains/token-lifecycle) |
+| **多租户** | 组织、组织级客户端与用户、组织授权 + 授权申请工作流、负责人继任、`org_ctx` claims、租户感知的管理 | [多租户](https://fulla.dev/zh-CN/docs/domains/multi-tenancy) |
 | **可观测性** | Prometheus 指标、结构化审计日志（登录/令牌/密码事件）、健康探针（live/ready） | [可观测性](https://fulla.dev/zh-CN/docs/operate/observability) |
 | **运维** | Docker Compose / Helm 部署、cosign 签名多架构镜像、SBOM、配置文件 + 环境变量驱动配置 | [生产部署](https://fulla.dev/zh-CN/docs/operate/deployment) |
+| **会话管理** | 服务端会话、CSRF、consent context 交接、会话承载的组织绑定 | [会话管理](https://fulla.dev/zh-CN/docs/domains/session-management) |
 
 ## 模块地图（Module Map）
 
@@ -153,7 +154,7 @@ graph TD
 | 角色管理 | 角色 CRUD（保护内置角色 admin/user） |
 | Scope 管理 | Scope CRUD（保护内置 Scope openid/profile/email/admin） |
 | Token 管理 | Token 列表、按客户端/用户撤销、单个撤销 |
-| 组织管理 | 多租户组织 CRUD |
+| 组织管理 | 多租户组织的创建/列表/查询 + 负责人改派 |
 | 审计日志 | 分页查看、按事件类型/结果筛选 |
 | OIDC 密钥 | 签名密钥信息查看 |
 | 系统设置 | 健康状态监控 |

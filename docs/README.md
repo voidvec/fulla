@@ -44,7 +44,7 @@ Frontend tests: [Admin cases](contribute/admin-test-cases.md) · [User cases](co
 
 ## Decision record (ADR)
 
-[docs/adr/](adr/) — 12 current architecture decision records (SDK layering,
+[docs/adr/](adr/) — 13 current architecture decision records (SDK layering,
 ErrorCatalog, opaque tokens, coroutine exclusion, …) plus three historical
 archives: the [OAuth/OIDC compliance audit](adr/oauth-oidc-compliance-audit.md)
 (2026-08-07 baseline, all 31 findings fixed), the
