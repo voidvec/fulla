@@ -7,7 +7,7 @@ import styles from './commercial.module.css';
 
 // Commercial contact email. Leave empty to hide the email CTA (GitHub stays
 // the primary channel); fill in one line here and the mailto button renders.
-const CONTACT_EMAIL = '';
+const CONTACT_EMAIL = 'luca@c0ding.cc';
 
 const REPO_URL = 'https://github.com/voidvec/fulla';
 const ISSUE_URL = 'https://github.com/voidvec/fulla/issues/new?labels=commercial';
