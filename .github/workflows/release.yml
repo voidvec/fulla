@@ -53,7 +53,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Read version from cmake/Version.cmake
         id: ver
@@ -93,7 +93,7 @@ jobs:
       VERSION: ${{ needs.version-check.outputs.version }}
       PRESET_DIR: build/linux-release
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Linux build dependencies
         # Same rationale as _build-test.yml: library deps come from Conan;
@@ -196,7 +196,7 @@ jobs:
       # Dry run (workflow_dispatch): build everything, push nothing.
       PUSH: ${{ github.ref_type == 'tag' }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 
@@ -308,7 +308,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version-check.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # git-cliff needs full history + tags for the notes
 
@@ -445,7 +445,7 @@ jobs:
       VERSION: ${{ needs.version-check.outputs.version }}
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
