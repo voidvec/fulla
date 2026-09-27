@@ -21,7 +21,9 @@ test suite.
 
 > **Roadmap — open core:** the open-source core is the base for optional commercial
 > enhancement modules (enterprise integration & support offerings, planned). Everything
-> needed to run a complete IAM is and stays open source under AGPL-3.0.
+> needed to run a complete IAM is and stays open source under AGPL-3.0 — see
+> [Commercial Licensing](https://fulla.dev/commercial) for the enterprise roadmap and
+> our open-core commitments.
 
 ---
 
@@ -456,6 +458,15 @@ Full index: [docs/README.md](docs/README.md)
 ## License
 
 AGPL-3.0 — see [LICENSE](LICENSE). Prior releases (v1.0.0) remain MIT.
+
+fulla is dual-licensed: the open-source core — everything needed to run a complete IAM,
+including all protocol semantics (organization claims, admin consent, org-scoped tokens,
+federated login) — ships under AGPL-3.0; a commercial license is available for closed-source
+integration or OEM redistribution that AGPL-3.0 does not permit. The planned enterprise
+subscription (directory sync, policy management, audit compliance, support) never gates
+login protocols: core features will not move behind a paywall.
+
+See [Commercial Licensing](https://fulla.dev/commercial) for details and contact.
 
 ---
 
