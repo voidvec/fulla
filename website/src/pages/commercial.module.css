@@ -1,0 +1,272 @@
+/* Commercial licensing page — fulla.dev */
+
+/* ---------------- Page header ---------------- */
+
+.pageHero {
+  padding: 4.2rem 2rem 3.2rem;
+  text-align: center;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124, 46, 220, 0.14), transparent),
+    linear-gradient(180deg, var(--ifm-hero-bg, #fafaff) 0%, transparent 100%);
+}
+
+[data-theme='dark'] .pageHero {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124, 46, 220, 0.25), transparent),
+    linear-gradient(180deg, rgba(19, 12, 32, 0.6) 0%, transparent 100%);
+}
+
+.pageHero h1 {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.8rem;
+}
+
+.pageHeroSubtitle {
+  max-width: 680px;
+  margin: 0 auto 0.4rem;
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.7;
+}
+
+.ctaRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 1.6rem;
+}
+
+/* ---------------- Sections ---------------- */
+
+.section {
+  padding: 3.2rem 2rem;
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.sectionSubtitle {
+  max-width: 760px;
+  margin: 0 auto 2rem;
+  text-align: center;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.7;
+}
+
+.altSection {
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme='dark'] .altSection {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.commitmentSection {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* ---------------- Cards (commitment + options) ---------------- */
+
+.cardRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.card {
+  flex: 1 1 280px;
+  max-width: 360px;
+  padding: 1.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-card-bg, var(--ifm-color-emphasis-0));
+}
+
+.cardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--ifm-color-primary);
+  background: rgba(124, 46, 220, 0.09);
+}
+
+.cardIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.cardTag {
+  display: inline-block;
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ifm-color-primary-darker);
+  background: rgba(124, 46, 220, 0.08);
+  border: 1px solid rgba(124, 46, 220, 0.22);
+}
+
+[data-theme='dark'] .cardTag {
+  color: #cbb6f8;
+  background: rgba(124, 46, 220, 0.16);
+  border-color: rgba(124, 46, 220, 0.4);
+}
+
+.card h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.7rem 0 0.5rem;
+}
+
+.card p {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 0;
+}
+
+.cardLink {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+/* ---------------- Pricing tiers ---------------- */
+
+.tierCard {
+  text-align: center;
+  flex: 1 1 200px;
+  max-width: 280px;
+  padding: 1.6rem 1.2rem;
+}
+
+.tierName {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--ifm-color-primary);
+}
+
+.tierBand {
+  font-size: 0.88rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-top: 0.4rem;
+  line-height: 1.6;
+}
+
+.tierQuote {
+  display: inline-block;
+  margin-top: 0.9rem;
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary-darker);
+  background: rgba(124, 46, 220, 0.08);
+  border: 1px solid rgba(124, 46, 220, 0.22);
+}
+
+[data-theme='dark'] .tierQuote {
+  color: #cbb6f8;
+  background: rgba(124, 46, 220, 0.16);
+  border-color: rgba(124, 46, 220, 0.4);
+}
+
+.pricingPoints {
+  max-width: 640px;
+  margin: 2rem auto 0;
+  color: var(--ifm-color-emphasis-800);
+  line-height: 1.8;
+}
+
+.pricingPoints li {
+  margin-bottom: 0.4rem;
+}
+
+/* ---------------- Enterprise capabilities ---------------- */
+
+.entGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.entCard {
+  padding: 1.2rem 1.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-card-bg, var(--ifm-color-emphasis-0));
+}
+
+.entCard h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.entCard p {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 0;
+}
+
+/* ---------------- Closing ---------------- */
+
+.closing {
+  text-align: center;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.closing h2 {
+  font-size: 1.7rem;
+  margin-bottom: 0.6rem;
+}
+
+.closing > .container > p {
+  max-width: 560px;
+  margin: 0 auto 0.4rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.legalNote {
+  font-size: 0.82rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-top: 2rem !important;
+}
+
+.repoNote {
+  font-size: 0.85rem;
+  margin-top: 0.6rem !important;
+}
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 996px) {
+  .pageHero {
+    padding: 3rem 1.2rem 2.4rem;
+  }
+
+  .pageHero h1 {
+    font-size: 2.1rem;
+  }
+
+  .section {
+    padding: 2.4rem 1.2rem;
+  }
+}
