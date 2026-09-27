@@ -1927,16 +1927,53 @@ void OrgMemberService::approveConsentRequest(
                                 return;
                             }
                             // pending -> normal approval; approved ->
-                            // B4 idempotent self-heal (re-run the consent
-                            // writes; saveConsent is an upsert).
-                            // B2: read the client's registered scope set
-                            // at approval time.
-                            repo->findClientScopes(
-                              row.getValueOfClientId(),
-                              [repo, req, cb, db, org, caller, row](
-                                const std::vector<std::string> &scopes) {
-                                  auto consentRepo = std::make_shared<
-                                    ::fulla::storage::postgres::OrgConsentRepository>(db);
+                            // B4 self-heal ONLY when no active consent
+                            // rows exist. Re-approving an already-active
+                            // pair must be a 200 no-op: the client's
+                            // CURRENT registered scope set may have
+                            // expanded since the original approval, and
+                            // that expansion never went through a member
+                            // request (review F-2) -- writing it here
+                            // would grant un-requested scopes.
+                            const bool alreadyApproved =
+                              row.getValueOfStatus() == "approved";
+                            ::fulla::storage::postgres::OrgConsentRepository(db)
+                              .hasActiveConsentForOrg(
+                                org.getValueOfId(),
+                                row.getValueOfClientId(),
+                                [repo, req, cb, db, org, caller, row, alreadyApproved](
+                                  bool hasActive) {
+                                      if (alreadyApproved && hasActive)
+                                      {
+                                          Json::Value json;
+                                          json["id"] = static_cast<Json::Int64>(row.getValueOfId());
+                                          json["client_id"] = row.getValueOfClientId();
+                                          json["status"] = "approved";
+                                          json["message"] =
+                                            "Consent request already approved; organization consent rows are active";
+                                          (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                          return;
+                                      }
+                                      // B2: read the client's registered
+                                      // scope set at approval time.
+                                      repo->findClientScopes(
+                                        row.getValueOfClientId(),
+                                        [repo, req, cb, db, org, caller, row](
+                                          bool dbOk, const std::vector<std::string> &scopes) {
+                                              // Review F-1 (the MF-1 class):
+                                              // a lookup failure must
+                                              // surface as a retryable 5xx,
+                                              // never fold into a "no
+                                              // registered scopes" false
+                                              // success.
+                                              if (!dbOk)
+                                              {
+                                                  respondError(req, cb, "DB_QUERY_ERROR",
+                                                    "client scope lookup failed");
+                                                  return;
+                                              }
+                                              auto consentRepo = std::make_shared<
+                                                ::fulla::storage::postgres::OrgConsentRepository>(db);
                                   if (scopes.empty())
                                   {
                                       // Degenerate (registered, review):
@@ -2021,10 +2058,14 @@ void OrgMemberService::approveConsentRequest(
                                   );
                               }
                             );
-                        }
-                      );
-                  });
-            });
+                          }
+                        );
+                      }
+                    );
+                }
+              );
+          }
+        );
       });
 }
 
@@ -2166,7 +2207,7 @@ void OrgMemberService::withdrawConsentRequest(
                                 return;
                             }
                             audit(req, "org_consent_request_withdrawn",
-                              org.getValueOfSlug());
+                              org.getValueOfSlug() + ":" + std::to_string(requestId));
                             Json::Value json;
                             json["id"] = static_cast<Json::Int64>(requestId);
                             json["status"] = "withdrawn";

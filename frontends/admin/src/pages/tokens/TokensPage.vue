@@ -155,8 +155,14 @@ async function doRevokeByUser(userId: string) {
 }
 
 function revokeByUser() {
-  showConfirm(t('admin.tokens.revokeUserConfirm', { name: bulkUserId.value.trim() }), async () => {
-    await doRevokeByUser(bulkUserId.value.trim())
+  const userId = bulkUserId.value.trim()
+  if (!userId) return
+  // Close the dropdown before confirming (review S2): the menu stayed open
+  // and clickable during the POST, so a second confirm fired a second
+  // revoke that overwrote the success banner with "Revoked 0".
+  showBulkMenu.value = false
+  showConfirm(t('admin.tokens.revokeUserConfirm', { name: userId }), async () => {
+    await doRevokeByUser(userId)
   })
 }
 

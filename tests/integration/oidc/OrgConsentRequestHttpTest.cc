@@ -756,3 +756,158 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_ApproveRejectWithdraw_FullCircle)
                   userB + "', '" + userD + "')")
                .has_value());
 }
+
+// ---------------------------------------------------------------------------
+// Round-3 review coverage: (a) an empty filing body is a 400; (b) the
+// anti-enumeration folds are org-scoped — approving or withdrawing another
+// org's request through this org's URL is the same 404, and the same
+// request through its OWN org still works (the SF-2 regression); (c) the
+// degenerate approve of a scope-less client records the decision without
+// inventing consent rows (and the response says so).
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_OrgConsentRequest_CrossOrgAndDegenerate)
+{
+    ORGREQ_SKIP_GUARD;
+
+    const std::string suffix = uniqueSuffix();
+    const std::string slug1 = "qa-orgreq-x1-" + suffix;
+    const std::string slug2 = "qa-orgreq-x2-" + suffix;
+    const std::string userA = "qa_req_g_" + suffix;  // owner of BOTH orgs
+    const std::string userB = "qa_req_h_" + suffix;  // member of BOTH orgs
+    const std::string passA = randomPassword();
+    const std::string passB = randomPassword();
+    REQUIRE(createVerifiedUser(userA, userA + "@qa.example", passA));
+    REQUIRE(createVerifiedUser(userB, userB + "@qa.example", passB));
+
+    auto bearerA = consoleBearer(userA, passA);
+    auto bearerB = consoleBearer(userB, passB);
+    REQUIRE(bearerA.has_value());
+    REQUIRE(bearerB.has_value());
+
+    for (const auto &slug : {slug1, slug2})
+    {
+        Json::Value orgBody;
+        orgBody["slug"] = slug;
+        orgBody["name"] = "QA OrgReq X " + slug;
+        auto r = sendPostJson("/api/me/organizations", orgBody, *bearerA);
+        REQUIRE(r != nullptr);
+        CHECK(statusIs(r, drogon::k201Created));
+        Json::Value invite;
+        invite["email"] = userB + "@qa.example";
+        invite["role"] = "member";
+        auto r2 = sendPostJson("/api/me/organizations/" + slug + "/invitations",
+                               invite, *bearerA);
+        REQUIRE(r2 != nullptr);
+        CHECK(statusIs(r2, drogon::k201Created));
+        Json::Value inviteBody;
+        REQUIRE(parseJsonBody(r2, inviteBody));
+        Json::Value accept;
+        accept["token"] = inviteBody["token"].asString();
+        auto r3 = sendPostJson("/api/me/org-invitations/accept", accept, *bearerB);
+        REQUIRE(r3 != nullptr);
+        CHECK(statusIs(r3, drogon::k200OK));
+    }
+
+    // Two personal apps of A: app1 WITH scopes (cross-org fold target),
+    // app2 WITHOUT scopes (degenerate target).
+    std::string app1Id, app2Id;
+    for (const auto &[name, out] :
+         std::vector<std::pair<const char *, std::string *>>{
+           {"QA ReqX App1 ", &app1Id}, {"QA ReqX App2 ", &app2Id}})
+    {
+        Json::Value app;
+        app["name"] = name + suffix;
+        Json::Value uris(Json::arrayValue);
+        uris.append(kRedirect);
+        app["redirect_uris"] = uris;
+        Json::Value scopes(Json::arrayValue);
+        scopes.append("openid");
+        scopes.append("profile");
+        app["scopes"] = scopes;
+        auto r = sendPostJson("/api/me/applications", app, *bearerA);
+        REQUIRE(r != nullptr);
+        Json::Value b;
+        REQUIRE(parseJsonBody(r, b));
+        *out = b["client_id"].asString();
+        CHECK(!out->empty());
+    }
+
+    // (a) empty filing body -> 400.
+    auto emptyBody = sendPostJson("/api/me/organizations/" + slug1 + "/consent-requests",
+                                  Json::Value(Json::objectValue), *bearerB);
+    REQUIRE(emptyBody != nullptr);
+    CHECK(statusIs(emptyBody, drogon::k400BadRequest));
+
+    // (b) cross-org folds: B files in org1, then org2's URL must 404 on
+    // BOTH approve and withdraw -- while org1's URL keeps working.
+    Json::Value fileBody;
+    fileBody["client_id"] = app1Id;
+    auto filed = sendPostJson("/api/me/organizations/" + slug1 + "/consent-requests",
+                              fileBody, *bearerB);
+    REQUIRE(filed != nullptr);
+    CHECK(statusIs(filed, drogon::k200OK));
+    Json::Value filedBody;
+    REQUIRE(parseJsonBody(filed, filedBody));
+    const Json::Int64 requestX = filedBody["id"].asInt64();
+
+    auto crossApprove = sendPostJson(
+      "/api/me/organizations/" + slug2 + "/consent-requests/" + std::to_string(requestX) +
+        "/approve",
+      Json::Value(Json::objectValue), *bearerA);
+    REQUIRE(crossApprove != nullptr);
+    CHECK(statusIs(crossApprove, drogon::k404NotFound));
+    auto crossWithdraw = sendDelete(
+      "/api/me/organizations/" + slug2 + "/consent-requests/" + std::to_string(requestX),
+      *bearerB);
+    REQUIRE(crossWithdraw != nullptr);
+    CHECK(statusIs(crossWithdraw, drogon::k404NotFound));
+
+    auto ownApprove = sendPostJson(
+      "/api/me/organizations/" + slug1 + "/consent-requests/" + std::to_string(requestX) +
+        "/approve",
+      Json::Value(Json::objectValue), *bearerA);
+    REQUIRE(ownApprove != nullptr);
+    dumpReqBody(ownApprove, "own-org approve");
+    CHECK(statusIs(ownApprove, drogon::k200OK));
+
+    // (c) degenerate approve: purge app2's registered scopes, file in
+    // org2, approve -> 200 with an empty scope list and the explicit
+    // "no registered scopes" message.
+    REQUIRE(sqlExec("DELETE FROM oauth2_client_scopes WHERE client_id = '" + app2Id + "'"));
+    Json::Value file2Body;
+    file2Body["client_id"] = app2Id;
+    auto filed2 = sendPostJson("/api/me/organizations/" + slug2 + "/consent-requests",
+                               file2Body, *bearerB);
+    REQUIRE(filed2 != nullptr);
+    CHECK(statusIs(filed2, drogon::k200OK));
+    Json::Value filed2Body;
+    REQUIRE(parseJsonBody(filed2, filed2Body));
+    auto degenerateApprove = sendPostJson(
+      "/api/me/organizations/" + slug2 + "/consent-requests/" +
+        std::to_string(filed2Body["id"].asInt64()) + "/approve",
+      Json::Value(Json::objectValue), *bearerA);
+    REQUIRE(degenerateApprove != nullptr);
+    dumpReqBody(degenerateApprove, "degenerate approve");
+    CHECK(statusIs(degenerateApprove, drogon::k200OK));
+    Json::Value degenerateBody;
+    REQUIRE(parseJsonBody(degenerateApprove, degenerateBody));
+    CHECK(degenerateBody["scopes"].empty());
+    CHECK(degenerateBody["message"].asString().find("no registered scopes") !=
+          std::string::npos);
+
+    // Cleanup (both orgs' request rows first -- requested_by pins users).
+    sqlExec("DELETE FROM organization_consent_requests WHERE client_id IN ('" +
+            app1Id + "', '" + app2Id + "')");
+    sqlExec("DELETE FROM organization_consents WHERE client_id IN ('" + app1Id +
+            "', '" + app2Id + "')");
+    sqlExec("DELETE FROM oauth2_client_owners WHERE client_id IN ('" + app1Id +
+            "', '" + app2Id + "')");
+    sqlExec("DELETE FROM oauth2_client_scopes WHERE client_id IN ('" + app1Id +
+            "', '" + app2Id + "')");
+    sqlExec("DELETE FROM oauth2_clients WHERE client_id IN ('" + app1Id + "', '" +
+            app2Id + "')");
+    sqlExec("DELETE FROM users WHERE username IN ('" + userA + "', '" + userB + "')");
+    CHECK(!sqlInt("SELECT 1 FROM users WHERE username IN ('" + userA + "', '" +
+                  userB + "')")
+               .has_value());
+}

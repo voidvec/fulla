@@ -112,12 +112,14 @@ class OrgConsentRequestRepository
     );
 
     /// B2 approval input: the client's registered scope names (the
-    /// normalized oauth2_client_scopes table). Failure resolves to an
-    /// empty set -- the caller then approves "zero scopes", which the
-    /// design registers as a harmless degenerate outcome.
+    /// normalized oauth2_client_scopes table). dbOk=false reports a real
+    /// lookup failure -- the caller must NOT treat it as "no scopes"
+    /// (the #230/MF-1 class: a DB blip must never fold into a successful
+    /// degenerate outcome); an genuinely scope-less client resolves
+    /// (true, {}).
     void findClientScopes(
       const std::string &clientId,
-      std::function<void(const std::vector<std::string> &)> &&cb
+      std::function<void(bool dbOk, const std::vector<std::string> &)> &&cb
     );
 
     /// Manager-list hop 2 (the no-JOIN pairing): requester display names
