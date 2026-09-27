@@ -5,8 +5,10 @@ sidebar_position: 7
 # Multi-Tenancy (Organizations)
 
 fulla's multi-tenancy today is an **organizational layer**: organizations
-group users and clients, carry branding fields, and are managed through
-admin APIs. This page documents exactly what exists, what it does **not**
+group users and clients, carry branding fields, anchor the v1.5.0 tenant
+semantics (org-scoped authorization, organization consents, owner
+succession), and are managed through admin APIs plus self-service portal
+flows. This page documents exactly what exists, what it does **not**
 do yet, and how to use it without over-assuming isolation.
 
 > **Read this first**: organizations are metadata and ownership grouping,
@@ -14,7 +16,12 @@ do yet, and how to use it without over-assuming isolation.
 > (see [RBAC Guide](rbac-guide.md)); today an org-scoped principal is not
 > automatically fenced off from other orgs' data.
 
-## 1. Model (V017)
+## 1. Model (V017 + V034/V036–V038)
+
+The core `organizations` table is V017; the organization layer now spans five
+more migrations — `organization_members` + `organization_invitations` (V034),
+`organization_consents` (V036), `organization_succession_nominations` (V037),
+and `organization_consent_requests` (V038):
 
 ```sql
 organizations (
@@ -24,6 +31,7 @@ organizations (
     logo_uri        VARCHAR(512),         -- branding
     primary_color   VARCHAR(7),           -- branding
     issuer_override VARCHAR(512),         -- stored; see §4 roadmap
+    require_mfa     BOOLEAN DEFAULT FALSE,-- V036; enforced by the org context gate
     created_at / updated_at
 )
 ```
@@ -49,6 +57,7 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 | `GET /api/admin/organizations` | List organizations (id, slug, name, branding) |
 | `POST /api/admin/organizations` | Create (slug: 3–50 lowercase chars, unique) |
 | `GET /api/admin/organizations/{slug}` | Fetch one |
+| `POST /api/admin/organizations/{slug}/transfer-ownership` | Reassign the owner seat to another live user (rescues the soft-deleted-owner deadlock; the old owner is demoted to admin) |
 
 Additionally:
 
@@ -75,6 +84,29 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   legacy column).
 - **Branding catalog**: per-org logo and primary color for frontends that
   want to skin the login experience per tenant.
+- **Organization context in the authorization chain (v1.5.0)**: the authorize
+  endpoint accepts an optional `org_id` (id or slug) validated by the org
+  context gate — requester must be a live member, the client must belong to
+  that org, and an org with `require_mfa` enforced rejects password sessions.
+  The binding flows through the code-to-token chain, and tokens issued with
+  the `org` scope carry **`org_ctx` claims** (userinfo / id_token) that drop
+  immediately when membership ends.
+- **Organization consents (v1.5.0)**: when a member authorizes an org-owned
+  application, the grant is recorded on the **organization** (admin-level
+  rows in `organization_consents`); members can review and revoke grants on
+  the portal's "Organization Authorizations" page
+  (`GET/DELETE /api/me/organizations/{slug}/consents`).
+- **Consent request workflow (v1.5.0, #236)**: members who are not owners can
+  file an organization-authorization **request**
+  (`organization_consent_requests`); managers approve/reject/withdraw from
+  the portal, and an approved request becomes the org grant.
+- **Owner succession (v1.5.0)**: an owner can nominate a successor
+  (nominate → accept two-step confirmation), a soft-deleted owner's seat is
+  auto-succeeded from a pending nomination, and the admin transfer-ownership
+  endpoint above rescues orgs with no eligible successor.
+- **Organization-anchored client credentials (v1.5.0)**: client_credentials
+  tokens for org-owned applications carry the `org_id` claim (the subject
+  stays the client id).
 - **No migration cliff**: everything is optional and additive; deployments
   that don't care about orgs never touch it.
 
@@ -87,8 +119,11 @@ Be explicit with stakeholders — these are **not** implemented:
 2. **No org-scoped filtering/isolation** on user or client listings; an
    admin sees across orgs.
 3. **No org-scoped roles**: roles are global (RBAC), not per-org.
-4. **No update/delete** endpoints for organizations (create/list/get only).
-5. **No per-org rate limits, quotas, or keys**.
+4. **No update/delete** endpoints for organizations (create/list/get +
+   ownership transfer only; updates go through the database or future API).
+5. **Per-org rate limits and API keys don't exist yet** — but creation
+   *quotas* do: self-service org creation is quota'd per user and rate
+   limited, and org-owned client counts are quota'd (open-platform limits).
 
 If you need hard tenant isolation today, run one fulla stack per tenant —
 the Docker Compose / Helm paths make that cheap
@@ -96,9 +131,16 @@ the Docker Compose / Helm paths make that cheap
 
 ## 5. Schema reference
 
-The authoritative DDL is
-[`V017__multi_tenant.sql`](https://github.com/voidvec/fulla/blob/master/apps/server/migrations/V017__multi_tenant.sql)
-(V017 indexed `users(org_id)`, `oauth2_clients(org_id)`, and
-`organizations(slug)`; the `oauth2_clients.org_id` column and its index were
-dropped in V036, and `users.org_id` is slated for v2.0).
+The organization layer spans several migrations — the authoritative DDL lives
+in [`apps/server/migrations/`](https://github.com/voidvec/fulla/tree/master/apps/server/migrations):
+
+| Migration | Content |
+|---|---|
+| `V017__multi_tenant.sql` | `organizations` core table (indexed `users(org_id)`, `organizations(slug)`) |
+| `V034` | `organization_members` / `organization_invitations` |
+| `V036` | `organization_consents` + `organizations.require_mfa` + org columns on the authorization chain + dropped the dead `oauth2_clients.org_id` |
+| `V037` | `organization_succession_nominations` |
+| `V038` | `organization_consent_requests` |
+
+`users.org_id` is a legacy read-only column slated for v2.0 physical removal.
 Storage-layer details: [Data Persistence](../architecture/data-persistence.md).

@@ -29,19 +29,18 @@ test suite.
 
 ## Capability Map
 
-What the product does, by domain. Deep-dive links go to the guides under `docs/`
-(session management, token lifecycle and multi-tenancy deep-dives are on the docs
-roadmap).
+What the product does, by domain. Deep-dive links go to the guides under `docs/`.
 
 | Domain | Capabilities | Deep dive |
 |--------|--------------|-----------|
 | **Authentication** | Login/registration, email verification, password reset, TOTP MFA, WebAuthn (FIDO2), Google/WeChat social login, progressive account lockout | [Security Architecture](docs/architecture/security-architecture.md) |
 | **Authorization (OAuth2/OIDC)** | Auth-code + PKCE, client-credentials, refresh rotation, device flow, dynamic client registration, user consent, introspection, revocation, OIDC discovery/JWKS/UserInfo, end-session with front/back-channel logout | [Architecture Overview](docs/architecture/architecture-overview.md) |
 | **Access control** | RBAC (built-in admin/user + custom roles), granular scopes, DB-driven resource-scope registry, triple check (client restriction + role + consent) | [RBAC Guide](docs/domains/rbac-guide.md) |
-| **Token lifecycle** | Issuance, TTL-bounded retention, family-based refresh rotation, revocation by token/client/user, cache-aside with delayed double-delete invalidation | — |
-| **Multi-tenancy** | Organizations, org-scoped clients and users, tenant-aware administration | — |
+| **Token lifecycle** | Issuance, TTL-bounded retention, family-based refresh rotation, revocation by token/client/user, cache-aside with delayed double-delete invalidation | [Token Lifecycle](docs/domains/token-lifecycle.md) |
+| **Multi-tenancy** | Organizations, org-scoped clients and users, organization consents + consent-request workflow, owner succession, `org_ctx` claims, tenant-aware administration | [Multi-Tenancy](docs/domains/multi-tenancy.md) |
 | **Observability** | Prometheus metrics, structured audit log (login/token/password events), health probes (live/ready) | [Observability](docs/operate/observability.md) |
 | **Operations** | Docker Compose / Helm deploys, cosign-signed multi-arch images, SBOMs, config-file + env-driven configuration | [Production Deployment](docs/operate/deployment.md) |
+| **Session management** | Server-side sessions, CSRF, consent-context handoff, session-borne org binding | [Session Management](docs/domains/session-management.md) |
 
 ## Module Map
 
@@ -166,7 +165,7 @@ Optional feature areas are gated by Conan/CMake options (`with_identity` / `with
 | Role Management | Role CRUD (protects built-in roles: admin/user) |
 | Scope Management | Scope CRUD (protects built-in scopes: openid/profile/email/admin) |
 | Token Management | Token listing, revocation by client/user, individual revocation |
-| Organization Management | Multi-tenant organization CRUD |
+| Organization Management | Multi-tenant organization create/list/get + ownership transfer |
 | Audit Log | Paginated view, filter by event type/result |
 | OIDC Keys | Signing key information |
 | System Settings | Health monitoring |

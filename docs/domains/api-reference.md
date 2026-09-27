@@ -39,6 +39,7 @@ Used to request user authorization and obtain an authorization code.
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
 | `prompt` | No | OIDC prompt values, space-separated: `none`/`login`/`consent`/`select_account` (§3.1.2.1). `none` forbids any UI; `login` forces re-authentication; `consent` forces the consent page. Combining `none` with other values → 400 | `none` |
 | `max_age` | No | Maximum allowable age of authentication (seconds). If the session auth_time exceeds the limit → forced re-authentication | `3600` |
+| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
 
 ### Response
 
@@ -197,14 +198,25 @@ attribute names the scope required to unlock the resource.
 > matching against space-separated tokens (`fulla::drogon::utils::hasScope()`),
 > preventing `openidprofile` from erroneously passing `openid`/`profile`.
 
-### 3.y Client management (F-030: admin-only, no RFC 7592 self-management)
+### 3.y Client management (no RFC 7592 management protocol)
 
-Client registration and management are available **only** via the admin API
-`/api/admin/clients/*` (requires the admin scope + admin role). This service does
-**not** implement the `registration_access_token` self-management endpoints of
-RFC 7592 dynamic client management — clients cannot view or modify their own
-registration information. Clients that require changes must contact an
-administrator to process them via the admin API.
+Three management surfaces exist:
+
+- **Admin API** `/api/admin/clients/*` (admin scope + admin role) — full
+  lifecycle management on behalf of any client.
+- **Dynamic registration** `POST /oauth2/register` (RFC 7591, v1.4.0) —
+  self-service client registration with a per-user quota; registered
+  applications are owned by their creator and manageable in the portal's
+  **My Applications** page (credential rotation, status, deletion).
+- **Organization-owned applications** — a client anchored to an organization
+  is managed by its org owner/admins, and its authorization grants are
+  recorded (and revocable) on the organization
+  ([Multi-Tenancy](multi-tenancy.md) §3).
+
+What is **not** implemented is the RFC 7592 `registration_access_token`
+**management protocol** (the `/register/{client_id}` GET/PUT/DELETE resource
+with a registration token) — owners manage their applications through the
+portal/admin API instead of that protocol surface.
 
 ### 3.z Nonce replay protection (F-026: client responsibility)
 

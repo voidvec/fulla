@@ -1181,6 +1181,7 @@ Used to request user authorization and obtain an authorization code.
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
 | `prompt` | No | OIDC prompt values, space-separated: `none`/`login`/`consent`/`select_account` (§3.1.2.1). `none` forbids any UI; `login` forces re-authentication; `consent` forces the consent page. Combining `none` with other values → 400 | `none` |
 | `max_age` | No | Maximum allowable age of authentication (seconds). If the session auth_time exceeds the limit → forced re-authentication | `3600` |
+| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
 
 ### Response
 
@@ -1339,14 +1340,25 @@ attribute names the scope required to unlock the resource.
 > matching against space-separated tokens (`fulla::drogon::utils::hasScope()`),
 > preventing `openidprofile` from erroneously passing `openid`/`profile`.
 
-### 3.y Client management (F-030: admin-only, no RFC 7592 self-management)
+### 3.y Client management (no RFC 7592 management protocol)
 
-Client registration and management are available **only** via the admin API
-`/api/admin/clients/*` (requires the admin scope + admin role). This service does
-**not** implement the `registration_access_token` self-management endpoints of
-RFC 7592 dynamic client management — clients cannot view or modify their own
-registration information. Clients that require changes must contact an
-administrator to process them via the admin API.
+Three management surfaces exist:
+
+- **Admin API** `/api/admin/clients/*` (admin scope + admin role) — full
+  lifecycle management on behalf of any client.
+- **Dynamic registration** `POST /oauth2/register` (RFC 7591, v1.4.0) —
+  self-service client registration with a per-user quota; registered
+  applications are owned by their creator and manageable in the portal's
+  **My Applications** page (credential rotation, status, deletion).
+- **Organization-owned applications** — a client anchored to an organization
+  is managed by its org owner/admins, and its authorization grants are
+  recorded (and revocable) on the organization
+  ([Multi-Tenancy](multi-tenancy.md) §3).
+
+What is **not** implemented is the RFC 7592 `registration_access_token`
+**management protocol** (the `/register/{client_id}` GET/PUT/DELETE resource
+with a registration token) — owners manage their applications through the
+portal/admin API instead of that protocol surface.
 
 ### 3.z Nonce replay protection (F-026: client responsibility)
 
@@ -1573,8 +1585,10 @@ Source: https://fulla.dev/docs/domains/multi-tenancy
 # Multi-Tenancy (Organizations)
 
 fulla's multi-tenancy today is an **organizational layer**: organizations
-group users and clients, carry branding fields, and are managed through
-admin APIs. This page documents exactly what exists, what it does **not**
+group users and clients, carry branding fields, anchor the v1.5.0 tenant
+semantics (org-scoped authorization, organization consents, owner
+succession), and are managed through admin APIs plus self-service portal
+flows. This page documents exactly what exists, what it does **not**
 do yet, and how to use it without over-assuming isolation.
 
 > **Read this first**: organizations are metadata and ownership grouping,
@@ -1582,7 +1596,12 @@ do yet, and how to use it without over-assuming isolation.
 > (see [RBAC Guide](rbac-guide.md)); today an org-scoped principal is not
 > automatically fenced off from other orgs' data.
 
-## 1. Model (V017)
+## 1. Model (V017 + V034/V036–V038)
+
+The core `organizations` table is V017; the organization layer now spans five
+more migrations — `organization_members` + `organization_invitations` (V034),
+`organization_consents` (V036), `organization_succession_nominations` (V037),
+and `organization_consent_requests` (V038):
 
 ```sql
 organizations (
@@ -1592,6 +1611,7 @@ organizations (
     logo_uri        VARCHAR(512),         -- branding
     primary_color   VARCHAR(7),           -- branding
     issuer_override VARCHAR(512),         -- stored; see §4 roadmap
+    require_mfa     BOOLEAN DEFAULT FALSE,-- V036; enforced by the org context gate
     created_at / updated_at
 )
 ```
@@ -1617,6 +1637,7 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 | `GET /api/admin/organizations` | List organizations (id, slug, name, branding) |
 | `POST /api/admin/organizations` | Create (slug: 3–50 lowercase chars, unique) |
 | `GET /api/admin/organizations/{slug}` | Fetch one |
+| `POST /api/admin/organizations/{slug}/transfer-ownership` | Reassign the owner seat to another live user (rescues the soft-deleted-owner deadlock; the old owner is demoted to admin) |
 
 Additionally:
 
@@ -1643,6 +1664,29 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   legacy column).
 - **Branding catalog**: per-org logo and primary color for frontends that
   want to skin the login experience per tenant.
+- **Organization context in the authorization chain (v1.5.0)**: the authorize
+  endpoint accepts an optional `org_id` (id or slug) validated by the org
+  context gate — requester must be a live member, the client must belong to
+  that org, and an org with `require_mfa` enforced rejects password sessions.
+  The binding flows through the code-to-token chain, and tokens issued with
+  the `org` scope carry **`org_ctx` claims** (userinfo / id_token) that drop
+  immediately when membership ends.
+- **Organization consents (v1.5.0)**: when a member authorizes an org-owned
+  application, the grant is recorded on the **organization** (admin-level
+  rows in `organization_consents`); members can review and revoke grants on
+  the portal's "Organization Authorizations" page
+  (`GET/DELETE /api/me/organizations/{slug}/consents`).
+- **Consent request workflow (v1.5.0, #236)**: members who are not owners can
+  file an organization-authorization **request**
+  (`organization_consent_requests`); managers approve/reject/withdraw from
+  the portal, and an approved request becomes the org grant.
+- **Owner succession (v1.5.0)**: an owner can nominate a successor
+  (nominate → accept two-step confirmation), a soft-deleted owner's seat is
+  auto-succeeded from a pending nomination, and the admin transfer-ownership
+  endpoint above rescues orgs with no eligible successor.
+- **Organization-anchored client credentials (v1.5.0)**: client_credentials
+  tokens for org-owned applications carry the `org_id` claim (the subject
+  stays the client id).
 - **No migration cliff**: everything is optional and additive; deployments
   that don't care about orgs never touch it.
 
@@ -1655,8 +1699,11 @@ Be explicit with stakeholders — these are **not** implemented:
 2. **No org-scoped filtering/isolation** on user or client listings; an
    admin sees across orgs.
 3. **No org-scoped roles**: roles are global (RBAC), not per-org.
-4. **No update/delete** endpoints for organizations (create/list/get only).
-5. **No per-org rate limits, quotas, or keys**.
+4. **No update/delete** endpoints for organizations (create/list/get +
+   ownership transfer only; updates go through the database or future API).
+5. **Per-org rate limits and API keys don't exist yet** — but creation
+   *quotas* do: self-service org creation is quota'd per user and rate
+   limited, and org-owned client counts are quota'd (open-platform limits).
 
 If you need hard tenant isolation today, run one fulla stack per tenant —
 the Docker Compose / Helm paths make that cheap
@@ -1664,11 +1711,18 @@ the Docker Compose / Helm paths make that cheap
 
 ## 5. Schema reference
 
-The authoritative DDL is
-[`V017__multi_tenant.sql`](https://github.com/voidvec/fulla/blob/master/apps/server/migrations/V017__multi_tenant.sql)
-(V017 indexed `users(org_id)`, `oauth2_clients(org_id)`, and
-`organizations(slug)`; the `oauth2_clients.org_id` column and its index were
-dropped in V036, and `users.org_id` is slated for v2.0).
+The organization layer spans several migrations — the authoritative DDL lives
+in [`apps/server/migrations/`](https://github.com/voidvec/fulla/tree/master/apps/server/migrations):
+
+| Migration | Content |
+|---|---|
+| `V017__multi_tenant.sql` | `organizations` core table (indexed `users(org_id)`, `organizations(slug)`) |
+| `V034` | `organization_members` / `organization_invitations` |
+| `V036` | `organization_consents` + `organizations.require_mfa` + org columns on the authorization chain + dropped the dead `oauth2_clients.org_id` |
+| `V037` | `organization_succession_nominations` |
+| `V038` | `organization_consent_requests` |
+
+`users.org_id` is a legacy read-only column slated for v2.0 physical removal.
 Storage-layer details: [Data Persistence](../architecture/data-persistence.md).
 
 
@@ -1748,6 +1802,13 @@ Depending on the requested scopes, it may also contain:
 
 - **profile scope**: `name`, `preferred_username`
 - **email scope**: `email`, `email_verified`
+- **org scope with an organization context** (v1.5.0): `org_ctx` — an object
+  `{ org_id, org_name, roles[] }` describing the active organization bound to
+  this authorization and the caller's current membership roles in it. Present
+  only when the authorize request carried a valid `org_id` and the client
+  requested the `org` scope; membership is re-checked at issuance, so the
+  claim disappears once membership ends. The same `org_ctx` object appears in
+  the userinfo response.
 
 ## 4. Verifying the id_token
 
@@ -1775,6 +1836,7 @@ Depending on the requested scopes, it may also contain:
 | `openid` | `sub` (required scope; enables OIDC) |
 | `profile` | `name`, `preferred_username` |
 | `email` | `email`, `email_verified` |
+| `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — only when the authorization carried a valid organization context (v1.5.0) |
 
 ## 6. Integration Examples
 
@@ -2187,7 +2249,7 @@ All grants converge on `TokenService` (libs/oauth2):
 |---|---|---|
 | `authorization_code` (+ PKCE, mandatory for PUBLIC clients) | access + refresh (+ id_token if `openid`) | The code is single-use with atomic consume (see §5) |
 | `refresh_token` | new access + **new** refresh | Old refresh is revoked; family id is inherited (§4) |
-| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only |
+| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally carries the `org_id` claim (v1.5.0), exposed via introspection — the subject stays the client id |
 | `device_code` | access + refresh after user approval | Polling per RFC 8628 |
 
 `expires_in` in every response advertises the **configured** access-token
@@ -5442,7 +5504,10 @@ docker exec -it fulla-postgres psql -U fulla_user -d fulla_db -c "\dt"
 
 # Expected output: list of OAuth2-related tables
 # oauth2_clients, oauth2_codes, oauth2_access_tokens, oauth2_refresh_tokens,
-# oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc. (21 tables in total after V026)
+# oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc.
+# (26 core tables after V038, plus the partitioned audit_logs family —
+# organizations now has the organization_consents /
+# organization_succession_nominations / organization_consent_requests companions)
 ```
 
 ### 4. Frontend Access Test
@@ -5475,12 +5540,17 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 "
 
-# Expected table list (V002-V026 actual schema, all with the oauth2_ prefix):
+# Expected table list (V001-V038 actual schema):
 # - oauth2_access_tokens, oauth2_refresh_tokens, oauth2_codes
 # - oauth2_clients, oauth2_scopes, oauth2_client_scopes
+# - oauth2_client_owners (v1.4.0 open platform)
 # - oauth2_user_consents, oauth2_subject_mappings, oauth2_device_codes
 # - users, roles, permissions, user_roles, role_permissions
-# - organizations, audit_logs, webauthn_credentials, etc.
+# - organizations + organization_members / organization_invitations (V034)
+# - organization_consents (V036) / organization_succession_nominations (V037)
+#   / organization_consent_requests (V038)
+# - audit_logs (partitioned), webauthn_credentials, email_verification_tokens,
+#   password_reset_tokens, schema_migrations
 
 # Database version check
 docker exec fulla-postgres psql -U fulla_user -d fulla_db -c "SELECT version();"
@@ -5882,8 +5952,10 @@ curl -s -X POST http://localhost:5555/oauth2/token \
   -d "code_verifier=<PKCE verifier used at login>"
 
 # Expected response: returns an access_token and refresh_token
+# (access tokens are opaque random strings, NOT JWTs — only the id_token is a JWT;
+#  see docs/domains/token-lifecycle.md and ADR-0004)
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q",
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "xxx",
