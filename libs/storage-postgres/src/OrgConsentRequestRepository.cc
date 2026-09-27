@@ -100,9 +100,9 @@ void OrgConsentRequestRepository::findPending(
               (*sharedCb)(true, row);
           },
           [sharedCb](const DrogonDbException &) {
-              //findOne throws on no row (or a real DB error); the service
-              // re-issues the write on the not-found path, so both fold to
-              // "no pending row" without an oracle.
+              // findOne throws on no row (or a real DB error); both fold to
+              // "no pending row" without an oracle -- the service renders
+              // the race as the ratified 409.
               (*sharedCb)(false, OrganizationConsentRequests{});
           }
         );
@@ -309,16 +309,17 @@ void OrgConsentRequestRepository::withdrawOwnPending(
 
 void OrgConsentRequestRepository::findClientScopes(
   const std::string &clientId,
-  std::function<void(const std::vector<std::string> &)> &&cb
+  std::function<void(bool dbOk, const std::vector<std::string> &)> &&cb
 )
 {
     auto sharedCb =
-      std::make_shared<std::function<void(const std::vector<std::string> &)>>(
+      std::make_shared<
+        std::function<void(bool dbOk, const std::vector<std::string> &)>>(
         std::move(cb));
 
     if (!dbClient_)
     {
-        (*sharedCb)({});
+        (*sharedCb)(false, {});
         return;
     }
 
@@ -333,18 +334,18 @@ void OrgConsentRequestRepository::findClientScopes(
               scopes.reserve(rows.size());
               for (const auto &r : rows)
                   scopes.push_back(r.getValueOfScopeName());
-              (*sharedCb)(scopes);
+              (*sharedCb)(true, scopes);
           },
           [sharedCb](const DrogonDbException &e) {
               LOG_ERROR << "findClientScopes failed: " << e.base().what();
-              (*sharedCb)({});
+              (*sharedCb)(false, {});
           }
         );
     }
     catch (...)
     {
         LOG_ERROR << "findClientScopes Mapper construction failed";
-        (*sharedCb)({});
+        (*sharedCb)(false, {});
     }
 }
 

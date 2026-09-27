@@ -6269,7 +6269,7 @@ CountCallback &&cb
 );
 void findClientScopes(
 const std::string &clientId,
-std::function<void(const std::vector<std::string> &)> &&cb
+std::function<void(bool dbOk, const std::vector<std::string> &)> &&cb
 );
 void findUsernames(
 const std::vector<int32_t> &userIds,

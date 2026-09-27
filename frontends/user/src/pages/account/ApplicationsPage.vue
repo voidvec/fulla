@@ -162,6 +162,9 @@ async function submitRequestAuth() {
     const resp = await http.post(
       `/api/me/organizations/${requestAuthSlug.value}/consent-requests`,
       { client_id: requestAuthApp.value.client_id },
+      // The user app's axios instance defaults to form-encoded bodies; the
+      // endpoint reads a JSON object (getJsonObject), so send JSON explicitly.
+      { headers: { 'Content-Type': 'application/json' } },
     )
     // The backend's message distinguishes first filing from the idempotent
     // already-pending replay — surface it verbatim.

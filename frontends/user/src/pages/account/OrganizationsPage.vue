@@ -161,13 +161,26 @@ async function toggleConsents(slug: string) {
 
 // An approval resolves the request AND creates consent rows — refresh both
 // lists (and drop the resolved request from the pending queue via refetch).
+// Bumps both seq counters and re-checks them after the round trip: a slow
+// refresh from a PREVIOUSLY open org must never render into the panel of
+// the org the user switched to (the fetch paths above guard the same way).
 async function refreshConsentPanel(slug: string) {
-  const [consentsResp, requestsResp] = await Promise.all([
-    http.get(`/api/me/organizations/${slug}/consents`),
-    http.get(`/api/me/organizations/${slug}/consent-requests`),
-  ])
-  consents.value = consentsResp.data?.consents || []
-  pendingRequests.value = requestsResp.data?.requests || []
+  const consentsSeq = ++consentsRequestSeq
+  const requestsSeq = ++pendingRequestsSeq
+  try {
+    const [consentsResp, requestsResp] = await Promise.all([
+      http.get(`/api/me/organizations/${slug}/consents`),
+      http.get(`/api/me/organizations/${slug}/consent-requests`),
+    ])
+    if (consentsSeq !== consentsRequestSeq || requestsSeq !== pendingRequestsSeq ||
+        expandedConsentsSlug.value !== slug) return
+    consents.value = consentsResp.data?.consents || []
+    pendingRequests.value = requestsResp.data?.requests || []
+  } catch (e: unknown) {
+    if (consentsSeq === consentsRequestSeq && expandedConsentsSlug.value === slug) {
+      error.value = normalizeError(e)
+    }
+  }
 }
 
 function approveConsentRequest(slug: string, req: any) {
@@ -213,14 +226,16 @@ function rejectConsentRequest(slug: string, req: any) {
 function revokeConsents(slug: string, clientId: string) {
   askConfirm(t('account.organizations.consentsRevokeConfirm'), async () => {
     error.value = null
+    const seq = ++consentsRequestSeq
     try {
       await http.delete(`/api/me/organizations/${slug}/consents/${clientId}`)
       success.value = t('account.organizations.consentsRevoked')
       setTimeout(() => { success.value = '' }, 3000)
       const resp = await http.get(`/api/me/organizations/${slug}/consents`)
+      if (seq !== consentsRequestSeq || expandedConsentsSlug.value !== slug) return
       consents.value = resp.data?.consents || []
     } catch (e: unknown) {
-      error.value = normalizeError(e)
+      if (seq === consentsRequestSeq) error.value = normalizeError(e)
     }
   })
 }
