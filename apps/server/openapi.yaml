@@ -541,6 +541,33 @@ components:
       - provider
       - message
       type: object
+    AuthProvider:
+      description: An external login provider currently enabled on this
+        deployment (v1.5.0 provider tiers). authorize_url is the fully built
+        provider authorize URL — the SPA redirects to it as-is; the redirect
+        target resolves from the per-provider redirect_uri override, else
+        frontend.url + /callback/{provider}.
+      properties:
+        authorize_url:
+          type: string
+        provider:
+          type: string
+          enum: [github, google, wechat]
+      required:
+      - provider
+      - authorize_url
+      type: object
+    AuthProvidersResponse:
+      description: External login provider discovery. An empty list means
+        external login is disabled on this deployment.
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthProvider'
+      required:
+      - providers
+      type: object
     DeviceAuthorizationResponse:
       description: 'RFC 8628 device authorization response. The verification URIs
         point at the admin console device-approval page by default (admin_console.url
@@ -2150,6 +2177,27 @@ paths:
       tags:
       - Admin
       - Users
+  /api/auth/providers:
+    get:
+      description: Public, unauthenticated discovery of the external login
+        providers this deployment currently offers (v1.5.0 provider tiers).
+        The login page renders its provider buttons from this response; an
+        empty list means external login is disabled. Authorize URLs are
+        built by the SPA from the returned public client identifiers and
+        its own origin, matching the callback paths registered at each
+        provider.
+      operationId: get_api_auth_providers
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthProvidersResponse'
+          description: Currently enabled external login providers (empty array
+            when external login is off).
+      summary: List Enabled External Login Providers
+      tags:
+      - External Auth
   /api/github/login:
     post:
       requestBody:

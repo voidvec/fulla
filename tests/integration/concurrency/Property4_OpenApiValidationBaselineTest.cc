@@ -140,6 +140,7 @@ const std::string &expectedFingerprint()
       "GET /api/admin/users\n"
       "GET /api/admin/users/{userId}\n"
       "GET /api/admin/users/{userId}/roles\n"
+      "GET /api/auth/providers\n"
       "GET /api/me\n"
       "GET /api/me/applications\n"
       "GET /api/me/authorized-apps\n"

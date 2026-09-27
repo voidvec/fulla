@@ -17,6 +17,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AuthProviderProvider.
+const (
+	AuthProviderProviderGithub AuthProviderProvider = "github"
+	AuthProviderProviderGoogle AuthProviderProvider = "google"
+	AuthProviderProviderWechat AuthProviderProvider = "wechat"
+)
+
+// Valid indicates whether the value is a known member of the AuthProviderProvider enum.
+func (e AuthProviderProvider) Valid() bool {
+	switch e {
+	case AuthProviderProviderGithub:
+		return true
+	case AuthProviderProviderGoogle:
+		return true
+	case AuthProviderProviderWechat:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatusStatus.
 const (
 	Degraded  HealthStatusStatus = "degraded"
@@ -408,6 +429,20 @@ func (e PostOauth2ConsentParamsAction) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AuthProvider An external login provider currently enabled on this deployment (v1.5.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+type AuthProvider struct {
+	AuthorizeUrl string               `json:"authorize_url"`
+	Provider     AuthProviderProvider `json:"provider"`
+}
+
+// AuthProviderProvider defines model for AuthProvider.Provider.
+type AuthProviderProvider string
+
+// AuthProvidersResponse External login provider discovery. An empty list means external login is disabled on this deployment.
+type AuthProvidersResponse struct {
+	Providers []AuthProvider `json:"providers"`
 }
 
 // DeviceAuthorizationResponse RFC 8628 device authorization response. The verification URIs point at the admin console device-approval page by default (admin_console.url config + /admin/devices, #146); override with custom_config.device_authorization.verification_uri.
@@ -2175,6 +2210,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAuthProviders List Enabled External Login Providers
+	//
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+	//
+	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
+	GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGithubLoginWithBody GitHub OAuth2 Login
 	//
@@ -4243,6 +4285,23 @@ func (c *Client) PutApiAdminUsersUserIdRolesWithBody(ctx context.Context, userId
 // Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutApiAdminUsersUserIdRolesRequest(c.Server, userId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAuthProviders List Enabled External Login Providers
+//
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+//
+// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
+func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAuthProvidersRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -7952,6 +8011,33 @@ func NewPutApiAdminUsersUserIdRolesRequestWithBody(server string, userId int, co
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetApiAuthProvidersRequest constructs an http.Request for the GetApiAuthProviders method
+func NewGetApiAuthProvidersRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/auth/providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -11698,6 +11784,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRolesWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdRolesResponse, error)
 
+	// GetApiAuthProvidersWithResponse List Enabled External Login Providers
+	//
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
+	GetApiAuthProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAuthProvidersResponse, error)
+
 	// PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 	//
 	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
@@ -14475,6 +14570,47 @@ func (r PutApiAdminUsersUserIdRolesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutApiAdminUsersUserIdRolesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAuthProvidersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AuthProvidersResponse
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAuthProvidersResponse) GetJSON200() *AuthProvidersResponse {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAuthProvidersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAuthProvidersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAuthProvidersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAuthProvidersResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19616,6 +19752,21 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 	return ParsePutApiAdminUsersUserIdRolesResponse(rsp)
 }
 
+// GetApiAuthProvidersWithResponse List Enabled External Login Providers
+//
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
+func (c *ClientWithResponses) GetApiAuthProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAuthProvidersResponse, error) {
+	rsp, err := c.GetApiAuthProviders(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAuthProvidersResponse(rsp)
+}
+
 // PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 //
 // Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
@@ -22296,6 +22447,32 @@ func ParsePutApiAdminUsersUserIdRolesResponse(rsp *http.Response) (*PutApiAdminU
 	response := &PutApiAdminUsersUserIdRolesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAuthProvidersResponse parses an HTTP response from a GetApiAuthProvidersWithResponse call
+func ParseGetApiAuthProvidersResponse(rsp *http.Response) (*GetApiAuthProvidersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAuthProvidersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuthProvidersResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil

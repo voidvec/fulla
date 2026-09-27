@@ -58,6 +58,8 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
 {"custom_config.external_auth.google.redirect_uri", "FULLA_GOOGLE_REDIRECT_URI", false},
 {"custom_config.external_auth.wechat.appid", "FULLA_WECHAT_APPID", false},
 {"custom_config.external_auth.wechat.secret", "FULLA_WECHAT_SECRET", false},
+{"custom_config.external_auth.tiers.domestic", "FULLA_EXTERNAL_TIER_DOMESTIC", true},
+{"custom_config.external_auth.tiers.international", "FULLA_EXTERNAL_TIER_INTERNATIONAL", true},
 {"listeners.0.port", "FULLA_LISTEN_PORT", true},
 {"custom_config.mfa.totp_issuer", "FULLA_MFA_TOTP_ISSUER", false},
 {"custom_config.webauthn.rp_id", "FULLA_WEBAUTHN_RP_ID", false},
@@ -1429,6 +1431,33 @@ std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 static void initApiDocs();
 private:
 static void initApiDocsImpl();
+};
+}
+=== libs/drogon/include/fulla/drogon/controllers/AuthProvidersController.h
+#pragma once
+#include <drogon/HttpController.h>
+#include <json/json.h>
+#include <string>
+#include <vector>
+namespace fulla::drogon::controllers
+{
+class AuthProvidersController : public ::drogon::HttpController<AuthProvidersController, false>
+{
+public:
+void setProviders(std::vector<std::string> providerNames)
+;
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(AuthProvidersController::list, "/api/auth/providers", ::drogon::Get);
+METHOD_LIST_END
+void list(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+static void initApiDocs();
+private:
+std::vector<std::string> providerNames_;
+Json::Value cachedBody_{Json::objectValue};
+void buildBody();
 };
 }
 === libs/drogon/include/fulla/drogon/controllers/AuthorizationEndpointController.h

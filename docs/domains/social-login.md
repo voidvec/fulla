@@ -26,10 +26,37 @@ Issuance records a `SOCIAL_LOGIN_TOKEN_ISSUED` audit action (provider, client, s
 
 This is a first-party extension endpoint, not one of RFC 6749's four grants — the same position the GitHub flow has always had, now documented and audit-traced. The standards-track alternative (social login establishes a browser session, then the SPA runs authorization-code + PKCE with a consent-exempt first-party client) is registered as follow-up work.
 
+## Provider tiers (v1.5.0)
+
+Deployments differ in which external providers make sense (GitHub/Google are
+unreachable from mainland China; WeChat is China-only). Availability is a
+server-side gate with two switches in `config.json` (env aliases
+`FULLA_EXTERNAL_TIER_DOMESTIC` / `FULLA_EXTERNAL_TIER_INTERNATIONAL`):
+
+```json
+"external_auth": {
+    "tiers": {
+        "domestic": true,       // gates WeChat
+        "international": true   // gates GitHub + Google
+    }
+}
+```
+
+Effective enablement = tier on AND credentials configured (a tier switch
+composes with the credential gate, never replaces it). The login page
+discovers the result at runtime via the public `GET /api/auth/providers`
+endpoint — it returns each enabled provider with a fully built
+`authorize_url` (same redirect resolution as the link flow:
+per-provider `redirect_uri` override, else `frontend.url` +
+`/callback/{provider}`) — so toggling a tier takes effect on restart with
+no frontend rebuild. Both tiers default to `true` (upgrade compatibility).
+
 ## GitHub (fully wired, mainline)
 
-- Backend route: `POST /api/github/login`; the `frontends/user` frontend has a "Sign in with GitHub" button
-  (the OAuth App's client id is injected via `VITE_GITHUB_CLIENT_ID`).
+- Backend route: `POST /api/github/login`; the `frontends/user` frontend renders the
+  "Sign in with GitHub" button from the runtime discovery endpoint
+  `GET /api/auth/providers` (v1.5.0 provider tiers — the button tracks the
+  server-side `external_auth` gate, no frontend build variable involved).
 - Callback: `/callback/github`.
 
 ## Google (wired, #70)
@@ -48,14 +75,14 @@ This is a first-party extension endpoint, not one of RFC 6749's four grants — 
 ```
 
 3. `POST /api/google/login` (`code` parameter) completes the exchange and returns the token pair (see above).
-4. Frontend: the login page renders "Sign in with Google" when `VITE_GOOGLE_CLIENT_ID` is set (unconfigured = hidden); the `/callback/google` route (generalized `SocialCallbackPage`) stores the tokens and lands the user on the home page.
+4. Frontend: the login page renders "Sign in with Google" when the discovery endpoint reports Google enabled (unconfigured = hidden); the `/callback/google` route (generalized `SocialCallbackPage`) stores the tokens and lands the user on the home page.
 
 ## WeChat (login wired; QR scan needs a mobile-agent surface)
 
 1. Create a website application on the WeChat Open Platform (**localhost callbacks are not supported**; an ICP-registered domain is required).
 2. Backend configuration follows the same structure (`external_auth.wechat`: appid / app_secret).
 3. Backend route: `POST /api/wechat/login` — same closed loop; WeChat supplies no email, the created account mirrors GitHub's empty-email handling.
-4. Frontend: `/callback/wechat` exists; the desktop SPA only surfaces a hint when `VITE_WECHAT_APPID` is configured (the QR-scan authorization flow requires a WeChat-enabled device/browser surface — the desktop button-and-redirect UX cannot complete it; the explicit desktop QR flow is a registered follow-up).
+4. Frontend: `/callback/wechat` exists; the desktop SPA only surfaces a hint when the discovery endpoint reports WeChat enabled — i.e. the domestic tier (`external_auth.tiers.domestic`, default on) AND credentials configured (the QR-scan authorization flow requires a WeChat-enabled device/browser surface — the desktop button-and-redirect UX cannot complete it; the explicit desktop QR flow is a registered follow-up).
 5. Local development tricks: point the callback domain to 127.0.0.1 via the hosts file / an Nginx reverse proxy / an intranet tunnel.
 
 ## General Security Notes

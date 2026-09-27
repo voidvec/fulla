@@ -4,6 +4,7 @@
 #include <fulla/drogon/adapters/BackchannelLogoutNotifier.h>
 #include <fulla/drogon/adapters/DrogonOAuthHttpClient.h>
 #include <fulla/drogon/observability/AuditLogger.h>
+#include <fulla/drogon/controllers/AuthProvidersController.h>
 #ifdef WITH_SOCIAL
 #include <fulla/drogon/controllers/GitHubController.h>
 #include <fulla/drogon/controllers/GoogleController.h>
@@ -221,6 +222,13 @@ void wireIdentityServices()
     std::string googleClientId, googleClientSecret, googleRedirectUri;
     std::string wechatAppId, wechatSecret;
     std::string githubClientId, githubClientSecret;
+    // v1.5.0 provider tiers (external_auth.tiers.*): domestic gates WeChat,
+    // international gates GitHub/Google. Defaults true so a config without
+    // the block (or without external_auth at all) keeps every configured
+    // provider enabled — upgrade compatibility; only an explicit false
+    // turns a tier off.
+    bool domesticTier = true;
+    bool internationalTier = true;
     if (customConfig.isMember("external_auth"))
     {
         const auto &externalAuth = customConfig["external_auth"];
@@ -240,6 +248,12 @@ void wireIdentityServices()
             githubClientId = externalAuth["github"].get("client_id", "").asString();
             githubClientSecret = externalAuth["github"].get("client_secret", "").asString();
         }
+        if (externalAuth.isMember("tiers"))
+        {
+            const auto &tiers = externalAuth["tiers"];
+            domesticTier = tiers.get("domestic", true).asBool();
+            internationalTier = tiers.get("international", true).asBool();
+        }
     }
     const bool googleConfigured =
       credentialConfigured(googleClientId) && credentialConfigured(googleClientSecret);
@@ -247,15 +261,28 @@ void wireIdentityServices()
       credentialConfigured(wechatAppId) && credentialConfigured(wechatSecret);
     const bool githubConfigured =
       credentialConfigured(githubClientId) && credentialConfigured(githubClientSecret);
-    if (!googleConfigured)
-        LOG_INFO << "IdentityAssembly: social provider 'google' disabled (external_auth.google "
-                    "credentials not configured; see docs on provider setup)";
-    if (!wechatConfigured)
-        LOG_INFO << "IdentityAssembly: social provider 'wechat' disabled (external_auth.wechat "
-                    "credentials not configured; see docs on provider setup)";
-    if (!githubConfigured)
-        LOG_INFO << "IdentityAssembly: social provider 'github' disabled (external_auth.github "
-                    "credentials not configured; see docs on provider setup)";
+    // Effective enablement = tier on AND credentials set (#111): a tier
+    // switch composes with the credential gate instead of replacing it, and
+    // login/link endpoints inherit tier behavior through the same
+    // nullptr-injection surface — no new error paths.
+    const bool googleEnabled = googleConfigured && internationalTier;
+    const bool wechatEnabled = wechatConfigured && domesticTier;
+    const bool githubEnabled = githubConfigured && internationalTier;
+    if (!googleEnabled)
+        LOG_INFO << "IdentityAssembly: social provider 'google' disabled ("
+                 << (internationalTier ? "external_auth.google credentials not configured"
+                                       : "external_auth.tiers.international=false")
+                 << ")";
+    if (!wechatEnabled)
+        LOG_INFO << "IdentityAssembly: social provider 'wechat' disabled ("
+                 << (domesticTier ? "external_auth.wechat credentials not configured"
+                                  : "external_auth.tiers.domestic=false")
+                 << ")";
+    if (!githubEnabled)
+        LOG_INFO << "IdentityAssembly: social provider 'github' disabled ("
+                 << (internationalTier ? "external_auth.github credentials not configured"
+                                       : "external_auth.tiers.international=false")
+                 << ")";
     auto socialAccountRepo =
       std::make_shared<fulla::storage::postgres::PostgresSocialAccountRepository>(dbClient);
 
@@ -321,10 +348,11 @@ void wireIdentityServices()
     }
     static auto socialLinkService = std::make_shared<fulla::identity::SocialLinkService>(
       // #111: disabled providers enter as nullptr -> NotConfigured at the
-      // link endpoints (same error surface as the login controllers).
-      githubConfigured ? gitHubAuthService : nullptr,
-      googleConfigured ? googleAuthService : nullptr,
-      wechatConfigured ? weChatAuthService : nullptr,
+      // link endpoints (same error surface as the login controllers). The
+      // tier flags fold into the same effective-enablement booleans.
+      githubEnabled ? gitHubAuthService : nullptr,
+      googleEnabled ? googleAuthService : nullptr,
+      wechatEnabled ? weChatAuthService : nullptr,
       socialAccountRepo,
       linkGuardWebAuthnRepo,
       crypto,
@@ -348,16 +376,43 @@ void wireIdentityServices()
 #endif  // WITH_WEBAUTHN
 #ifdef WITH_SOCIAL
     // #111: inject nullptr for disabled providers (envelope NotConfigured at
-    // request time instead of a doomed upstream call).
+    // request time instead of a doomed upstream call). Effective enablement
+    // includes the v1.5.0 tier flags.
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>()
-      ->setGoogleAuthService(googleConfigured ? googleAuthService.get() : nullptr);
+      ->setGoogleAuthService(googleEnabled ? googleAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
-      ->setWeChatAuthService(wechatConfigured ? weChatAuthService.get() : nullptr);
+      ->setWeChatAuthService(wechatEnabled ? weChatAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
-      ->setGitHubAuthService(githubConfigured ? gitHubAuthService.get() : nullptr);
+      ->setGitHubAuthService(githubEnabled ? gitHubAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UserSelfServiceController>()
       ->setSocialLinkService(socialLinkService.get());
 #endif  // WITH_SOCIAL
+
+    // v1.5.0 provider discovery: the login SPA renders its external-login
+    // buttons from GET /api/auth/providers instead of build-time VITE_* env
+    // vars. Only the ENABLED provider names are pushed here — computed from
+    // the SAME effective-enablement gate as the service injections above —
+    // and the controller builds the authorize URLs itself via the shared
+    // redirect resolution, so the buttons and the server-side enforcement
+    // can never disagree (single source of truth). Wired unconditionally
+    // (outside WITH_SOCIAL): without social support the list is simply
+    // empty. Memory-storage deployments returned early at the top of this
+    // function, so they also serve an empty list — social login needs the
+    // account repository anyway.
+#ifdef WITH_SOCIAL
+    std::vector<std::string> enabledProviderNames;
+    if (githubEnabled)
+        enabledProviderNames.push_back("github");
+    if (googleEnabled)
+        enabledProviderNames.push_back("google");
+    if (wechatEnabled)
+        enabledProviderNames.push_back("wechat");
+#else
+    // No social support compiled in: no provider is ever offered.
+    std::vector<std::string> enabledProviderNames;
+#endif
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::AuthProvidersController>()
+      ->setProviders(std::move(enabledProviderNames));
 
     LOG_INFO << "Identity services wired into SessionController/MfaController/"
                 "WebAuthnController/Google|WeChat|GitHubController "

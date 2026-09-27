@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
 import { authService } from '../../services/authService'
+import type { ExternalProviderInfo } from '../../types'
 import AppInput from '../../components/ui/AppInput.vue'
 import AppButton from '../../components/ui/AppButton.vue'
 import AppAlert from '../../components/ui/AppAlert.vue'
@@ -30,14 +31,33 @@ const passwordChangeError = ref('')
 const passwordChangeBusy = ref(false)
 const passwordChangeDone = ref(false)
 
-const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID || ''
-const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=user:email&redirect_uri=${encodeURIComponent(window.location.origin + '/callback/github')}`
+// v1.5.0 provider tiers: the social buttons render from the server's runtime
+// discovery (GET /api/auth/providers) instead of build-time VITE_* env vars —
+// the same gate (tier switch + credentials) that enforces the login endpoints
+// decides what this page offers, so buttons and server behavior can never
+// disagree. authorize_url is fully built server-side (redirect target from
+// the per-provider redirect_uri override or frontend.url). Fetch failure
+// hides the whole section: a degraded password-only login beats buttons that
+// cannot complete a login.
+const externalProviders = ref<ExternalProviderInfo[]>([])
+const githubAuthUrl = computed(
+  () => externalProviders.value.find((p) => p.provider === 'github')?.authorize_url ?? ''
+)
+const googleAuthUrl = computed(
+  () => externalProviders.value.find((p) => p.provider === 'google')?.authorize_url ?? ''
+)
+const wechatEnabled = computed(() =>
+  externalProviders.value.some((p) => p.provider === 'wechat')
+)
 
-// #70: Google login entry; rendered only when the deployment configured a
-// client id (unconfigured providers stay hidden rather than broken).
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(window.location.origin + '/callback/google')}`
-const WECHAT_ENABLED = Boolean(import.meta.env.VITE_WECHAT_APPID)
+onMounted(async () => {
+  try {
+    externalProviders.value = await authService.listExternalProviders()
+  } catch {
+    // Discovery unreachable (e.g. backend down in a mocked dev run): keep
+    // the section hidden instead of rendering dead buttons.
+  }
+})
 
 // #145: the authorize gate sends flagged users here with the query flag set
 // (302 from /oauth2/authorize) — show the change form without a login round-trip.
@@ -340,7 +360,7 @@ async function handlePasswordChange() {
 
       <!-- Social Login Divider -->
       <div
-        v-if="GITHUB_CLIENT_ID || GOOGLE_CLIENT_ID"
+        v-if="githubAuthUrl || googleAuthUrl"
         class="relative my-6"
       >
         <div class="absolute inset-0 flex items-center">
@@ -353,7 +373,7 @@ async function handlePasswordChange() {
 
       <!-- GitHub Login -->
       <a
-        v-if="GITHUB_CLIENT_ID"
+        v-if="githubAuthUrl"
         :href="githubAuthUrl"
         class="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-neutral-300
                rounded-lg text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
@@ -371,7 +391,7 @@ async function handlePasswordChange() {
 
       <!-- Google Login (#70) -->
       <a
-        v-if="GOOGLE_CLIENT_ID"
+        v-if="googleAuthUrl"
         :href="googleAuthUrl"
         class="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-neutral-300
                rounded-lg text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
@@ -402,9 +422,10 @@ async function handlePasswordChange() {
       </a>
 
       <!-- WeChat (#70): QR-scan login requires a mobile browser agent; the
-           desktop SPA can only surface the entry point when configured. -->
+           desktop SPA can only surface the entry point when the deployment
+           offers WeChat (domestic tier). -->
       <p
-        v-if="WECHAT_ENABLED"
+        v-if="wechatEnabled"
         class="mt-4 text-xs text-neutral-400 text-center"
       >
         {{ $t('auth.login.wechatNote') }}

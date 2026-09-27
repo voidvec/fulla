@@ -2,6 +2,7 @@
 #include <drogon/drogon.h>
 #include <drogon/DrClassMap.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
+#include <fulla/drogon/controllers/AuthProvidersController.h>
 #include <fulla/drogon/controllers/ConsentContextController.h>
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/controllers/DiscoveryController.h>
@@ -52,6 +53,11 @@ void registerAllControllers()
     // PLAIN (non-whole-archive) link is sufficient.
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::HealthController>()
+    );
+    // v1.5.0 provider tiers: public login-page discovery (unconditional —
+    // without social support it serves an empty provider list).
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::AuthProvidersController>()
     );
 #ifdef WITH_SOCIAL
     drogon::app().registerController(

@@ -21,6 +21,10 @@
 // B2 social link/unlink: orchestration service + audit sink. The service is
 // injected by IdentityAssembly (or SocialMockFixture in tests).
 #include <fulla/identity/SocialLinkService.h>
+// Shared server-side provider authorize-URL builder (link flow passes a
+// one-time #71 state; the login discovery in AuthProvidersController calls
+// the same builder statelessly).
+#include "SocialAuthorizeUrl.h"
 #endif  // WITH_SOCIAL
 
 namespace fulla::drogon::controllers
@@ -1252,71 +1256,13 @@ void resolveInternalUserId(
     }
 }
 
-// #71: server-side provider authorize-URL builder for the link flow. Client
-// ids come from custom_config external_auth.{provider}; the redirect target
-// is external_auth.{provider}.redirect_uri when set, else the frontend URL +
-// /callback/{provider}. Returns "" for an unconfigured provider (the caller
-// fails closed -- no stateless URL ever leaves the server).
-std::string buildSocialAuthorizeUrl(const std::string &provider, const std::string &state)
-{
-    auto config = ::drogon::app().getCustomConfig();
-    if (!config.isMember("external_auth"))
-        return "";
-    const auto &externalAuth = config["external_auth"];
-    if (!externalAuth.isMember(provider) || !externalAuth[provider].isObject())
-        return "";
-
-    std::string frontendUrl = "http://localhost:5173";
-    if (config.isMember("frontend") && config["frontend"].isMember("url"))
-        frontendUrl = config["frontend"]["url"].asString();
-    // Trim a trailing slash once so the fallback never doubles it.
-    if (!frontendUrl.empty() && frontendUrl.back() == '/')
-        frontendUrl.pop_back();
-
-    const auto credentialConfigured = [](const std::string &v) {
-        return !v.empty() && v.rfind("YOUR_", 0) != 0;
-    };
-    const std::string redirectUri = externalAuth[provider].get("redirect_uri", "").asString() !=
-                                        ""
-                                      ? externalAuth[provider].get("redirect_uri", "").asString()
-                                      : frontendUrl + "/callback/" + provider;
-    const std::string encodedRedirect = ::drogon::utils::urlEncode(redirectUri);
-    const std::string encodedState = ::drogon::utils::urlEncode(state);
-
-    if (provider == "github")
-    {
-        const std::string clientId = externalAuth["github"].get("client_id", "").asString();
-        const std::string clientSecret = externalAuth["github"].get("client_secret", "").asString();
-        if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
-            return "";
-        return "https://github.com/login/oauth/authorize?client_id=" + clientId +
-               "&scope=user%3Aemail&state=" + encodedState +
-               "&redirect_uri=" + encodedRedirect;
-    }
-    if (provider == "google")
-    {
-        const std::string clientId = externalAuth["google"].get("client_id", "").asString();
-        const std::string clientSecret =
-          externalAuth["google"].get("client_secret", "").asString();
-        if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
-            return "";
-        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientId +
-               "&response_type=code&scope=openid%20email%20profile&state=" + encodedState +
-               "&redirect_uri=" + encodedRedirect;
-    }
-    if (provider == "wechat")
-    {
-        const std::string appId = externalAuth["wechat"].get("appid", "").asString();
-        const std::string secret = externalAuth["wechat"].get("secret", "").asString();
-        if (!credentialConfigured(appId) || !credentialConfigured(secret))
-            return "";
-        return "https://open.weixin.qq.com/connect/qrconnect?appid=" + appId +
-               "&redirect_uri=" + encodedRedirect +
-               "&response_type=code&scope=snsapi_login&state=" + encodedState +
-               "#wechat_redirect";
-    }
-    return "";
-}
+// Server-side provider authorize-URL builder: moved to the src-local shared
+// header SocialAuthorizeUrl.h so the v1.5.0 login discovery endpoint
+// (AuthProvidersController) emits URLs from the exact same redirect
+// resolution (per-provider redirect_uri override, else frontend.url +
+// /callback/{provider}) as this link flow. State stays mandatory here
+// (#71 one-time link state); the login discovery calls it statelessly.
+using social_detail::buildSocialAuthorizeUrl;
 
 // SocialLinkOpStatus -> Error Envelope (design §3.4). Returns false when the
 // status was an error (response sent); true for Ok (caller builds the 200).

@@ -235,15 +235,21 @@ test.describe('GitHub Login', () => {
     await setupMocks(page)
   })
 
-  // The GitHub button is compiled in only when VITE_GITHUB_CLIENT_ID is set
-  // for the dev server (LoginPage.vue gates on it). Skip — not fail — when
-  // the environment does not configure GitHub login.
+  // v1.5.0 provider tiers: the GitHub button renders only when the mocked
+  // discovery endpoint reports it (GET /api/auth/providers — opt in with
+  // E2E_EXTERNAL_PROVIDERS=github). Skip — not fail — when not opted in;
+  // the runtime count check stays as a belt-and-braces guard.
+  const githubProviderConfigured = (process.env.E2E_EXTERNAL_PROVIDERS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .includes('github')
+
   test('shows GitHub login button on login page', async ({ page }) => {
     await page.goto('/login')
     await page.locator('form').first().waitFor()
     const btn = page.locator('text=Sign in with GitHub')
-    if ((await btn.count()) === 0)
-      test.skip(true, 'VITE_GITHUB_CLIENT_ID not configured for this build')
+    if (!githubProviderConfigured)
+      test.skip(true, 'E2E_EXTERNAL_PROVIDERS does not include github')
     await expect(btn).toBeVisible()
   })
 
@@ -251,8 +257,8 @@ test.describe('GitHub Login', () => {
     await page.goto('/login')
     await page.locator('form').first().waitFor()
     const githubLink = page.locator('a:has-text("Sign in with GitHub")')
-    if ((await githubLink.count()) === 0)
-      test.skip(true, 'VITE_GITHUB_CLIENT_ID not configured for this build')
+    if (!githubProviderConfigured)
+      test.skip(true, 'E2E_EXTERNAL_PROVIDERS does not include github')
     await expect(githubLink).toBeVisible()
     const href = await githubLink.getAttribute('href')
     expect(href).toContain('github.com/login/oauth/authorize')
