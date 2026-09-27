@@ -156,6 +156,7 @@ const config = {
               { label: 'Benchmarks', href: 'https://github.com/voidvec/fulla/blob/master/benchmarks/competitors/results/COMPARISON.md' },
               { label: 'OpenAPI Contract', href: 'https://github.com/voidvec/fulla/blob/master/apps/server/openapi.yaml' },
               { label: 'ADRs', to: '/docs/adr/ADR-0001' },
+              { label: 'Commercial Licensing', to: '/commercial' },
             ],
           },
           {
