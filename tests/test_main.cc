@@ -407,6 +407,7 @@ int main(int argc, char **argv)
     fulla::drogon::controllers::RoleScopeAdminController::initApiDocs();
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
+    fulla::drogon::controllers::AuthProvidersController::initApiDocs();
     // #43: OrganizationController (product-app level).
     ::organization::OrganizationController::initApiDocs();
     ::organization::OrgMemberController::initApiDocs();
