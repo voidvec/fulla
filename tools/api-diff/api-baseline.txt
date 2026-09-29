@@ -1458,6 +1458,9 @@ private:
 std::vector<std::string> providerNames_;
 Json::Value cachedBody_{Json::objectValue};
 void buildBody();
+public:
+AuthProvidersController()
+;
 };
 }
 === libs/drogon/include/fulla/drogon/controllers/AuthorizationEndpointController.h
