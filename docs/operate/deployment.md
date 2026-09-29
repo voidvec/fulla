@@ -408,7 +408,7 @@ VITE_REDIRECT_URI=https://your-domain.com/callback
    button when the backend reports GitHub enabled.
 3. Restart the backend: `docker compose up -d` (the button appears/disappears
    with the backend config; no frontend rebuild required).
-4. Provider tiers: `external_auth.tiers.domestic` gates WeChat,
+4. Provider tiers: `custom_config.external_auth.tiers.domestic` gates WeChat,
    `external_auth.tiers.international` gates GitHub/Google (config or the
    `FULLA_EXTERNAL_TIER_DOMESTIC` / `FULLA_EXTERNAL_TIER_INTERNATIONAL` env
    aliases; default `true` = every configured provider offered).
@@ -618,7 +618,11 @@ The frontend (the user-facing OAuth2Frontend) is configured through Vite environ
 | `VITE_API_BASE_URL` | API base URL | **(empty)** — the SPA uses same-origin relative paths; setting a value breaks the nginx reverse-proxy routing |
 | `VITE_CLIENT_ID` | OAuth2 Client ID | fulla-portal |
 | `VITE_REDIRECT_URI` | OAuth2 callback URI | https://your-domain.com/callback |
-| `VITE_GITHUB_CLIENT_ID` | GitHub "Sign in with GitHub" button (optional) | (button hidden when empty) |
+
+> External login providers (GitHub / Google / WeChat) are **not** frontend
+> variables since v1.5.0 — they are configured server-side
+> (`custom_config.external_auth.*` + the tier switches) and the login page
+> discovers them at runtime from `GET /api/auth/providers`.
 
 > **The admin console (OAuth2Admin) needs no configuration**: its source code reads no `import.meta.env` at all; every API call uses the relative path `/api/admin/*`, which nginx reverse-proxies to the backend. When changing domains you only need to keep the nginx `/admin/` route correct — no admin image rebuild required.
 >

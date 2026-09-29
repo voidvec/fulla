@@ -30,7 +30,7 @@ This is a first-party extension endpoint, not one of RFC 6749's four grants — 
 
 Deployments differ in which external providers make sense (GitHub/Google are
 unreachable from mainland China; WeChat is China-only). Availability is a
-server-side gate with two switches in `config.json` (env aliases
+server-side gate with two switches under `custom_config` in `config.json` (env aliases
 `FULLA_EXTERNAL_TIER_DOMESTIC` / `FULLA_EXTERNAL_TIER_INTERNATIONAL`):
 
 ```json
