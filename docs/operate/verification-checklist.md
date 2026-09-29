@@ -46,7 +46,7 @@ docker exec -it fulla-postgres psql -U fulla_user -d fulla_db -c "\dt"
 # Expected output: list of OAuth2-related tables
 # oauth2_clients, oauth2_codes, oauth2_access_tokens, oauth2_refresh_tokens,
 # oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc.
-# (26 core tables after V038, plus the partitioned audit_logs family —
+# (27 core tables after V038 incl. the V016 token archive, plus the partitioned audit_logs family —
 # organizations now has the organization_consents /
 # organization_succession_nominations / organization_consent_requests companions)
 ```
@@ -83,6 +83,7 @@ ORDER BY table_name;
 
 # Expected table list (V001-V038 actual schema):
 # - oauth2_access_tokens, oauth2_refresh_tokens, oauth2_codes
+#   (+ oauth2_access_tokens_archive from V016 token partitioning prep)
 # - oauth2_clients, oauth2_scopes, oauth2_client_scopes
 # - oauth2_client_owners (v1.4.0 open platform)
 # - oauth2_user_consents, oauth2_subject_mappings, oauth2_device_codes
@@ -223,7 +224,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 
 # Expected response (save the access_token):
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q",
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "tGzv3JH7xN1yQ9X2...",
@@ -231,7 +232,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 }
 
 # Set an environment variable (used by the tests below)
-export TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+export TOKEN="F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q"
 ```
 
 > On Windows, use the repository-provided `scripts/backend/test-admin-endpoints.ps1` to run the same login + token flow.

@@ -40,7 +40,7 @@ What the product does, by domain. Deep-dive links go to the guides under `docs/`
 | **Multi-tenancy** | Organizations, org-scoped clients and users, organization consents + consent-request workflow, owner succession, `org_ctx` claims, tenant-aware administration | [Multi-Tenancy](docs/domains/multi-tenancy.md) |
 | **Observability** | Prometheus metrics, structured audit log (login/token/password events), health probes (live/ready) | [Observability](docs/operate/observability.md) |
 | **Operations** | Docker Compose / Helm deploys, cosign-signed multi-arch images, SBOMs, config-file + env-driven configuration | [Production Deployment](docs/operate/deployment.md) |
-| **Session management** | Server-side sessions, CSRF, consent-context handoff, session-borne org binding | [Session Management](docs/domains/session-management.md) |
+| **Session management** | Server-side SSO sessions and their lifecycle, distinct from API-token lifetimes; session-store sizing under machine traffic | [Session Management](docs/domains/session-management.md) |
 
 ## Module Map
 

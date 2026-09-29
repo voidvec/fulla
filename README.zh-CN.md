@@ -31,7 +31,7 @@ Fulla 是以 C++17 构建的**高性能开源身份与访问管理（IAM）核�
 | **多租户** | 组织、组织级客户端与用户、组织授权 + 授权申请工作流、负责人继任、`org_ctx` claims、租户感知的管理 | [多租户](https://fulla.dev/zh-CN/docs/domains/multi-tenancy) |
 | **可观测性** | Prometheus 指标、结构化审计日志（登录/令牌/密码事件）、健康探针（live/ready） | [可观测性](https://fulla.dev/zh-CN/docs/operate/observability) |
 | **运维** | Docker Compose / Helm 部署、cosign 签名多架构镜像、SBOM、配置文件 + 环境变量驱动配置 | [生产部署](https://fulla.dev/zh-CN/docs/operate/deployment) |
-| **会话管理** | 服务端会话、CSRF、consent context 交接、会话承载的组织绑定 | [会话管理](https://fulla.dev/zh-CN/docs/domains/session-management) |
+| **会话管理** | 服务端 SSO 会话及其生命周期（与 API token 生命周期区分）；机器流量下的会话存储容量估算 | [会话管理](https://fulla.dev/zh-CN/docs/domains/session-management) |
 
 ## 模块地图（Module Map）
 

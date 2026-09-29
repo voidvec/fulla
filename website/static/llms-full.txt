@@ -1181,7 +1181,7 @@ Used to request user authorization and obtain an authorization code.
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
 | `prompt` | No | OIDC prompt values, space-separated: `none`/`login`/`consent`/`select_account` (§3.1.2.1). `none` forbids any UI; `login` forces re-authentication; `consent` forces the consent page. Combining `none` with other values → 400 | `none` |
 | `max_age` | No | Maximum allowable age of authentication (seconds). If the session auth_time exceeds the limit → forced re-authentication | `3600` |
-| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
+| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org or hold an active organization consent, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
 
 ### Response
 
@@ -1346,10 +1346,15 @@ Three management surfaces exist:
 
 - **Admin API** `/api/admin/clients/*` (admin scope + admin role) — full
   lifecycle management on behalf of any client.
-- **Dynamic registration** `POST /oauth2/register` (RFC 7591, v1.4.0) —
-  self-service client registration with a per-user quota; registered
-  applications are owned by their creator and manageable in the portal's
-  **My Applications** page (credential rotation, status, deletion).
+- **RFC 7591 dynamic registration** `POST /oauth2/register` (v1.4.0) —
+  implements the RFC 7591 protocol shape but is **admin-gated** (Bearer token
+  with admin role); it creates the client record without an owner row, so
+  registered clients are administered via the admin API, not the portal.
+- **Self-service applications** `POST /api/me/applications` (v1.4.0 open
+  platform, Bearer token) — quota'd per user (`max_apps_per_user`) and rate
+  limited (`creation_rate_limit_per_day`); created applications are owned by
+  their creator and manageable in the portal's **My Applications** page
+  (credential rotation, status, deletion).
 - **Organization-owned applications** — a client anchored to an organization
   is managed by its org owner/admins, and its authorization grants are
   recorded (and revocable) on the organization
@@ -1598,9 +1603,11 @@ do yet, and how to use it without over-assuming isolation.
 
 ## 1. Model (V017 + V034/V036–V038)
 
-The core `organizations` table is V017; the organization layer now spans five
+The core `organizations` table is V017; the organization layer now spans four
 more migrations — `organization_members` + `organization_invitations` (V034),
-`organization_consents` (V036), `organization_succession_nominations` (V037),
+`organization_consents` (V036; the same migration adds
+`organizations.require_mfa`, org columns on codes/tokens, `audit_logs.org_id`,
+and seeds the `org` scope), `organization_succession_nominations` (V037),
 and `organization_consent_requests` (V038):
 
 ```sql
@@ -1667,19 +1674,22 @@ curl -X POST http://localhost:5555/api/admin/organizations \
 - **Organization context in the authorization chain (v1.5.0)**: the authorize
   endpoint accepts an optional `org_id` (id or slug) validated by the org
   context gate — requester must be a live member, the client must belong to
-  that org, and an org with `require_mfa` enforced rejects password sessions.
+  that org or hold an active organization consent, and an org with
+  `require_mfa` enforced rejects password sessions.
   The binding flows through the code-to-token chain, and tokens issued with
   the `org` scope carry **`org_ctx` claims** (userinfo / id_token) that drop
   immediately when membership ends.
 - **Organization consents (v1.5.0)**: when a member authorizes an org-owned
   application, the grant is recorded on the **organization** (admin-level
   rows in `organization_consents`); members can review and revoke grants on
-  the portal's "Organization Authorizations" page
-  (`GET/DELETE /api/me/organizations/{slug}/consents`).
+  the portal's "Org authorizations" page
+  (`GET /api/me/organizations/{slug}/consents`,
+  `DELETE /api/me/organizations/{slug}/consents/{clientId}`).
 - **Consent request workflow (v1.5.0, #236)**: members who are not owners can
   file an organization-authorization **request**
-  (`organization_consent_requests`); managers approve/reject/withdraw from
-  the portal, and an approved request becomes the org grant.
+  (`organization_consent_requests`); managers approve/reject from the
+  portal, the requesting member can withdraw their own pending request, and
+  an approved request becomes the org grant.
 - **Owner succession (v1.5.0)**: an owner can nominate a successor
   (nominate → accept two-step confirmation), a soft-deleted owner's seat is
   auto-succeeded from a pending nomination, and the admin transfer-ownership
@@ -1702,8 +1712,10 @@ Be explicit with stakeholders — these are **not** implemented:
 4. **No update/delete** endpoints for organizations (create/list/get +
    ownership transfer only; updates go through the database or future API).
 5. **Per-org rate limits and API keys don't exist yet** — but creation
-   *quotas* do: self-service org creation is quota'd per user and rate
-   limited, and org-owned client counts are quota'd (open-platform limits).
+   *quotas* do: self-service org creation is quota'd per user
+   (`max_orgs_per_user`), org-owned client counts are quota'd
+   (`max_org_apps`), and self-service *application* creation is rate limited
+   (`creation_rate_limit_per_day`) (open-platform limits).
 
 If you need hard tenant isolation today, run one fulla stack per tenant —
 the Docker Compose / Helm paths make that cheap
@@ -3553,7 +3565,7 @@ Base URL: http://localhost:5555
     [+] PASS (0.1s)
 
 [Test 10/59] Test 10: Client Credentials
-    AT: eyJhbGciOiJSUzI1Ni..., Scope: read
+    AT: F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q, Scope: read
     [+] PASS (0.2s)
 
 ...
@@ -5505,7 +5517,7 @@ docker exec -it fulla-postgres psql -U fulla_user -d fulla_db -c "\dt"
 # Expected output: list of OAuth2-related tables
 # oauth2_clients, oauth2_codes, oauth2_access_tokens, oauth2_refresh_tokens,
 # oauth2_scopes, users, roles, user_roles, organizations, audit_logs, etc.
-# (26 core tables after V038, plus the partitioned audit_logs family —
+# (27 core tables after V038 incl. the V016 token archive, plus the partitioned audit_logs family —
 # organizations now has the organization_consents /
 # organization_succession_nominations / organization_consent_requests companions)
 ```
@@ -5542,6 +5554,7 @@ ORDER BY table_name;
 
 # Expected table list (V001-V038 actual schema):
 # - oauth2_access_tokens, oauth2_refresh_tokens, oauth2_codes
+#   (+ oauth2_access_tokens_archive from V016 token partitioning prep)
 # - oauth2_clients, oauth2_scopes, oauth2_client_scopes
 # - oauth2_client_owners (v1.4.0 open platform)
 # - oauth2_user_consents, oauth2_subject_mappings, oauth2_device_codes
@@ -5682,7 +5695,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 
 # Expected response (save the access_token):
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q",
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "tGzv3JH7xN1yQ9X2...",
@@ -5690,7 +5703,7 @@ curl -s -X POST http://localhost:5555/oauth2/token \
 }
 
 # Set an environment variable (used by the tests below)
-export TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+export TOKEN="F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q"
 ```
 
 > On Windows, use the repository-provided `scripts/backend/test-admin-endpoints.ps1` to run the same login + token flow.

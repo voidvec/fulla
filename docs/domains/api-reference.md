@@ -39,7 +39,7 @@ Used to request user authorization and obtain an authorization code.
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
 | `prompt` | No | OIDC prompt values, space-separated: `none`/`login`/`consent`/`select_account` (§3.1.2.1). `none` forbids any UI; `login` forces re-authentication; `consent` forces the consent page. Combining `none` with other values → 400 | `none` |
 | `max_age` | No | Maximum allowable age of authentication (seconds). If the session auth_time exceeds the limit → forced re-authentication | `3600` |
-| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
+| `org_id` | No | Organization context for this authorization (numeric id or slug, v1.5.0). Validated by the org context gate: the logged-in user must be a live member, the client must belong to that org or hold an active organization consent, and an org with `require_mfa` enforced rejects password-only sessions. The binding flows through the code-to-token chain; tokens issued with the `org` scope carry `org_ctx` claims | `3` or `acme` |
 
 ### Response
 
@@ -204,10 +204,15 @@ Three management surfaces exist:
 
 - **Admin API** `/api/admin/clients/*` (admin scope + admin role) — full
   lifecycle management on behalf of any client.
-- **Dynamic registration** `POST /oauth2/register` (RFC 7591, v1.4.0) —
-  self-service client registration with a per-user quota; registered
-  applications are owned by their creator and manageable in the portal's
-  **My Applications** page (credential rotation, status, deletion).
+- **RFC 7591 dynamic registration** `POST /oauth2/register` (v1.4.0) —
+  implements the RFC 7591 protocol shape but is **admin-gated** (Bearer token
+  with admin role); it creates the client record without an owner row, so
+  registered clients are administered via the admin API, not the portal.
+- **Self-service applications** `POST /api/me/applications` (v1.4.0 open
+  platform, Bearer token) — quota'd per user (`max_apps_per_user`) and rate
+  limited (`creation_rate_limit_per_day`); created applications are owned by
+  their creator and manageable in the portal's **My Applications** page
+  (credential rotation, status, deletion).
 - **Organization-owned applications** — a client anchored to an organization
   is managed by its org owner/admins, and its authorization grants are
   recorded (and revocable) on the organization
