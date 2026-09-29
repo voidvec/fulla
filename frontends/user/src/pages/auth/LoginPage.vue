@@ -360,7 +360,7 @@ async function handlePasswordChange() {
 
       <!-- Social Login Divider -->
       <div
-        v-if="githubAuthUrl || googleAuthUrl"
+        v-if="githubAuthUrl || googleAuthUrl || wechatEnabled"
         class="relative my-6"
       >
         <div class="absolute inset-0 flex items-center">

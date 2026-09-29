@@ -59,8 +59,18 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
 
   private:
     std::vector<std::string> providerNames_;
+    // Default body is the schema-valid empty answer: when wireIdentityServices
+    // early-returns (memory storage / no DB client), setProviders never runs,
+    // and the published contract requires the `providers` KEY (empty array =
+    // external login off), not a bare object.
     Json::Value cachedBody_{Json::objectValue};
     void buildBody();
+
+  public:
+    AuthProvidersController()
+    {
+        buildBody();  // {"providers":[]} until IdentityAssembly refines it
+    }
 };
 
 }  // namespace fulla::drogon::controllers
