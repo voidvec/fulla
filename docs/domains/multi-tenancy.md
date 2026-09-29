@@ -18,9 +18,11 @@ do yet, and how to use it without over-assuming isolation.
 
 ## 1. Model (V017 + V034/V036–V038)
 
-The core `organizations` table is V017; the organization layer now spans five
+The core `organizations` table is V017; the organization layer now spans four
 more migrations — `organization_members` + `organization_invitations` (V034),
-`organization_consents` (V036), `organization_succession_nominations` (V037),
+`organization_consents` (V036; the same migration adds
+`organizations.require_mfa`, org columns on codes/tokens, `audit_logs.org_id`,
+and seeds the `org` scope), `organization_succession_nominations` (V037),
 and `organization_consent_requests` (V038):
 
 ```sql
@@ -87,19 +89,22 @@ curl -X POST http://localhost:5555/api/admin/organizations \
 - **Organization context in the authorization chain (v1.5.0)**: the authorize
   endpoint accepts an optional `org_id` (id or slug) validated by the org
   context gate — requester must be a live member, the client must belong to
-  that org, and an org with `require_mfa` enforced rejects password sessions.
+  that org or hold an active organization consent, and an org with
+  `require_mfa` enforced rejects password sessions.
   The binding flows through the code-to-token chain, and tokens issued with
   the `org` scope carry **`org_ctx` claims** (userinfo / id_token) that drop
   immediately when membership ends.
 - **Organization consents (v1.5.0)**: when a member authorizes an org-owned
   application, the grant is recorded on the **organization** (admin-level
   rows in `organization_consents`); members can review and revoke grants on
-  the portal's "Organization Authorizations" page
-  (`GET/DELETE /api/me/organizations/{slug}/consents`).
+  the portal's "Org authorizations" page
+  (`GET /api/me/organizations/{slug}/consents`,
+  `DELETE /api/me/organizations/{slug}/consents/{clientId}`).
 - **Consent request workflow (v1.5.0, #236)**: members who are not owners can
   file an organization-authorization **request**
-  (`organization_consent_requests`); managers approve/reject/withdraw from
-  the portal, and an approved request becomes the org grant.
+  (`organization_consent_requests`); managers approve/reject from the
+  portal, the requesting member can withdraw their own pending request, and
+  an approved request becomes the org grant.
 - **Owner succession (v1.5.0)**: an owner can nominate a successor
   (nominate → accept two-step confirmation), a soft-deleted owner's seat is
   auto-succeeded from a pending nomination, and the admin transfer-ownership
@@ -122,8 +127,10 @@ Be explicit with stakeholders — these are **not** implemented:
 4. **No update/delete** endpoints for organizations (create/list/get +
    ownership transfer only; updates go through the database or future API).
 5. **Per-org rate limits and API keys don't exist yet** — but creation
-   *quotas* do: self-service org creation is quota'd per user and rate
-   limited, and org-owned client counts are quota'd (open-platform limits).
+   *quotas* do: self-service org creation is quota'd per user
+   (`max_orgs_per_user`), org-owned client counts are quota'd
+   (`max_org_apps`), and self-service *application* creation is rate limited
+   (`creation_rate_limit_per_day`) (open-platform limits).
 
 If you need hard tenant isolation today, run one fulla stack per tenant —
 the Docker Compose / Helm paths make that cheap

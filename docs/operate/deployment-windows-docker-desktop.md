@@ -438,7 +438,7 @@ Base URL: http://localhost:5555
     [+] PASS (0.1s)
 
 [Test 10/59] Test 10: Client Credentials
-    AT: eyJhbGciOiJSUzI1Ni..., Scope: read
+    AT: F8k2pQ9vLx7mN4bR1sT6uW0yZ3aC5dE8gH2jK4lM7nP1q, Scope: read
     [+] PASS (0.2s)
 
 ...
