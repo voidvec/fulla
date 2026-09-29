@@ -50,8 +50,9 @@ def sync_detailed(
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
     (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. Authorize URLs are built by the SPA from the returned public
-    client identifiers and its own origin, matching the callback paths registered at each provider.
+    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
+    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
+    else frontend.url + /callback/{provider}.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -78,8 +79,9 @@ def sync(
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
     (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. Authorize URLs are built by the SPA from the returned public
-    client identifiers and its own origin, matching the callback paths registered at each provider.
+    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
+    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
+    else frontend.url + /callback/{provider}.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -102,8 +104,9 @@ async def asyncio_detailed(
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
     (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. Authorize URLs are built by the SPA from the returned public
-    client identifiers and its own origin, matching the callback paths registered at each provider.
+    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
+    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
+    else frontend.url + /callback/{provider}.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -128,8 +131,9 @@ async def asyncio(
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
     (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. Authorize URLs are built by the SPA from the returned public
-    client identifiers and its own origin, matching the callback paths registered at each provider.
+    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
+    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
+    else frontend.url + /callback/{provider}.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

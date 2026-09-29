@@ -2213,7 +2213,7 @@ type ClientInterface interface {
 
 	// GetApiAuthProviders List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 	//
 	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 	GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4297,7 +4297,7 @@ func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, bo
 
 // GetApiAuthProviders List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 //
 // Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11786,7 +11786,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiAuthProvidersWithResponse List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19754,7 +19754,7 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 
 // GetApiAuthProvidersWithResponse List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. Authorize URLs are built by the SPA from the returned public client identifiers and its own origin, matching the callback paths registered at each provider.
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 //
 // Returns a wrapper object for the known response body format(s).
 //
