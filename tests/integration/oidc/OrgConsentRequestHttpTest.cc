@@ -3,7 +3,7 @@
 // #236 entry half (plan B) integration tests: the member-files-manager-
 // approves org consent request workflow.
 //   1. Filing: 200 on a new request, idempotent 200 on an identical
-//      pending re-file, 403 non-member, 404 unknown client / unknown org
+//      pending re-file, 404 non-member (folded), 404 unknown client / unknown org
 //      (uniform shapes), 409 already-org-owned / already-consented.
 //   2. Manager surface: pending list with requester names (member list is
 //      403), approve (writes organization_consents rows + auto-approves
@@ -276,8 +276,9 @@ void dumpReqBody(const ::drogon::HttpResponsePtr &resp, const char *where)
 
 // ---------------------------------------------------------------------------
 // Filing guards: new-file 200, idempotent re-file 200 (same id), non-member
-// 403, ghost client 404, ghost org 404, already-org-owned 409, already-
-// consented 409.
+// 404 (v1.4.0 review fold: an existent-but-foreign org is indistinguishable
+// from a nonexistent one — the slug-existence oracle is closed), ghost
+// client 404, ghost org 404, already-org-owned 409, already-consented 409.
 // ---------------------------------------------------------------------------
 DROGON_TEST(Integration_P1_OrgConsentRequest_FileGuards)
 {
@@ -373,11 +374,12 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_FileGuards)
     REQUIRE(parseJsonBody(file2, file2Body));
     CHECK(file2Body["id"].asInt64() == requestId);
 
-    // 3) Non-member files -> 403.
+    // 3) Non-member files -> 404 (folded with the nonexistent-org shape —
+    // the #229 discipline; formerly 403, which leaked slug existence).
     auto file3 = sendPostJson("/api/me/organizations/" + slug + "/consent-requests",
                               fileBody, *bearerC);
     REQUIRE(file3 != nullptr);
-    CHECK(statusIs(file3, drogon::k403Forbidden));
+    CHECK(statusIs(file3, drogon::k404NotFound));
 
     // 4) Ghost client -> 404 (uniform "application not found").
     Json::Value ghostBody;

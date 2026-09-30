@@ -21991,6 +21991,12 @@ func ParsePostApiAdminOrganizationsSlugTransferOwnershipResponse(rsp *http.Respo
 	case rsp.StatusCode == 404:
 		break // No content-type
 
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
+		break // No content-type
+
 	}
 
 	return response, nil

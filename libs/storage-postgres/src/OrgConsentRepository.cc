@@ -141,11 +141,21 @@ void OrgConsentRepository::saveConsent(
       [sharedCb, orgId, grantedBy, clientId, scope](
         const std::shared_ptr<::drogon::orm::Transaction> &txn) {
           // Success is reported from the COMMIT callback (the row is
-          // durable then); the upsert error path reports inline (the
-          // transaction rolls back and a commit callback registered
-          // here never fires -- no double invocation).
+          // durable then); the upsert error path reports inline. Single
+          // invocation is guarded by invokeOnce (saveTokenPair's
+          // real-incident hardening): the no-double-invocation claim used
+          // to rest solely on "the commit callback never fires after an
+          // error/rollback" being true in every Drogon version.
+          auto invoked = std::make_shared<bool>(false);
+          auto invokeOnce = [sharedCb, invoked](bool ok) {
+              if (!*invoked)
+              {
+                  *invoked = true;
+                  (*sharedCb)(ok);
+              }
+          };
           txn->setCommitCallback(
-            [sharedCb](bool committed) { (*sharedCb)(committed); }
+            [invokeOnce](bool committed) { invokeOnce(committed); }
           );
           // R-M2-6: INSERT ... ON CONFLICT DO UPDATE (raw-SQL exemption)
           // -- re-granting a revoked row revives it and reattributes the
@@ -159,9 +169,9 @@ void OrgConsentRepository::saveConsent(
             "revoked_at = NULL, granted_by = EXCLUDED.granted_by, "
             "granted_at = CURRENT_TIMESTAMP",
             [txn](const Result &) {},
-            [sharedCb, txn](const DrogonDbException &e) {
+            [invokeOnce, txn](const DrogonDbException &e) {
                 LOG_ERROR << "saveConsent upsert failed: " << e.base().what();
-                (*sharedCb)(false);
+                invokeOnce(false);
             },
             orgId,
             clientId,

@@ -77,6 +77,24 @@ class OrgConsentRequestRepository
     /// Single row by id (approve/reject/withdraw entry lookup). Single hop.
     void findById(int32_t requestId, RowCallback &&cb);
 
+    // v1.4.0 review hardening: the RowCallback variants above fold a real DB
+    // error into "no row", which the decision endpoints then render as
+    // 404/409 -- infrastructure failure masquerading as business state
+    // (#230's Error-vs-NoRow policy). The Ex variants add a dbOk state so
+    // callers can answer 5xx instead. dbOk=false => infra failure (row
+    /// meaningless); dbOk=true + found=false => genuinely no such row.
+    using RowExCallback = std::function<
+      void(bool dbOk, bool found, ::drogon_model::fulla_db::OrganizationConsentRequests row)>;
+
+    void findPendingEx(
+      int32_t orgId,
+      const std::string &clientId,
+      int32_t requesterId,
+      RowExCallback &&cb
+    );
+
+    void findByIdEx(int32_t requestId, RowExCallback &&cb);
+
     /// B4 decision: flips a PENDING row to the decided status. Reports the
     /// number of rows flipped (0 = the row was concurrently decided or is
     /// gone -- the callers translate that to their own 409/404 semantics).

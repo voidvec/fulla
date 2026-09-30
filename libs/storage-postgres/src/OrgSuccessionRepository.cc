@@ -497,17 +497,31 @@ void OrgSuccessionRepository::effectSuccession(
         return;
     }
 
+    // Single-invocation guard (saveTokenPair's real-incident hardening
+    // pattern): the inline failure paths below and the COMMIT callback all
+    // funnel through guardedCb, so exactly-once holds even if a Drogon
+    // version ever fired the commit callback after an error/rollback.
+    auto invoked = std::make_shared<bool>(false);
+    auto guardedCb = std::make_shared<BoolCallback>(
+      [sharedCb, invoked](bool ok) {
+          if (!*invoked)
+          {
+              *invoked = true;
+              (*sharedCb)(ok);
+          }
+      }
+    );
+
     // Plain transaction (no lock keys): the optimistic accepted_at guard
     // in step 3 arbitrates concurrent acceptances -- the loser finds
     // zero updated rows and the whole transaction rolls back.
     withAdvisoryXactLock(
       dbClient_,
       {},
-      [sharedCb, orgId, nomineeUserId](const std::shared_ptr<Transaction> &txn) {
+      [guardedCb, orgId, nomineeUserId](const std::shared_ptr<Transaction> &txn) {
           // Success is reported from the COMMIT callback; every failure
-          // path reports inline (a rolled-back transaction never fires
-          // its commit callback, so there is no double invocation).
-          txn->setCommitCallback([sharedCb](bool committed) { (*sharedCb)(committed); });
+          // path reports inline -- both through guardedCb.
+          txn->setCommitCallback([guardedCb](bool committed) { (*guardedCb)(committed); });
 
           // Step 1 (R-M3-3): the nominee's membership becomes owner --
           // promote an existing member or create the seat (the nominee
@@ -522,14 +536,14 @@ void OrgSuccessionRepository::effectSuccession(
                   Criteria(
                     OrganizationMembers::Cols::_user_id, CompareOperator::EQ, nomineeUserId
                   ),
-                [txn, orgId, nomineeUserId, sharedCb](const OrganizationMembers &row) {
+                [txn, orgId, nomineeUserId, guardedCb](const OrganizationMembers &row) {
                     OrganizationMembers updated = row;
                     updated.setRole("owner");
                     try
                     {
                         Mapper<OrganizationMembers>(txn).update(
                           updated,
-                          [txn, orgId, nomineeUserId, sharedCb](const std::size_t count) {
+                          [txn, orgId, nomineeUserId, guardedCb](const std::size_t count) {
                               if (count == 0)
                               {
                                   // The nominee left between findOne and
@@ -540,15 +554,15 @@ void OrgSuccessionRepository::effectSuccession(
                                   // re-fires the commit callback (review
                                   // finding 1).
                                   txn->rollback();
-                                  (*sharedCb)(false);
+                                  (*guardedCb)(false);
                                   return;
                               }
-                              demoteAndMark(txn, orgId, nomineeUserId, sharedCb);
+                              demoteAndMark(txn, orgId, nomineeUserId, guardedCb);
                           },
-                          [sharedCb](const DrogonDbException &e) {
+                          [guardedCb](const DrogonDbException &e) {
                               LOG_ERROR << "effectSuccession promote update failed: "
                                         << e.base().what();
-                              (*sharedCb)(false);
+                              (*guardedCb)(false);
                           }
                         );
                     }
@@ -556,10 +570,10 @@ void OrgSuccessionRepository::effectSuccession(
                     {
                         LOG_ERROR << "effectSuccession promote update Mapper construction "
                                      "failed";
-                        (*sharedCb)(false);
+                        (*guardedCb)(false);
                     }
                 },
-                [txn, orgId, nomineeUserId, sharedCb](const DrogonDbException &e) {
+                [txn, orgId, nomineeUserId, guardedCb](const DrogonDbException &e) {
                     if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
                     {
                         // Not a member yet -- create the owner seat.
@@ -571,13 +585,13 @@ void OrgSuccessionRepository::effectSuccession(
                         {
                             Mapper<OrganizationMembers>(txn).insert(
                               member,
-                              [txn, orgId, nomineeUserId, sharedCb](const OrganizationMembers &) {
-                                  demoteAndMark(txn, orgId, nomineeUserId, sharedCb);
+                              [txn, orgId, nomineeUserId, guardedCb](const OrganizationMembers &) {
+                                  demoteAndMark(txn, orgId, nomineeUserId, guardedCb);
                               },
-                              [sharedCb](const DrogonDbException &e2) {
+                              [guardedCb](const DrogonDbException &e2) {
                                   LOG_ERROR << "effectSuccession owner seat insert failed: "
                                             << e2.base().what();
-                                  (*sharedCb)(false);
+                                  (*guardedCb)(false);
                               }
                             );
                         }
@@ -585,25 +599,25 @@ void OrgSuccessionRepository::effectSuccession(
                         {
                             LOG_ERROR << "effectSuccession owner seat insert Mapper "
                                          "construction failed";
-                            (*sharedCb)(false);
+                            (*guardedCb)(false);
                         }
                         return;
                     }
                     LOG_ERROR << "effectSuccession membership findOne failed: "
                               << e.base().what();
-                    (*sharedCb)(false);
+                    (*guardedCb)(false);
                 }
               );
           }
           catch (...)
           {
               LOG_ERROR << "effectSuccession membership Mapper construction failed";
-              (*sharedCb)(false);
+              (*guardedCb)(false);
           }
       },
-      [sharedCb](const std::string &err) {
+      [guardedCb](const std::string &err) {
           LOG_ERROR << "effectSuccession transaction acquisition failed: " << err;
-          (*sharedCb)(false);
+          (*guardedCb)(false);
       }
     );
 }

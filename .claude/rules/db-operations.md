@@ -54,7 +54,10 @@ Raw SQL is allowed ONLY for:
 - **connectivity probes** (`SELECT 1` health checks that touch no table),
 - **explicit transaction `COMMIT`** (when durability MUST be confirmed before an
   external side effect — e.g. channel ACK / outbound call; an implicit
-  destructor-time commit would race with the network call. Justify in a comment).
+  destructor-time commit would race with the network call. Justify in a comment),
+- **advisory-lock concurrency primitives** (`SELECT pg_advisory_xact_lock(...)` etc.,
+  parameter-bound — used to serialize TOCTOU-sensitive multi-statement sequences;
+  user-ratified v1.4.0, see `libs/storage-postgres/src/AdvisoryLock.cc`).
 
 Anything else as raw SQL is a violation. A PreToolUse hook also guards
 credential placeholders in these files, so failures show up before runtime.

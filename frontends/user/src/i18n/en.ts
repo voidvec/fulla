@@ -400,6 +400,7 @@ export default {
       successionNominate: 'Nominate successor (user ID)',
       successionNominateAction: 'Nominate',
       successionPending: 'Pending successor nomination: user {id}',
+      successionInvalidId: 'Enter a numeric user ID to nominate a successor',
       successionWithdraw: 'Withdraw nomination',
       successionAccepted: 'You are now the owner',
       pendingRequests: 'Pending approval requests',
