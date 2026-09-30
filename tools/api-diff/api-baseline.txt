@@ -6281,6 +6281,15 @@ RowCallback &&cb
 );
 void listPendingByOrg(int32_t orgId, RowsCallback &&cb);
 void findById(int32_t requestId, RowCallback &&cb);
+using RowExCallback = std::function<
+void(bool dbOk, bool found, ::drogon_model::fulla_db::OrganizationConsentRequests row)>;
+void findPendingEx(
+int32_t orgId,
+const std::string &clientId,
+int32_t requesterId,
+RowExCallback &&cb
+);
+void findByIdEx(int32_t requestId, RowExCallback &&cb);
 void decidePending(
 int32_t requestId,
 const std::string &status,

@@ -637,7 +637,9 @@ void OrgMemberService::listMembers(
                   [req, cb, db, org](bool isMember, const std::string &) {
                       if (!isMember)
                       {
-                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "not a member of this organization");
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+                          // #223 fold: an existent-but-foreign org is
+                          // indistinguishable from a nonexistent one
                           return;
                       }
                       try
@@ -752,7 +754,9 @@ void OrgMemberService::removeMember(
                   [req, cb, db, org, caller, targetUserId](bool isMember, const std::string &role) {
                       if (!isMember)
                       {
-                          respondError(req, cb, "AUTHZ_ACCESS_DENIED", "not a member of this organization");
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+                          // #223 fold: an existent-but-foreign org is
+                          // indistinguishable from a nonexistent one
                           return;
                       }
                       const bool selfRemoval = (caller.id == targetUserId);
@@ -1719,8 +1723,10 @@ void OrgMemberService::fileConsentRequest(
                     bool isMember, const std::string &) {
                       if (!isMember)
                       {
-                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
-                            "not a member of this organization");
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                            "organization not found");
+                          // #223 fold: existent-but-foreign ==
+                          // nonexistent (slug-existence oracle closed)
                           return;
                       }
                       // B5: one owner-row read answers "client exists"
@@ -1778,12 +1784,21 @@ void OrgMemberService::fileConsentRequest(
                                         caller.id,
                                         [repo, req, cb, db, org, caller, clientId](
                                           std::size_t affected) {
-                                            repo->findPending(
+                                            repo->findPendingEx(
                                               org.getValueOfId(),
                                               clientId,
                                               caller.id,
                                               [repo, req, cb, org, caller, clientId, affected](
-                                                bool foundRow, const RequestModel &row) {
+                                                bool dbOk, bool foundRow, const RequestModel &row) {
+                                                  if (!dbOk)
+                                                  {
+                                                      // Infra failure, not a
+                                                      // business 409 (the #230
+                                                      // Error-vs-NoRow split).
+                                                      respondError(req, cb, "DB_QUERY_ERROR",
+                                                        "file consent request: pending lookup failed");
+                                                      return;
+                                                  }
                                                   if (!foundRow)
                                                   {
                                                       // affected==0 AND the
@@ -1926,10 +1941,17 @@ void OrgMemberService::approveConsentRequest(
                       }
                       auto repo = std::make_shared<
                         ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
-                      repo->findById(
+                      repo->findByIdEx(
                         requestId,
                         [repo, req, cb, db, org, caller, requestId](
-                          bool foundRow, const RequestModel &row) {
+                          bool dbOk, bool foundRow, const RequestModel &row) {
+                            if (!dbOk)
+                            {
+                                // Infra failure, not a 404 (#230 split).
+                                respondError(req, cb, "DB_QUERY_ERROR",
+                                  "consent request lookup failed");
+                                return;
+                            }
                             // Anti-enumeration: a request of another org
                             // (or a nonexistent id) is the same 404.
                             if (!foundRow ||
@@ -2130,10 +2152,17 @@ void OrgMemberService::rejectConsentRequest(
                       }
                       auto repo = std::make_shared<
                         ::fulla::storage::postgres::OrgConsentRequestRepository>(db);
-                      repo->findById(
+                      repo->findByIdEx(
                         requestId,
                         [repo, req, cb, db, org, caller, requestId, reason](
-                          bool foundRow, const RequestModel &row) {
+                          bool dbOk, bool foundRow, const RequestModel &row) {
+                              if (!dbOk)
+                              {
+                                  // Infra failure, not a 404 (#230 split).
+                                  respondError(req, cb, "DB_QUERY_ERROR",
+                                    "consent request lookup failed");
+                                  return;
+                              }
                               if (!foundRow ||
                                   row.getValueOfOrganizationId() != org.getValueOfId())
                               {
@@ -2206,8 +2235,10 @@ void OrgMemberService::withdrawConsentRequest(
                     bool isMember, const std::string &) {
                       if (!isMember)
                       {
-                          respondError(req, cb, "AUTHZ_ACCESS_DENIED",
-                            "not a member of this organization");
+                          respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND",
+                            "organization not found");
+                          // #223 fold: existent-but-foreign ==
+                          // nonexistent (slug-existence oracle closed)
                           return;
                       }
                       auto repo = std::make_shared<
