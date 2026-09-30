@@ -88,11 +88,24 @@ test.describe('My Applications', () => {
   })
 
   test('create form registers a CONFIDENTIAL app and shows the secret once', async ({ page }) => {
+    // Contract regression guard (pre-release review P0): the mutation must go
+    // out as JSON — the axios instance defaults to form-encoded and the
+    // backend handler hard-requires getJsonObject(). A mock route fulfills
+    // either shape, so only this request-level assertion can catch a drift
+    // back to form encoding.
+    const createRequest = page.waitForRequest(
+      (r) => r.url().endsWith('/api/me/applications') && r.method() === 'POST',
+    )
     await page.click('button:has-text("Register application")')
     await page.fill('input[maxlength="100"]', 'QA App')
     await page.selectOption('select', 'CONFIDENTIAL')
     await page.getByPlaceholder('https://my-app.example/callback').fill('https://qa.example/callback')
     await page.click('button[type="submit"]')
+    const request = await createRequest
+    expect((request.headers()['content-type'] || '').toLowerCase()).toContain('application/json')
+    const body = JSON.parse(request.postData() || '{}')
+    expect(body.name).toBe('QA App')
+    expect(body.client_type).toBe('CONFIDENTIAL')
     await expect(page.getByText('Secret for app_qamock123')).toBeVisible()
     await expect(page.getByText('once-shown-secret')).toBeVisible()
     await expect(page.getByText('QA App')).toBeVisible()
@@ -116,10 +129,20 @@ test.describe('My Organizations', () => {
   })
 
   test('create organization flow', async ({ page }) => {
+    // Contract regression guard (pre-release review P0): JSON body, never the
+    // axios default form encoding (the handler hard-requires getJsonObject()).
+    const createRequest = page.waitForRequest(
+      (r) => r.url().endsWith('/api/me/organizations') && r.method() === 'POST',
+    )
     await page.click('button:has-text("Create organization")')
     await page.locator('input[pattern]').fill('qa-org-e2e')
     await page.locator('input[maxlength="100"]').fill('QA Org E2E')
     await page.click('button[type="submit"]')
+    const request = await createRequest
+    expect((request.headers()['content-type'] || '').toLowerCase()).toContain('application/json')
+    const body = JSON.parse(request.postData() || '{}')
+    expect(body.slug).toBe('qa-org-e2e')
+    expect(body.name).toBe('QA Org E2E')
     await expect(page.getByText('@qa-org-e2e')).toBeVisible()
     await expect(page.getByText('owner', { exact: true })).toBeVisible()
   })

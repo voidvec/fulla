@@ -80,7 +80,9 @@ async function saveProfile() {
   savingProfile.value = true
   error.value = null
   try {
-    await http.patch('/api/me/profile', body)
+    await http.patch('/api/me/profile', JSON.stringify(body), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     success.value = t('account.profile.saved')
     setTimeout(() => { success.value = '' }, 3000)
     await fetchProfile()
@@ -193,7 +195,7 @@ onMounted(fetchProfile)
             <input
               v-model="editDisplayName"
               maxlength="100"
-              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
           </div>
@@ -202,7 +204,7 @@ onMounted(fetchProfile)
             <input
               v-model="editAvatarUrl"
               placeholder="https://"
-              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+              class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
           </div>

@@ -74,9 +74,9 @@ async function nominateSuccessor(slug: string) {
   if (Number.isNaN(parsed)) return
   error.value = null
   try {
-    await http.post(`/api/me/organizations/${slug}/successor-nomination`, {
+    await http.post(`/api/me/organizations/${slug}/successor-nomination`, JSON.stringify({
       user_id: parsed,
-    })
+    }), { headers: { 'Content-Type': 'application/json' } })
     success.value = t('account.organizations.successionPending', { id: nominateUserId.value })
     setTimeout(() => { success.value = '' }, 3000)
     nominateUserId.value = ''
@@ -290,10 +290,10 @@ async function createOrg() {
   creating.value = true
   error.value = null
   try {
-    await http.post('/api/me/organizations', {
+    await http.post('/api/me/organizations', JSON.stringify({
       slug: newSlug.value,
       name: newName.value,
-    })
+    }), { headers: { 'Content-Type': 'application/json' } })
     success.value = t('account.organizations.created')
     setTimeout(() => { success.value = '' }, 3000)
     showCreate.value = false
@@ -335,10 +335,10 @@ async function invite(slug: string) {
   if (!inviteEmail.value) return
   error.value = null
   try {
-    const resp = await http.post(`/api/me/organizations/${slug}/invitations`, {
+    const resp = await http.post(`/api/me/organizations/${slug}/invitations`, JSON.stringify({
       email: inviteEmail.value,
       role: inviteRole.value,
-    })
+    }), { headers: { 'Content-Type': 'application/json' } })
     lastInviteToken.value = resp.data?.token || ''
     inviteEmail.value = ''
     success.value = t('account.organizations.invited')
@@ -365,7 +365,9 @@ async function acceptInvite() {
   accepting.value = true
   error.value = null
   try {
-    await http.post('/api/me/org-invitations/accept', { token: acceptToken.value })
+    await http.post('/api/me/org-invitations/accept', JSON.stringify({ token: acceptToken.value }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     acceptToken.value = ''
     success.value = t('account.organizations.accepted')
     setTimeout(() => { success.value = '' }, 3000)
@@ -446,7 +448,7 @@ onMounted(fetchOrgs)
         <input
           v-model="acceptToken"
           :placeholder="$t('account.organizations.acceptPlaceholder')"
-          class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+          class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                  focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
         >
         <button
@@ -475,7 +477,7 @@ onMounted(fetchOrgs)
             v-model="newSlug"
             required
             pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]"
-            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
         </div>
@@ -485,7 +487,7 @@ onMounted(fetchOrgs)
             v-model="newName"
             required
             maxlength="100"
-            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
         </div>
@@ -587,12 +589,12 @@ onMounted(fetchOrgs)
             <input
               v-model="inviteEmail"
               :placeholder="$t('account.organizations.inviteEmail')"
-              class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+              class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
             <select
               v-model="inviteRole"
-              class="rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white"
+              class="rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface"
             >
               <option value="member">member</option>
               <option value="admin">admin</option>
@@ -625,7 +627,7 @@ onMounted(fetchOrgs)
               <input
                 v-model="nominateUserId"
                 :placeholder="$t('account.organizations.successionNominate')"
-                class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+                class="flex-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                        focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
               >
               <button
@@ -725,13 +727,13 @@ onMounted(fetchOrgs)
             <input
               v-model="grantClientId"
               :placeholder="$t('account.organizations.consentsClientId')"
-              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
             <input
               v-model="grantRedirectUri"
               :placeholder="$t('account.organizations.consentsRedirectUri')"
-              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+              class="w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
             >
             <button
