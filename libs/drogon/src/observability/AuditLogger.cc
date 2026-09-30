@@ -58,6 +58,19 @@ void AuditLogger::log(const fulla::common::observability::AuditEvent &event)
         auditLog.setUserAgent(event.userAgent);
         auditLog.setRequestId(event.requestId);
         auditLog.setDetails(detailsStr);
+        // V036 org dimension: org-scoped actions carry the numeric org id
+        // (string in AuditEvent; stoi is safe — writers pass std::to_string
+        // of an int32). Empty/non-numeric leaves the column NULL.
+        if (!event.orgId.empty())
+        {
+            try
+            {
+                auditLog.setOrgId(std::stoi(event.orgId));
+            }
+            catch (...)
+            {
+            }
+        }
 
         auto sharedCb =
           std::make_shared<std::function<void(const ::drogon::orm::DrogonDbException &)>>(

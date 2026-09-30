@@ -51,15 +51,19 @@ void respondError(
 void audit(
   const ::drogon::HttpRequestPtr &req,
   const char *action,
-  const std::string &targetId
+  const std::string &targetId,
+  const std::string &orgId = ""
 )
 {
-    // Same pattern as OrgMemberService::audit (organization targetType).
+    // Same pattern as OrgMemberService::audit (organization targetType):
+    // empty actorId falls back to the filter-set userId attribute inside
+    // logFromRequest; orgId feeds audit_logs.org_id (V036).
     auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
     if (plugin)
     {
         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
-          plugin->getAuditSink(), action, "success", req, "", "organization", targetId
+          plugin->getAuditSink(), action, "success", req, "", "organization", targetId,
+          Json::Value(), orgId
         );
     }
 }
@@ -284,7 +288,7 @@ void OrganizationService::transferOwnership(
                               "UPDATE organization_members SET role = 'admin' "
                               "WHERE organization_id = $1 AND role = 'owner' AND user_id <> $2",
                               [req, cb, org, slug, targetUserId](const Result &) {
-                                  audit(req, "org_ownership_transferred", slug);
+                                  audit(req, "org_ownership_transferred", slug, std::to_string(org.getValueOfId()));
                                   Json::Value json;
                                   json["slug"] = slug;
                                   json["organization_id"] = org.getValueOfId();

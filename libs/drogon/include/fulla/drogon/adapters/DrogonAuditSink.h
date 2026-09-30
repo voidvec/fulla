@@ -37,6 +37,12 @@ class DrogonAuditSink : public fulla::common::ports::IAuditSink
      * overload -- extracts ip (X-Forwarded-For / X-Real-IP / peer), user-agent,
      * and request-id (X-Request-ID, else a generated UUID), infers actorType
      * from actorId, and forwards via record(). Null sink -> no-op.
+     *
+     * An EMPTY actorId falls back to the auth filter's "userId" request
+     * attribute before resolving to "anonymous" (pre-release review fix:
+     * authenticated mutations must never audit as anonymous). orgId is the
+     * optional numeric org id for org-scoped actions (audit_logs.org_id,
+     * V036); empty = column stays NULL.
      */
     static void logFromRequest(
       const std::shared_ptr<fulla::common::ports::IAuditSink> &sink,
@@ -46,7 +52,8 @@ class DrogonAuditSink : public fulla::common::ports::IAuditSink
       const std::string &actorId = "",
       const std::string &targetType = "",
       const std::string &targetId = "",
-      const Json::Value &details = Json::Value()
+      const Json::Value &details = Json::Value(),
+      const std::string &orgId = ""
     );
 };
 

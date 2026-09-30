@@ -39,6 +39,11 @@ struct AuditEvent
     std::string ip;
     std::string userAgent;
     std::string requestId;
+    // Optional organization dimension (V036 audit_logs.org_id): the numeric
+    // org id as a string for org-scoped actions (consent decisions, succession,
+    // ownership transfer, member/invitation mutations, org-owned app writes).
+    // Empty = no org context (column stays NULL).
+    std::string orgId;
     Json::Value details;  ///< Additional context (Json::Value; jsoncpp is
                           ///< allowed in the Domain layer, design.md §4.1).
 };

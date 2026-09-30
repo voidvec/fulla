@@ -167,14 +167,18 @@ bool isManagerRole(const std::string &role)
 }
 
 void audit(
-  const ::drogon::HttpRequestPtr &req, const char *action, const std::string &targetId
+  const ::drogon::HttpRequestPtr &req, const char *action, const std::string &targetId,
+  const std::string &orgId = ""
 )
 {
     auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
     if (plugin)
     {
+        // Empty actorId falls back to the filter-set userId attribute inside
+        // logFromRequest; orgId (org-owned apps only) feeds audit_logs.org_id.
         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
-          plugin->getAuditSink(), action, "success", req, "", "client", targetId
+          plugin->getAuditSink(), action, "success", req, "", "client", targetId,
+          Json::Value(), orgId
         );
     }
 }
@@ -735,8 +739,8 @@ void insertApplication(
                                           "application creation commit failed");
                                         return;
                                     }
-                                    audit(req, "application_created",
-                                      clientId);
+                                    audit(req, "application_created", clientId,
+                                      orgId ? std::to_string(*orgId) : "");
                                     // Review C2: every client write invalidates the
                                     // Redis client cache or a rotated/created row
                                     // stays trusted for up to the cache TTL.
@@ -1281,8 +1285,11 @@ void ApplicationService::update(
                                     updated.setAllowedGrantTypes(grantTypes);
                                     touched = true;
                                 }
-                                ::fulla::drogon::ClientCacheInvalidator::instance()
-                                  .invalidate(clientId);
+                                // Cache invalidation fires AFTER the write
+                                // (see insertApplication's #219 comment): a
+                                // pre-commit DEL lets a concurrent read refill
+                                // the cache with the stale row for a full TTL
+                                // — same anti-pattern rotateSecret avoids.
                                 auto respondOk = [req, cb]() {
                                     Json::Value json;
                                     json["message"] = "Application updated";
@@ -1290,10 +1297,19 @@ void ApplicationService::update(
                                 };
                                 auto afterRow = [req, cb, db, clientId, scopes, scopesRequested,
                                                  respondOk](const std::size_t) {
+                                    ::fulla::drogon::ClientCacheInvalidator::instance()
+                                      .invalidate(clientId);
                                     if (scopesRequested)
                                     {
                                         replaceClientScopes(db, clientId, scopes, req, cb,
-                                          [respondOk]() {});
+                                          [respondOk, clientId]() {
+                                              // Scopes are part of the cached
+                                              // client view too — re-invalidate
+                                              // after the terminal scope write.
+                                              ::fulla::drogon::ClientCacheInvalidator::instance()
+                                                .invalidate(clientId);
+                                              respondOk();
+                                          });
                                     }
                                     else
                                     {
@@ -1322,7 +1338,11 @@ void ApplicationService::update(
                                 else if (scopesRequested)
                                 {
                                     replaceClientScopes(db, clientId, scopes, req, cb,
-                                      [respondOk]() {});
+                                      [respondOk, clientId]() {
+                                          ::fulla::drogon::ClientCacheInvalidator::instance()
+                                            .invalidate(clientId);
+                                          respondOk();
+                                      });
                                 }
                             });
                       },
@@ -1358,15 +1378,19 @@ void ApplicationService::rotateSecret(
           if (!found)
               return;
           requireManagePermission(db, clientId, caller, req, cb,
-            [req, cb, db, clientId](bool ok, const OwnerModel &) {
+            [req, cb, db, clientId](bool ok, const OwnerModel &owner) {
                 if (!ok)
                     return;
+                // V036 org dimension for the audit below: the owner row is
+                // the org anchor (nullable — personal apps carry none).
+                const std::string ownerOrgId =
+                  owner.getOrgId() ? std::to_string(*owner.getOrgId()) : "";
                 try
                 {
                     Mapper<ClientModel>(db).findOne(
                       Criteria(ClientModel::Cols::_client_id, CompareOperator::EQ, clientId) &&
                         Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
-                      [req, cb, db, clientId](const ClientModel &client) {
+                      [req, cb, db, clientId, ownerOrgId](const ClientModel &client) {
                           if (client.getValueOfClientType() != "CONFIDENTIAL")
                           {
                               respondError(req, cb, "VALIDATION_INVALID_INPUT",
@@ -1384,10 +1408,10 @@ void ApplicationService::rotateSecret(
                           {
                               Mapper<ClientModel>(db).update(
                                 updated,
-                                [req, cb, clientId, secret](const std::size_t) {
+                                [req, cb, clientId, secret, ownerOrgId](const std::size_t) {
                                     ::fulla::drogon::ClientCacheInvalidator::instance()
                                       .invalidate(clientId);
-                                    audit(req, "application_secret_rotated", clientId);
+                                    audit(req, "application_secret_rotated", clientId, ownerOrgId);
                                     Json::Value json;
                                     json["client_id"] = clientId;
                                     // Shown EXACTLY once (design §3/§8).
@@ -1586,7 +1610,7 @@ void ApplicationService::transfer(
                                                       updated,
                                                       [req, cb, clientId, orgId](const std::size_t) {
                                                           audit(req, "application_transferred",
-                                                            clientId);
+                                                            clientId, std::to_string(orgId));
                                                           Json::Value json;
                                                           json["message"] =
                                                             "Application transferred to organization";
@@ -1651,15 +1675,18 @@ void ApplicationService::remove(
           if (!found)
               return;
           requireManagePermission(db, clientId, caller, req, cb,
-            [req, cb, db, clientId](bool ok, const OwnerModel &) {
+            [req, cb, db, clientId](bool ok, const OwnerModel &owner) {
                 if (!ok)
                     return;
+                // V036 org dimension for the audit below (nullable).
+                const std::string ownerOrgId =
+                  owner.getOrgId() ? std::to_string(*owner.getOrgId()) : "";
                 try
                 {
                     Mapper<ClientModel>(db).findOne(
                       Criteria(ClientModel::Cols::_client_id, CompareOperator::EQ, clientId) &&
                         Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
-                      [req, cb, db, clientId](const ClientModel &client) {
+                      [req, cb, db, clientId, ownerOrgId](const ClientModel &client) {
                           // delete stays open for suspended apps (exit path).
                           ClientModel updated = client;
                           updated.setDeletedAt(::trantor::Date::now());
@@ -1667,10 +1694,10 @@ void ApplicationService::remove(
                           {
                               Mapper<ClientModel>(db).update(
                                 updated,
-                                [req, cb, clientId](const std::size_t) {
+                                [req, cb, clientId, ownerOrgId](const std::size_t) {
                                     ::fulla::drogon::ClientCacheInvalidator::instance()
                                       .invalidate(clientId);
-                                    audit(req, "application_deleted", clientId);
+                                    audit(req, "application_deleted", clientId, ownerOrgId);
                                     Json::Value json;
                                     json["message"] = "Application deleted";
                                     (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
