@@ -1415,6 +1415,13 @@ paths:
           description: Unauthorized
         '404':
           description: Organization or target user not found (or soft-deleted)
+        '409':
+          description: The target left the organization during the transfer
+            (VALIDATION_RESOURCE_CONFLICT; retry with a current member)
+        '500':
+          description: The promote succeeded but the demotion of previous
+            owner rows failed (DB_QUERY_ERROR) — the org may temporarily have
+            two owners; retrying the same transfer is safe
       security:
       - bearerAuth: []
       summary: Transfer Organization Ownership
