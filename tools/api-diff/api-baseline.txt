@@ -368,6 +368,7 @@ std::string outcome;
 std::string ip;
 std::string userAgent;
 std::string requestId;
+std::string orgId;
 Json::Value details;
 };
 }
@@ -829,7 +830,8 @@ const ::drogon::HttpRequestPtr &req,
 const std::string &actorId = "",
 const std::string &targetType = "",
 const std::string &targetId = "",
-const Json::Value &details = Json::Value()
+const Json::Value &details = Json::Value(),
+const std::string &orgId = ""
 );
 };
 }

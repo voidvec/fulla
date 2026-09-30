@@ -20,7 +20,8 @@ void DrogonAuditSink::logFromRequest(
   const std::string &actorId,
   const std::string &targetType,
   const std::string &targetId,
-  const Json::Value &details
+  const Json::Value &details,
+  const std::string &orgId
 )
 {
     if (!sink)
@@ -31,15 +32,35 @@ void DrogonAuditSink::logFromRequest(
     fulla::common::observability::AuditEvent event;
     event.action = action;
     event.outcome = outcome;
-    event.actorId = actorId;
     event.targetType = targetType;
     event.targetId = targetId;
     event.details = details;
+    event.orgId = orgId;
+
+    // Attribution (pre-release review finding): an empty actorId used to
+    // record "anonymous" even on routes whose auth filter had already
+    // validated the caller — the org/open-platform mutation audit rows lost
+    // their actor entirely. Fall back to the filter-set "userId" request
+    // attribute (OAuth2AuthFilter/AuthorizationFilter both populate it;
+    // client-credential tokens carry "client:<id>", which the type inference
+    // below already understands). Still anonymous when absent.
+    std::string effectiveActor = actorId;
+    if (effectiveActor.empty() && req)
+    {
+        try
+        {
+            effectiveActor = req->getAttributes()->get<std::string>("userId");
+        }
+        catch (...)
+        {
+        }
+    }
+    event.actorId = effectiveActor;
 
     // Determine actor type
-    if (actorId.empty())
+    if (effectiveActor.empty())
         event.actorType = "anonymous";
-    else if (actorId.find("client:") == 0)
+    else if (effectiveActor.find("client:") == 0)
         event.actorType = "client";
     else
         event.actorType = "user";

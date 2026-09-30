@@ -233,14 +233,19 @@ void proceedWithInvitationInsert(
 void audit(
   const ::drogon::HttpRequestPtr &req,
   const char *action,
-  const std::string &targetId
+  const std::string &targetId,
+  const std::string &orgId = ""
 )
 {
     auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
     if (plugin)
     {
+        // actorId stays empty here on purpose: logFromRequest falls back to
+        // the filter-set "userId" attribute (pre-release review fix), and
+        // orgId feeds the V036 audit_logs.org_id dimension.
         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
-          plugin->getAuditSink(), action, "success", req, "", "organization", targetId
+          plugin->getAuditSink(), action, "success", req, "", "organization", targetId,
+          Json::Value(), orgId
         );
     }
 }
@@ -351,21 +356,22 @@ void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCa
                           Mapper<OrgModel>(txn).insert(
                             row,
                             [req, cb, txn, slug, caller](const OrgModel &inserted) {
+                                const int32_t orgId = inserted.getValueOfId();
                                 MemberModel member;
-                                member.setOrganizationId(inserted.getValueOfId());
+                                member.setOrganizationId(orgId);
                                 member.setUserId(caller.id);
                                 member.setRole("owner");
                                 try
                                 {
                                     Mapper<MemberModel>(txn).insert(
                                       member,
-                                      [req, cb, txn, slug](const MemberModel &) {
+                                      [req, cb, txn, slug, orgId](const MemberModel &) {
                                           // #219: the 201 fires from the COMMIT
                                           // callback (an inline response races
                                           // the commit; an immediate follow-up
                                           // read could miss the new org).
                                           txn->setCommitCallback(
-                                            [req, cb, slug](bool committed) {
+                                            [req, cb, slug, orgId](bool committed) {
                                                 if (!committed)
                                                 {
                                                     respondError(
@@ -373,7 +379,8 @@ void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCa
                                                       "create org: commit failed");
                                                     return;
                                                 }
-                                                audit(req, "organization_created", slug);
+                                                audit(req, "organization_created", slug,
+                                                      std::to_string(orgId));
                                                 Json::Value json;
                                                 json["slug"] = slug;
                                                 json["role"] = "owner";
@@ -793,7 +800,7 @@ void OrgMemberService::removeMember(
                                           return;
                                       }
                                       audit(req, selfRemoval ? "org_member_left" : "org_member_removed",
-                                        org.getValueOfSlug());
+                                        org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                       Json::Value json;
                                       json["message"] = "Member removed";
                                       (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -929,7 +936,16 @@ void proceedWithInvitationInsert(
                       invite.setOrganizationId(org.getValueOfId());
                       invite.setEmail(email);
                       invite.setRole(role);
-                      invite.setToken(::fulla::drogon::utils::generateSecureToken());
+                      // Hash-at-rest (pre-release review fix, V009 password-
+                      // reset pattern): the `token` column stores the hex
+                      // SHA-256 of the raw token — a DB dump/backup cannot
+                      // redeem invitations (they grant org membership, up to
+                      // role='admin'). The raw value exists only in this
+                      // frame (mail body + one-time response). Pending rows
+                      // written before this change hold plaintext and are no
+                      // longer redeemable (dev-only data, unreleased table).
+                      const std::string rawToken = ::fulla::drogon::utils::generateSecureToken();
+                      invite.setToken(::fulla::drogon::utils::hashToken(rawToken));
                       invite.setInvitedBy(caller.id);
                       const int64_t now = ::trantor::Date::now().secondsSinceEpoch();
                       invite.setExpiresAt(::trantor::Date((now + kInviteTtlSeconds) * 1000000));
@@ -937,20 +953,20 @@ void proceedWithInvitationInsert(
                       {
                           Mapper<InviteModel>(db).insert(
                             invite,
-                            [req, cb, db, org](const InviteModel &inserted) {
+                            [req, cb, db, org, rawToken](const InviteModel &inserted) {
                                 // #219: the 201 + email fire from the COMMIT
                                 // callback (an inline response races the
                                 // commit; the email must reference a durable
                                 // invitation row).
                                 db->setCommitCallback(
-                                  [req, cb, org, inserted](bool committed) {
+                                  [req, cb, org, inserted, rawToken](bool committed) {
                                       if (!committed)
                                       {
                                           respondError(req, cb, "DB_QUERY_ERROR",
                                             "invite: commit failed");
                                           return;
                                       }
-                                      audit(req, "org_invitation_created", org.getValueOfSlug());
+                                      audit(req, "org_invitation_created", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                       // Fire-and-forget delivery (same pattern as
                                       // EmailVerificationService): with SMTP
                                       // configured the invitee gets the token by
@@ -962,7 +978,7 @@ void proceedWithInvitationInsert(
                                         org.getValueOfName() +
                                         "\" on Fulla.\n\n"
                                         "Invitation token (valid for 72 hours, single use):\n  " +
-                                        inserted.getValueOfToken() +
+                                        rawToken +
                                         "\n\n"
                                         "Sign in to the portal, open My Organizations, and paste "
                                         "the token under \"Accept an invitation\". If you did not "
@@ -981,7 +997,7 @@ void proceedWithInvitationInsert(
                                       json["id"] = inserted.getValueOfId();
                                       json["email"] = inserted.getValueOfEmail();
                                       json["role"] = inserted.getValueOfRole();
-                                      json["token"] = inserted.getValueOfToken();
+                                      json["token"] = rawToken;
                                       json["expires_at"] = inserted.getValueOfExpiresAt().toDbStringLocal();
                                       json["message"] = "Invitation created; deliver the token out-of-band";
                                       auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
@@ -1117,7 +1133,7 @@ void OrgMemberService::revokeInvitation(
                                     respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "invitation not found");
                                     return;
                                 }
-                                audit(req, "org_invitation_revoked", org.getValueOfSlug());
+                                audit(req, "org_invitation_revoked", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                 Json::Value json;
                                 json["message"] = "Invitation revoked";
                                 (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -1252,7 +1268,7 @@ void OrgMemberService::revokeOrgConsents(
                                 return;
                             }
                             audit(req, "org_consent_revoked",
-                              org.getValueOfSlug() + ":" + clientId);
+                              org.getValueOfSlug() + ":" + clientId, std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
                             json["client_id"] = clientId;
@@ -1349,7 +1365,7 @@ void OrgMemberService::nominateSuccessor(
                                       return;
                                   }
                                   audit(req, "org_successor_nominated",
-                                    org.getValueOfSlug() + ":" + std::to_string(targetUserId));
+                                    org.getValueOfSlug() + ":" + std::to_string(targetUserId), std::to_string(org.getValueOfId()));
                                   Json::Value json;
                                   json["slug"] = org.getValueOfSlug();
                                   json["nominee_user_id"] = targetUserId;
@@ -1405,7 +1421,7 @@ void OrgMemberService::withdrawSuccessionNomination(
                                 return;
                             }
                             audit(req, "org_successor_nomination_withdrawn",
-                              org.getValueOfSlug());
+                              org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
                             json["message"] = "Successor nomination withdrawn";
@@ -1469,7 +1485,7 @@ void OrgMemberService::acceptSuccession(
                                   "succession no longer pending or the swap failed; retry");
                                 return;
                             }
-                            audit(req, "org_successor_accepted", org.getValueOfSlug());
+                            audit(req, "org_successor_accepted", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
                             json["owner_user_id"] = caller.id;
@@ -1533,7 +1549,10 @@ void OrgMemberService::acceptInvitation(const ::drogon::HttpRequestPtr &req, Res
           try
           {
               Mapper<InviteModel>(db).findOne(
-                Criteria(InviteModel::Cols::_token, CompareOperator::EQ, token),
+                // Hash-at-rest mirror of the create side: look up by the
+                // SHA-256 of the presented token.
+                Criteria(InviteModel::Cols::_token, CompareOperator::EQ,
+                         ::fulla::drogon::utils::hashToken(token)),
                 [req, cb, db, caller, callerEmail](const InviteModel &invite) {
                     // Default-constructed trantor::Date has epoch 0; the only
                     // way accepted_at is "set" is a real timestamp.
@@ -1790,7 +1809,7 @@ void OrgMemberService::fileConsentRequest(
                                                       return;
                                                   }
                                                   audit(req, "org_consent_request_filed",
-                                                    org.getValueOfSlug() + ":" + clientId);
+                                                    org.getValueOfSlug() + ":" + clientId, std::to_string(org.getValueOfId()));
                                                   Json::Value json = requestToJson(row);
                                                   json["message"] =
                                                     "Consent request filed; awaiting a manager decision";
@@ -1989,7 +2008,7 @@ void OrgMemberService::approveConsentRequest(
                                                 [repo, req, cb, org, row, scopes](
                                                   std::size_t) {
                                                       audit(req, "org_consent_request_approved",
-                                                        org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                                        org.getValueOfSlug() + ":" + row.getValueOfClientId(), std::to_string(org.getValueOfId()));
                                                       Json::Value json;
                                                       json["id"] = static_cast<Json::Int64>(row.getValueOfId());
                                                       json["client_id"] = row.getValueOfClientId();
@@ -2038,7 +2057,7 @@ void OrgMemberService::approveConsentRequest(
                                                     [repo, consentRepo, req, cb, org, caller, row, scopes](
                                                       std::size_t) {
                                                           audit(req, "org_consent_request_approved",
-                                                            org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                                            org.getValueOfSlug() + ":" + row.getValueOfClientId(), std::to_string(org.getValueOfId()));
                                                           Json::Value json;
                                                           json["id"] = static_cast<Json::Int64>(row.getValueOfId());
                                                           json["client_id"] = row.getValueOfClientId();
@@ -2139,7 +2158,7 @@ void OrgMemberService::rejectConsentRequest(
                                         return;
                                     }
                                     audit(req, "org_consent_request_rejected",
-                                      org.getValueOfSlug() + ":" + row.getValueOfClientId());
+                                      org.getValueOfSlug() + ":" + row.getValueOfClientId(), std::to_string(org.getValueOfId()));
                                     Json::Value json;
                                     json["id"] = static_cast<Json::Int64>(row.getValueOfId());
                                     json["client_id"] = row.getValueOfClientId();
@@ -2207,7 +2226,7 @@ void OrgMemberService::withdrawConsentRequest(
                                 return;
                             }
                             audit(req, "org_consent_request_withdrawn",
-                              org.getValueOfSlug() + ":" + std::to_string(requestId));
+                              org.getValueOfSlug() + ":" + std::to_string(requestId), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["id"] = static_cast<Json::Int64>(requestId);
                             json["status"] = "withdrawn";
