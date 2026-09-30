@@ -74,7 +74,9 @@ async function createApp() {
     }
     if (uris.length) body.redirect_uris = uris
     if (scopes.length) body.scopes = scopes
-    const resp = await http.post('/api/me/applications', body)
+    const resp = await http.post('/api/me/applications', JSON.stringify(body), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     oneTimeSecret.value = resp.data?.client_secret || ''
     oneTimeSecretFor.value = resp.data?.client_id || ''
     showCreate.value = false
@@ -248,7 +250,7 @@ onMounted(fetchApps)
             v-model="newName"
             required
             maxlength="100"
-            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
         </div>
@@ -256,7 +258,7 @@ onMounted(fetchApps)
           <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.clientType') }}</label>
           <select
             v-model="newType"
-            class="mt-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
             <option value="PUBLIC">PUBLIC</option>
@@ -268,7 +270,7 @@ onMounted(fetchApps)
           <input
             v-model="newRedirectUris"
             :placeholder="$t('account.applications.redirectUrisPlaceholder')"
-            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
         </div>
@@ -276,7 +278,7 @@ onMounted(fetchApps)
           <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.scopes') }}</label>
           <input
             v-model="newScopes"
-            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-white
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
         </div>
