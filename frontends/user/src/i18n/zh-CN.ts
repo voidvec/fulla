@@ -385,6 +385,7 @@ export default {
       successionNominate: '提名继任者（用户 ID）',
       successionNominateAction: '提名',
       successionPending: '待接受的继任提名：用户 {id}',
+      successionInvalidId: '请输入数字用户 ID 以提名继任者',
       successionWithdraw: '撤回提名',
       successionAccepted: '你已成为所有者',
       pendingRequests: '待审批申请',

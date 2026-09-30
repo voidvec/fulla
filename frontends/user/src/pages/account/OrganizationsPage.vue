@@ -71,7 +71,12 @@ async function acceptSuccession(slug: string) {
 
 async function nominateSuccessor(slug: string) {
   const parsed = Number.parseInt(nominateUserId.value, 10)
-  if (Number.isNaN(parsed)) return
+  if (Number.isNaN(parsed))
+  {
+    // Surface the invalid input instead of a dead button (review nit).
+    error.value = t('account.organizations.successionInvalidId')
+    return
+  }
   error.value = null
   try {
     await http.post(`/api/me/organizations/${slug}/successor-nomination`, JSON.stringify({
@@ -81,8 +86,7 @@ async function nominateSuccessor(slug: string) {
     setTimeout(() => { success.value = '' }, 3000)
     nominateUserId.value = ''
     await fetchOrgs()
-    await toggleMembers(slug)
-    await toggleMembers(slug)
+    await refreshMembers(slug)
   } catch (e: unknown) {
     error.value = normalizeError(e)
   }
@@ -155,7 +159,12 @@ async function toggleConsents(slug: string) {
     if (seq !== consentsRequestSeq || expandedConsentsSlug.value !== slug) return
     consents.value = resp.data?.consents || []
   } catch (e: unknown) {
-    if (seq === consentsRequestSeq) error.value = normalizeError(e)
+    // Guard mirrors the success path: a late failure for a previously open
+    // org must not render an error banner over the panel the user switched
+    // to (fetchPendingRequests guards the same way).
+    if (seq === consentsRequestSeq && expandedConsentsSlug.value === slug) {
+      error.value = normalizeError(e)
+    }
   }
 }
 
@@ -331,6 +340,21 @@ async function toggleMembers(slug: string) {
   }
 }
 
+// Refresh the OPEN members panel in place (post-mutation): unlike a
+// close-then-reopen toggle pair this causes no flicker and keeps the invite
+// input state.
+async function refreshMembers(slug: string) {
+  if (expandedSlug.value !== slug) return
+  const seq = ++membersRequestSeq
+  try {
+    const resp = await http.get(`/api/me/organizations/${slug}/members`)
+    if (seq !== membersRequestSeq || expandedSlug.value !== slug) return
+    members.value = resp.data?.members || []
+  } catch (e: unknown) {
+    if (seq === membersRequestSeq) error.value = normalizeError(e)
+  }
+}
+
 async function invite(slug: string) {
   if (!inviteEmail.value) return
   error.value = null
@@ -352,8 +376,7 @@ function removeMember(slug: string, userId: string | number) {
   askConfirm(t('account.organizations.removeConfirm'), async () => {
     try {
       await http.delete(`/api/me/organizations/${slug}/members/${userId}`)
-      await toggleMembers(slug)
-      await toggleMembers(slug)
+      await refreshMembers(slug)
     } catch (e: unknown) {
       error.value = normalizeError(e)
     }
