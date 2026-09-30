@@ -102,7 +102,8 @@ void OrgConsentRequestRepository::findPending(
           [sharedCb](const DrogonDbException &) {
               // findOne throws on no row (or a real DB error); both fold to
               // "no pending row" without an oracle -- the service renders
-              // the race as the ratified 409.
+              // the race as the ratified 409. Decision paths that must
+              // distinguish use findPendingEx/findByIdEx.
               (*sharedCb)(false, OrganizationConsentRequests{});
           }
         );
@@ -182,6 +183,103 @@ void OrgConsentRequestRepository::findById(int32_t requestId, RowCallback &&cb)
     {
         LOG_ERROR << "findById Mapper construction failed";
         (*sharedCb)(false, OrganizationConsentRequests{});
+    }
+}
+
+// ---------------------------------------------------------------------------
+// v1.4.0 review hardening: three-state lookups (see header). The old
+// RowCallback variants fold infra failures into "no row"; these keep the
+// #230 Error-vs-NoRow distinction so decision endpoints answer 5xx.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+/// UnexpectedRows => genuine no-row; any other DrogonDbException => infra
+/// failure (Mapper construction failures report the same shape inline).
+void dispatchRowExError(
+  const OrgConsentRequestRepository::RowExCallback &cb, const DrogonDbException &e
+)
+{
+    if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+    {
+        cb(true, false, OrganizationConsentRequests{});
+        return;
+    }
+    LOG_ERROR << "consent-request lookup failed: " << e.base().what();
+    cb(false, false, OrganizationConsentRequests{});
+}
+}  // namespace
+
+void OrgConsentRequestRepository::findPendingEx(
+  int32_t orgId,
+  const std::string &clientId,
+  int32_t requesterId,
+  RowExCallback &&cb
+)
+{
+    auto sharedCb = std::make_shared<RowExCallback>(std::move(cb));
+
+    if (!dbClient_)
+    {
+        (*sharedCb)(false, false, OrganizationConsentRequests{});
+        return;
+    }
+
+    try
+    {
+        Mapper<OrganizationConsentRequests> mapper(dbClient_);
+        mapper.findOne(
+          Criteria(OrganizationConsentRequests::Cols::_organization_id,
+                   CompareOperator::EQ, orgId) &&
+            Criteria(OrganizationConsentRequests::Cols::_client_id,
+                     CompareOperator::EQ, clientId) &&
+            Criteria(OrganizationConsentRequests::Cols::_requested_by,
+                     CompareOperator::EQ, requesterId) &&
+            Criteria(OrganizationConsentRequests::Cols::_status,
+                     CompareOperator::EQ, "pending"),
+          [sharedCb](const OrganizationConsentRequests &row) {
+              (*sharedCb)(true, true, row);
+          },
+          [sharedCb](const DrogonDbException &e) {
+              dispatchRowExError(*sharedCb, e);
+          }
+        );
+    }
+    catch (...)
+    {
+        LOG_ERROR << "findPendingEx Mapper construction failed";
+        (*sharedCb)(false, false, OrganizationConsentRequests{});
+    }
+}
+
+void OrgConsentRequestRepository::findByIdEx(int32_t requestId, RowExCallback &&cb)
+{
+    auto sharedCb = std::make_shared<RowExCallback>(std::move(cb));
+
+    if (!dbClient_)
+    {
+        (*sharedCb)(false, false, OrganizationConsentRequests{});
+        return;
+    }
+
+    try
+    {
+        Mapper<OrganizationConsentRequests> mapper(dbClient_);
+        mapper.findOne(
+          Criteria(OrganizationConsentRequests::Cols::_id,
+                   CompareOperator::EQ, requestId),
+          [sharedCb](const OrganizationConsentRequests &row) {
+              (*sharedCb)(true, true, row);
+          },
+          [sharedCb](const DrogonDbException &e) {
+              dispatchRowExError(*sharedCb, e);
+          }
+        );
+    }
+    catch (...)
+    {
+        LOG_ERROR << "findByIdEx Mapper construction failed";
+        (*sharedCb)(false, false, OrganizationConsentRequests{});
     }
 }
 

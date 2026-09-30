@@ -249,7 +249,8 @@
             "max_org_apps": 10,
             "max_orgs_per_user": 3,
             "max_redirect_uris": 20,
-            "creation_rate_limit_per_day": 5
+            "creation_rate_limit_per_day": 5,
+            "max_pending_invitations_per_org": 20
         },
         "external_auth": {
             "tiers": {
