@@ -52,7 +52,7 @@ const lastInviteToken = ref('')
 const acceptToken = ref('')
 const accepting = ref(false)
 
-// v1.5.0 M3: ownership succession (R-M3-5) -- the nominee-facing accept
+// v1.4.0 M3: ownership succession (R-M3-5) -- the nominee-facing accept
 // banner rides the org list response (the nominee may be a non-member).
 const pendingNominations = ref<any[]>([])
 const nominateUserId = ref('')
@@ -102,7 +102,7 @@ async function withdrawSuccession(slug: string) {
   }
 }
 
-// v1.5.0 M2: organization consents panel (owner/admin).
+// v1.4.0 M2: organization consents panel (owner/admin).
 const expandedConsentsSlug = ref('')
 const consents = ref<any[]>([])
 const grantClientId = ref('')

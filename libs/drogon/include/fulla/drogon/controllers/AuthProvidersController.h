@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 social provider tiers: public, unauthenticated discovery of the
+// v1.4.0 social provider tiers: public, unauthenticated discovery of the
 // external login providers this deployment currently offers. The user SPA
 // renders its login-page buttons from this response instead of build-time
 // VITE_* env vars, so a tier switch (custom_config external_auth.tiers.*)

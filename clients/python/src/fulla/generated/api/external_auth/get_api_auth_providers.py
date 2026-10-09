@@ -49,7 +49,7 @@ def sync_detailed(
     """List Enabled External Login Providers
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
+    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
     list means external login is disabled. authorize_url is the fully built provider authorize URL — the
     SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
     else frontend.url + /callback/{provider}.
@@ -78,7 +78,7 @@ def sync(
     """List Enabled External Login Providers
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
+    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
     list means external login is disabled. authorize_url is the fully built provider authorize URL — the
     SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
     else frontend.url + /callback/{provider}.
@@ -103,7 +103,7 @@ async def asyncio_detailed(
     """List Enabled External Login Providers
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
+    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
     list means external login is disabled. authorize_url is the fully built provider authorize URL — the
     SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
     else frontend.url + /callback/{provider}.
@@ -130,7 +130,7 @@ async def asyncio(
     """List Enabled External Login Providers
 
      Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty
+    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
     list means external login is disabled. authorize_url is the fully built provider authorize URL — the
     SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
     else frontend.url + /callback/{provider}.

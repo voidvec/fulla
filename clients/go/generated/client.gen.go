@@ -431,7 +431,7 @@ func (e PostOauth2ConsentParamsAction) Valid() bool {
 	}
 }
 
-// AuthProvider An external login provider currently enabled on this deployment (v1.5.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// AuthProvider An external login provider currently enabled on this deployment (v1.4.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 type AuthProvider struct {
 	AuthorizeUrl string               `json:"authorize_url"`
 	Provider     AuthProviderProvider `json:"provider"`
@@ -514,7 +514,7 @@ type IntrospectionResponse struct {
 	Iss      *string `json:"iss,omitempty"`
 	Nbf      *int64  `json:"nbf,omitempty"`
 
-	// OrgId v1.5.0: present when the token was issued in org context (authorize org_id parameter). The token's own binding; roles/name stay userinfo-only.
+	// OrgId v1.4.0: present when the token was issued in org context (authorize org_id parameter). The token's own binding; roles/name stay userinfo-only.
 	OrgId *int32 `json:"org_id,omitempty"`
 
 	// Scope Space-separated scopes.
@@ -786,7 +786,7 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 }
 
-// UserInfoResponse OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.5.0; membership is re-checked in real time).
+// UserInfoResponse OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0; membership is re-checked in real time).
 type UserInfoResponse struct {
 	Email         *string `json:"email,omitempty"`
 	EmailVerified *bool   `json:"email_verified,omitempty"`
@@ -794,7 +794,7 @@ type UserInfoResponse struct {
 	// Name Username (fallback: email, then sub).
 	Name string `json:"name"`
 
-	// OrgCtx v1.5.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the full membership list.
+	// OrgCtx v1.4.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the full membership list.
 	OrgCtx *struct {
 		OrgId   *int32    `json:"org_id,omitempty"`
 		OrgName *string   `json:"org_name,omitempty"`
@@ -1212,7 +1212,7 @@ type GetOauth2AuthorizeParams struct {
 	// MaxAge Maximum allowable age in seconds of the user's authentication. If the session auth_time is older, re-authentication is forced.
 	MaxAge *int `form:"max_age,omitempty" json:"max_age,omitempty"`
 
-	// OrgId Organization context hint (v1.5.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; every rejection renders the same inline 400 (no redirect). Combine with the org scope to receive org_ctx claims.
+	// OrgId Organization context hint (v1.4.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; every rejection renders the same inline 400 (no redirect). Combine with the org scope to receive org_ctx claims.
 	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
 }
 
@@ -2102,7 +2102,7 @@ type ClientInterface interface {
 
 	// PostApiAdminUsersWithBody Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2111,7 +2111,7 @@ type ClientInterface interface {
 
 	// PostApiAdminUsers Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2134,7 +2134,7 @@ type ClientInterface interface {
 
 	// PutApiAdminUsersUserIdWithBody Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2143,7 +2143,7 @@ type ClientInterface interface {
 
 	// PutApiAdminUsersUserId Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2213,7 +2213,7 @@ type ClientInterface interface {
 
 	// GetApiAuthProviders List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 	//
 	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 	GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2544,7 +2544,7 @@ type ClientInterface interface {
 
 	// GetApiMeOrganizationsSlugConsents List Organization Consents
 	//
-	// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
+	// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
 	//
 	// Corresponds with GET /api/me/organizations/{slug}/consents (the `GetApiMeOrganizationsSlugConsents` operationId).
 	GetApiMeOrganizationsSlugConsents(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2611,7 +2611,7 @@ type ClientInterface interface {
 
 	// PostApiMeOrganizationsSlugSuccessorNominationWithBody Nominate Successor
 	//
-	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2620,7 +2620,7 @@ type ClientInterface interface {
 
 	// PostApiMeOrganizationsSlugSuccessorNomination Nominate Successor
 	//
-	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2926,7 +2926,7 @@ type ClientInterface interface {
 
 	// GetOauth2ConsentContext Consent screen context (owner attribution + org banner)
 	//
-	// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+	// Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
 	//
 	// Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
 	GetOauth2ConsentContext(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4056,7 +4056,7 @@ func (c *Client) GetApiAdminUsers(ctx context.Context, params *GetApiAdminUsersP
 
 // PostApiAdminUsersWithBody Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4075,7 +4075,7 @@ func (c *Client) PostApiAdminUsersWithBody(ctx context.Context, contentType stri
 
 // PostApiAdminUsers Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4128,7 +4128,7 @@ func (c *Client) GetApiAdminUsersUserId(ctx context.Context, userId int, reqEdit
 
 // PutApiAdminUsersUserIdWithBody Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4147,7 +4147,7 @@ func (c *Client) PutApiAdminUsersUserIdWithBody(ctx context.Context, userId int,
 
 // PutApiAdminUsersUserId Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4297,7 +4297,7 @@ func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, bo
 
 // GetApiAuthProviders List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 //
 // Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5018,7 +5018,7 @@ func (c *Client) PostApiMeOrganizationsSlugConsentRequestsRequestIdReject(ctx co
 
 // GetApiMeOrganizationsSlugConsents List Organization Consents
 //
-// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
+// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
 //
 // Corresponds with GET /api/me/organizations/{slug}/consents (the `GetApiMeOrganizationsSlugConsents` operationId).
 func (c *Client) GetApiMeOrganizationsSlugConsents(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5175,7 +5175,7 @@ func (c *Client) DeleteApiMeOrganizationsSlugSuccessorNomination(ctx context.Con
 
 // PostApiMeOrganizationsSlugSuccessorNominationWithBody Nominate Successor
 //
-// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5194,7 +5194,7 @@ func (c *Client) PostApiMeOrganizationsSlugSuccessorNominationWithBody(ctx conte
 
 // PostApiMeOrganizationsSlugSuccessorNomination Nominate Successor
 //
-// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5860,7 +5860,7 @@ func (c *Client) PostOauth2Consent(ctx context.Context, params *PostOauth2Consen
 
 // GetOauth2ConsentContext Consent screen context (owner attribution + org banner)
 //
-// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+// Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
 //
 // Corresponds with GET /oauth2/consent/context (the `GetOauth2ConsentContext` operationId).
 func (c *Client) GetOauth2ConsentContext(ctx context.Context, params *GetOauth2ConsentContextParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11669,7 +11669,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiAdminUsersWithBodyWithResponse Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11678,7 +11678,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiAdminUsersWithResponse Create User
 	//
-	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11705,7 +11705,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutApiAdminUsersUserIdWithBodyWithResponse Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11714,7 +11714,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutApiAdminUsersUserIdWithResponse Update User
 	//
-	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+	// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11786,7 +11786,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiAuthProvidersWithResponse List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12137,7 +12137,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiMeOrganizationsSlugConsentsWithResponse List Organization Consents
 	//
-	// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
+	// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12218,7 +12218,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse Nominate Successor
 	//
-	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12227,7 +12227,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiMeOrganizationsSlugSuccessorNominationWithResponse Nominate Successor
 	//
-	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+	// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12551,7 +12551,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetOauth2ConsentContextWithResponse Consent screen context (owner attribution + org banner)
 	//
-	// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+	// Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -15585,7 +15585,7 @@ type GetApiMeOrganizationsResponse struct {
 			} `json:"successor_nomination,omitempty"`
 		} `json:"organizations,omitempty"`
 
-		// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+		// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.4.0 M3.
 		PendingSuccessionNominations *[]struct {
 			CreatedAt      *string `json:"created_at,omitempty"`
 			Name           *string `json:"name,omitempty"`
@@ -15616,7 +15616,7 @@ func (r GetApiMeOrganizationsResponse) GetJSON200() *struct {
 		} `json:"successor_nomination,omitempty"`
 	} `json:"organizations,omitempty"`
 
-	// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+	// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.4.0 M3.
 	PendingSuccessionNominations *[]struct {
 		CreatedAt      *string `json:"created_at,omitempty"`
 		Name           *string `json:"name,omitempty"`
@@ -19559,7 +19559,7 @@ func (c *ClientWithResponses) GetApiAdminUsersWithResponse(ctx context.Context, 
 
 // PostApiAdminUsersWithBodyWithResponse Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19574,7 +19574,7 @@ func (c *ClientWithResponses) PostApiAdminUsersWithBodyWithResponse(ctx context.
 
 // PostApiAdminUsersWithResponse Create User
 //
-// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Create a new user. Requires username and password; email, roles, mfa_enabled, email_verified, and must_change_password are optional. must_change_password (default false, #145) forces the user to change the password at first login. The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19619,7 +19619,7 @@ func (c *ClientWithResponses) GetApiAdminUsersUserIdWithResponse(ctx context.Con
 
 // PutApiAdminUsersUserIdWithBodyWithResponse Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19634,7 +19634,7 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdWithBodyWithResponse(ctx con
 
 // PutApiAdminUsersUserIdWithResponse Update User
 //
-// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.5.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
+// Update user information. Updatable fields: username, email, email_verified, mfa_enabled, must_change_password (#145; enforcement starts at the user's next login), and locked (true locks the account). Fields with a wrong JSON type are rejected with 400 (never silently skipped). The deprecated users.org_id column is read-only since v1.4.0: requests containing org_id are rejected with 400 (organization membership is managed via the organization APIs).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19754,7 +19754,7 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 
 // GetApiAuthProvidersWithResponse List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -20339,7 +20339,7 @@ func (c *ClientWithResponses) PostApiMeOrganizationsSlugConsentRequestsRequestId
 
 // GetApiMeOrganizationsSlugConsentsWithResponse List Organization Consents
 //
-// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
+// Active organization consents grouped by client, each scope with its own granted_by / granted_at (org owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by these rows.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -20474,7 +20474,7 @@ func (c *ClientWithResponses) DeleteApiMeOrganizationsSlugSuccessorNominationWit
 
 // PostApiMeOrganizationsSlugSuccessorNominationWithBodyWithResponse Nominate Successor
 //
-// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20489,7 +20489,7 @@ func (c *ClientWithResponses) PostApiMeOrganizationsSlugSuccessorNominationWithB
 
 // PostApiMeOrganizationsSlugSuccessorNominationWithResponse Nominate Successor
 //
-// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+// The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21029,7 +21029,7 @@ func (c *ClientWithResponses) PostOauth2ConsentWithResponse(ctx context.Context,
 
 // GetOauth2ConsentContextWithResponse Consent screen context (owner attribution + org banner)
 //
-// Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
+// Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires; the org block comes from the binding stashed server-side at authorize time (unknown or missing state, or a flow without an org context, yields org=null).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -23175,7 +23175,7 @@ func ParseGetApiMeOrganizationsResponse(rsp *http.Response) (*GetApiMeOrganizati
 				} `json:"successor_nomination,omitempty"`
 			} `json:"organizations,omitempty"`
 
-			// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.5.0 M3.
+			// PendingSuccessionNominations Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-member). v1.4.0 M3.
 			PendingSuccessionNominations *[]struct {
 				CreatedAt      *string `json:"created_at,omitempty"`
 				Name           *string `json:"name,omitempty"`

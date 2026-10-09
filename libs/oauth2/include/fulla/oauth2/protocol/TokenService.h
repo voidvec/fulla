@@ -102,7 +102,7 @@ class TokenService : public std::enable_shared_from_this<TokenService>
         jwkManager_ = std::move(jwkManager);
     }
 
-    /// v1.5.0 M1: publish the org-context resolver used to build the
+    /// v1.4.0 M1: publish the org-context resolver used to build the
     /// org_ctx claim (org name + current roles) for id_tokens issued in
     /// org context. Nullable by design: unwired (Domain unit tests) simply
     /// omits org_ctx, exactly like an unwired roleProvider omits roles.
@@ -212,7 +212,7 @@ class TokenService : public std::enable_shared_from_this<TokenService>
       std::function<void(std::vector<std::string>)> &&cb
     );
 
-    /// v1.5.0 M1: resolve the org_ctx claim data for an issuance in org
+    /// v1.4.0 M1: resolve the org_ctx claim data for an issuance in org
     /// context. Invokes `cb` with nullopt (no org_ctx claim) when the
     /// resolver is unwired, the code/token carries no org binding, or the
     /// granted scope set does not include `org` (scope gates claim

@@ -13,7 +13,7 @@ T = TypeVar("T", bound="AuthProvider")
 
 @_attrs_define
 class AuthProvider:
-    """An external login provider currently enabled on this deployment (v1.5.0 provider tiers). authorize_url is the fully
+    """An external login provider currently enabled on this deployment (v1.4.0 provider tiers). authorize_url is the fully
     built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider
     redirect_uri override, else frontend.url + /callback/{provider}.
 

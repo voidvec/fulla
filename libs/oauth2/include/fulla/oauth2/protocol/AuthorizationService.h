@@ -91,7 +91,7 @@ class AuthorizationService
         adminScopes_ = std::move(adminScopes);
     }
 
-    /// v1.5.0 M2 (design §2.2, R-M2-1): inject the org-consent half of
+    /// v1.4.0 M2 (design §2.2, R-M2-1): inject the org-consent half of
     /// the consent UNION. Unset (or a scope with a personal consent
     /// already recorded -- the common case short-circuits) keeps the
     /// decision exactly as before this milestone. Setter-injected like

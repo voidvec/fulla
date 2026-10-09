@@ -47,7 +47,7 @@ test.describe('User Detail Page', () => {
     await expect(page.locator('text=User updated successfully')).toBeVisible()
   })
 
-  // v1.5.0 org-anchor convergence (design 1.2/V7): users.org_id admin write
+  // v1.4.0 org-anchor convergence (design 1.2/V7): users.org_id admin write
   // surface removed - the Organization ID input is gone from the form (the
   // read-only column stays server-side until the v2.0 physical DROP), so the
   // page must never emit a PUT carrying org_id.

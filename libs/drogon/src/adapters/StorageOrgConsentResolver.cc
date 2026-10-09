@@ -1,4 +1,4 @@
-// See StorageOrgConsentResolver.h for the wiring rationale (v1.5.0 M2).
+// See StorageOrgConsentResolver.h for the wiring rationale (v1.4.0 M2).
 // The repository owns the queries (async callback + Mapper + Criteria);
 // every failure resolves to false (the union's failure mode is "prompt
 // the user", mirroring IConsentRepository's hasUserConsent error path).

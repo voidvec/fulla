@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M1b (real-tenant design 2.1 item 6 / 2.1 item 7, #223 second half):
+// v1.4.0 M1b (real-tenant design 2.1 item 6 / 2.1 item 7, #223 second half):
 // server-side consent-screen context. The consent page used to read
 // `owner_name` off the authorize -> consent redirect URL, which a phisher
 // could freely forge ("provided by Your Bank..."). The attribution (and the

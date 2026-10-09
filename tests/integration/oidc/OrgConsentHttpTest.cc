@@ -1,6 +1,6 @@
 // tests/integration/oidc/OrgConsentHttpTest.cc
 //
-// v1.5.0 M2 integration tests: organization admin consent (design §2.2).
+// v1.4.0 M2 integration tests: organization admin consent (design §2.2).
 //   1. The R-M2-2 write gate -- an org-bound approve by the org's
 //      owner/admin records organization_consents rows (never personal
 //      rows); a regular member's org-bound approve records personal rows.

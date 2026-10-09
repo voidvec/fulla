@@ -113,7 +113,7 @@ test.describe('Authorize flow resume (U-3)', () => {
     expect(url.searchParams.get('nonce')).toBe('n0nce77')
   })
 
-  // v1.5.0 M1b: the backend flattens the org context hint onto /login with
+  // v1.4.0 M1b: the backend flattens the org context hint onto /login with
   // the other authorize parameters; the resume rebuild must carry it too,
   // or the browser chain silently degrades to a no-org issuance.
   test('password login resumes authorize preserving the org_id hint', async ({ page }) => {
@@ -235,7 +235,7 @@ test.describe('GitHub Login', () => {
     await setupMocks(page)
   })
 
-  // v1.5.0 provider tiers: the GitHub button renders only when the mocked
+  // v1.4.0 provider tiers: the GitHub button renders only when the mocked
   // discovery endpoint reports it (GET /api/auth/providers — opt in with
   // E2E_EXTERNAL_PROVIDERS=github). Skip — not fail — when not opted in;
   // the runtime count check stays as a belt-and-braces guard.

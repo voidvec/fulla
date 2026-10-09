@@ -17,7 +17,7 @@
 - ❌ **禁止** Domain 逻辑（业务规则在 `libs/oauth2`、`libs/identity`）
 - ❌ 装配层（`main.cc`/`bootstrap/`）**禁止**直接 DB 访问
 - ⚠️ 产品级服务（`openplatform/`、`organization/`、`bootstrap/AdminBootstrapper`）直接构造
-  `drogon::orm::Mapper` 是**登记例外**（#222，v1.5.0 M0 写实）：存量查询允许保留，但
+  `drogon::orm::Mapper` 是**登记例外**（#222，v1.4.0 M0 写实）：存量查询允许保留，但
   **只降不升**——`tools/arch-guard` 的 **R4** 对 `apps/server/src` 的 Mapper 构造点数设
   冻结基线（当前 57），新增属主/成员类读取优先走
   `libs/storage-postgres` 的 `ClientOwnersRepository` 等共享仓储

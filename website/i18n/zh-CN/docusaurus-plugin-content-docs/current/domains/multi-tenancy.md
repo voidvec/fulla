@@ -30,10 +30,10 @@ organizations (
 
 | 列 | 所在表 | 语义 |
 |---|---|---|
-| `org_id` | `users` | V017 的单组织锚点，已废弃。**v1.5.0 起只读**（admin API 写入面已移除）；`NULL` = 未设置。计划 v2.0 物理删除。 |
+| `org_id` | `users` | V017 的单组织锚点，已废弃。**v1.4.0 起只读**（admin API 写入面已移除）；`NULL` = 未设置。计划 v2.0 物理删除。 |
 | （已删除） | `oauth2_clients` | V017 的 `org_id` 列从未被代码读写，**V036 已 DROP**。客户端归属在 `oauth2_client_owners.org_id`（v1.4.0）。 |
 
-v1.5.0 起组织归属的唯一权威锚点是 M:N 成员表（`organization_members`）与
+v1.4.0 起组织归属的唯一权威锚点是 M:N 成员表（`organization_members`）与
 `oauth2_client_owners.org_id`；`users.org_id` 只是为迁移保留的只读遗留列。
 
 ## 2. 管理 API 面
@@ -49,7 +49,7 @@ v1.5.0 起组织归属的唯一权威锚点是 M:N 成员表（`organization_mem
 
 另：
 
-- 管理用户 API（`POST/PUT /api/admin/users`）**不再接受 `org_id`**（v1.5.0
+- 管理用户 API（`POST/PUT /api/admin/users`）**不再接受 `org_id`**（v1.4.0
   组织锚点收敛）：请求体携带该键一律 400，无论取值。组织成员关系经组织
   成员 API（`organization_members`）管理；`users.org_id` 列在 v2.0 物理删除
   前保持可读。

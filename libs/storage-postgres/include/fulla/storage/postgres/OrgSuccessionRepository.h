@@ -1,6 +1,6 @@
 #pragma once
 
-// Ownership succession data access (v1.5.0 M3, design §1.3 item 2,
+// Ownership succession data access (v1.4.0 M3, design §1.3 item 2,
 // rulings R-M3-2/3/4). The V037 organization_succession_nominations
 // table holds at most ONE pending (accepted_at IS NULL) nomination per
 // org (partial unique index); a nomination names any live user as the

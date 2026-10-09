@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M1 (real-tenant design §2.1 item 3): adapter implementing the
+// v1.4.0 M1 (real-tenant design §2.1 item 3): adapter implementing the
 // common IOrgContextResolver port for the assembled server. Mirrors the
 // StorageRoleProvider pattern (an Adapter-layer class constructed with
 // its storage dependency INJECTED by the composition root -- the port's

@@ -1,6 +1,6 @@
 // tests/integration/oidc/OrgContextHttpTest.cc
 //
-// v1.5.0 M1 integration tests: the authorize org_id parameter and the org
+// v1.4.0 M1 integration tests: the authorize org_id parameter and the org
 // context chain (design §2.1). The OrgContextGate logic is shared by all
 // three issuance entries (authorize silent, login POST, consent POST);
 // these cases drive it through the LOGIN path (stateless, no session
@@ -121,7 +121,7 @@ std::optional<int64_t> sqlInt(const std::string &sql)
 }
 
 // PKCE login (json=true) against `clientId`; returns the response plus the
-// verifier used (needed for the exchange). orgRef is the v1.5.0 org_id
+// verifier used (needed for the exchange). orgRef is the v1.4.0 org_id
 // hint carried through the form.
 struct LoginResult
 {
@@ -1223,7 +1223,7 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentRoundTrip_BindingSurvives)
 }
 
 // ---------------------------------------------------------------------------
-// v1.5.0 M1b (#223 second half): GET /oauth2/consent/context. The consent
+// v1.4.0 M1b (#223 second half): GET /oauth2/consent/context. The consent
 // screen's owner attribution and org banner are SERVER-derived from session
 // state; the authorize -> consent redirect no longer carries owner_name
 // (phishing vector). Pins: happy path (org app: owner_name = org name, org

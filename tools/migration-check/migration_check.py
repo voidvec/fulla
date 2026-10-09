@@ -33,7 +33,7 @@ Rules (all violations exit 1):
       ``DROP SCHEMA``, ``DROP DATABASE`` or top-level ``DELETE FROM``.
       (``DROP CONSTRAINT IF EXISTS`` / ``DROP NOT NULL`` stay allowed.)
       A deliberately RATIFIED destructive migration (explicit design ruling,
-      e.g. the v1.5.0 V7 dead-column cleanup) is recorded into
+      e.g. the v1.4.0 V7 dead-column cleanup) is recorded into
       ``baseline.json`` via ``--update-baseline --ratify-destructive
       <file>`` and stops being a violation; the M5 checksum lock means the
       ratification covers exactly the baselined content — editing the file

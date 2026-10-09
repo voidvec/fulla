@@ -86,7 +86,7 @@ void fulla::drogon::filters::OAuth2AuthFilter::doFilter(
               (*req->getAttributes())["userId"] = tokenInfo->userId;
               (*req->getAttributes())["scope"] = tokenInfo->scope;
               (*req->getAttributes())["clientId"] = tokenInfo->clientId;
-              // v1.5.0 M1 (review nit 6): expose the token's org binding so
+              // v1.4.0 M1 (review nit 6): expose the token's org binding so
               // org-aware handlers (userinfo's org_ctx) skip a second
               // introspection round-trip. Stringified for attribute-shape
               // consistency. (Mirrored in AuthorizationFilter.)

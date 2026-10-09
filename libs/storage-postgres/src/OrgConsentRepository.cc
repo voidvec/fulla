@@ -1,4 +1,4 @@
-// See OrgConsentRepository.h for the design anchors (v1.5.0 M2 §2.2,
+// See OrgConsentRepository.h for the design anchors (v1.4.0 M2 §2.2,
 // rulings R-M2-1/2/4/5/6). Every hop is async callback + Mapper +
 // Criteria; the two raw-SQL statements (upsert, batch revoke) carry
 // their exemption rationale inline.

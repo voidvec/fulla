@@ -36,7 +36,7 @@ All grants converge on `TokenService` (libs/oauth2):
 |---|---|---|
 | `authorization_code` (+ PKCE, mandatory for PUBLIC clients) | access + refresh (+ id_token if `openid`) | The code is single-use with atomic consume (see §5) |
 | `refresh_token` | new access + **new** refresh | Old refresh is revoked; family id is inherited (§4) |
-| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally carries the `org_id` claim (v1.5.0), exposed via introspection — the subject stays the client id |
+| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally carries the `org_id` claim (v1.4.0), exposed via introspection — the subject stays the client id |
 | `device_code` | access + refresh after user approval | Polling per RFC 8628 |
 
 `expires_in` in every response advertises the **configured** access-token

@@ -83,7 +83,7 @@ void OrgMemberController::initApiDocsImpl()
       "Nominate Successor",
       "The organization owner nominates a successor (any live user, may be a "
       "non-member). Replaces any previous pending nomination (idempotent); "
-      "the nominee must accept before the seat moves (v1.5.0 M3)."));
+      "the nominee must accept before the seat moves (v1.4.0 M3)."));
     openapi::OpenApiGenerator::addEndpoint(orgMemberEp(
       "/api/me/organizations/{slug}/successor-nomination", "DELETE",
       "Withdraw Successor Nomination",

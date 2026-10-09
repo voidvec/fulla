@@ -11,7 +11,7 @@
 #include <mutex>
 #include <string>
 
-// v1.5.0 M1b (#223 second half): the consent screen's owner attribution and
+// v1.4.0 M1b (#223 second half): the consent screen's owner attribution and
 // org-membership banner are server-derived, not URL-trusted. Gates follow
 // SessionController::consent's fail-closed chain (session -> user match ->
 // CSRF nonce -> client binding) with deliberate differences for a read-only
@@ -71,7 +71,7 @@ void ConsentContextController::initApiDocsImpl()
     ep.method = "GET";
     ep.summary = "Consent screen context (owner attribution + org banner)";
     ep.description =
-      "Server-side consent-screen context (v1.5.0 M1b): the owner "
+      "Server-side consent-screen context (v1.4.0 M1b): the owner "
       "attribution label and the organization-membership banner for the "
       "consent flow whose server-minted consent_csrf nonce is presented. "
       "Session-cookie authenticated; the nonce is validated but NOT "

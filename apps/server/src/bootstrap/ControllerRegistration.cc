@@ -54,7 +54,7 @@ void registerAllControllers()
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::HealthController>()
     );
-    // v1.5.0 provider tiers: public login-page discovery (unconditional —
+    // v1.4.0 provider tiers: public login-page discovery (unconditional —
     // without social support it serves an empty provider list).
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::AuthProvidersController>()

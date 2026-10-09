@@ -1,6 +1,6 @@
 #pragma once
 
-// Shared client-ownership data access (#222, v1.5.0 M0). The same
+// Shared client-ownership data access (#222, v1.4.0 M0). The same
 // "owner row for this client" read used to exist in three shapes with
 // three different error mappings (PostgresClientRepository fail-closed,
 // ApplicationService everything-is-404 -- see #230 -- and the consent
@@ -88,12 +88,12 @@ class ClientOwnersRepository
     void findMembership(int32_t orgId, int32_t userId, MembershipCallback &&cb);
 
     /// Organization row by reference: an all-digits `orgRef` resolves by
-    /// integer id, anything else by slug (v1.5.0 M1's authorize org_id
+    /// integer id, anything else by slug (v1.4.0 M1's authorize org_id
     /// parameter accepts both shapes; design §2.1 item 2 / O6). The
     /// reference is matched with Criteria, never string-interpolated.
     void findOrganization(const std::string &orgRef, std::function<void(const OrganizationLookup &)> &&cb);
 
-    /// Dual-key subject resolution (v1.5.0 M1): the canonical /api/me
+    /// Dual-key subject resolution (v1.4.0 M1): the canonical /api/me
     /// pattern (V024) -- an all-digits `subject` resolves by internal id,
     /// anything else by users.public_sub. Soft-deleted users never match.
     /// Used by the org-context paths whose subjects may be either the

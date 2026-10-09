@@ -1,5 +1,5 @@
 // See ClientOwnersRepository.h for the design rationale (#222/#230,
-// v1.5.0 M0). All queries are async callback + Mapper + Criteria with an
+// v1.4.0 M0). All queries are async callback + Mapper + Criteria with an
 // independent try/catch around every Mapper construction (db-operations.md);
 // every failure path reaches (*sharedCb).
 

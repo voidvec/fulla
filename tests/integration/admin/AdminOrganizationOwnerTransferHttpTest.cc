@@ -1,6 +1,6 @@
 // tests/integration/admin/AdminOrganizationOwnerTransferHttpTest.cc
 //
-// #221 minimal slice (v1.5.0 stage-one plan): a soft-deleted organization
+// #221 minimal slice (v1.4.0 stage-one plan): a soft-deleted organization
 // owner leaves the org unmanageable; the system-admin ownership-transfer
 // endpoint breaks the deadlock. Acceptance (per the issue): owner-deleted ->
 // admin reassign -> org manageable.

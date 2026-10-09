@@ -73,7 +73,7 @@
   {
     "description" : "OAuth2.0 authorization server with token management",
     "title" : "OAuth2 Authorization Server API",
-    "version" : "1.3.2"
+    "version" : "1.4.0"
   },
   "openapi" : "3.0.0",
   "paths" : 
@@ -1072,7 +1072,7 @@
       },
       "post" : 
       {
-        "description" : "Create a new user. Requires username and password; email, roles, mfa_enabled, and email_verified are optional. The deprecated users.org_id column is read-only since v1.5.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
+        "description" : "Create a new user. Requires username and password; email, roles, mfa_enabled, and email_verified are optional. The deprecated users.org_id column is read-only since v1.4.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
         "operationId" : "post_api_admin_users",
         "responses" : null,
         "security" : 
@@ -1153,7 +1153,7 @@
       },
       "put" : 
       {
-        "description" : "Update user fields: email, email_verified, username, mfa_enabled, locked. Wrong-typed fields are rejected with 400. The deprecated users.org_id column is read-only since v1.5.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
+        "description" : "Update user fields: email, email_verified, username, mfa_enabled, locked. Wrong-typed fields are rejected with 400. The deprecated users.org_id column is read-only since v1.4.0: a body containing org_id is rejected with 400 (organization membership is managed via the organization APIs).",
         "operationId" : "put_api_admin_users_{userId}",
         "responses" : null,
         "security" : 
@@ -1295,7 +1295,7 @@
     {
       "get" : 
       {
-        "description" : "Public discovery of the external login providers this deployment currently offers (v1.5.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL (redirect target resolved from the per-provider redirect_uri override, else frontend.url + /callback/{provider}) \u2014 the SPA redirects to it as-is.",
+        "description" : "Public discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL (redirect target resolved from the per-provider redirect_uri override, else frontend.url + /callback/{provider}) \u2014 the SPA redirects to it as-is.",
         "operationId" : "get_api_auth_providers",
         "responses" : null,
         "summary" : "List Enabled External Login Providers",
@@ -2097,7 +2097,7 @@
       },
       "post" : 
       {
-        "description" : "The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).",
+        "description" : "The organization owner nominates a successor (any live user, may be a non-member). Replaces any previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).",
         "operationId" : "post_api_me_organizations_{slug}_successor-nomination",
         "responses" : null,
         "security" : 
@@ -2594,7 +2594,7 @@
                 "example" : 
                 {
                   "status" : "ok",
-                  "version" : "1.3.2"
+                  "version" : "1.4.0"
                 }
               }
             },
@@ -2751,7 +2751,7 @@
             }
           },
           {
-            "description" : "Organization context hint (v1.5.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; otherwise a uniform inline error (no redirect). Combine with the org scope to receive org_ctx claims.",
+            "description" : "Organization context hint (v1.4.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; otherwise a uniform inline error (no redirect). Combine with the org scope to receive org_ctx claims.",
             "in" : "query",
             "name" : "org_id",
             "required" : false,
@@ -2895,7 +2895,7 @@
     {
       "get" : 
       {
-        "description" : "Server-side consent-screen context (v1.5.0 M1b): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. Session-cookie authenticated; the nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires.",
+        "description" : "Server-side consent-screen context (v1.4.0 M1b): the owner attribution label and the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is presented. Session-cookie authenticated; the nonce is validated but NOT consumed (the one-shot consume stays with POST /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the consent screen via authorize already requires.",
         "operationId" : "get_oauth2_consent_context",
         "parameters" : 
         [

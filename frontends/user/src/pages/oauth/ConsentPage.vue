@@ -30,7 +30,7 @@ const codeChallenge = route.query.code_challenge as string || ''
 const consentCsrf = route.query.consent_csrf as string || ''
 const codeChallengeMethod = route.query.code_challenge_method as string || ''
 const nonce = route.query.nonce as string || ''
-// v1.5.0 M1b (#223 second half): owner attribution and the org-membership
+// v1.4.0 M1b (#223 second half): owner attribution and the org-membership
 // banner come from the SERVER (GET /oauth2/consent/context, derived from
 // session state), never from URL params — a phisher could forge
 // owner_name=Your Bank on a fake consent link. Any fetch failure (401/400/
@@ -143,7 +143,7 @@ function handleConsent(action: 'approve' | 'deny') {
       {{ $t('oauth.consent.subtitle') }}
     </p>
 
-    <!-- Org-membership banner (v1.5.0 M1b): server-derived from the flow's
+    <!-- Org-membership banner (v1.4.0 M1b): server-derived from the flow's
          org binding — shown only when the authorization is org-scoped. -->
     <div
       v-if="orgName"
@@ -177,7 +177,7 @@ function handleConsent(action: 'approve' | 'deny') {
           label="client_id"
           class="mt-1"
         />
-        <!-- Owner attribution (v1.4.0, server-derived since v1.5.0 M1b):
+        <!-- Owner attribution (v1.4.0, server-derived since v1.4.0 M1b):
              shown only for self-registered apps -->
         <p
           v-if="ownerName"

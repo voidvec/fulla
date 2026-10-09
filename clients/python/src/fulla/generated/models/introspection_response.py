@@ -27,7 +27,7 @@ class IntrospectionResponse:
             aud (str | Unset):
             iss (str | Unset):
             scope (str | Unset): Space-separated scopes.
-            org_id (int | Unset): v1.5.0: present when the token was issued in org context (authorize org_id parameter). The
+            org_id (int | Unset): v1.4.0: present when the token was issued in org context (authorize org_id parameter). The
                 token's own binding; roles/name stay userinfo-only.
     """
 

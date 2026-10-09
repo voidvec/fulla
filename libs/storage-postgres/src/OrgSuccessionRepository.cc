@@ -1,4 +1,4 @@
-// See OrgSuccessionRepository.h for the design anchors (v1.5.0 M3 §1.3
+// See OrgSuccessionRepository.h for the design anchors (v1.4.0 M3 §1.3
 // item 2, R-M3-2/3/4). Every hop is async callback + Mapper + Criteria;
 // the two raw statements (partial-index upsert, demotion batch UPDATE)
 // carry their exemption rationale inline.

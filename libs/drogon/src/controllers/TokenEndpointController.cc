@@ -639,7 +639,7 @@ void TokenEndpointController::introspect(
                 {
                     response["sub"] = introspection->sub;
                 }
-                // v1.5.0 M1 (design §2.1 item 4): the token's org binding.
+                // v1.4.0 M1 (design §2.1 item 4): the token's org binding.
                 if (introspection->orgId.has_value())
                 {
                     response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
@@ -1309,7 +1309,7 @@ void TokenEndpointController::token(
                         }
                     }
 
-                    // v1.5.0 M3 (design §2.3, R-M3-1): an org-owned
+                    // v1.4.0 M3 (design §2.3, R-M3-1): an org-owned
                     // client's CC token carries the org anchor
                     // (oauth2_access_tokens.org_id; introspection exposes
                     // it -- the M1 DTO plumbing already persists the field
@@ -2195,7 +2195,7 @@ void TokenEndpointController::userInfo(
                   }
               }
 
-              // v1.5.0 M1 (design §2.1 item 3): org_ctx -- the ACTIVE org
+              // v1.4.0 M1 (design §2.1 item 3): org_ctx -- the ACTIVE org
               // bound to this access token (selected by the org_id
               // parameter at authorize, carried through the code->token
               // chain) with the user's CURRENT roles in it (O7 real-time
@@ -2212,7 +2212,7 @@ void TokenEndpointController::userInfo(
                   return;
               }
               {
-                  // v1.5.0 M1 (review nit 6): the org binding comes from the
+                  // v1.4.0 M1 (review nit 6): the org binding comes from the
                   // AuthorizationFilter's request attributes (it already
                   // holds the validated token row) -- no second
                   // introspection round-trip for a field the filter has.

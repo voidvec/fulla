@@ -63,7 +63,7 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       ::drogon::Post,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
-    // v1.5.0 M2 (design §2.2, R-M2-4): org-consent management surface.
+    // v1.4.0 M2 (design §2.2, R-M2-4): org-consent management surface.
     ADD_METHOD_TO(
       OrgMemberController::listOrgConsents,
       "/api/me/organizations/{slug}/consents",
@@ -76,7 +76,7 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
       ::drogon::Delete,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
-    // v1.5.0 M3 (design §1.3 item 2, R-M3-3): ownership succession.
+    // v1.4.0 M3 (design §1.3 item 2, R-M3-3): ownership succession.
     ADD_METHOD_TO(
       OrgMemberController::nominateSuccessor,
       "/api/me/organizations/{slug}/successor-nomination",
@@ -190,7 +190,7 @@ class OrgMemberController : public ::drogon::HttpController<OrgMemberController,
     );
 
     /// POST /api/me/organizations/{slug}/successor-nomination — owner
-    /// nominates a successor (body {user_id}, v1.5.0 M3).
+    /// nominates a successor (body {user_id}, v1.4.0 M3).
     void nominateSuccessor(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,

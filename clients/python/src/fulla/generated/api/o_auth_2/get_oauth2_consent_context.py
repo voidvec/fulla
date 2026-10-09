@@ -89,7 +89,7 @@ def sync_detailed(
 ) -> Response[Any | GetOauth2ConsentContextResponse200]:
     """Consent screen context (owner attribution + org banner)
 
-     Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and
+     Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and
     the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is
     presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST
     /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the
@@ -138,7 +138,7 @@ def sync(
 ) -> Any | GetOauth2ConsentContextResponse200 | None:
     """Consent screen context (owner attribution + org banner)
 
-     Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and
+     Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and
     the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is
     presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST
     /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the
@@ -182,7 +182,7 @@ async def asyncio_detailed(
 ) -> Response[Any | GetOauth2ConsentContextResponse200]:
     """Consent screen context (owner attribution + org banner)
 
-     Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and
+     Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and
     the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is
     presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST
     /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the
@@ -229,7 +229,7 @@ async def asyncio(
 ) -> Any | GetOauth2ConsentContextResponse200 | None:
     """Consent screen context (owner attribution + org banner)
 
-     Server-side consent-screen context (v1.5.0 M1b, #223 second half): the owner attribution label and
+     Server-side consent-screen context (v1.4.0 M1b, #223 second half): the owner attribution label and
     the organization-membership banner for the consent flow whose server-minted consent_csrf nonce is
     presented. The nonce is validated but NOT consumed (the one-shot consume stays with POST
     /oauth2/consent). The (client_id, redirect_uri) pair must be registered, mirroring what reaching the

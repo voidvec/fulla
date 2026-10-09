@@ -169,7 +169,7 @@ void AuthorizationService::evaluateScopes(
                     fulla::oauth2::model::UserRef userRef{*internalUserId};
                     for (const auto &scope : requestedScopes)
                     {
-                        // v1.5.0 M2 (design §2.2, R-M2-1): the consent
+                        // v1.4.0 M2 (design §2.2, R-M2-1): the consent
                         // tier is a UNION -- a scope is consented when a
                         // personal row exists OR any org the user
                         // currently belongs to holds an active org

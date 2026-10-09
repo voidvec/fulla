@@ -5,7 +5,7 @@ sidebar_position: 7
 # Multi-Tenancy (Organizations)
 
 fulla's multi-tenancy today is an **organizational layer**: organizations
-group users and clients, carry branding fields, anchor the v1.5.0 tenant
+group users and clients, carry branding fields, anchor the v1.4.0 tenant
 semantics (org-scoped authorization, organization consents, owner
 succession), and are managed through admin APIs plus self-service portal
 flows. This page documents exactly what exists, what it does **not**
@@ -42,10 +42,10 @@ Two nullable foreign keys attach entities to an organization:
 
 | Column | On | Semantics |
 |---|---|---|
-| `org_id` | `users` | Deprecated single-org anchor from V017. **Read-only since v1.5.0** (the admin API write surface was removed); `NULL` = unset. Physical removal planned for v2.0. |
+| `org_id` | `users` | Deprecated single-org anchor from V017. **Read-only since v1.4.0** (the admin API write surface was removed); `NULL` = unset. Physical removal planned for v2.0. |
 | (dropped) | `oauth2_clients` | The V017 `org_id` column was never read or written by code and was **dropped in V036**. Client ownership lives in `oauth2_client_owners.org_id` (v1.4.0). |
 
-The authoritative organization anchors since v1.5.0 are the M:N membership
+The authoritative organization anchors since v1.4.0 are the M:N membership
 table (`organization_members`) and `oauth2_client_owners.org_id`;
 `users.org_id` is a legacy read-only column kept only for migration.
 
@@ -64,7 +64,7 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 Additionally:
 
 - The admin user API (`POST/PUT /api/admin/users`) **no longer accepts
-  `org_id`** (v1.5.0 org-anchor convergence): a request body containing the
+  `org_id`** (v1.4.0 org-anchor convergence): a request body containing the
   key is rejected with 400, whatever its value. Organization membership is
   managed through the organization membership APIs (`organization_members`),
   and the `users.org_id` column stays readable until its v2.0 physical drop.
@@ -86,7 +86,7 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   legacy column).
 - **Branding catalog**: per-org logo and primary color for frontends that
   want to skin the login experience per tenant.
-- **Organization context in the authorization chain (v1.5.0)**: the authorize
+- **Organization context in the authorization chain (v1.4.0)**: the authorize
   endpoint accepts an optional `org_id` (id or slug) validated by the org
   context gate — requester must be a live member, the client must belong to
   that org or hold an active organization consent, and an org with
@@ -94,22 +94,22 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   The binding flows through the code-to-token chain, and tokens issued with
   the `org` scope carry **`org_ctx` claims** (userinfo / id_token) that drop
   immediately when membership ends.
-- **Organization consents (v1.5.0)**: when a member authorizes an org-owned
+- **Organization consents (v1.4.0)**: when a member authorizes an org-owned
   application, the grant is recorded on the **organization** (admin-level
   rows in `organization_consents`); members can review and revoke grants on
   the portal's "Org authorizations" page
   (`GET /api/me/organizations/{slug}/consents`,
   `DELETE /api/me/organizations/{slug}/consents/{clientId}`).
-- **Consent request workflow (v1.5.0, #236)**: members who are not owners can
+- **Consent request workflow (v1.4.0, #236)**: members who are not owners can
   file an organization-authorization **request**
   (`organization_consent_requests`); managers approve/reject from the
   portal, the requesting member can withdraw their own pending request, and
   an approved request becomes the org grant.
-- **Owner succession (v1.5.0)**: an owner can nominate a successor
+- **Owner succession (v1.4.0)**: an owner can nominate a successor
   (nominate → accept two-step confirmation), a soft-deleted owner's seat is
   auto-succeeded from a pending nomination, and the admin transfer-ownership
   endpoint above rescues orgs with no eligible successor.
-- **Organization-anchored client credentials (v1.5.0)**: client_credentials
+- **Organization-anchored client credentials (v1.4.0)**: client_credentials
   tokens for org-owned applications carry the `org_id` claim (the subject
   stays the client id).
 - **No migration cliff**: everything is optional and additive; deployments

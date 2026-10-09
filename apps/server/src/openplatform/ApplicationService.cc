@@ -45,7 +45,7 @@ using OrgModel = ::drogon_model::fulla_db::Organizations;
 using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
 using UserModel = ::drogon_model::fulla_db::Users;
 
-// Shared client-ownership reads (#222, v1.5.0 M0).
+// Shared client-ownership reads (#222, v1.4.0 M0).
 using ::fulla::storage::postgres::ClientOwnersRepository;
 using ::fulla::storage::postgres::LookupStatus;
 using ::fulla::storage::postgres::MembershipLookup;
@@ -193,7 +193,7 @@ void loadOwnerRow(
   OwnerCallback &&onLoaded
 )
 {
-    // #222/#230 (v1.5.0 M0): the raw owners-row query lives in the shared
+    // #222/#230 (v1.4.0 M0): the raw owners-row query lives in the shared
     // ClientOwnersRepository. NoRow keeps the uniform-404 shape (#227), but
     // a REAL query failure now surfaces as 500 DB_QUERY_ERROR instead of
     // masquerading as "no such application" (#230: the old path swallowed
@@ -286,7 +286,7 @@ void requireManagePermission(
           // Org app: caller must CURRENTLY hold owner/admin in that org (a
           // creator who left the org has no residual rights — ratified).
           const int32_t orgId = *owner.getOrgId();
-          // #222 (v1.5.0 M0): membership read sunk into the shared
+          // #222 (v1.4.0 M0): membership read sunk into the shared
           // repository; the manager-role POLICY stays here.
           ClientOwnersRepository ownersRepo(db);
           ownersRepo.findMembership(

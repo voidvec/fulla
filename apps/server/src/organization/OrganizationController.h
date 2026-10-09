@@ -42,7 +42,7 @@ class OrganizationController : public ::drogon::HttpController<OrganizationContr
       "fulla::drogon::filters::AuthorizationFilter"
     );
     // #221 admin override: reassign an org's owner seat (minimal slice; the
-    // self-service nominate-and-accept workflow is v1.5.0 scope).
+    // self-service nominate-and-accept workflow is v1.4.0 scope).
     ADD_METHOD_TO(
       OrganizationController::transferOwnership,
       "/api/admin/organizations/{slug}/transfer-ownership",

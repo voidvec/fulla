@@ -14,7 +14,7 @@ of the rules the refactor established:
   R3  Domain code must NOT use ``drogon::orm`` -- ORM belongs to
       libs/storage-postgres, never the Domain.
   R4  apps/server product services are a REGISTERED EXCEPTION allowed to
-      construct ``drogon::orm::Mapper`` directly (#222, v1.5.0 M0; see
+      construct ``drogon::orm::Mapper`` directly (#222, v1.4.0 M0; see
       apps/server/AGENTS.md). The exception is capped: the number of
       ``Mapper<`` construction points under apps/server/src (comment-stripped,
       same caliber as R1-R3) must stay <= the frozen baseline. Lower the
@@ -63,7 +63,7 @@ RE_INCLUDE_OAUTH2 = re.compile(r'#\s*include\s*[<"][^">]*fulla/oauth2/')
 # `Mapper<X>(db).findBy(...)` form). Every use site constructs one.
 RE_MAPPER_CONSTRUCTION = re.compile(r'\bMapper\s*<')
 
-# R4 cap, frozen at v1.5.0 M0 (#222) after the ClientOwnersRepository
+# R4 cap, frozen at v1.4.0 M0 (#222) after the ClientOwnersRepository
 # extraction. Measured with this script's own caliber (comment-stripped
 # apps/server/src production sources). Direction: DOWN only -- lower the
 # constant when the count drops, never raise it back.

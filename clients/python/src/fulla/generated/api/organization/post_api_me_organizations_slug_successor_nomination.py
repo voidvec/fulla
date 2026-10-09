@@ -92,7 +92,7 @@ def sync_detailed(
     """Nominate Successor
 
      The organization owner nominates a successor (any live user, may be a non-member). Replaces any
-    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 
     Args:
         slug (str):
@@ -127,7 +127,7 @@ def sync(
     """Nominate Successor
 
      The organization owner nominates a successor (any live user, may be a non-member). Replaces any
-    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 
     Args:
         slug (str):
@@ -157,7 +157,7 @@ async def asyncio_detailed(
     """Nominate Successor
 
      The organization owner nominates a successor (any live user, may be a non-member). Replaces any
-    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 
     Args:
         slug (str):
@@ -190,7 +190,7 @@ async def asyncio(
     """Nominate Successor
 
      The organization owner nominates a successor (any live user, may be a non-member). Replaces any
-    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.5.0 M3).
+    previous pending nomination (idempotent); the nominee must accept before the seat moves (v1.4.0 M3).
 
     Args:
         slug (str):

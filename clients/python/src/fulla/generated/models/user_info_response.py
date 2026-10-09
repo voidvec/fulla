@@ -18,7 +18,7 @@ T = TypeVar("T", bound="UserInfoResponse")
 @_attrs_define
 class UserInfoResponse:
     """OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx
-    present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.5.0;
+    present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0;
     membership is re-checked in real time).
 
         Attributes:
@@ -28,7 +28,7 @@ class UserInfoResponse:
             email (str | Unset):
             email_verified (bool | Unset):
             roles (list[str] | Unset):
-            org_ctx (UserInfoResponseOrgCtx | Unset): v1.5.0: the ACTIVE organization context (id + name + the user's
+            org_ctx (UserInfoResponseOrgCtx | Unset): v1.4.0: the ACTIVE organization context (id + name + the user's
                 current roles in it); active-org-only, never the full membership list.
     """
 

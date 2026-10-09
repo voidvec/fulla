@@ -26,7 +26,7 @@ test.describe('OAuth2 Consent Page', () => {
     await expect(page.locator('button:has-text("Deny")')).toBeVisible()
   })
 
-  // v1.4.0 open platform + v1.5.0 M1b (#223 second half): consent screens
+  // v1.4.0 open platform + v1.4.0 M1b (#223 second half): consent screens
   // attribute self-registered apps to their owner — via the SERVER-derived
   // context endpoint, never the URL (a phisher could forge owner_name).
   test('shows owner attribution from the server context', async ({ page }) => {
@@ -54,7 +54,7 @@ test.describe('OAuth2 Consent Page', () => {
     await expect(page.getByTestId('consent-owner-name')).toHaveCount(0)
   })
 
-  // v1.5.0 M1b org banner: shown only when the server context carries an
+  // v1.4.0 M1b org banner: shown only when the server context carries an
   // org binding for the flow.
   test('shows the org-membership banner when the context has an org', async ({ page }) => {
     await page.route('**/oauth2/consent/context*', async (route) => {

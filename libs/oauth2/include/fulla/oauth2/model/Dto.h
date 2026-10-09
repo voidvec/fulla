@@ -92,7 +92,7 @@ struct OAuth2AuthCode
     // amr = space-separated Authentication Method References ("pwd", "mfa").
     int64_t authTime = 0;
     std::string amr;
-    // v1.5.0 M1 (design §2.1 item 4): the organization context selected at
+    // v1.4.0 M1 (design §2.1 item 4): the organization context selected at
     // authorize time (org_id hint accepted only for a current member of the
     // org on an org-owned client). The code row carries it; token exchange
     // inherits it onto the access/refresh pair. nullopt = no org context.
@@ -119,7 +119,7 @@ struct OAuth2AccessToken
     int introspectCount = 0;  // Number of introspection requests
     int64_t revokedAt = 0;    // Unix timestamp when token was revoked
     std::string revokedBy;    // Client ID that revoked the token
-    // v1.5.0 M1 (design §2.1 item 4): org context inherited from the code at
+    // v1.4.0 M1 (design §2.1 item 4): org context inherited from the code at
     // issuance. Exposed by introspection as `org_id` (the token's own
     // binding, like sub/client_id -- the roles/name stay userinfo-only).
     std::optional<int32_t> orgId;
@@ -142,7 +142,7 @@ struct OAuth2RefreshToken
     // P1: Token Revocation audit fields (RFC 7009)
     int64_t revokedAt = 0;  // Unix timestamp when the token was revoked
     std::string revokedBy;  // Client ID that revoked the token
-    // v1.5.0 M1: org context inherited from the code; refresh rotation
+    // v1.4.0 M1: org context inherited from the code; refresh rotation
     // preserves it along the family.
     std::optional<int32_t> orgId;
 };
@@ -162,7 +162,7 @@ struct TokenIntrospection
     std::string aud;                   // Audience (client ID)
     std::string iss;                   // Issuer (authorization server URL)
     std::string scope;                 // Granted scopes
-    // v1.5.0 M1 (design §2.1 item 4): the token's org binding, exposed as
+    // v1.4.0 M1 (design §2.1 item 4): the token's org binding, exposed as
     // `org_id` when active (roles/name stay userinfo-only).
     std::optional<int32_t> orgId;
 
@@ -194,7 +194,7 @@ struct TokenIntrospection
                 json["iss"] = iss;
             if (!scope.empty())
                 json["scope"] = scope;
-            // v1.5.0 M1 (design §2.1 item 4): expose the token's org binding.
+            // v1.4.0 M1 (design §2.1 item 4): expose the token's org binding.
             if (orgId.has_value())
                 json["org_id"] = static_cast<Json::Int64>(*orgId);
         }

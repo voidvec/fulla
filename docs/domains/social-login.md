@@ -26,7 +26,7 @@ Issuance records a `SOCIAL_LOGIN_TOKEN_ISSUED` audit action (provider, client, s
 
 This is a first-party extension endpoint, not one of RFC 6749's four grants — the same position the GitHub flow has always had, now documented and audit-traced. The standards-track alternative (social login establishes a browser session, then the SPA runs authorization-code + PKCE with a consent-exempt first-party client) is registered as follow-up work.
 
-## Provider tiers (v1.5.0)
+## Provider tiers (v1.4.0)
 
 Deployments differ in which external providers make sense (GitHub/Google are
 unreachable from mainland China; WeChat is China-only). Availability is a
@@ -55,7 +55,7 @@ no frontend rebuild. Both tiers default to `true` (upgrade compatibility).
 
 - Backend route: `POST /api/github/login`; the `frontends/user` frontend renders the
   "Sign in with GitHub" button from the runtime discovery endpoint
-  `GET /api/auth/providers` (v1.5.0 provider tiers — the button tracks the
+  `GET /api/auth/providers` (v1.4.0 provider tiers — the button tracks the
   server-side `external_auth` gate, no frontend build variable involved).
 - Callback: `/callback/github`.
 

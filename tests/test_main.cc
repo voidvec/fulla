@@ -313,7 +313,7 @@ int main(int argc, char **argv)
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::HealthController>()
     );
-    // v1.5.0 provider tiers: the route-manifest golden snapshot enumerates
+    // v1.4.0 provider tiers: the route-manifest golden snapshot enumerates
     // every registered handler, so the discovery controller must be
     // registered here too (mirrors registerAllControllers()).
     drogon::app().registerController(

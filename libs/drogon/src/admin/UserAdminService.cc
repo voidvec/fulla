@@ -606,7 +606,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "Invalid JSON body");
         return;
     }
-    // users.org_id write surface removed (v1.5.0 org-anchor convergence, design
+    // users.org_id write surface removed (v1.4.0 org-anchor convergence, design
     // 1.2/V7): the column stays until v2.0 but the admin API no longer accepts
     // it - the sole org truth is organization_members + client_owners. Reject
     // the key on presence (any type) so a caller never believes a deprecated
@@ -1005,7 +1005,7 @@ void UserAdminService::updateUser(
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "Invalid JSON body");
         return;
     }
-    // org_id write surface removed (v1.5.0, design 1.2/V7 - see createUser);
+    // org_id write surface removed (v1.4.0, design 1.2/V7 - see createUser);
     // presence of the key is a 400 regardless of value type.
     if (jsonBody->isMember("org_id"))
     {
@@ -1245,7 +1245,7 @@ void UserAdminService::deleteUser(
                         );
                         return;
                     }
-                    // v1.5.0 M3 (R-M3-4): auto-effect any pending succession
+                    // v1.4.0 M3 (R-M3-4): auto-effect any pending succession
                     // nomination the deleting owner holds BEFORE the soft
                     // delete; failure aborts. Orgs without a pending
                     // nomination fall to the admin-takeover state (#228 is

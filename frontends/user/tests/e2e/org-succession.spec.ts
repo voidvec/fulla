@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { setupMocks, loginUser } from './helpers/mock-api'
 
-// v1.5.0 M3: ownership succession on the organizations page -- the
+// v1.4.0 M3: ownership succession on the organizations page -- the
 // owner's nominate/withdraw surface and the nominee's accept banner.
 // Backend contract mirrored here:
 //   GET  /api/me/organizations  (successor_nomination per org,

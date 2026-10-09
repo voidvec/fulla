@@ -57,7 +57,7 @@ void AuthProvidersController::initApiDocs()
         ep.summary = "List Enabled External Login Providers";
         ep.description =
           "Public discovery of the external login providers this deployment "
-          "currently offers (v1.5.0 provider tiers). The login page renders "
+          "currently offers (v1.4.0 provider tiers). The login page renders "
           "its provider buttons from this response; an empty list means "
           "external login is disabled. authorize_url is the fully built "
           "provider authorize URL (redirect target resolved from the "
