@@ -182,7 +182,7 @@ export const authService = {
     await http.post('/api/register', new URLSearchParams({ username, password, email }))
   },
 
-  // v1.5.0 provider tiers: public discovery (no auth) of the external login
+  // v1.4.0 provider tiers: public discovery (no auth) of the external login
   // providers this deployment offers. The login page renders its social
   // buttons from this instead of build-time env vars, so the same server-side
   // gate (tier switch + credentials) that enforces the login endpoints

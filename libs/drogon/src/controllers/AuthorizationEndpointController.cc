@@ -110,7 +110,7 @@ void AuthorizationEndpointController::initApiDocsImpl()
         fulla::drogon::observability::openapi::ParameterLocation::QUERY,
         false},
        {"org_id",
-        "Organization context hint (v1.5.0): integer id or slug of the "
+        "Organization context hint (v1.4.0): integer id or slug of the "
         "organization this authorization is made in. Accepted only when "
         "the user is a current member and the client belongs to that "
         "organization; otherwise a uniform inline error (no redirect). "
@@ -527,7 +527,7 @@ void AuthorizationEndpointController::authorize(
                     }
                     if (!nonce.empty())
                         location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
-                    // v1.5.0 M1: carry the org context hint through the
+                    // v1.4.0 M1: carry the org context hint through the
                     // login round trip; the login POST re-runs the same
                     // OrgContextGate before issuing the code.
                     {
@@ -602,7 +602,7 @@ void AuthorizationEndpointController::authorize(
                     }
                     if (!nonce.empty())
                         location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
-                    // v1.5.0 M1: carry the org context hint through the
+                    // v1.4.0 M1: carry the org context hint through the
                     // login round trip; the login POST re-runs the same
                     // OrgContextGate before issuing the code.
                     {
@@ -615,7 +615,7 @@ void AuthorizationEndpointController::authorize(
                     return;
                 }
 
-                // v1.5.0 M1 (design §2.1 item 5 / O1): the org-context
+                // v1.4.0 M1 (design §2.1 item 5 / O1): the org-context
                 // gate wraps the scope evaluation. `org_id` is a client-
                 // supplied HINT; it is accepted only for a current member
                 // of the referenced org on an org-owned client (§2.5 MFA
@@ -814,7 +814,7 @@ void AuthorizationEndpointController::authorize(
                               location +=
                                 "&consent_csrf=" + ::drogon::utils::urlEncode(consentCsrf);
                           }
-                          // v1.5.0 M1 (design §2.1 item 4): the org binding
+                          // v1.4.0 M1 (design §2.1 item 4): the org binding
                           // selected for THIS request crosses the portal
                           // round trip server-side, keyed by `state` -- the
                           // consent URL never carries it. The consent POST
@@ -832,7 +832,7 @@ void AuthorizationEndpointController::authorize(
                                 )
                               );
                           }
-                          // v1.5.0 M1b (#223 second half): owner attribution
+                          // v1.4.0 M1b (#223 second half): owner attribution
                           // no longer rides the redirect URL (a phisher could
                           // forge owner_name=Your Bank on a fake consent
                           // link). The consent screen pulls it from GET
@@ -929,7 +929,7 @@ void AuthorizationEndpointController::authorize(
                 );
                   };  // proceedWithOrgContext
 
-                  // v1.5.0 M1 dispatch: no org_id parameter -> straight
+                  // v1.4.0 M1 dispatch: no org_id parameter -> straight
                   // through; otherwise the gate decides (see the wrapper's
                   // decision handling above).
                   {

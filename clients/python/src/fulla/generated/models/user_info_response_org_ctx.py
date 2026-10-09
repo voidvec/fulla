@@ -13,7 +13,7 @@ T = TypeVar("T", bound="UserInfoResponseOrgCtx")
 
 @_attrs_define
 class UserInfoResponseOrgCtx:
-    """v1.5.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the
+    """v1.4.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the
     full membership list.
 
         Attributes:

@@ -1,6 +1,6 @@
 // tests/integration/oidc/OrgSuccessionHttpTest.cc
 //
-// v1.5.0 M3 integration tests: ownership succession (design §1.3 item 2)
+// v1.4.0 M3 integration tests: ownership succession (design §1.3 item 2)
 // and the org-scoped client_credentials anchor (§2.3).
 //   1. The nominate-and-accept workflow (R-M3-3): owner nominates (a
 //      member, a NON-member, and an overwrite of a pending nomination),

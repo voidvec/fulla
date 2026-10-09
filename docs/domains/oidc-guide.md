@@ -68,7 +68,7 @@ Depending on the requested scopes, it may also contain:
 
 - **profile scope**: `name`, `preferred_username`
 - **email scope**: `email`, `email_verified`
-- **org scope with an organization context** (v1.5.0): `org_ctx` — an object
+- **org scope with an organization context** (v1.4.0): `org_ctx` — an object
   `{ org_id, org_name, roles[] }` describing the active organization bound to
   this authorization and the caller's current membership roles in it. Present
   only when the authorize request carried a valid `org_id` and the client
@@ -102,7 +102,7 @@ Depending on the requested scopes, it may also contain:
 | `openid` | `sub` (required scope; enables OIDC) |
 | `profile` | `name`, `preferred_username` |
 | `email` | `email`, `email_verified` |
-| `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — only when the authorization carried a valid organization context (v1.5.0) |
+| `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — only when the authorization carried a valid organization context (v1.4.0) |
 
 ## 6. Integration Examples
 

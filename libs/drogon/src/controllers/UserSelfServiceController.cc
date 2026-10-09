@@ -1122,7 +1122,7 @@ void UserSelfServiceController::deleteAccount(
                             );
                             return;
                         }
-                        // v1.5.0 M3 (R-M3-4): auto-effect any pending
+                        // v1.4.0 M3 (R-M3-4): auto-effect any pending
                         // succession nomination the deleting owner holds
                         // BEFORE the soft delete lands; failure aborts the
                         // deletion (a frozen seat is the #221 deadlock).
@@ -1257,7 +1257,7 @@ void resolveInternalUserId(
 }
 
 // Server-side provider authorize-URL builder: moved to the src-local shared
-// header SocialAuthorizeUrl.h so the v1.5.0 login discovery endpoint
+// header SocialAuthorizeUrl.h so the v1.4.0 login discovery endpoint
 // (AuthProvidersController) emits URLs from the exact same redirect
 // resolution (per-provider redirect_uri override, else frontend.url +
 // /callback/{provider}) as this link flow. State stays mandatory here

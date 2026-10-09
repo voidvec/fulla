@@ -157,7 +157,7 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                   );
               };
 
-              // #222 (v1.5.0 M0): the owners-row read lives in the shared
+              // #222 (v1.4.0 M0): the owners-row read lives in the shared
               // ClientOwnersRepository; the fail-closed POLICY (Review C3)
               // stays here: NoRow = admin-owned/active, Error = treat as
               // suspended (a genuine DB failure must fail CLOSED: treating
@@ -319,7 +319,7 @@ void PostgresClientRepository::validateClient(
                   // uniformity fix, not a timing-side-channel fix).
                   (*sharedCb)(match);
               };
-              // #222 (v1.5.0 M0): shared owners-row read (see the getClient
+              // #222 (v1.4.0 M0): shared owners-row read (see the getClient
               // twin above); fail-closed POLICY (Review C3) preserved here.
               ClientOwnersRepository ownersRepo(dbClientReader_);
               ownersRepo.findOwnerRow(

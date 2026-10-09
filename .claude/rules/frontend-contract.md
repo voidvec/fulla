@@ -23,7 +23,7 @@ globs:
   session 清理与 backchannel 通知；user 登出走 POST `/oauth2/logout` Bearer 单点）。
 - **vue-client 种子 redirect_uri 是 `http://127.0.0.1:8080/callback`**——精确匹配，localhost
   被拒。
-- GitHub 社交登录：**v1.5.0 起**前端不再用 `VITE_GITHUB_CLIENT_ID`（已废除）。登录页从公开端点
+- GitHub 社交登录：**v1.4.0 起**前端不再用 `VITE_GITHUB_CLIENT_ID`（已废除）。登录页从公开端点
   `GET /api/auth/providers` 拉取已启用 provider 与服务端拼好的 `authorize_url`（redirect 解析 =
   per-provider `redirect_uri` 覆盖优先，否则 `frontend.url` + `/callback/{provider}`）；可用性 =
   档位开关（`external_auth.tiers.domestic/international`，env 别名 `FULLA_EXTERNAL_TIER_*`，

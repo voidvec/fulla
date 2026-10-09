@@ -403,7 +403,7 @@ VITE_REDIRECT_URI=https://your-domain.com/callback
    Authorization callback URL: `https://your-domain.com/callback/github`.
 2. Fill `.env.docker` with the client ID and client secret:
    `FULLA_GITHUB_CLIENT_ID` and `FULLA_GITHUB_CLIENT_SECRET`. No frontend
-   variable is needed — since v1.5.0 the login page discovers external
+   variable is needed — since v1.4.0 the login page discovers external
    login providers at runtime (`GET /api/auth/providers`) and renders the
    button when the backend reports GitHub enabled.
 3. Restart the backend: `docker compose up -d` (the button appears/disappears
@@ -620,7 +620,7 @@ The frontend (the user-facing OAuth2Frontend) is configured through Vite environ
 | `VITE_REDIRECT_URI` | OAuth2 callback URI | https://your-domain.com/callback |
 
 > External login providers (GitHub / Google / WeChat) are **not** frontend
-> variables since v1.5.0 — they are configured server-side
+> variables since v1.4.0 — they are configured server-side
 > (`custom_config.external_auth.*` + the tier switches) and the login page
 > discovers them at runtime from `GET /api/auth/providers`.
 

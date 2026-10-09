@@ -28,7 +28,7 @@ class GetApiMeOrganizationsResponse200:
         total (int | Unset):
         pending_succession_nominations (list[GetApiMeOrganizationsResponse200PendingSuccessionNominationsItem] | Unset):
             Orgs where the CALLER is the pending nominee (the accept banner's discovery surface; the caller may be a non-
-            member). v1.5.0 M3.
+            member). v1.4.0 M3.
     """
 
     organizations: list[GetApiMeOrganizationsResponse200OrganizationsItem] | Unset = UNSET

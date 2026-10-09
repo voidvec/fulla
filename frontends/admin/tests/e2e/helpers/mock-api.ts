@@ -474,7 +474,7 @@ export async function setupAuthenticatedMocks(page: Page) {
   // User detail - GET/PUT/DELETE for user info. Stateful: PUT applies the
   // known fields onto the current detail state (mirroring the backend's
   // contract — wrong types are a 400, org_id presence is a 400 since the
-  // v1.5.0 org-anchor convergence — issues #53/#59; the backend answers the
+  // v1.4.0 org-anchor convergence — issues #53/#59; the backend answers the
   // catalog-generic VALIDATION_INVALID_INPUT message in both cases) so a
   // subsequent GET reflects the update, like the real API.
   const userDetail: any = { ...MOCK_USER_DETAIL }

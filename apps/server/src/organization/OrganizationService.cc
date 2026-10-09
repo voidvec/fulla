@@ -273,7 +273,7 @@ void OrganizationService::transferOwnership(
                         // after the promote/insert so a mid-flight failure
                         // biases toward "two owners temporarily" (retryable).
                         // Not transactional (V034's comment envisioned a
-                        // single-transaction transfer for the full v1.5.0
+                        // single-transaction transfer for the full v1.4.0
                         // nominate-and-accept workflow); the promote's
                         // count==0 abort below closes the "target left
                         // mid-flight -> zero owners" window, and the

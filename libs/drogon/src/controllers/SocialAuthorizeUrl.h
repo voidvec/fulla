@@ -5,7 +5,7 @@
 // 1. The #71 social LINK flow (UserSelfServiceController's
 //    /api/me/social/links/{provider}/authorize): state = the one-time
 //    Redis-backed link-state token; the link-back POST must present it.
-// 2. The v1.5.0 LOGIN discovery payload (AuthProvidersController,
+// 2. The v1.4.0 LOGIN discovery payload (AuthProvidersController,
 //    GET /api/auth/providers): state = "" — the login flow is stateless
 //    today (the SPA posts the provider code straight back), so no state
 //    parameter is emitted.

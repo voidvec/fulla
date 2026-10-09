@@ -9,6 +9,51 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.4.0] - 2026-10-09
+
+The multi-tenancy release: organizations become real protocol-level tenants, the
+self-service open platform ships, external login providers become
+deployment-configurable, and the commercial licensing page goes live. Six
+migrations (V033–V038) — all additive except the documented dead-column drop.
+
+### ⚠️ Breaking / Required reading before upgrading
+
+- **`users.org_id` admin write surface removed** (V036 organization-anchor unification): the admin create/update APIs no longer accept `users.org_id` — organization membership is expressed exclusively through the M:N `organization_members` table (and `oauth2_client_owners.org_id` for applications). The column itself is retained but deprecated until v2.0. The dead `oauth2_clients.org_id` column (never written or read) IS dropped by V036.
+- **External-login frontend build variables removed**: `VITE_GITHUB_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` / `VITE_WECHAT_APPID` are gone from the SPA and the Docker build chain. Provider availability is now server-side config (`custom_config.external_auth.*` plus the new `tiers` block) discovered at runtime via the public `GET /api/auth/providers` endpoint — flipping a tier or removing credentials takes effect on backend restart, no frontend rebuild. Deployments that set the old variables simply ignore them.
+- **Non-member organization endpoints answer 404, not 403**: `/api/me/organizations/{slug}/*` membership failures now render the same shape as a nonexistent org (anti-enumeration, closing the org-slug existence oracle). Members who lack a manager role still get 403. Scripts keying on the old 403 for non-members must expect 404.
+- **Organization invitations are single-use, email-verified, 72h, and now stored hashed** (SHA-256, the password-reset pattern): a database dump can no longer redeem invitations. Pending invitations created by pre-1.4.0 dev builds hold plaintext and are not redeemable — re-issue them.
+
+### Added
+
+- **Organization context in the OAuth2/OIDC protocol** (tenant semantics): the authorize endpoint accepts an `org_id` hint (numeric id or slug) validated by the org context gate — the requester must be a live member, and the client must belong to that org or hold an active organization consent; organizations can additionally require MFA for org-context authorization (`require_mfa`, enforced at the gate). The binding flows through the code→token chain (including refresh), tokens issued with the `org` scope carry an **`org_ctx` claim** (`{org_id, org_name, roles[]}` — active organization only, never the membership list), userinfo re-checks membership on every request, and introspection exposes `org_id`.
+- **Organization-level admin consents + consent-request workflow**: org owners/admins can grant consents on behalf of the organization (members then skip the personal consent prompt for covered scopes — prompt behavior only, never scope enlargement); members without manager rights file consent **requests** that managers approve/reject from the portal. Revocation affects future authorizations only (per-tenant ruling; in-flight tokens are untouched).
+- **Owner succession**: owners nominate a successor (two-step nominate→accept with optimistic arbitration), a soft-deleted owner's seat auto-effects from a pending nomination, and the admin `POST /api/admin/organizations/{slug}/transfer-ownership` rescues orgs with no eligible successor (previous owners demote to admin).
+- **Organization-scoped client credentials**: tokens for org-owned applications carry the `org_id` claim (subject stays the client id); introspection reports it.
+- **Self-service open platform**: `POST /api/me/applications` (quota'd per user, rate-limited, https-or-loopback redirect URIs), the portal's **My Applications** page (credential rotation shown once, suspend/resume, org transfer, deletion), org-owned application management, RFC 7591 dynamic registration at `POST /oauth2/register` (admin-gated), and organization invitations with single-use tokens.
+- **External login provider tiers + runtime discovery**: `external_auth.tiers.{domestic,international}` gate WeChat and GitHub/Google respectively (default both on; env aliases `FULLA_EXTERNAL_TIER_*`); the new public `GET /api/auth/providers` returns each enabled provider with a fully built `authorize_url`, and the login page renders its social buttons from that response.
+- **Commercial licensing page** (`/commercial`, en + zh): the open-core commitment (protocol semantics free forever, core never moves behind a paywall, no SSO tax), dual-license options, tier-by-org-size pricing structure (no numbers — quotes on request), and the enterprise roadmap under a customer-triggered wording. README links it from the License section.
+- **Profile display name / avatar URL** user fields (admin + self-service PATCH with format validation).
+- `llms.txt` / `llms-full.txt` AI-native documentation artifacts, generated from the docs tree in CI (never stale).
+
+### Changed
+
+- **Audit trail gains actor attribution and an organization dimension**: authenticated org/open-platform mutations no longer audit as `anonymous` (the auth filter's user id is used), and org-scoped actions populate the V036 `audit_logs.org_id` column.
+- **Client cache invalidation ordering** hardened: application updates invalidate the Redis client cache after the write commits (a pre-commit DEL could re-serve a stale row for a full TTL).
+- Organization membership lookups on decision endpoints distinguish infrastructure failures from business states (#230 policy: 5xx instead of masquerading 404/409); consent-grant and succession transactions carry exactly-once completion guards.
+- Open-platform config blocks are complete in every shipped config (env-override channels all land); the user SPA's new account pages use the semantic surface token (dark-mode correct).
+
+### Fixed
+
+- **Six self-service portal mutations sent form-encoded bodies to JSON-only endpoints** and always failed against the real backend (create org, invite, accept invitation, nominate successor, create application, profile update) — the mock-based e2e suite could not catch it; the specs now assert the request content type.
+- White input fields in dark mode on the new account pages (`bg-white` → `bg-surface`).
+- Consent-panel and members-panel race guards cover their error paths (a late failure for a previously open org no longer renders over the switched-to panel); post-mutation refresh no longer flickers or clears the invite input.
+
+### Known behaviors (operator notes)
+
+- **The fail-closed client-owners lookup is on the auth hot path**: every client resolution now also reads `oauth2_client_owners`, and any error there (including for admin-seeded clients with no owners row) resolves as suspended/invalid — security-correct by design, but a transient failure of that one table is an auth outage, and suspensions propagate only after replica lag.
+- **Introspection reports the token's stored `org_id` without a live membership re-check** (bounded by the access-token TTL); userinfo and id_token issuance DO re-check — resource servers keying tenant authorization on introspection should treat it as token facts, not current membership.
+- Social login authorize URLs remain stateless (pre-existing login-CSRF posture; the account-link flow already carries a one-time state) — tracked for a follow-up.
+
 ## [1.3.2] - 2026-09-17
 
 ### Added

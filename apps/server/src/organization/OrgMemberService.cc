@@ -494,7 +494,7 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                         Mapper<OrgModel>(db).findBy(
                           Criteria(OrgModel::Cols::_id, CompareOperator::In, orgIds),
                           [req, cb, db, roleByOrg, caller](const std::vector<OrgModel> &orgs) {
-                              // v1.5.0 M3 (R-M3-3 visibility): owner/admin
+                              // v1.4.0 M3 (R-M3-3 visibility): owner/admin
                               // entries carry the org's pending succession
                               // nomination; the caller's own pending
                               // nominations (they may be a NON-member
@@ -1159,7 +1159,7 @@ void OrgMemberService::revokeInvitation(
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// GET /api/me/organizations/{slug}/consents — v1.5.0 M2 (R-M2-4): active
+// GET /api/me/organizations/{slug}/consents — v1.4.0 M2 (R-M2-4): active
 // org consents grouped by client, each scope with its own granted_by /
 // granted_at (rows of one client may carry different grantors after a
 // partial re-grant). Owner/admin only. Queries live in the shared
@@ -1289,7 +1289,7 @@ void OrgMemberService::revokeOrgConsents(
 
 // ---------------------------------------------------------------------------
 // POST /api/me/organizations/{slug}/successor-nomination {user_id} —
-// v1.5.0 M3 (R-M3-3): the owner nominates a successor (any LIVE user --
+// v1.4.0 M3 (R-M3-3): the owner nominates a successor (any LIVE user --
 // may be a non-member; a soft-deleted target would recreate the #221
 // deadlock). Overwrites a previous pending nomination (idempotent).
 // ---------------------------------------------------------------------------

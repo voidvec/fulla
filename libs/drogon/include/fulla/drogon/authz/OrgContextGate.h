@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M1 (real-tenant design §2.1 item 5, ruling O1): the authorize-time
+// v1.4.0 M1 (real-tenant design §2.1 item 5, ruling O1): the authorize-time
 // validity gate for the `org_id` parameter. The parameter is a client-
 // supplied HINT selecting the organization context of this authorization;
 // it is accepted only when

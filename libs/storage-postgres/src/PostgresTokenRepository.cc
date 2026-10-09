@@ -46,7 +46,7 @@ void PostgresTokenRepository::saveAccessToken(const OAuth2AccessToken &token, Vo
         // F-016: persist the issuer stamped at issuance (previously never
         // written, so every row carried the schema's hardcoded default).
         newToken.setIssuer(token.issuer);
-        // v1.5.0 M1 (design §2.1 item 4): the org binding inherited from
+        // v1.4.0 M1 (design §2.1 item 4): the org binding inherited from
         // the code. V036 column; absent -> NULL.
         if (token.orgId.has_value())
         {
@@ -172,7 +172,7 @@ void PostgresTokenRepository::saveTokenPair(
               invokeOnce(false);
           };
 
-          // v1.5.0 M1: the refresh insert branches on family_id (pre-
+          // v1.4.0 M1: the refresh insert branches on family_id (pre-
           // existing) AND org_id (new) -- raw SQL placeholders are a
           // compile-time arg list, so each combination gets its own
           // statement. Kept in one lambda so the access insert below has a
@@ -332,7 +332,7 @@ void PostgresTokenRepository::getAccessToken(const std::string &token, AccessTok
               t.scope = row.getValueOfScope();
               t.expiresAt = row.getValueOfExpiresAt();
               t.revoked = row.getValueOfRevoked();
-              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              // v1.4.0 M1: org binding round-trips (NULL -> nullopt).
               t.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
                                        : std::nullopt;
               (*sharedCb)(t);
@@ -428,7 +428,7 @@ void PostgresTokenRepository::getRefreshToken(const std::string &token, RefreshT
               t.expiresAt = row.getValueOfExpiresAt();
               t.revoked = row.getValueOfRevoked();
               t.familyId = row.getValueOfFamilyId();
-              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              // v1.4.0 M1: org binding round-trips (NULL -> nullopt).
               t.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
                                        : std::nullopt;
               (*sharedCb)(t);
@@ -530,7 +530,7 @@ void PostgresTokenRepository::atomicRevokeRefreshToken(
           rt.scope = row["scope"].isNull() ? "" : row["scope"].as<std::string>();
           rt.expiresAt = row["expires_at"].as<int64_t>();
           rt.familyId = row["family_id"].isNull() ? "" : row["family_id"].as<std::string>();
-          // v1.5.0 M1: the org binding must survive the rotation read.
+          // v1.4.0 M1: the org binding must survive the rotation read.
           rt.orgId =
             row["org_id"].isNull() ? std::nullopt
                                    : std::optional<int32_t>(row["org_id"].as<int32_t>());
@@ -639,7 +639,7 @@ void PostgresTokenRepository::introspectToken(
           introspection.nbf = accessToken.getValueOfNotBefore();
           introspection.sub = accessToken.getValueOfUserId();
           introspection.scope = accessToken.getValueOfScope();
-          // v1.5.0 M1: expose the token's org binding (design §2.1 item 4).
+          // v1.4.0 M1: expose the token's org binding (design §2.1 item 4).
           introspection.orgId =
             accessToken.getOrgId() ? std::optional<int32_t>(*accessToken.getOrgId())
                                    : std::nullopt;
@@ -677,7 +677,7 @@ void PostgresTokenRepository::introspectToken(
                 introspection.nbf = 0;
                 introspection.sub = refreshToken.getValueOfUserId();
                 introspection.scope = refreshToken.getValueOfScope();
-                // v1.5.0 M1: org binding on the refresh branch too.
+                // v1.4.0 M1: org binding on the refresh branch too.
                 introspection.orgId =
                   refreshToken.getOrgId() ? std::optional<int32_t>(*refreshToken.getOrgId())
                                           : std::nullopt;

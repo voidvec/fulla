@@ -1,6 +1,6 @@
 #pragma once
 
-// Organization-level admin consent data access (v1.5.0 M2, design §2.2).
+// Organization-level admin consent data access (v1.4.0 M2, design §2.2).
 // The V036 organization_consents table holds one row per
 // (org, client, scope) -- same shape as oauth2_user_consents -- so the
 // authorize-time consent decision becomes a UNION: a scope is consented

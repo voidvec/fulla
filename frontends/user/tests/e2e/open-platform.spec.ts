@@ -152,7 +152,7 @@ test.describe('My Organizations', () => {
   })
 })
 
-// v1.5.0 M2: the org-consents panel (list / revoke / grant-link) — fixtures
+// v1.4.0 M2: the org-consents panel (list / revoke / grant-link) — fixtures
 // live at module scope so the consent-request approval walkthrough below can
 // reuse the same consents route (fullyParallel gives each test its own
 // worker, i.e. its own module instance).
@@ -199,7 +199,7 @@ async function setupOrgConsentMocks(page: any) {
   await mockOrgConsentRequests(page, 'qa-consent-org', { requests: [], calls: [] })
 }
 
-// v1.5.0 M2: the org-consents panel (list / revoke / grant-link).
+// v1.4.0 M2: the org-consents panel (list / revoke / grant-link).
 test.describe('My Organizations — org authorizations', () => {
   test.beforeEach(async ({ page }) => {
     await setupOrgConsentMocks(page)

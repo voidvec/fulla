@@ -1,4 +1,4 @@
-// See OrgContextGate.h for the policy rationale (v1.5.0 M1, design §2.1
+// See OrgContextGate.h for the policy rationale (v1.4.0 M1, design §2.1
 // item 5 / O1 / §2.5). Every hop is async callback + Mapper + Criteria via
 // the shared repository, each failure mapped to the uniform Invalid
 // decision (or StorageError, which the callers render identically).
@@ -149,7 +149,7 @@ void OrgContextGate::validate(
                           (*sharedCb)(uniformReject(o.status, o.error));
                           return;
                       }
-                      // §2.1 item 5, condition 3 (v1.5.0 M1 + #236): the org
+                      // §2.1 item 5, condition 3 (v1.4.0 M1 + #236): the org
                       // hint is related to this client when the client is the
                       // org's OWN application (oauth2_client_owners.org_id)
                       // OR the org holds an ACTIVE org consent row for the

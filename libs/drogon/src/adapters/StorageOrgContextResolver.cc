@@ -1,4 +1,4 @@
-// See StorageOrgContextResolver.h for the wiring rationale (v1.5.0 M1).
+// See StorageOrgContextResolver.h for the wiring rationale (v1.4.0 M1).
 // All hops are async callback + Mapper + Criteria via the shared
 // repository; every failure resolves to nullopt (org_ctx is claim data:
 // its failure mode is absence, never a failed request).

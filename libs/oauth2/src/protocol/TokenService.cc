@@ -216,7 +216,7 @@ void TokenService::generateAuthorizationCode(
     // the code so the token endpoint can stamp them into the id_token.
     authCode.authTime = authTime;
     authCode.amr = amr;
-    // v1.5.0 M1 (design §2.1 item 4): the org binding picked at authorize
+    // v1.4.0 M1 (design §2.1 item 4): the org binding picked at authorize
     // time rides the code row; token exchange inherits it down the chain.
     authCode.orgId = orgId;
 
@@ -303,7 +303,7 @@ void TokenService::exchangeCodeForToken(
                 }
 
                 auto authCode = *authCodeOpt;
-                // v1.5.0 M1 (design §2.1): resolve the org_ctx claim data
+                // v1.4.0 M1 (design §2.1): resolve the org_ctx claim data
                 // first -- a nullopt hop when the code carries no org
                 // binding, the granted scopes lack `org`, or no resolver
                 // is wired -- then roles, then issuance.
@@ -348,7 +348,7 @@ void TokenService::exchangeCodeForToken(
                       // (previously the column was never written and the DB
                       // default leaked a hardcoded example.com URL).
                       token.issuer = self->issuer_;
-                      // v1.5.0 M1 (design §2.1 item 4): the org binding
+                      // v1.4.0 M1 (design §2.1 item 4): the org binding
                       // inherited from the code rides the token pair.
                       token.orgId = authCode.orgId;
 
@@ -462,7 +462,7 @@ void TokenService::exchangeCodeForToken(
                                         idTokenClaims["acr"] = mfa ? "2" : "1";
                                     }
                                 }
-                                // v1.5.0 M1 (design §2.1 item 3): org_ctx =
+                                // v1.4.0 M1 (design §2.1 item 3): org_ctx =
                                 // the active org + the user's CURRENT roles
                                 // in it (O7: the resolver re-checks
                                 // membership, so a removed member's refresh
@@ -497,7 +497,7 @@ void TokenService::exchangeCodeForToken(
                   }
               );
                   }
-              );  // resolveOrgContextForClaims (v1.5.0 M1 org_ctx hop)
+              );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
             }
           );
       }
@@ -566,7 +566,7 @@ void TokenService::refreshAccessToken(
               return;
           }
 
-          // v1.5.0 M1 (design §2.1 item 4): refresh preserves the org
+          // v1.4.0 M1 (design §2.1 item 4): refresh preserves the org
           // binding along the family and re-resolves org_ctx (O7: a
           // member removed from the org stops getting org_ctx on refresh-
           // issued id_tokens immediately). Nullopt hop when not applicable.
@@ -595,7 +595,7 @@ void TokenService::refreshAccessToken(
           token.expiresAt = now + self->accessTokenTtl_;
           // F-016: same issuer stamping as the authorization_code path above.
           token.issuer = self->issuer_;
-          // v1.5.0 M1: the org binding survives rotation.
+          // v1.4.0 M1: the org binding survives rotation.
           token.orgId = storedRt->orgId;
 
           fulla::oauth2::model::OAuth2RefreshToken newRt;
@@ -642,7 +642,7 @@ void TokenService::refreshAccessToken(
                     idTokenClaims["aud"] = storedRt->clientId;
                     idTokenClaims["iat"] = (Json::Int64)now;
                     idTokenClaims["exp"] = (Json::Int64)(now + self->accessTokenTtl_);
-                    // v1.5.0 M1: org_ctx mirrors the code-exchange id_token
+                    // v1.4.0 M1: org_ctx mirrors the code-exchange id_token
                     // (O7 re-resolution; orgCtx present implies the binding).
                     if (orgCtx.has_value() && storedRt->orgId.has_value())
                     {
@@ -665,7 +665,7 @@ void TokenService::refreshAccessToken(
             }
           );
               }
-              );  // resolveOrgContextForClaims (v1.5.0 M1 org_ctx hop)
+              );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
       }
     );
 }

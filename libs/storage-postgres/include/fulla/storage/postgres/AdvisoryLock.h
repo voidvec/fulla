@@ -1,6 +1,6 @@
 #pragma once
 
-// Advisory transaction locks for the quota TOCTOU fix (#219, v1.5.0 M2
+// Advisory transaction locks for the quota TOCTOU fix (#219, v1.4.0 M2
 // ruling R-M2-5). The open-platform creation paths used to be
 // count-then-insert sequences; concurrent requests could exceed the
 // per-user app quota, the org app quota, the 24h creation rate limit,

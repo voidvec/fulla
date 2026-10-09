@@ -68,7 +68,7 @@ export const MOCK_SLOW_TOKEN_PAIR = {
 }
 
 export async function setupMocks(page: Page) {
-  // v1.5.0 provider tiers: login-page discovery. Empty by default (password
+  // v1.4.0 provider tiers: login-page discovery. Empty by default (password
   // only); a test can opt into providers via E2E_EXTERNAL_PROVIDERS
   // (comma-separated: github,google,wechat) — the LoginPage renders its
   // social buttons from this response, not from build-time env vars.
@@ -215,7 +215,7 @@ export async function setupMocks(page: Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ redirect_uri: 'http://localhost:5173/callback?code=consent-code&state=test' }) })
   })
 
-  // v1.5.0 M1b: consent-screen context (owner attribution + org banner) is
+  // v1.4.0 M1b: consent-screen context (owner attribution + org banner) is
   // server-derived via GET /oauth2/consent/context. Default = the official-
   // app shape (no attribution, no org); attribution tests override this
   // route (page.route is LIFO, so a later registration wins).

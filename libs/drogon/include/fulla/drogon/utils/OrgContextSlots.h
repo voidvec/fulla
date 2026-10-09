@@ -6,7 +6,7 @@
 #include <optional>
 #include <string>
 
-// v1.5.0 M1 (real-tenant design §2.1 item 4): bounded multi-slot store for
+// v1.4.0 M1 (real-tenant design §2.1 item 4): bounded multi-slot store for
 // the org context an authorize request selected, keyed by the request's
 // `state` value. The consent round trip (authorize -> portal -> POST
 // /oauth2/consent) and the login round trip cannot carry the org binding
@@ -60,7 +60,7 @@ class OrgContextSlots
       int64_t nowSeconds
     );
 
-    /// Non-destructive read (v1.5.0 M1b): same lifetime rules as consume()
+    /// Non-destructive read (v1.4.0 M1b): same lifetime rules as consume()
     /// but the slot stays. Sole purpose: GET /oauth2/consent/context
     /// rendering the consent banner before the submit; the one-shot consume
     /// stays with the issuance path.

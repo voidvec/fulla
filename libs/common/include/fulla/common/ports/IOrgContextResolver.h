@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M1 (real-tenant design §2.1 item 3): port for the org context
+// v1.4.0 M1 (real-tenant design §2.1 item 3): port for the org context
 // behind an access token's org binding. TokenService (Domain, libs/oauth2)
 // needs the ACTIVE organization's name + the user's roles IN that org to
 // build the org_ctx claim for id_tokens -- but membership/name live behind

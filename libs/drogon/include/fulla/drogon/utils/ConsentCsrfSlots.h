@@ -60,7 +60,7 @@ class ConsentCsrfSlots
       int64_t nowSeconds
     );
 
-    /// Non-destructive validity check (v1.5.0 M1b): same lifetime rules as
+    /// Non-destructive validity check (v1.4.0 M1b): same lifetime rules as
     /// consume(), but the slot is left in place. Sole purpose: GET
     /// /oauth2/consent/context rendering the consent screen BEFORE the
     /// submit; the one-shot consume stays with POST /oauth2/consent.

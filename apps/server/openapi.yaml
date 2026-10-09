@@ -245,7 +245,7 @@ components:
         org_id:
           type: integer
           format: int32
-          description: 'v1.5.0: present when the token was issued in org context
+          description: 'v1.4.0: present when the token was issued in org context
             (authorize org_id parameter). The token''s own binding; roles/name
             stay userinfo-only.'
       required:
@@ -256,7 +256,7 @@ components:
         OIDC Core §5.3 userinfo claims. email_verified present iff email
         present; roles present iff non-empty. org_ctx present iff the token
         was issued in org context, carries the org scope, and the user is
-        still a member (v1.5.0; membership is re-checked in real time).
+        still a member (v1.4.0; membership is re-checked in real time).
       properties:
         sub:
           type: string
@@ -276,7 +276,7 @@ components:
             type: string
         org_ctx:
           type: object
-          description: 'v1.5.0: the ACTIVE organization context (id + name + the
+          description: 'v1.4.0: the ACTIVE organization context (id + name + the
             user''s current roles in it); active-org-only, never the full
             membership list.'
           properties:
@@ -543,7 +543,7 @@ components:
       type: object
     AuthProvider:
       description: An external login provider currently enabled on this
-        deployment (v1.5.0 provider tiers). authorize_url is the fully built
+        deployment (v1.4.0 provider tiers). authorize_url is the fully built
         provider authorize URL — the SPA redirects to it as-is; the redirect
         target resolves from the per-provider redirect_uri override, else
         frontend.url + /callback/{provider}.
@@ -772,7 +772,7 @@ components:
 info:
   description: OAuth2.0 authorization server with token management
   title: OAuth2 Authorization Server API
-  version: 1.3.2
+  version: 1.4.0
 openapi: 3.0.0
 paths:
   /.well-known/jwks.json:
@@ -1857,7 +1857,7 @@ paths:
         mfa_enabled, email_verified, and must_change_password are optional.
         must_change_password (default false, #145) forces the user to change
         the password at first login. The deprecated users.org_id column is
-        read-only since v1.5.0: requests containing org_id are rejected with
+        read-only since v1.4.0: requests containing org_id are rejected with
         400 (organization membership is managed via the organization APIs).
       operationId: post_api_admin_users
       requestBody:
@@ -1983,7 +1983,7 @@ paths:
                   username:
                     type: string
                 type: object
-          description: User details (org_id is a deprecated read-only legacy column since v1.5.0; null when unset)
+          description: User details (org_id is a deprecated read-only legacy column since v1.4.0; null when unset)
         '404':
           description: User not found
       security:
@@ -1999,7 +1999,7 @@ paths:
         starts at the user's next login), and locked (true locks the account).
         Fields with a wrong JSON type are rejected with 400 (never silently
         skipped). The deprecated users.org_id column is read-only since
-        v1.5.0: requests containing org_id are rejected with 400 (organization
+        v1.4.0: requests containing org_id are rejected with 400 (organization
         membership is managed via the organization APIs).
       operationId: put_api_admin_users_{userId}
       parameters:
@@ -2187,7 +2187,7 @@ paths:
   /api/auth/providers:
     get:
       description: Public, unauthenticated discovery of the external login
-        providers this deployment currently offers (v1.5.0 provider tiers).
+        providers this deployment currently offers (v1.4.0 provider tiers).
         The login page renders its provider buttons from this response; an
         empty list means external login is disabled. authorize_url is the
         fully built provider authorize URL — the SPA redirects to it as-is;
@@ -3003,7 +3003,7 @@ paths:
                   pending_succession_nominations:
                     description: Orgs where the CALLER is the pending nominee
                       (the accept banner's discovery surface; the caller may be
-                      a non-member). v1.5.0 M3.
+                      a non-member). v1.4.0 M3.
                     type: array
                     items:
                       type: object
@@ -3238,7 +3238,7 @@ paths:
   /api/me/organizations/{slug}/consents:
     get:
       description: Active organization consents grouped by client, each scope
-        with its own granted_by / granted_at (org owner/admin; v1.5.0 M2).
+        with its own granted_by / granted_at (org owner/admin; v1.4.0 M2).
         Members of the org skip the personal consent prompt for scopes
         covered by these rows.
       operationId: get_api_me_organizations_{slug}_consents
@@ -3737,7 +3737,7 @@ paths:
     post:
       description: 'The organization owner nominates a successor (any live user,
         may be a non-member). Replaces any previous pending nomination (idempotent);
-        the nominee must accept before the seat moves (v1.5.0 M3).'
+        the nominee must accept before the seat moves (v1.4.0 M3).'
       operationId: post_api_me_organizations_{slug}_successor-nomination
       parameters:
       - description: Organization slug
@@ -4788,7 +4788,7 @@ paths:
         required: false
         schema:
           type: integer
-      - description: 'Organization context hint (v1.5.0): integer id or slug
+      - description: 'Organization context hint (v1.4.0): integer id or slug
           of the organization this authorization is made in. Accepted only
           when the user is a current member and the client belongs to that
           organization; every rejection renders the same inline 400 (no
@@ -4879,7 +4879,7 @@ paths:
   /oauth2/consent/context:
     get:
       description: >-
-        Server-side consent-screen context (v1.5.0 M1b, #223 second half):
+        Server-side consent-screen context (v1.4.0 M1b, #223 second half):
         the owner attribution label and the organization-membership banner
         for the consent flow whose server-minted consent_csrf nonce is
         presented. The nonce is validated but NOT consumed (the one-shot

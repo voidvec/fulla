@@ -632,7 +632,7 @@ void SessionController::login(
     std::string clientId, redirectUri, scope, state;
     std::string codeChallenge, codeChallengeMethod;
     std::string nonce;
-    // v1.5.0 M1: the org context hint carried through the login round trip
+    // v1.4.0 M1: the org context hint carried through the login round trip
     // (authorize adds org_id to the login URL); validated by the
     // OrgContextGate below before the code is issued.
     std::string orgIdParam;
@@ -1015,7 +1015,7 @@ void SessionController::login(
                           sessAmr = req->session()->get<std::string>("amr");
                   }
 
-                  // v1.5.0 M1 (design §2.1 item 5): when the authorize
+                  // v1.4.0 M1 (design §2.1 item 5): when the authorize
                   // request carried an org_id hint through the login round
                   // trip, the SAME OrgContextGate decides here (fresh
                   // membership + org-owned client + §2.5 MFA policy);
@@ -1470,7 +1470,7 @@ void SessionController::consent(
               return;
           }
 
-          // v1.5.0 M1 (design §2.1 item 4): the org binding selected at
+          // v1.4.0 M1 (design §2.1 item 4): the org binding selected at
           // authorize time is stashed server-side keyed by `state` (the
           // consent URL never carries it). Consume it one-shot and re-run
           // the OrgContextGate (fresh membership + §2.5 MFA policy) before
@@ -1544,7 +1544,7 @@ void SessionController::consent(
                 orgId
               );
             };
-          // writeOrgConsent (R-M2-2, v1.5.0 M2): an org-bound approve
+          // writeOrgConsent (R-M2-2, v1.4.0 M2): an org-bound approve
           // records organization_consents rows instead of personal ones
           // when the session user is the org's owner/admin (they speak
           // for the org; the M2 union already covers them personally).

@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M2 (real-tenant design §2.2, ruling R-M2-1): port for the
+// v1.4.0 M2 (real-tenant design §2.2, ruling R-M2-1): port for the
 // organization-consent half of the authorize-time consent UNION.
 // AuthorizationService (Domain, libs/oauth2) decides per scope
 //   consented = personal consent EXISTS

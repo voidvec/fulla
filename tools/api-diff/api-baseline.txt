@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.3.2
+// version: 1.4.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>

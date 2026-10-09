@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M3 (real-tenant design §1.3 item 2, ruling R-M3-4): the owner
+// v1.4.0 M3 (real-tenant design §1.3 item 2, ruling R-M3-4): the owner
 // soft-delete hook. Both account-deletion paths (self-service
 // deleteAccount and the admin deleteUser) must, BEFORE the soft delete
 // lands, auto-effect any pending succession nomination the deleting

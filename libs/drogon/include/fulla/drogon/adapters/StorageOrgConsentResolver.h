@@ -1,6 +1,6 @@
 #pragma once
 
-// v1.5.0 M2 (real-tenant design §2.2, R-M2-1): adapter implementing the
+// v1.4.0 M2 (real-tenant design §2.2, R-M2-1): adapter implementing the
 // common IOrgConsentResolver port for the assembled server, over the
 // shared OrgConsentRepository (storage-postgres). Mirrors
 // StorageOrgContextResolver (M1): constructed by the composition root

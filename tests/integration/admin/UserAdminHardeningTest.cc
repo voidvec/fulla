@@ -6,7 +6,7 @@
 //   #53  strict JSON type validation on updateUser/createUser (400, no crash)
 //   #56  deleteUser revokes tokens durably (dual key) before responding
 //   #58  case-insensitive user search (lower() on both sides)
-//   #59  org_id: admin write surface removed in v1.5.0 (org-anchor
+//   #59  org_id: admin write surface removed in v1.4.0 (org-anchor
 //        convergence, design 1.2/V7) - presence in a body is a 400; the read
 //        path keeps returning the legacy column until the v2.0 physical DROP
 //   #54  soft-deleted user's self-service token no longer returns data
@@ -106,7 +106,7 @@ DROGON_TEST(Integration_P0_AdminUser_Update_TypeMismatch_Returns400)
         {"mfa_enabled", strVal2},
         {"locked", intVal2},
     };
-    // org_id is deliberately absent here: since the v1.5.0 convergence its
+    // org_id is deliberately absent here: since the v1.4.0 convergence its
     // rejection is presence-based, not type-based, and is pinned by
     // Integration_P0_AdminUser_OrgId_WriteSurfaceRemoved below.
     for (const auto &c : cases)
@@ -121,7 +121,7 @@ DROGON_TEST(Integration_P0_AdminUser_Update_TypeMismatch_Returns400)
 }
 
 // ---------------------------------------------------------------------------
-// #59 (v1.5.0 org-anchor convergence, design 1.2/V7): users.org_id admin
+// #59 (v1.4.0 org-anchor convergence, design 1.2/V7): users.org_id admin
 // write surface removed. Presence of the key in a create/update body is a
 // 400 regardless of value type (never a silent skip that answers 200); the
 // read path still returns the legacy column (JSON null when unset) until

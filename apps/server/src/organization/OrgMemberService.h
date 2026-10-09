@@ -79,7 +79,7 @@ class OrgMemberService
     static void acceptInvitation(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 
     /// GET /api/me/organizations/{slug}/consents — active organization
-    /// consents grouped by client (v1.5.0 M2, R-M2-4; owner/admin).
+    /// consents grouped by client (v1.4.0 M2, R-M2-4; owner/admin).
     static void listOrgConsents(
       const ::drogon::HttpRequestPtr &req, ResponseCallback cb, const std::string &slug
     );
@@ -96,7 +96,7 @@ class OrgMemberService
     );
 
     /// POST /api/me/organizations/{slug}/successor-nomination {user_id}
-    /// — v1.5.0 M3 (R-M3-3): owner nominates a successor (any live user,
+    /// — v1.4.0 M3 (R-M3-3): owner nominates a successor (any live user,
     /// may be a non-member). Overwrites any previous pending nomination
     /// (idempotent 200).
     static void nominateSuccessor(

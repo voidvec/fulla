@@ -235,7 +235,7 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
       issuer
     );
     tokenService_->setJwkManager(jwkManager_);
-    // v1.5.0 M1 (design §2.1 item 3; review 1.4): the org_ctx claim
+    // v1.4.0 M1 (design §2.1 item 3; review 1.4): the org_ctx claim
     // resolver for id_tokens issued in org context (org name + CURRENT
     // roles via the shared ClientOwnersRepository; O7 real-time
     // membership semantics). Constructor-injected like StorageRoleProvider
@@ -263,7 +263,7 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
           std::make_shared<fulla::drogon::adapters::StorageOrgContextResolver>(orgCtxDb)
         );
     }
-    // v1.5.0 M2 (design §2.2, R-M2-1): the org-consent half of the
+    // v1.4.0 M2 (design §2.2, R-M2-1): the org-consent half of the
     // authorize-time consent UNION. Same storage-type guard and the same
     // single Postgres home as the M1 org-context resolver above -- org
     // rows live in Postgres regardless of the oauth2 storage type, so a

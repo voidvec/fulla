@@ -222,7 +222,7 @@ void wireIdentityServices()
     std::string googleClientId, googleClientSecret, googleRedirectUri;
     std::string wechatAppId, wechatSecret;
     std::string githubClientId, githubClientSecret;
-    // v1.5.0 provider tiers (external_auth.tiers.*): domestic gates WeChat,
+    // v1.4.0 provider tiers (external_auth.tiers.*): domestic gates WeChat,
     // international gates GitHub/Google. Defaults true so a config without
     // the block (or without external_auth at all) keeps every configured
     // provider enabled — upgrade compatibility; only an explicit false
@@ -377,7 +377,7 @@ void wireIdentityServices()
 #ifdef WITH_SOCIAL
     // #111: inject nullptr for disabled providers (envelope NotConfigured at
     // request time instead of a doomed upstream call). Effective enablement
-    // includes the v1.5.0 tier flags.
+    // includes the v1.4.0 tier flags.
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>()
       ->setGoogleAuthService(googleEnabled ? googleAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
@@ -388,7 +388,7 @@ void wireIdentityServices()
       ->setSocialLinkService(socialLinkService.get());
 #endif  // WITH_SOCIAL
 
-    // v1.5.0 provider discovery: the login SPA renders its external-login
+    // v1.4.0 provider discovery: the login SPA renders its external-login
     // buttons from GET /api/auth/providers instead of build-time VITE_* env
     // vars. Only the ENABLED provider names are pushed here — computed from
     // the SAME effective-enablement gate as the service injections above —

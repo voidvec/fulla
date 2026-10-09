@@ -56,7 +56,7 @@ void UserAdminController::initApiDocsImpl()
       adminEp("/api/admin/users", "POST", "Create User",
               "Create a new user. Requires username and password; email, roles, "
               "mfa_enabled, and email_verified are optional. The deprecated "
-              "users.org_id column is read-only since v1.5.0: a body containing "
+              "users.org_id column is read-only since v1.4.0: a body containing "
               "org_id is rejected with 400 (organization membership is managed "
               "via the organization APIs).",
               {"users:write"}));
@@ -68,7 +68,7 @@ void UserAdminController::initApiDocsImpl()
       adminEp("/api/admin/users/{userId}", "PUT", "Update User",
               "Update user fields: email, email_verified, username, mfa_enabled, "
               "locked. Wrong-typed fields are rejected with 400. The deprecated "
-              "users.org_id column is read-only since v1.5.0: a body containing "
+              "users.org_id column is read-only since v1.4.0: a body containing "
               "org_id is rejected with 400 (organization membership is managed "
               "via the organization APIs).",
               {"users:write"}));

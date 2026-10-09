@@ -66,7 +66,7 @@ void PostgresGrantRepository::saveAuthCode(const OAuth2AuthCode &code, VoidCallb
         {
             newCode.setNonce(code.nonce);
         }
-        // v1.5.0 M1 (design §2.1 item 4): the org binding selected at
+        // v1.4.0 M1 (design §2.1 item 4): the org binding selected at
         // authorize time rides the code row. V036 column; absent -> NULL.
         if (code.orgId.has_value())
         {
@@ -127,7 +127,7 @@ void PostgresGrantRepository::getAuthCode(const std::string &code, AuthCodeCallb
               c.amr = row.getValueOfAmr();
               // P0-1: nonce round-trips with the code row.
               c.nonce = row.getValueOfNonce();
-              // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+              // v1.4.0 M1: org binding round-trips (NULL -> nullopt).
               c.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
                                        : std::nullopt;
               (*sharedCb)(c);
@@ -249,7 +249,7 @@ void PostgresGrantRepository::consumeAuthCode(
           c.amr = row["amr"].isNull() ? "" : row["amr"].as<std::string>();
           // P0-1: nonce round-trips with the consumed code row.
           c.nonce = row["nonce"].isNull() ? "" : row["nonce"].as<std::string>();
-          // v1.5.0 M1: org binding round-trips (NULL -> nullopt).
+          // v1.4.0 M1: org binding round-trips (NULL -> nullopt).
           c.orgId =
             row["org_id"].isNull() ? std::nullopt
                                    : std::optional<int32_t>(row["org_id"].as<int32_t>());

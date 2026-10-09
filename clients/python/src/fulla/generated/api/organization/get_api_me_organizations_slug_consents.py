@@ -73,7 +73,7 @@ def sync_detailed(
     """List Organization Consents
 
      Active organization consents grouped by client, each scope with its own granted_by / granted_at (org
-    owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by
+    owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by
     these rows.
 
     Args:
@@ -106,7 +106,7 @@ def sync(
     """List Organization Consents
 
      Active organization consents grouped by client, each scope with its own granted_by / granted_at (org
-    owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by
+    owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by
     these rows.
 
     Args:
@@ -134,7 +134,7 @@ async def asyncio_detailed(
     """List Organization Consents
 
      Active organization consents grouped by client, each scope with its own granted_by / granted_at (org
-    owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by
+    owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by
     these rows.
 
     Args:
@@ -165,7 +165,7 @@ async def asyncio(
     """List Organization Consents
 
      Active organization consents grouped by client, each scope with its own granted_by / granted_at (org
-    owner/admin; v1.5.0 M2). Members of the org skip the personal consent prompt for scopes covered by
+    owner/admin; v1.4.0 M2). Members of the org skip the personal consent prompt for scopes covered by
     these rows.
 
     Args:

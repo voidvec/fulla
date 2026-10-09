@@ -46,7 +46,7 @@ export interface SocialLink {
   linked_at?: string
 }
 
-// v1.5.0 provider tiers: one entry of the GET /api/auth/providers discovery
+// v1.4.0 provider tiers: one entry of the GET /api/auth/providers discovery
 // response. authorize_url is fully built server-side (redirect target from
 // the per-provider redirect_uri override or frontend.url) — the login page
 // redirects to it as-is.

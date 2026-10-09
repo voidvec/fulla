@@ -31,7 +31,7 @@ const passwordChangeError = ref('')
 const passwordChangeBusy = ref(false)
 const passwordChangeDone = ref(false)
 
-// v1.5.0 provider tiers: the social buttons render from the server's runtime
+// v1.4.0 provider tiers: the social buttons render from the server's runtime
 // discovery (GET /api/auth/providers) instead of build-time VITE_* env vars —
 // the same gate (tier switch + credentials) that enforces the login endpoints
 // decides what this page offers, so buttons and server behavior can never
@@ -78,7 +78,7 @@ const passwordChangedNotice = route.query.pw_changed === '1'
 // the server re-validates redirect_uri against the client registration) and
 // navigate with a full page load. Before this, such users landed on the
 // dashboard and the relying party never received its authorization code.
-// v1.5.0 M1b: 'org_id' joins the whitelist — the backend already flattens
+// v1.4.0 M1b: 'org_id' joins the whitelist — the backend already flattens
 // the org context hint onto the /login URL (both authorize login-redirect
 // branches), but dropping it here rebuilt the authorize request without the
 // org context, silently degrading the browser chain to a no-org issuance
