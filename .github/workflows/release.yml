@@ -368,13 +368,19 @@ jobs:
         # several lines; the capture ends at the next bullet or heading.
         run: |
           ver="${GITHUB_REF_NAME#v}"
+          # Capture styles (v1.4.0 lesson: the bullet-marker-only match missed
+          # a section whose Breaking markers live in the HEADING):
+          #   1. heading-driven — any "### ⚠? Breaking ..." section: every
+          #      bullet under it is captured until the next heading;
+          #   2. legacy inline marker — a bullet itself containing
+          #      "Breaking (" starts a capture that ends at the next bullet.
           awk -v ver="$ver" '
             BEGIN { p = 0; inb = 0; hdr = 0 }
             /^## \[/ { p = (index($0, "[" ver "]") == 4) ? 1 : 0; inb = 0 }
-            p && /^### / { inb = 0 }
-            p && /^- /  { inb = ($0 ~ /Breaking \(/) ? 1 : 0 }
+            p && /^### / { inb = ($0 ~ /Breaking/) ? 1 : 0 }
+            p && /^- /  { if (inb == 0 && $0 ~ /Breaking \(/) inb = 1 }
             p && inb {
-              if (!hdr) { print ""; print "### ⚠️ Breaking (security hardening)"; print ""; hdr = 1 }
+              if (!hdr) { print ""; print "### ⚠️ Breaking / Required reading before upgrading"; print ""; hdr = 1 }
               print
             }
           ' CHANGELOG.md > BREAKING.md
