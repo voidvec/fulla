@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+// vitest 5 isolation: the vi.hoisted() values referenced inside the vi.mock
+// factory are structurally cloned into the mock registration graph, so the
+// `create` spy the factory calls is NOT the instance this file asserts on
+// (call counts never propagate back). The axios.create ARGUMENTS are recorded
+// on globalThis instead — one object identity shared across both graphs.
 const { post, create, remember } = vi.hoisted(() => {
   const post = vi.fn()
-  return { post, create: vi.fn(() => ({ post })), remember: vi.fn() }
+  const createCalls: unknown[] = ((globalThis as Record<string, unknown>).__socialCreateCalls ??= []) as unknown[]
+  return {
+    post,
+    create: vi.fn((cfg: unknown) => { createCalls.push(cfg); return { post } }),
+    remember: vi.fn(),
+  }
 })
 vi.mock('axios', () => ({ default: { create } }))
 vi.mock('../../src/services/socialFlowContext', () => ({ rememberSocialFlow: remember }))
@@ -10,7 +20,11 @@ const response = { status: 200, data: { state: 'a'.repeat(64), authorize_url: 'h
 beforeEach(() => { post.mockReset(); remember.mockReset() })
 describe('credentialed social client', () => {
   it('uses a dedicated credentialed client without interceptors', () => {
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ withCredentials: true, timeout: 15000 }))
+    // Assert on the globalThis record (see the hoisted comment) — the local
+    // `create` reference loses call counts under vitest 5's graph isolation.
+    const calls = (globalThis as Record<string, unknown[]>).__socialCreateCalls as unknown[]
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[0]).toEqual(expect.objectContaining({ withCredentials: true, timeout: 15000 }))
   })
   it('retries only the initialization 204, then saves context', async () => {
     post.mockResolvedValueOnce({ status: 204 }).mockResolvedValueOnce(response)
