@@ -1,0 +1,12 @@
+{
+  "name": "fulla-interop-node",
+  "private": true,
+  "type": "module",
+  "description": "P0-9 RP interop smoke: openid-client v6 against fulla",
+  "scripts": {
+    "smoke": "node rp-smoke.mjs"
+  },
+  "dependencies": {
+    "openid-client": "^6.0.0"
+  }
+}
