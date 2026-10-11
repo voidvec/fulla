@@ -121,6 +121,7 @@ const std::string &expectedFingerprint()
       "DELETE /api/me/organizations/{slug}/members/{userId}\n"
       "DELETE /api/me/organizations/{slug}/successor-nomination\n"
       "DELETE /api/me/social/links/{provider}\n"
+      "DELETE /api/me/webauthn/credentials/{credentialId}\n"
       "GET /.well-known/jwks.json\n"
       "GET /.well-known/oauth-authorization-server\n"
       "GET /.well-known/openid-configuration\n"

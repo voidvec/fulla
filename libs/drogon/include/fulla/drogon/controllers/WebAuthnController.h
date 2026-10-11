@@ -79,6 +79,13 @@ class WebAuthnController : public ::drogon::HttpController<WebAuthnController, f
       ::drogon::Get,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
+    // P0-7a (#261): remove a registered passkey (ownership-scoped delete)
+    ADD_METHOD_TO(
+      WebAuthnController::deleteCredential,
+      "/api/me/webauthn/credentials/{credentialId}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
     METHOD_LIST_END
 
     void registerBegin(
@@ -100,6 +107,12 @@ class WebAuthnController : public ::drogon::HttpController<WebAuthnController, f
     void listCredentials(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+    // P0-7a (#261): DELETE /api/me/webauthn/credentials/{credentialId}
+    void deleteCredential(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &credentialId
     );
 
   private:

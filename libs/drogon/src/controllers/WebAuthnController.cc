@@ -13,6 +13,7 @@
 // controller now optionally consumes.
 #include <fulla/identity/IUserRepository.h>
 #include <fulla/identity/WebAuthnService.h>
+#include <fulla/storage/postgres/models/WebauthnCredentials.h>
 
 using namespace ::drogon::orm;
 
@@ -167,6 +168,22 @@ struct WebAuthnControllerDocs
         credentialsDocs.tags = {"WebAuthn"};
         credentialsDocs.requiresAuth = true;
         ::fulla::drogon::observability::openapi::OpenApiGenerator::addEndpoint(credentialsDocs);
+
+        // P0-7a (#261)
+        ::fulla::drogon::observability::openapi::EndpointInfo deleteCredDocs;
+        deleteCredDocs.path = "/api/me/webauthn/credentials/{credentialId}";
+        deleteCredDocs.method = "DELETE";
+        deleteCredDocs.summary = "Delete WebAuthn Credential";
+        deleteCredDocs.description =
+          "Remove a registered passkey. The delete is ownership-scoped "
+          "(credential must belong to the Bearer subject); a foreign or "
+          "unknown credential id answers the same 404. Deleting the last "
+          "credential is allowed — WebAuthn and TOTP are parallel second "
+          "factors; the security page warns about dropping to a single "
+          "factor.";
+        deleteCredDocs.tags = {"WebAuthn"};
+        deleteCredDocs.requiresAuth = true;
+        ::fulla::drogon::observability::openapi::OpenApiGenerator::addEndpoint(deleteCredDocs);
     }
 };
 
@@ -617,6 +634,107 @@ void WebAuthnController::listCredentials(
                 (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
             }
           );
+      }
+    );
+}
+
+// P0-7a (#261): remove a registered passkey. Ownership is enforced by the
+// delete predicate itself (user_id = the Bearer subject's internal id AND
+// credential_id = the path id), so a foreign credential and an unknown id
+// both answer the same generic 404 — no enumeration oracle. Runs in the
+// drogon layer against the Postgres row directly: identity's repository
+// interfaces gain no methods in a minor release (api-diff gate), same
+// constraint P0-3 documented for backup codes.
+void WebAuthnController::deleteCredential(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &credentialId
+)
+{
+    std::string subject = req->getAttributes()->get<std::string>("userId");
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+
+    if (!webAuthnService_ || !userRepo_)
+    {
+        respondWebAuthnUnavailable(req, sharedCb, "deleteCredential");
+        return;
+    }
+
+    userRepo_->findByPublicSub(
+      subject,
+      [sharedCb, req, subject, credentialId](std::optional<fulla::identity::UserData> user) {
+          if (!user)
+          {
+              respondError(req, sharedCb, "RESOURCE_NOT_FOUND", "deleteCredential: unknown subject");
+              return;
+          }
+          ::drogon::orm::DbClientPtr db;
+          try
+          {
+              db = ::drogon::app().getDbClient();
+          }
+          catch (...)
+          {
+              db = nullptr;
+          }
+          if (!db)
+          {
+              respondError(req, sharedCb, "DB_QUERY_ERROR", "deleteCredential: no database client");
+              return;
+          }
+          try
+          {
+              Mapper<drogon_model::fulla_db::WebauthnCredentials>(db)
+                .deleteBy(
+                  Criteria(
+                    drogon_model::fulla_db::WebauthnCredentials::Cols::_user_id,
+                    CompareOperator::EQ,
+                    user->id
+                  ) &&
+                    Criteria(
+                      drogon_model::fulla_db::WebauthnCredentials::Cols::_credential_id,
+                      CompareOperator::EQ,
+                      credentialId
+                    ),
+                  [sharedCb, req, subject, credentialId](const size_t count) {
+                      if (count == 0)
+                      {
+                          respondError(
+                            req, sharedCb, "RESOURCE_NOT_FOUND", "deleteCredential: credential not found"
+                          );
+                          return;
+                      }
+                      ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                        ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
+                        "webauthn_credential_deleted",
+                        "success",
+                        req,
+                        subject,
+                        "credential",
+                        credentialId
+                      );
+                      Json::Value json;
+                      json["message"] = "Passkey deleted";
+                      json["credential_id"] = credentialId;
+                      (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                  },
+                  [sharedCb, req](const ::drogon::orm::DrogonDbException &e) {
+                      respondError(
+                        req,
+                        sharedCb,
+                        "DB_QUERY_ERROR",
+                        std::string("deleteCredential: ") + e.base().what()
+                      );
+                  }
+                );
+          }
+          catch (...)
+          {
+              respondError(
+                req, sharedCb, "DB_QUERY_ERROR", "deleteCredential: Mapper construction failed"
+              );
+          }
       }
     );
 }

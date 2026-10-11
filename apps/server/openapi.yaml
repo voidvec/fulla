@@ -4434,6 +4434,32 @@ paths:
       summary: List WebAuthn Credentials
       tags:
       - WebAuthn
+  /api/me/webauthn/credentials/{credentialId}:
+    delete:
+      description: 'Remove a registered passkey (P0-7). The delete is
+        ownership-scoped (the credential must belong to the Bearer subject);
+        a foreign or unknown credential id answers the same generic 404.
+        Deleting the last credential is allowed — WebAuthn and TOTP are
+        parallel second factors.'
+      operationId: delete_api_me_webauthn_credentials_credentialId
+      parameters:
+      - name: credentialId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Passkey deleted
+        '401':
+          description: Unauthorized
+        '404':
+          description: Credential not found (or not owned by the caller)
+      security:
+      - bearerAuth: []
+      summary: Delete WebAuthn Credential
+      tags:
+      - WebAuthn
   /api/me/webauthn/register/begin:
     post:
       requestBody:
