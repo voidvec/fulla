@@ -12,6 +12,7 @@ DELETE /api/me/organizations/{slug}/invitations/{invitationId}
 DELETE /api/me/organizations/{slug}/members/{userId}
 DELETE /api/me/organizations/{slug}/successor-nomination
 DELETE /api/me/social/links/{provider}
+DELETE /api/me/webauthn/credentials/{credentialId}
 GET /.well-known/jwks.json
 GET /.well-known/oauth-authorization-server
 GET /.well-known/openid-configuration
