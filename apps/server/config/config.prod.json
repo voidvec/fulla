@@ -157,7 +157,8 @@
                         "urls": [
                             "^/oauth2/login",
                             "^/oauth2/password/change",
-                            "^/oauth2/mfa/verify"
+                            "^/oauth2/mfa/verify",
+                            "^/oauth2/authorize-context"
                         ],
                         "capacity": 5000,
                         "ip_capacity": 3,

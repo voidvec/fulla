@@ -786,12 +786,15 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 }
 
-// UserInfoResponse OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0; membership is re-checked in real time).
+// UserInfoResponse OIDC Core §5.3 userinfo claims, scope-gated per §5.4 (P0-2): profile claims (name/preferred_username/picture) require the profile scope; email/email_verified require the email scope; sub is unconditional. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0; membership is re-checked in real time).
 type UserInfoResponse struct {
-	Email         *string `json:"email,omitempty"`
-	EmailVerified *bool   `json:"email_verified,omitempty"`
+	// Email Email address (email scope).
+	Email *string `json:"email,omitempty"`
 
-	// Name Username (fallback: email, then sub).
+	// EmailVerified Email verification status (email scope).
+	EmailVerified *bool `json:"email_verified,omitempty"`
+
+	// Name display_name when set, else username, else email (profile scope).
 	Name string `json:"name"`
 
 	// OrgCtx v1.4.0: the ACTIVE organization context (id + name + the user's current roles in it); active-org-only, never the full membership list.
@@ -800,10 +803,18 @@ type UserInfoResponse struct {
 		OrgName *string   `json:"org_name,omitempty"`
 		Roles   *[]string `json:"roles,omitempty"`
 	} `json:"org_ctx,omitempty"`
-	Roles *[]string `json:"roles,omitempty"`
+
+	// Picture Avatar URL (profile scope).
+	Picture *string `json:"picture,omitempty"`
+
+	// PreferredUsername Standard OIDC claim name (profile scope); the legacy username key dual-emits alongside it until v1.6.0.
+	PreferredUsername *string   `json:"preferred_username,omitempty"`
+	Roles             *[]string `json:"roles,omitempty"`
 
 	// Sub Subject (public user id, stringified).
-	Sub      string  `json:"sub"`
+	Sub string `json:"sub"`
+
+	// Username Legacy key (deprecated, removed in v1.6.0) — use preferred_username (profile scope).
 	Username *string `json:"username,omitempty"`
 }
 
@@ -1214,6 +1225,11 @@ type GetOauth2AuthorizeParams struct {
 
 	// OrgId Organization context hint (v1.4.0): integer id or slug of the organization this authorization is made in. Accepted only when the user is a current member and the client belongs to that organization; every rejection renders the same inline 400 (no redirect). Combine with the org scope to receive org_ctx claims.
 	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
+}
+
+// GetOauth2AuthorizeContextParams defines parameters for GetOauth2AuthorizeContext.
+type GetOauth2AuthorizeContextParams struct {
+	ClientId string `form:"client_id" json:"client_id"`
 }
 
 // PostOauth2ConsentParams defines parameters for PostOauth2Consent.
@@ -2738,6 +2754,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/me/webauthn/credentials (the `GetApiMeWebauthnCredentials` operationId).
 	GetApiMeWebauthnCredentials(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteApiMeWebauthnCredentialsCredentialId Delete WebAuthn Credential
+	//
+	// Remove a registered passkey (P0-7). The delete is ownership-scoped (the credential must belong to the Bearer subject); a foreign or unknown credential id answers the same generic 404. Deleting the last credential is allowed — WebAuthn and TOTP are parallel second factors.
+	//
+	// Corresponds with DELETE /api/me/webauthn/credentials/{credentialId} (the `DeleteApiMeWebauthnCredentialsCredentialId` operationId).
+	DeleteApiMeWebauthnCredentialsCredentialId(ctx context.Context, credentialId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiMeWebauthnRegisterBeginWithBody WebAuthn Register Begin
 	//
 	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
@@ -2916,6 +2939,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /oauth2/authorize (the `GetOauth2Authorize` operationId).
 	GetOauth2Authorize(ctx context.Context, params *GetOauth2AuthorizeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOauth2AuthorizeContext Authorize Context (client display name)
+	//
+	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+	//
+	// Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
+	GetOauth2AuthorizeContext(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOauth2Consent Submit user consent
 	//
@@ -5452,6 +5482,23 @@ func (c *Client) GetApiMeWebauthnCredentials(ctx context.Context, reqEditors ...
 	return c.Client.Do(req)
 }
 
+// DeleteApiMeWebauthnCredentialsCredentialId Delete WebAuthn Credential
+//
+// Remove a registered passkey (P0-7). The delete is ownership-scoped (the credential must belong to the Bearer subject); a foreign or unknown credential id answers the same generic 404. Deleting the last credential is allowed — WebAuthn and TOTP are parallel second factors.
+//
+// Corresponds with DELETE /api/me/webauthn/credentials/{credentialId} (the `DeleteApiMeWebauthnCredentialsCredentialId` operationId).
+func (c *Client) DeleteApiMeWebauthnCredentialsCredentialId(ctx context.Context, credentialId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiMeWebauthnCredentialsCredentialIdRequest(c.Server, credentialId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiMeWebauthnRegisterBeginWithBody WebAuthn Register Begin
 //
 // Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
@@ -5831,6 +5878,23 @@ func (c *Client) GetHealthReady(ctx context.Context, reqEditors ...RequestEditor
 // Corresponds with GET /oauth2/authorize (the `GetOauth2Authorize` operationId).
 func (c *Client) GetOauth2Authorize(ctx context.Context, params *GetOauth2AuthorizeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOauth2AuthorizeRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOauth2AuthorizeContext Authorize Context (client display name)
+//
+// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+//
+// Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
+func (c *Client) GetOauth2AuthorizeContext(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOauth2AuthorizeContextRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9655,6 +9719,40 @@ func NewGetApiMeWebauthnCredentialsRequest(server string) (*http.Request, error)
 	return req, nil
 }
 
+// NewDeleteApiMeWebauthnCredentialsCredentialIdRequest constructs an http.Request for the DeleteApiMeWebauthnCredentialsCredentialId method
+func NewDeleteApiMeWebauthnCredentialsCredentialIdRequest(server string, credentialId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "credentialId", credentialId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/webauthn/credentials/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostApiMeWebauthnRegisterBeginRequest calls the generic PostApiMeWebauthnRegisterBegin builder with application/json body
 func NewPostApiMeWebauthnRegisterBeginRequest(server string, body PostApiMeWebauthnRegisterBeginJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -10295,6 +10393,56 @@ func NewGetOauth2AuthorizeRequest(server string, params *GetOauth2AuthorizeParam
 				}
 			}
 
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOauth2AuthorizeContextRequest constructs an http.Request for the GetOauth2AuthorizeContext method
+func NewGetOauth2AuthorizeContextRequest(server string, params *GetOauth2AuthorizeContextParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth2/authorize-context")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "client_id", params.ClientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
 		}
 
 		if encoded := queryValues.Encode(); encoded != "" {
@@ -12351,6 +12499,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/me/webauthn/credentials (the `GetApiMeWebauthnCredentials` operationId).
 	GetApiMeWebauthnCredentialsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeWebauthnCredentialsResponse, error)
 
+	// DeleteApiMeWebauthnCredentialsCredentialIdWithResponse Delete WebAuthn Credential
+	//
+	// Remove a registered passkey (P0-7). The delete is ownership-scoped (the credential must belong to the Bearer subject); a foreign or unknown credential id answers the same generic 404. Deleting the last credential is allowed — WebAuthn and TOTP are parallel second factors.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/me/webauthn/credentials/{credentialId} (the `DeleteApiMeWebauthnCredentialsCredentialId` operationId).
+	DeleteApiMeWebauthnCredentialsCredentialIdWithResponse(ctx context.Context, credentialId string, reqEditors ...RequestEditorFn) (*DeleteApiMeWebauthnCredentialsCredentialIdResponse, error)
+
 	// PostApiMeWebauthnRegisterBeginWithBodyWithResponse WebAuthn Register Begin
 	//
 	// Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
@@ -12539,6 +12696,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /oauth2/authorize (the `GetOauth2Authorize` operationId).
 	GetOauth2AuthorizeWithResponse(ctx context.Context, params *GetOauth2AuthorizeParams, reqEditors ...RequestEditorFn) (*GetOauth2AuthorizeResponse, error)
+
+	// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name)
+	//
+	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
+	GetOauth2AuthorizeContextWithResponse(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*GetOauth2AuthorizeContextResponse, error)
 
 	// PostOauth2ConsentWithResponse Submit user consent
 	//
@@ -17374,6 +17540,40 @@ func (r GetApiMeWebauthnCredentialsResponse) ContentType() string {
 	return ""
 }
 
+type DeleteApiMeWebauthnCredentialsCredentialIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiMeWebauthnCredentialsCredentialIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiMeWebauthnCredentialsCredentialIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiMeWebauthnCredentialsCredentialIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiMeWebauthnCredentialsCredentialIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PostApiMeWebauthnRegisterBeginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17852,6 +18052,51 @@ func (r GetOauth2AuthorizeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetOauth2AuthorizeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOauth2AuthorizeContextResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		ClientName *string `json:"client_name,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOauth2AuthorizeContextResponse) GetJSON200() *struct {
+	ClientName *string `json:"client_name,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOauth2AuthorizeContextResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOauth2AuthorizeContextResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOauth2AuthorizeContextResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOauth2AuthorizeContextResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20697,6 +20942,21 @@ func (c *ClientWithResponses) GetApiMeWebauthnCredentialsWithResponse(ctx contex
 	return ParseGetApiMeWebauthnCredentialsResponse(rsp)
 }
 
+// DeleteApiMeWebauthnCredentialsCredentialIdWithResponse Delete WebAuthn Credential
+//
+// Remove a registered passkey (P0-7). The delete is ownership-scoped (the credential must belong to the Bearer subject); a foreign or unknown credential id answers the same generic 404. Deleting the last credential is allowed — WebAuthn and TOTP are parallel second factors.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/me/webauthn/credentials/{credentialId} (the `DeleteApiMeWebauthnCredentialsCredentialId` operationId).
+func (c *ClientWithResponses) DeleteApiMeWebauthnCredentialsCredentialIdWithResponse(ctx context.Context, credentialId string, reqEditors ...RequestEditorFn) (*DeleteApiMeWebauthnCredentialsCredentialIdResponse, error) {
+	rsp, err := c.DeleteApiMeWebauthnCredentialsCredentialId(ctx, credentialId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiMeWebauthnCredentialsCredentialIdResponse(rsp)
+}
+
 // PostApiMeWebauthnRegisterBeginWithBodyWithResponse WebAuthn Register Begin
 //
 // Start passkey registration (#142): ES256-only pubKeyCredParams, userVerification=required, user.id is the base64url of the internal user id bytes, excludeCredentials lists already-registered credentials, and the challenge is bound to the Bearer subject (no session cookie contract). Requires webauthn.rp_origins to be configured.
@@ -21010,6 +21270,21 @@ func (c *ClientWithResponses) GetOauth2AuthorizeWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetOauth2AuthorizeResponse(rsp)
+}
+
+// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name)
+//
+// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
+func (c *ClientWithResponses) GetOauth2AuthorizeContextWithResponse(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*GetOauth2AuthorizeContextResponse, error) {
+	rsp, err := c.GetOauth2AuthorizeContext(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOauth2AuthorizeContextResponse(rsp)
 }
 
 // PostOauth2ConsentWithResponse Submit user consent
@@ -24461,6 +24736,22 @@ func ParseGetApiMeWebauthnCredentialsResponse(rsp *http.Response) (*GetApiMeWeba
 	return response, nil
 }
 
+// ParseDeleteApiMeWebauthnCredentialsCredentialIdResponse parses an HTTP response from a DeleteApiMeWebauthnCredentialsCredentialIdWithResponse call
+func ParseDeleteApiMeWebauthnCredentialsCredentialIdResponse(rsp *http.Response) (*DeleteApiMeWebauthnCredentialsCredentialIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiMeWebauthnCredentialsCredentialIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParsePostApiMeWebauthnRegisterBeginResponse parses an HTTP response from a PostApiMeWebauthnRegisterBeginWithResponse call
 func ParsePostApiMeWebauthnRegisterBeginResponse(rsp *http.Response) (*PostApiMeWebauthnRegisterBeginResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24724,6 +25015,40 @@ func ParseGetOauth2AuthorizeResponse(rsp *http.Response) (*GetOauth2AuthorizeRes
 	response := &GetOauth2AuthorizeResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetOauth2AuthorizeContextResponse parses an HTTP response from a GetOauth2AuthorizeContextWithResponse call
+func ParseGetOauth2AuthorizeContextResponse(rsp *http.Response) (*GetOauth2AuthorizeContextResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOauth2AuthorizeContextResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			ClientName *string `json:"client_name,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
 	}
 
 	return response, nil

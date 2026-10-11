@@ -14,6 +14,10 @@ const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 
+// P0-6 (#260): the application this login is being performed for (the
+// authorize flow flattens client_id onto the query when it redirects here).
+const clientId = (route.query.client_id as string) || ''
+
 const username = ref('')
 const password = ref('')
 const mfaCode = ref('')
@@ -40,6 +44,10 @@ const passwordChangeDone = ref(false)
 // hides the whole section: a degraded password-only login beats buttons that
 // cannot complete a login.
 const externalProviders = ref<ExternalProviderInfo[]>([])
+
+// P0-6 (#260): display name of the app that initiated this authorization
+// (client_id only resumes the flow — the user should see WHO is asking).
+const clientName = ref('')
 const githubAuthUrl = computed(
   () => externalProviders.value.find((p) => p.provider === 'github')?.authorize_url ?? ''
 )
@@ -57,6 +65,8 @@ onMounted(async () => {
     // Discovery unreachable (e.g. backend down in a mocked dev run): keep
     // the section hidden instead of rendering dead buttons.
   }
+  // Branding lookup degrades to the raw client_id on any failure.
+  if (clientId) clientName.value = await authService.getAuthorizeContext(clientId)
 })
 
 // #145: the authorize gate sends flagged users here with the query flag set
@@ -173,6 +183,14 @@ async function handlePasswordChange() {
         >
           {{ $t('auth.login.createAccountLink') }}
         </router-link>
+      </p>
+      <!-- P0-6 (#260): which application is this login for -->
+      <p
+        v-if="clientId"
+        class="mt-3 text-sm font-medium text-brand-700"
+        data-testid="login-client-name"
+      >
+        {{ $t('auth.login.continueTo', { app: clientName || clientId }) }}
       </p>
     </div>
 

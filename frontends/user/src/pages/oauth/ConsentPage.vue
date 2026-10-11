@@ -38,6 +38,9 @@ const nonce = route.query.nonce as string || ''
 // owner_name degradation the redirect URL always had.
 const ownerName = ref('')
 const orgName = ref('')
+// P0-6 (#260): the application's display name (falls back to the raw
+// client_id — a branding lookup never blocks the consent flow).
+const clientName = ref('')
 
 onMounted(async () => {
   if (!consentCsrf) return
@@ -57,6 +60,14 @@ onMounted(async () => {
     }
   } catch {
     // Degrade silently: the consent screen stays usable without attribution.
+  }
+  try {
+    const resp = await axios.get('/oauth2/authorize-context', { params: { client_id: clientId } })
+    if (typeof resp.data?.client_name === 'string' && resp.data.client_name) {
+      clientName.value = resp.data.client_name
+    }
+  } catch {
+    // Degrade silently: the raw client_id renders instead.
   }
 })
 
@@ -169,8 +180,11 @@ function handleConsent(action: 'approve' | 'deny') {
         {{ clientId.slice(0, 2).toUpperCase() || 'CL' }}
       </div>
       <div class="min-w-0">
-        <div class="font-bold text-[15.5px] leading-tight text-neutral-900 truncate">
-          {{ clientId || $t('oauth.consent.unknownClient') }}
+        <div
+          class="font-bold text-[15.5px] leading-tight text-neutral-900 truncate"
+          data-testid="consent-client-name"
+        >
+          {{ clientName || clientId || $t('oauth.consent.unknownClient') }}
         </div>
         <DData
           :value="clientId.length > 10 ? clientId.slice(0, 10) + '…' : clientId"

@@ -1491,6 +1491,30 @@ static void initApiDocsImpl();
 ::OAuth2Plugin *resolvePlugin() const;
 };
 }
+=== libs/drogon/include/fulla/drogon/controllers/AuthorizeContextController.h
+#pragma once
+#include <drogon/HttpController.h>
+class OAuth2Plugin;
+namespace fulla::drogon::controllers
+{
+class AuthorizeContextController : public ::drogon::HttpController<AuthorizeContextController, false>
+{
+public:
+void setPlugin(OAuth2Plugin *plugin)
+;
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(AuthorizeContextController::context, "/oauth2/authorize-context", ::drogon::Get);
+METHOD_LIST_END
+void context(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+static void initApiDocs();
+private:
+OAuth2Plugin *plugin_ = nullptr;
+OAuth2Plugin *resolvePlugin() const;
+};
+}
 === libs/drogon/include/fulla/drogon/controllers/ClientAdminController.h
 #pragma once
 #include <drogon/HttpController.h>

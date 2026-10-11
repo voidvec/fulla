@@ -666,7 +666,9 @@ void WebAuthnController::deleteCredential(
       [sharedCb, req, subject, credentialId](std::optional<fulla::identity::UserData> user) {
           if (!user)
           {
-              respondError(req, sharedCb, "RESOURCE_NOT_FOUND", "deleteCredential: unknown subject");
+              respondError(
+                req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND", "deleteCredential: unknown subject"
+              );
               return;
           }
           ::drogon::orm::DbClientPtr db;
@@ -701,7 +703,10 @@ void WebAuthnController::deleteCredential(
                       if (count == 0)
                       {
                           respondError(
-                            req, sharedCb, "RESOURCE_NOT_FOUND", "deleteCredential: credential not found"
+                            req,
+                            sharedCb,
+                            "VALIDATION_RESOURCE_NOT_FOUND",
+                            "deleteCredential: credential not found"
                           );
                           return;
                       }

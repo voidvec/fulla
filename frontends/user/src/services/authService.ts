@@ -200,6 +200,20 @@ export const authService = {
     return resp.data.providers ?? []
   },
 
+  // P0-6 (#260): public application display name so the login/consent
+  // screens can show WHICH app is asking. Every failure degrades to the
+  // client_id itself — a branding lookup never hard-fails the login flow.
+  async getAuthorizeContext(clientId: string): Promise<string> {
+    try {
+      const resp = await http.get<{ client_name?: string }>('/oauth2/authorize-context', {
+        params: { client_id: clientId },
+      })
+      return resp.data?.client_name || clientId
+    } catch {
+      return clientId
+    }
+  },
+
   async requestPasswordReset(email: string): Promise<void> {
     await http.post('/api/password-reset/request', JSON.stringify({ email }), {
       headers: { 'Content-Type': 'application/json' },

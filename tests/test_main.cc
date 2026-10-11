@@ -78,6 +78,7 @@ static void flushGcovIfInstrumented()
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
 #include <fulla/drogon/controllers/ConsentContextController.h>
+#include <fulla/drogon/controllers/AuthorizeContextController.h>
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/controllers/DiscoveryController.h>
 #include <fulla/drogon/authz/ResourceScopeRegistry.h>
@@ -384,6 +385,10 @@ int main(int argc, char **argv)
     );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::ConsentContextController>()
+    );
+    // P0-6 (#260): public client display-name lookup (login/consent screens).
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::AuthorizeContextController>()
     );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::TokenEndpointController>()
