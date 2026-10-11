@@ -2138,18 +2138,30 @@ void TokenEndpointController::userInfo(
                   std::string displayName = dbUserInfo->isMember("display_name")
                                               ? (*dbUserInfo)["display_name"].asString()
                                               : "";
-                  userInfo["name"] = !displayName.empty() ? displayName
+                  // P0-2 (#256, OIDC Core §5.4): claims are scope-gated —
+                  // profile claims require `profile`, email claims `email`;
+                  // `sub` alone is unconditional. Before this, every claim
+                  // was released under a bare `openid` token.
+                  const bool hasProfileScope = fulla::drogon::utils::hasScope(scope, "profile");
+                  const bool hasEmailScope = fulla::drogon::utils::hasScope(scope, "email");
+                  if (hasProfileScope)
+                  {
+                      userInfo["name"] = !displayName.empty() ? displayName
                                      : (!uname.empty() ? uname : email);
-                  if (!uname.empty())
-                  {
-                      userInfo["username"] = uname;
+                      if (!uname.empty())
+                      {
+                          // Standard OIDC claim name; the legacy `username`
+                          // key dual-emits for one release (v1.6.0 removes it).
+                          userInfo["preferred_username"] = uname;
+                          userInfo["username"] = uname;
+                      }
+                      if (dbUserInfo->isMember("picture") &&
+                          !(*dbUserInfo)["picture"].asString().empty())
+                      {
+                          userInfo["picture"] = (*dbUserInfo)["picture"].asString();
+                      }
                   }
-                  if (dbUserInfo->isMember("picture") &&
-                      !(*dbUserInfo)["picture"].asString().empty())
-                  {
-                      userInfo["picture"] = (*dbUserInfo)["picture"].asString();
-                  }
-                  if (!email.empty())
+                  if (hasEmailScope && !email.empty())
                   {
                       userInfo["email"] = email;
                       // F-024 (OIDC Core §5.1): email_verified accompanies the
