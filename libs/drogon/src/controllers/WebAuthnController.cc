@@ -671,6 +671,20 @@ void WebAuthnController::deleteCredential(
               );
               return;
           }
+          // Memory-mode guard (the M1 Debug-assert pitfall): getDbClient()
+          // ABORTS in Debug builds when no db_clients are configured — an
+          // unregistered credential in memory mode answers 404 directly
+          // (memory deployments hold no webauthn rows by construction).
+          if (
+            auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+            p != nullptr && p->getStorageType() == "memory"
+          )
+          {
+              respondError(
+                req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND", "deleteCredential: credential not found"
+              );
+              return;
+          }
           ::drogon::orm::DbClientPtr db;
           try
           {

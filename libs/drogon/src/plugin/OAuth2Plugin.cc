@@ -1048,12 +1048,22 @@ void OAuth2Plugin::getInternalUserId(
     // check (#54) on the fallback leg too.
     auto sharedCb =
       std::make_shared<std::function<void(std::optional<int32_t>)>>(std::move(callback));
+    // Memory-mode guard (the M1 Debug-assert pitfall): the mapping repo
+    // resolves from memory, and the DB fallback below must never reach
+    // getDbClient() in memory deployments (Debug builds ABORT there, not
+    // throw). A memory-mode mapping miss resolves to nullopt directly.
+    const bool memoryMode = (storageType_ == "memory");
     identityService_->getInternalUserId(
       subject,
-      [subject, sharedCb](std::optional<int32_t> viaMapping) mutable {
+      [subject, sharedCb, memoryMode](std::optional<int32_t> viaMapping) mutable {
           if (viaMapping)
           {
               (*sharedCb)(viaMapping);
+              return;
+          }
+          if (memoryMode)
+          {
+              (*sharedCb)(std::nullopt);
               return;
           }
           ::drogon::orm::DbClientPtr db;
