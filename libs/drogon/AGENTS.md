@@ -58,7 +58,7 @@
 
 ### Utils（`src/utils/` + `include/fulla/drogon/utils/`）
 - `CryptoUtils`：OpenSSL 封装（哈希、随机数生成）
-- `PasswordHasher`：Argon2id 密码哈希
+- `PasswordHasher`：PBKDF2-SHA256 密码哈希（310k 迭代，OWASP 2023；Argon2id 为预留升级项，尚未实现）
 - `ScopeChecker`：scope 字符串解析与匹配
 - `SubjectGenerator`：用户 sub 生成（UUID → 公开标识）
 - `TotpUtils`：TOTP 密钥生成、HMAC 计算、时间窗口验证

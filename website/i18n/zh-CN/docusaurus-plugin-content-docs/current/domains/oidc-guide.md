@@ -64,10 +64,12 @@ GET /.well-known/jwks.json
 | `iat` | 签发时间 (Unix timestamp) | `1699996400` |
 | `nonce` | 请求中传入的 nonce 值 | `abc123` |
 
-根据请求的 scope，还可能包含：
+根据请求内容，还可能包含：
 
-- **profile scope**: `name`, `preferred_username`
-- **email scope**: `email`, `email_verified`
+- **认证上下文**: `auth_time`（可用时始终携带）、`amr`（如 `["pwd", "mfa"]`）、`acr`（`"1"` 仅密码 / `"2"` MFA）
+- **org scope 且携带组织上下文**（v1.4.0）：`org_ctx` —— 表示本次授权绑定的活跃组织与调用者当前成员角色的对象 `{ org_id, org_name, roles[] }`；仅在授权请求携带有效 `org_id` 且 client 申请了 `org` scope 时出现，签发时实时复查成员资格。
+
+profile 与 email 类 claims（`name`、`preferred_username`、`email`、`email_verified`）**不会**放入 id_token——请通过 userinfo 端点并携带对应 `profile` / `email` scope 获取（见 §5）。
 
 ## 4. 验证 id_token
 
@@ -93,8 +95,9 @@ GET /.well-known/jwks.json
 | Scope | 返回的 Claims |
 |-------|---------------|
 | `openid` | `sub` (必需 scope，启用 OIDC) |
-| `profile` | `name`, `preferred_username` |
-| `email` | `email`, `email_verified` |
+| `profile` | `name`, `preferred_username`（经 userinfo 端点返回；旧 `username` key 同时下发至 v1.6.0 移除） |
+| `email` | `email`, `email_verified`（经 userinfo 端点返回） |
+| `org` | `org_ctx`（`{org_id, org_name, roles[]}`）—— id_token 与 userinfo；仅当授权携带有效组织上下文（v1.4.0） |
 
 ## 6. 集成示例
 
