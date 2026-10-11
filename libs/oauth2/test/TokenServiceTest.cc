@@ -414,6 +414,9 @@ TEST(TokenServiceTest, ExchangeCode_HappyPath_ReturnsFrozenShape)
     EXPECT_EQ(validated->clientId, "test-client");
     EXPECT_EQ(validated->userId, "alice");
     EXPECT_EQ(validated->scope, "openid profile");
+    // P0-4 (#258): audience is written at issuance (aud = issuing client),
+    // so introspection's aud is no longer permanently empty.
+    EXPECT_EQ(validated->audience, "test-client");
 }
 
 TEST(TokenServiceTest, ExchangeCode_WrongSecret_ReturnsInvalidClient)
@@ -479,6 +482,12 @@ TEST(TokenServiceTest, RefreshToken_HappyPathThenReuse_YieldsInvalidGrant)
     ASSERT_TRUE(called);
     ASSERT_TRUE(refreshed.isMember("access_token"));
     EXPECT_FALSE(refreshed.isMember("error"));
+
+    // P0-4 (#258): audience survives rotation with the same value.
+    std::shared_ptr<OAuth2AccessToken> rotated;
+    svc->validateAccessToken(refreshed["access_token"].asString(), [&](auto at) { rotated = at; });
+    ASSERT_NE(rotated, nullptr);
+    EXPECT_EQ(rotated->audience, "test-client");
 
     Json::Value reuse;
     svc->refreshAccessToken(rt, "test-client", [&](const Json::Value &j) { reuse = j; });

@@ -1349,6 +1349,9 @@ void TokenEndpointController::token(
                         // so the stamp happens here via plugin->getIssuer()).
                         token.issuer = plugin->getIssuer();
                         token.orgId = orgId;  // M3 org anchor (nullopt = personal)
+                        // P0-4 (#258): M2M audience = the client itself, same
+                        // as the authorization_code path.
+                        token.audience = clientId;
 
                         // Phase 4.3: route through plugin->saveAccessToken (NEW
                         // ITokenRepository) instead of getStorage()->saveAccessToken.
