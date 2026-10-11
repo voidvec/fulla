@@ -17,16 +17,20 @@ T = TypeVar("T", bound="UserInfoResponse")
 
 @_attrs_define
 class UserInfoResponse:
-    """OIDC Core §5.3 userinfo claims. email_verified present iff email present; roles present iff non-empty. org_ctx
-    present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0;
-    membership is re-checked in real time).
+    """OIDC Core §5.3 userinfo claims, scope-gated per §5.4 (P0-2): profile claims (name/preferred_username/picture)
+    require the profile scope; email/email_verified require the email scope; sub is unconditional. email_verified
+    present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context,
+    carries the org scope, and the user is still a member (v1.4.0; membership is re-checked in real time).
 
         Attributes:
             sub (str): Subject (public user id, stringified).
-            name (str): Username (fallback: email, then sub).
-            username (str | Unset):
-            email (str | Unset):
-            email_verified (bool | Unset):
+            name (str): display_name when set, else username, else email (profile scope).
+            preferred_username (str | Unset): Standard OIDC claim name (profile scope); the legacy username key dual-emits
+                alongside it until v1.6.0.
+            username (str | Unset): Legacy key (deprecated, removed in v1.6.0) — use preferred_username (profile scope).
+            picture (str | Unset): Avatar URL (profile scope).
+            email (str | Unset): Email address (email scope).
+            email_verified (bool | Unset): Email verification status (email scope).
             roles (list[str] | Unset):
             org_ctx (UserInfoResponseOrgCtx | Unset): v1.4.0: the ACTIVE organization context (id + name + the user's
                 current roles in it); active-org-only, never the full membership list.
@@ -34,7 +38,9 @@ class UserInfoResponse:
 
     sub: str
     name: str
+    preferred_username: str | Unset = UNSET
     username: str | Unset = UNSET
+    picture: str | Unset = UNSET
     email: str | Unset = UNSET
     email_verified: bool | Unset = UNSET
     roles: list[str] | Unset = UNSET
@@ -46,7 +52,11 @@ class UserInfoResponse:
 
         name = self.name
 
+        preferred_username = self.preferred_username
+
         username = self.username
+
+        picture = self.picture
 
         email = self.email
 
@@ -68,8 +78,12 @@ class UserInfoResponse:
                 "name": name,
             }
         )
+        if preferred_username is not UNSET:
+            field_dict["preferred_username"] = preferred_username
         if username is not UNSET:
             field_dict["username"] = username
+        if picture is not UNSET:
+            field_dict["picture"] = picture
         if email is not UNSET:
             field_dict["email"] = email
         if email_verified is not UNSET:
@@ -90,7 +104,11 @@ class UserInfoResponse:
 
         name = d.pop("name")
 
+        preferred_username = d.pop("preferred_username", UNSET)
+
         username = d.pop("username", UNSET)
+
+        picture = d.pop("picture", UNSET)
 
         email = d.pop("email", UNSET)
 
@@ -108,7 +126,9 @@ class UserInfoResponse:
         user_info_response = cls(
             sub=sub,
             name=name,
+            preferred_username=preferred_username,
             username=username,
+            picture=picture,
             email=email,
             email_verified=email_verified,
             roles=roles,

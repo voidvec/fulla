@@ -15,6 +15,7 @@
 #include <fulla/drogon/error/RequestId.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
 #include <fulla/drogon/controllers/ConsentContextController.h>
+#include <fulla/drogon/controllers/AuthorizeContextController.h>
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 #include <fulla/drogon/controllers/DiscoveryController.h>
 #include <fulla/drogon/controllers/UserAdminController.h>
@@ -279,6 +280,7 @@ int main(int argc, char *argv[])
     LOG_INFO << "Initializing API documentation...";
     fulla::drogon::controllers::AuthorizationEndpointController::initApiDocs();
     fulla::drogon::controllers::ConsentContextController::initApiDocs();
+    fulla::drogon::controllers::AuthorizeContextController::initApiDocs();
     fulla::drogon::controllers::TokenEndpointController::initApiDocs();
     fulla::drogon::controllers::DiscoveryController::initApiDocs();
     // #43 resource-scope authorization: the admin + user-self-service

@@ -73,6 +73,7 @@ export default {
       title: 'Sign in to your account',
       or: 'Or',
       createAccountLink: 'create a new account',
+      continueTo: 'Continue to {app}',
       emailOrUsername: 'Email or Username',
       passwordPlaceholder: 'Enter your password',
       forgotPassword: 'Forgot password?',

@@ -72,6 +72,7 @@ export default {
       title: '登录您的账户',
       or: '或',
       createAccountLink: '创建新账户',
+      continueTo: '继续前往 {app}',
       emailOrUsername: '邮箱或用户名',
       passwordPlaceholder: '请输入密码',
       forgotPassword: '忘记密码？',
