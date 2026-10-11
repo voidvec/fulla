@@ -77,6 +77,17 @@ void attemptBackupCode(
 )
 {
     auto nextShared = std::make_shared<std::function<void(bool, int)>>(std::move(next));
+    // Memory-mode guard (the M1 Debug-assert pitfall): getDbClient() ABORTS
+    // in Debug builds when no db_clients are configured. Memory deployments
+    // hold no backup-code rows by construction — no match, generic failure.
+    if (
+      auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+      p != nullptr && p->getStorageType() == "memory"
+    )
+    {
+        (*nextShared)(false, -1);
+        return;
+    }
     ::drogon::orm::DbClientPtr db;
     try
     {

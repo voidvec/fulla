@@ -61,6 +61,17 @@ void scopesSupportedAsync(std::function<void(std::vector<std::string>)> &&cb)
             return;
         }
     }
+    // Memory-mode guard (the M1 Debug-assert pitfall): getDbClient() ABORTS
+    // in Debug builds when no db_clients are configured — memory deployments
+    // serve the core fallback set instead of the catalog.
+    if (
+      auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+      p != nullptr && p->getStorageType() == "memory"
+    )
+    {
+        (*sharedCb)(coreScopesFallback());
+        return;
+    }
     ::drogon::orm::DbClientPtr db;
     try
     {
