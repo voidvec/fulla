@@ -36,12 +36,10 @@
 // (roles are informational metadata in the response, not used for access
 // control decisions inside this class).
 //
-// NOT YET WIRED INTO PRODUCTION: OAuth2Plugin continues to use its own
-// oauth2::TokenService against the old IOAuth2Storage. Wiring this class
-// into apps/server's assembly is Task 24, deferred until libs/identity's
-// remaining services (MFA/WebAuthn/Social/Session) are filled in (see
-// PROGRESS.md). This class is additive and independently unit-tested
-// (libs/oauth2/test) against fake repository/port implementations.
+// Wired into production: OAuth2Plugin assembles this TokenService into the
+// apps/server stack (the historical "NOT YET WIRED / Task 24" note here was
+// stale). Independently unit-tested (libs/oauth2/test) against fake
+// repository/port implementations.
 
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/ICryptoProvider.h>

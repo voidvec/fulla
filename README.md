@@ -34,7 +34,7 @@ What the product does, by domain. Deep-dive links go to the guides under `docs/`
 | Domain | Capabilities | Deep dive |
 |--------|--------------|-----------|
 | **Authentication** | Login/registration, email verification, password reset, TOTP MFA, WebAuthn (FIDO2), Google/WeChat social login, progressive account lockout | [Security Architecture](docs/architecture/security-architecture.md) |
-| **Authorization (OAuth2/OIDC)** | Auth-code + PKCE, client-credentials, refresh rotation, device flow, dynamic client registration, user consent, introspection, revocation, OIDC discovery/JWKS/UserInfo, end-session with front/back-channel logout | [Architecture Overview](docs/architecture/architecture-overview.md) |
+| **Authorization (OAuth2/OIDC)** | Auth-code + PKCE, client-credentials, refresh rotation, device flow, dynamic client registration, user consent, introspection, revocation, OIDC discovery/JWKS/UserInfo, end-session with back-channel logout | [Architecture Overview](docs/architecture/architecture-overview.md) |
 | **Access control** | RBAC (built-in admin/user + custom roles), granular scopes, DB-driven resource-scope registry, triple check (client restriction + role + consent) | [RBAC Guide](docs/domains/rbac-guide.md) |
 | **Token lifecycle** | Issuance, TTL-bounded retention, family-based refresh rotation, revocation by token/client/user, cache-aside with delayed double-delete invalidation | [Token Lifecycle](docs/domains/token-lifecycle.md) |
 | **Multi-tenancy** | Organizations, org-scoped clients and users, organization consents + consent-request workflow, owner succession, `org_ctx` claims, tenant-aware administration | [Multi-Tenancy](docs/domains/multi-tenancy.md) |

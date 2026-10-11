@@ -64,10 +64,10 @@ The `id_token` is an RS256-signed JWT containing the following standard claims:
 | `iat` | Issued-at time (Unix timestamp) | `1699996400` |
 | `nonce` | The nonce value sent in the request | `abc123` |
 
-Depending on the requested scopes, it may also contain:
+Depending on the request it may also contain:
 
-- **profile scope**: `name`, `preferred_username`
-- **email scope**: `email`, `email_verified`
+- **authentication context**: `auth_time` (emitted whenever available),
+  `amr` (e.g. `["pwd", "mfa"]`), `acr` (`"1"` password-only / `"2"` MFA)
 - **org scope with an organization context** (v1.4.0): `org_ctx` — an object
   `{ org_id, org_name, roles[] }` describing the active organization bound to
   this authorization and the caller's current membership roles in it. Present
@@ -75,6 +75,10 @@ Depending on the requested scopes, it may also contain:
   requested the `org` scope; membership is re-checked at issuance, so the
   claim disappears once membership ends. The same `org_ctx` object appears in
   the userinfo response.
+
+Profile and email claims (`name`, `preferred_username`, `email`,
+`email_verified`) are **not** placed in the id_token — request them from the
+userinfo endpoint with the corresponding `profile` / `email` scopes (see §5).
 
 ## 4. Verifying the id_token
 
@@ -100,9 +104,12 @@ Depending on the requested scopes, it may also contain:
 | Scope | Returned Claims |
 |-------|---------------|
 | `openid` | `sub` (required scope; enables OIDC) |
-| `profile` | `name`, `preferred_username` |
-| `email` | `email`, `email_verified` |
-| `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — only when the authorization carried a valid organization context (v1.4.0) |
+| `profile` | `name`, `preferred_username` — via the userinfo endpoint (the legacy `username` key is also emitted until v1.6.0) |
+| `email` | `email`, `email_verified` — via the userinfo endpoint |
+| `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — in the id_token and userinfo; only when the authorization carried a valid organization context (v1.4.0) |
+
+Resource scopes (`users:read`, `clients:write`, `audit:read`, …) are
+admin-gated API scopes; see the [RBAC guide](rbac-guide.md).
 
 ## 6. Integration Examples
 
