@@ -82,8 +82,8 @@ bool authorizeMintNonce(
     req->setParameter("scope", "openid");
     req->setParameter("state", state);
     req->setParameter("prompt", "consent");
-    req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-    req->setParameter("code_challenge_method", "plain");
+    req->setParameter("code_challenge", "9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA");
+    req->setParameter("code_challenge_method", "S256");
     req->addHeader("Cookie", cookieOut);
     auto [result, resp] = client->sendRequest(req, 30.0);
     if (result != ReqResult::Ok || resp->getStatusCode() != k302Found)
@@ -119,8 +119,8 @@ HttpResponsePtr authorize(const std::string &cookie, const std::string &extraPar
     req->setParameter("redirect_uri", "http://127.0.0.1:5173/callback");
     req->setParameter("scope", "openid");
     req->setParameter("state", "silentstate01");
-    req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-    req->setParameter("code_challenge_method", "plain");
+    req->setParameter("code_challenge", "9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA");
+    req->setParameter("code_challenge_method", "S256");
     if (!extraParam.empty())
         req->setParameter("prompt", extraParam);
     req->addHeader("Cookie", cookie);
@@ -205,7 +205,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_TwoConcurrentNonces_BothApprove)
     auto approve1 = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate1&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate1&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
         csrf1 + "&action=approve",
       cookieA
     );
@@ -217,7 +217,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_TwoConcurrentNonces_BothApprove)
     auto approve2 = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate2&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=multiflowstate2&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
         csrf2 + "&action=approve",
       cookieB
     );
@@ -252,7 +252,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_NonceCapEvictsOldest)
     auto evicted = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate01&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate01&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
         csrfOldest + "&action=approve",
       cookieOldest
     );
@@ -263,7 +263,7 @@ DROGON_TEST(Integration_P1_ConsentMultiFlow_NonceCapEvictsOldest)
     auto live = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate06&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=capstate06&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
         csrfNewest + "&action=approve",
       cookieNewest
     );

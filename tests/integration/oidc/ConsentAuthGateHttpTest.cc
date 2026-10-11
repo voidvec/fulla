@@ -7,6 +7,7 @@
 #include <drogon/drogon_test.h>
 #include <drogon/HttpClient.h>
 #include "../../common/HttpTestClient.h"
+#include <fulla/drogon/utils/CryptoUtils.h>
 
 #include <iostream>
 #include <string>
@@ -99,8 +100,13 @@ bool authorizeMintNonce(const std::string &cookieIn, std::string &csrf,
     req->setParameter("scope", "openid");
     req->setParameter("state", "consentstate01");
     req->setParameter("prompt", "consent");
-    req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-    req->setParameter("code_challenge_method", "plain");
+    // P0-5 (#259): authorize is S256-only — mint the challenge from the
+    // fixed verifier instead of the former plain method.
+    const std::string kVerifier = "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po";
+    req->setParameter(
+      "code_challenge", ::fulla::drogon::utils::computeCodeChallenge(kVerifier, "S256")
+    );
+    req->setParameter("code_challenge_method", "S256");
     req->addHeader("Cookie", cookieOut);
     auto [result, resp] = client->sendRequest(req, 30.0);
     if (result != ReqResult::Ok || resp->getStatusCode() != k302Found)
@@ -209,8 +215,13 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     req->setParameter("scope", "openid");
     req->setParameter("state", "consentstate01");
     req->setParameter("prompt", "consent");
-    req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-    req->setParameter("code_challenge_method", "plain");
+    // P0-5 (#259): authorize is S256-only — mint the challenge from the
+    // fixed verifier instead of the former plain method.
+    const std::string kVerifier = "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po";
+    req->setParameter(
+      "code_challenge", ::fulla::drogon::utils::computeCodeChallenge(kVerifier, "S256")
+    );
+    req->setParameter("code_challenge_method", "S256");
     req->addHeader("Cookie", cookie);
     auto [result, resp] = client->sendRequest(req, 30.0);
     REQUIRE(result == ReqResult::Ok);
@@ -244,10 +255,17 @@ DROGON_TEST(Integration_P1_Consent_NonceRoundTrip_ApprovesAndRejectsReplay)
     // resolve the session user through the mapping table on its own.
 
     // Approve with the minted nonce -> 302 back to the client with a code.
+    // P0-5 (#259): the challenge threads through as S256 (authorize rejects
+    // plain), derived from the same fixed verifier used at authorize.
+    const std::string kS256 =
+      ::fulla::drogon::utils::computeCodeChallenge(
+        "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po", "S256"
+      );
     auto approve = post(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" + "&state=consentstate01&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" + csrf +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback" +
+        "&state=consentstate01&code_challenge=" + kS256 + "&code_challenge_method=S256&consent_csrf=" + csrf +
         "&action=approve",
       cookie
     );

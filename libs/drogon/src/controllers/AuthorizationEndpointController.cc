@@ -388,28 +388,57 @@ void AuthorizationEndpointController::authorize(
                     return;
                 }
 
-                // F-013 (RFC 7636 §4.2): code_challenge_method, when present,
-                // MUST be "plain" or "S256"; omitted defaults to "plain".
-                // client_id/redirect_uri are already verified above, so per the
-                // F-007 rule the error is redirected back to the client.
-                if (!codeChallengeMethod.empty())
+                // F-013 (RFC 7636 §4.2) + P0-5 (#259): S256-only (RFC 9700
+                // §2.1.1 direction). `plain` is rejected unless the explicit
+                // auth.allow_pkce_plain escape hatch is enabled (default
+                // false, one-release transition for legacy PUBLIC clients);
+                // an omitted method no longer defaults to plain (the RFC
+                // 7636 §4.3 default) — a challenge must name S256.
+                // client_id/redirect_uri are already verified above, so per
+                // the F-007 rule the errors redirect back to the client.
                 {
-                    if (codeChallengeMethod != "plain" && codeChallengeMethod != "S256")
+                    auto cfg = ::drogon::app().getCustomConfig();
+                    bool allowPlain = false;
+                    if (cfg.isMember("auth") && cfg["auth"].isMember("allow_pkce_plain"))
+                        allowPlain = cfg["auth"]["allow_pkce_plain"].asBool();
+                    if (!allowPlain && codeChallengeMethod == "plain")
                     {
                         callback(
                           buildAuthorizeErrorRedirect(
                             redirectUri,
                             "invalid_request",
-                            "code_challenge_method must be 'plain' or 'S256'",
+                            "code_challenge_method 'plain' is not allowed; use S256 "
+                            "(auth.allow_pkce_plain temporarily re-enables it)",
                             state
                           )
                         );
                         return;
                     }
-                }
-                else if (!codeChallenge.empty())
-                {
-                    codeChallengeMethod = "plain";
+                    if (codeChallengeMethod != "S256" && codeChallengeMethod != "plain")
+                    {
+                        callback(
+                          buildAuthorizeErrorRedirect(
+                            redirectUri,
+                            "invalid_request",
+                            "code_challenge_method must be 'S256'",
+                            state
+                          )
+                        );
+                        return;
+                    }
+                    if (codeChallengeMethod.empty() && !codeChallenge.empty())
+                    {
+                        callback(
+                          buildAuthorizeErrorRedirect(
+                            redirectUri,
+                            "invalid_request",
+                            "code_challenge_method is required when code_challenge is present "
+                            "(S256)",
+                            state
+                          )
+                        );
+                        return;
+                    }
                 }
 
                 // P2-6(4) audit fix: reject a malformed code_challenge

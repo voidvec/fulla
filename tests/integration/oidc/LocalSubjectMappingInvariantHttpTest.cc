@@ -95,8 +95,8 @@ bool authorizeMintNonce(
         req->setParameter("scope", "openid");
         req->setParameter("state", "p0143state");
         req->setParameter("prompt", "consent");
-        req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-        req->setParameter("code_challenge_method", "plain");
+        req->setParameter("code_challenge", "9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA");
+        req->setParameter("code_challenge_method", "S256");
         req->addHeader("Cookie", cookieOut);
         auto [result, resp] = client->sendRequest(req, 30.0);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr ||
@@ -168,7 +168,7 @@ bool authorizeMintNonce(
     return postWithCookie(
       "/oauth2/consent",
       "client_id=fulla-portal&user_id=" + userId +
-        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=p0143state&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=plain&consent_csrf=" +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=p0143state&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
         csrf + "&action=approve",
       cookie2
     );
