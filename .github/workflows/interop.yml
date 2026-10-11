@@ -1,0 +1,106 @@
+# RP Interop Smoke (P0-9) — the v1.5.0 P0 exit gate.
+#
+# Three standard RP libraries (openid-client / authlib / go-oidc) drive the
+# authorization-code + PKCE -> token -> userinfo -> refresh -> end-session
+# chain in strict mode against a real fulla stack. Deliberately NOT on the
+# per-PR hot path (runtime): runs on master / release branches and on demand.
+# See tests/interop/README.md.
+
+name: interop
+
+on:
+  push:
+    branches: [master, "release/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rp-interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMAKE_PRESET: linux-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client redis-tools
+          python -m pip install --upgrade pip conan
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tests/interop/go/go.mod
+
+      - name: Resolve locked dependencies (Conan)
+        run: |
+          conan profile detect --force
+          conan install . --output-folder=build/linux-release --build=missing \
+            -s build_type=Release -s compiler.cppstd=17
+
+      - name: Configure + build server
+        run: |
+          cmake --preset "$CMAKE_PRESET"
+          cmake --build --preset "$CMAKE_PRESET" --target fulla-server
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker run -d --name fulla-postgres \
+            -e POSTGRES_USER=fulla_user \
+            -e POSTGRES_PASSWORD=123456 \
+            -e POSTGRES_DB=fulla_db \
+            -p 5432:5432 postgres:17-alpine
+          docker run -d --name fulla-redis \
+            -p 6379:6379 redis:7-alpine
+
+      - name: Wait for services and initialize schema + seeds
+        working-directory: apps/server
+        env:
+          PGPASSWORD: 123456
+        run: |
+          for i in $(seq 1 15); do
+            psql -h localhost -U fulla_user -d fulla_db -c 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 2
+          done
+          for f in migrations/V*.sql seed/*.sql; do
+            echo "Applying $f..."
+            psql -h localhost -U fulla_user -d fulla_db -f "$f"
+          done
+
+      - name: Boot fulla-server
+        working-directory: apps/server/config
+        run: |
+          nohup "$GITHUB_WORKSPACE/build/linux-release/apps/server/fulla-server" \
+            > /tmp/fulla-server-interop.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5555/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "::error::server failed to become healthy"
+          cat /tmp/fulla-server-interop.log
+          exit 1
+
+      - name: Node driver (openid-client v6)
+        working-directory: tests/interop/node
+        run: |
+          npm install --no-fund --no-audit
+          node rp-smoke.mjs
+
+      - name: Python driver (authlib)
+        run: |
+          python -m pip install -r tests/interop/python/requirements.txt
+          python tests/interop/python/rp_smoke.py
+
+      - name: Go driver (go-oidc + x/oauth2)
+        run: go run ./tests/interop/go
+
+      - name: Server log on failure
+        if: failure()
+        run: tail -n 200 /tmp/fulla-server-interop.log || true
