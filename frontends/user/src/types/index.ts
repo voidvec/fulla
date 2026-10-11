@@ -14,6 +14,9 @@ export interface LoginResult {
   mfaRequired?: boolean
   mfaToken?: string
   passwordChangeRequired?: boolean
+  // P0-3 (#257): set when the second factor was a backup code — the number of
+  // codes left after that consumption (0 = re-bind required).
+  backupCodesRemaining?: number
   error?: import('../services/errorAdapter').NormalizedError | string
 }
 

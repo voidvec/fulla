@@ -26,6 +26,9 @@ const router = useRouter()
 const loading = ref(true)
 const profile = ref<any>(null)
 const success = ref('')
+// P0-3 (#257): set on mount when the previous login consumed the LAST backup
+// code (flag left by LoginPage) — drives the forced re-bind banner.
+const backupCodesExhausted = ref(false)
 // #158: catalog-backed errors are stored as NormalizedError and resolved at
 // render time (errorText) so switching locale re-translates text on screen;
 // plain strings (chrome copy via t()) keep snapshot semantics.
@@ -345,7 +348,16 @@ async function deleteAccount() {
   } finally { deletingAccount.value = false }
 }
 
-onMounted(fetchProfile)
+onMounted(() => {
+  // P0-3 (#257): a login completed on the LAST backup code left this flag —
+  // surface the forced re-bind guidance here (the login page redirects away
+  // before any UI could show it there).
+  if (localStorage.getItem('fulla_mfa_backup_exhausted') === '1') {
+    backupCodesExhausted.value = true
+    localStorage.removeItem('fulla_mfa_backup_exhausted')
+  }
+  fetchProfile()
+})
 </script>
 
 <template>
@@ -353,6 +365,15 @@ onMounted(fetchProfile)
     <h1 class="text-2xl font-bold text-neutral-900 mb-6">
       {{ $t('account.security.title') }}
     </h1>
+
+    <AppAlert
+      v-if="backupCodesExhausted"
+      type="warning"
+      class="mb-4"
+      data-testid="backup-codes-exhausted"
+    >
+      {{ $t('account.security.backupCodesExhausted') }}
+    </AppAlert>
 
     <AppAlert
       v-if="success"

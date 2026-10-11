@@ -134,7 +134,15 @@ export const authService = {
     if (resp.data.access_token) {
       clearPkceStash()
       setTokens(resp.data.access_token, resp.data.refresh_token)
-      return { success: true }
+      // P0-3 (#257): when the second factor was a backup code the response
+      // carries the remaining count (0 = TOTP re-bind required); TOTP logins
+      // omit the field.
+      const raw = resp.data as TokenResponse & { backup_codes_remaining?: number }
+      return {
+        success: true,
+        backupCodesRemaining:
+          typeof raw.backup_codes_remaining === 'number' ? raw.backup_codes_remaining : undefined,
+      }
     }
     return { error: 'MFA verification failed' }
   },

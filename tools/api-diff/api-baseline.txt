@@ -3604,6 +3604,29 @@ Config config_;
 };
 IEmailService &getEmailService();
 }
+=== libs/drogon/include/fulla/drogon/utils/MfaBackupCodes.h
+#pragma once
+#include <json/json.h>
+#include <cctype>
+#include <sstream>
+#include <string>
+#include <fulla/drogon/utils/CryptoUtils.h>
+namespace fulla::drogon::utils::mfa_backup
+{
+namespace detail
+{
+inline std::string toLowerHex(std::string s)
+;
+inline bool parseArray(const std::string &storedJsonArray, Json::Value &out)
+;
+}
+inline int matchBackupCode(const std::string &storedJsonArray, const std::string &plainCode)
+;
+inline std::string removeEntry(const std::string &storedJsonArray, int index)
+;
+inline int countEntries(const std::string &storedJsonArray)
+;
+}
 === libs/drogon/include/fulla/drogon/utils/OrgContextSlots.h
 #pragma once
 #include <drogon/drogon.h>

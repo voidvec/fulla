@@ -228,6 +228,8 @@ export default {
     },
     security: {
       title: 'Security Settings',
+      backupCodesExhausted:
+        'All backup codes have been used. Re-bind your authenticator (disable and re-enable MFA) — without a working second factor you can be locked out.',
       changePassword: 'Change Password',
       currentPassword: 'Current Password',
       changing: 'Changing...',
