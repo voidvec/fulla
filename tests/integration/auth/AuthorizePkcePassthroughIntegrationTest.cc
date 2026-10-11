@@ -156,8 +156,10 @@ HttpResponsePtr callAuthorize(const std::string &sessionCookie)
     req->setParameter("redirect_uri", kRedirectUri);
     req->setParameter("scope", "openid");
     req->setParameter("state", kState);
-    req->setParameter("code_challenge", kVerifier);
-    req->setParameter("code_challenge_method", "plain");
+    // P0-5 (#259): authorize is S256-only — the challenge is
+    // BASE64URL(SHA256(kVerifier)), still exchanged with kVerifier below.
+    req->setParameter("code_challenge", "0I_BPZj110JjgvHRPbBGCMkRed8cZyjJWpq29k9fYUk");
+    req->setParameter("code_challenge_method", "S256");
     req->setParameter("nonce", "pkce_e2e_nonce_01");
     req->addCookie("JSESSIONID", sessionCookie);
     return sendReq(req);

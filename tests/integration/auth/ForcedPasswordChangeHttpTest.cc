@@ -118,12 +118,32 @@ std::string userInternalId(const std::string &username)
         return "";
     std::promise<std::string> p;
     db->execSqlAsync(
-      "SELECT id FROM users WHERE username = $1",
-      [&](const Result &rows) {
-          p.set_value(rows.empty() ? "" : std::to_string(rows[0]["id"].as<int32_t>()));
-      },
-      [&](const DrogonDbException &) { p.set_value(""); },
-      username
+        "SELECT id FROM users WHERE username = $1",
+        [&](const Result &rows) {
+            p.set_value(rows.empty() ? "" : std::to_string(rows[0]["id"].as<int32_t>()));
+        },
+        [&](const DrogonDbException &) { p.set_value(""); },
+        username
+    );
+    return p.get_future().get();
+}
+
+// P0-1 (#255): the authorize->consent chain now carries the OIDC subject
+// (UUID public_sub) as user_id — consent Gate 2 compares against
+// session["sub"], so tests must submit the public subject.
+std::string userPublicSub(const std::string &username)
+{
+    auto db = app().getDbClient();
+    if (!db)
+        return "";
+    std::promise<std::string> p;
+    db->execSqlAsync(
+        "SELECT public_sub FROM users WHERE username = $1",
+        [&](const Result &rows) {
+            p.set_value(rows.empty() ? "" : rows[0]["public_sub"].as<std::string>());
+        },
+        [&](const DrogonDbException &) { p.set_value(""); },
+        username
     );
     return p.get_future().get();
 }
@@ -135,7 +155,7 @@ HttpResponsePtr loginUser()
       "/oauth2/login?json=true",
       std::string("username=") + kTestUser + "&password=" + oldPassword() +
         "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
-        "&scope=openid&state=pwdstate001&code_challenge=F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po&code_challenge_method=S256"
+        "&scope=openid&state=pwdstate001&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256"
     );
 }
 
@@ -167,8 +187,8 @@ HttpResponsePtr authorize(
     req->setParameter("redirect_uri", redirectUri);
     req->setParameter("scope", "openid");
     req->setParameter("state", "pwdstate001");
-    req->setParameter("code_challenge", "F_TTxId01kOTYIcFSCqZnz9wQ-6F1aJ1vtm1YoBy8po");
-    req->setParameter("code_challenge_method", "plain");
+    req->setParameter("code_challenge", "9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA");
+    req->setParameter("code_challenge_method", "S256");
     if (!prompt.empty())
         req->setParameter("prompt", prompt);
     req->addHeader("Cookie", cookie);
@@ -279,7 +299,7 @@ DROGON_TEST(Integration_P1_ForcedPasswordChange_Consent_Returns403)
     REQUIRE(login->getStatusCode() == k200OK);
     const std::string cookie = cookieOf(login);
     REQUIRE(!cookie.empty());
-    const std::string userId = userInternalId(kTestUser);
+    const std::string userId = userPublicSub(kTestUser);
     REQUIRE(!userId.empty());
 
     auto client = HttpClient::newHttpClient("http://127.0.0.1:5555", app().getLoop());

@@ -2,8 +2,13 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/error/OAuth2ErrorHandler.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>
+#include <fulla/storage/postgres/models/Oauth2Scopes.h>
 #include <drogon/drogon.h>
+#include <algorithm>
+#include <chrono>
+#include <functional>
 #include <mutex>
+#include <vector>
 
 using namespace fulla::drogon::controllers;
 using namespace fulla::drogon::observability::openapi;
@@ -23,6 +28,106 @@ std::string normalizeIssuer(std::string url)
     while (url.size() > 1 && url.back() == '/')
         url.pop_back();
     return url;
+}
+
+// P0-5 (#259): scopes_supported is served from the DB scope catalog (60 s
+// cache) instead of the former hardcoded four-entry list, so `org` (v1.4.0)
+// and the resource-scope family (V023) stop being
+// implemented-but-unadvertised. Memory-mode deployments (no DbClient) and
+// fetch failures fall back to the core set / last-good cache — discovery
+// must answer even when the catalog is unreachable.
+std::mutex g_scopesMutex;
+std::vector<std::string> g_scopesCache;
+std::chrono::steady_clock::time_point g_scopesFetchedAt;
+constexpr auto kScopesCacheTtl = std::chrono::seconds(60);
+
+const std::vector<std::string> &coreScopesFallback()
+{
+    static const std::vector<std::string> kCore = {"admin", "email", "openid", "org", "profile"};
+    return kCore;
+}
+
+void scopesSupportedAsync(std::function<void(std::vector<std::string>)> &&cb)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(std::vector<std::string>)>>(std::move(cb));
+    {
+        std::lock_guard<std::mutex> lock(g_scopesMutex);
+        if (
+          !g_scopesCache.empty() &&
+          std::chrono::steady_clock::now() - g_scopesFetchedAt < kScopesCacheTtl)
+        {
+            (*sharedCb)(g_scopesCache);
+            return;
+        }
+    }
+    ::drogon::orm::DbClientPtr db;
+    try
+    {
+        db = ::drogon::app().getDbClient();
+    }
+    catch (...)
+    {
+        db = nullptr;
+    }
+    if (!db)
+    {
+        std::lock_guard<std::mutex> lock(g_scopesMutex);
+        (*sharedCb)(g_scopesCache.empty() ? coreScopesFallback() : g_scopesCache);
+        return;
+    }
+    try
+    {
+        // The catalog is tiny; fetch all rows and filter in code. V023 left
+        // the legacy bare read/write rows as inert orphans — they are NOT
+        // advertised.
+        ::drogon::orm::Mapper<drogon_model::fulla_db::Oauth2Scopes>(db)
+          .findBy(
+            ::drogon::orm::Criteria(
+              drogon_model::fulla_db::Oauth2Scopes::Cols::_id,
+              ::drogon::orm::CompareOperator::GT,
+              0
+            ),
+            [sharedCb](const std::vector<drogon_model::fulla_db::Oauth2Scopes> &rows) {
+                std::vector<std::string> scopes;
+                for (const auto &row : rows)
+                {
+                    const std::string name = row.getValueOfName();
+                    if (name.empty() || name == "read" || name == "write")
+                        continue;
+                    scopes.push_back(name);
+                }
+                std::sort(scopes.begin(), scopes.end());
+                {
+                    std::lock_guard<std::mutex> lock(g_scopesMutex);
+                    if (!scopes.empty())
+                    {
+                        g_scopesCache = scopes;
+                        g_scopesFetchedAt = std::chrono::steady_clock::now();
+                    }
+                }
+                (*sharedCb)(scopes.empty() ? coreScopesFallback() : scopes);
+            },
+            [sharedCb](const ::drogon::orm::DrogonDbException &e) {
+                LOG_WARN << "scopes_supported catalog fetch failed: " << e.base().what();
+                std::vector<std::string> out;
+                {
+                    std::lock_guard<std::mutex> lock(g_scopesMutex);
+                    out = g_scopesCache.empty() ? coreScopesFallback() : g_scopesCache;
+                }
+                (*sharedCb)(out);
+            }
+          );
+    }
+    catch (...)
+    {
+        std::vector<std::string> out;
+        {
+            std::lock_guard<std::mutex> lock(g_scopesMutex);
+            out = g_scopesCache.empty() ? coreScopesFallback() : g_scopesCache;
+        }
+        (*sharedCb)(out);
+    }
 }
 }  // namespace
 
@@ -140,12 +245,9 @@ void DiscoveryController::metadata(
     // gated) -- advertise it so clients can discover it.
     metadata["registration_endpoint"] = baseUrl + "/oauth2/register";
 
-    // OpenID Connect support (partial, based on what we implement)
-    metadata["scopes_supported"] = Json::Value(Json::arrayValue);
-    metadata["scopes_supported"].append("openid");
-    metadata["scopes_supported"].append("profile");
-    metadata["scopes_supported"].append("email");
-    metadata["scopes_supported"].append("admin");
+    // P0-5 (#259): scopes_supported is filled from the DB scope catalog in
+    // the async continuation at the end of this handler (see
+    // scopesSupportedAsync).
 
     metadata["response_types_supported"] = Json::Value(Json::arrayValue);
     metadata["response_types_supported"].append("code");
@@ -164,9 +266,10 @@ void DiscoveryController::metadata(
     metadata["subject_types_supported"] = Json::Value(Json::arrayValue);
     metadata["subject_types_supported"].append("public");
 
-    // PKCE support
+    // PKCE support — P0-5 (#259): S256-only (RFC 9700 §2.1.1 direction);
+    // plain is no longer accepted at authorize (short of the
+    // auth.allow_pkce_plain escape hatch) and is no longer advertised.
     metadata["code_challenge_methods_supported"] = Json::Value(Json::arrayValue);
-    metadata["code_challenge_methods_supported"].append("plain");
     metadata["code_challenge_methods_supported"].append("S256");
 
     // Client authentication methods
@@ -185,9 +288,16 @@ void DiscoveryController::metadata(
             metadata["op_tos_uri"] = customConfig["metadata"]["op_tos_uri"];
     }
 
-    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(metadata);
-    resp->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
-    callback(resp);
+    // P0-5 (#259): catalog-backed scopes land here (async continuation).
+    scopesSupportedAsync(
+      [metadata, callback](std::vector<std::string> scopes) mutable {
+          metadata["scopes_supported"] = Json::Value(Json::arrayValue);
+          for (const auto &s : scopes)
+              metadata["scopes_supported"].append(s);
+          auto resp = ::drogon::HttpResponse::newHttpJsonResponse(metadata);
+          resp->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
+          callback(resp);
+      });
 }
 
 void DiscoveryController::oidcDiscovery(
@@ -220,11 +330,9 @@ void DiscoveryController::oidcDiscovery(
     // gated) -- advertise it.
     discovery["registration_endpoint"] = baseUrl + "/oauth2/register";
 
-    discovery["scopes_supported"] = Json::Value(Json::arrayValue);
-    discovery["scopes_supported"].append("openid");
-    discovery["scopes_supported"].append("profile");
-    discovery["scopes_supported"].append("email");
-    discovery["scopes_supported"].append("admin");
+    // P0-5 (#259): scopes_supported is filled from the DB scope catalog in
+    // the async continuation at the end of this handler (see
+    // scopesSupportedAsync).
 
     discovery["response_types_supported"] = Json::Value(Json::arrayValue);
     discovery["response_types_supported"].append("code");
@@ -246,8 +354,9 @@ void DiscoveryController::oidcDiscovery(
     discovery["token_endpoint_auth_methods_supported"].append("client_secret_post");
 
     discovery["code_challenge_methods_supported"] = Json::Value(Json::arrayValue);
+    // P0-5 (#259): S256-only — plain is no longer accepted at authorize and
+    // is no longer advertised.
     discovery["code_challenge_methods_supported"].append("S256");
-    discovery["code_challenge_methods_supported"].append("plain");
 
     // F-022 (OIDC Core §3.1.2.1 / §5.1): advertise prompt/max_age support and
     // the auth_time/acr/amr claims the id_token now carries.
@@ -274,25 +383,39 @@ void DiscoveryController::oidcDiscovery(
     discovery["backchannel_logout_supported"] = true;
     discovery["backchannel_logout_session_supported"] = false;
 
+    // P0-5 (#259): reconciled against what is actually emitted (the
+    // reconciliation test freezes this set): id_token carries
+    // iss/sub/aud/iat/exp/nonce + conditional auth_time/acr/amr/org_ctx;
+    // userinfo (P0-2, scope-gated) adds name/preferred_username/picture/
+    // email/email_verified; roles ride the token response and userinfo.
     discovery["claims_supported"] = Json::Value(Json::arrayValue);
     discovery["claims_supported"].append("sub");
-    discovery["claims_supported"].append("name");
-    discovery["claims_supported"].append("email");
-    discovery["claims_supported"].append("email_verified");
     discovery["claims_supported"].append("iss");
     discovery["claims_supported"].append("aud");
     discovery["claims_supported"].append("exp");
     discovery["claims_supported"].append("iat");
     discovery["claims_supported"].append("nonce");
-    // F-022: auth_time/acr/amr are conditionally emitted on the id_token
-    // (auth_time when set, acr/amr when the session recorded an amr).
     discovery["claims_supported"].append("auth_time");
     discovery["claims_supported"].append("acr");
     discovery["claims_supported"].append("amr");
+    discovery["claims_supported"].append("org_ctx");
+    discovery["claims_supported"].append("name");
+    discovery["claims_supported"].append("preferred_username");
+    discovery["claims_supported"].append("picture");
+    discovery["claims_supported"].append("email");
+    discovery["claims_supported"].append("email_verified");
+    discovery["claims_supported"].append("roles");
 
-    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(discovery);
-    resp->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
-    callback(resp);
+    // P0-5 (#259): the catalog-backed scope list lands here (async).
+    scopesSupportedAsync(
+      [discovery, callback](std::vector<std::string> scopes) mutable {
+          discovery["scopes_supported"] = Json::Value(Json::arrayValue);
+          for (const auto &s : scopes)
+              discovery["scopes_supported"].append(s);
+          auto resp = ::drogon::HttpResponse::newHttpJsonResponse(discovery);
+          resp->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
+          callback(resp);
+      });
 }
 
 void DiscoveryController::jwks(
