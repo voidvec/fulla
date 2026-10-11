@@ -1247,10 +1247,11 @@ void SessionController::consent(
         return;
     }
 
-    // Gate 2 — the consented user must be the session user. The authorize
-    // flow hands `user_id` = session["userId"] (internal id as string);
-    // a mismatch means someone is submitting consent for another user.
-    if (userId != sessUserId)
+    // Gate 2 — the consented user must be the session user. P0-1 (#255):
+    // the authorize flow now hands `user_id` = session["sub"] (the OIDC
+    // subject, UUID public_sub — previously the numeric internal id); a
+    // mismatch means someone is submitting consent for another user.
+    if (userId != sessSub)
     {
         respondError(
           req, std::move(callback), "AUTHZ_ACCESS_DENIED",

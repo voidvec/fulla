@@ -570,17 +570,32 @@ void TokenService::refreshAccessToken(
               return;
           }
 
-          // v1.4.0 M1 (design §2.1 item 4): refresh preserves the org
-          // binding along the family and re-resolves org_ctx (O7: a
-          // member removed from the org stops getting org_ctx on refresh-
-          // issued id_tokens immediately). Nullopt hop when not applicable.
-          self->resolveOrgContextForClaims(
-            storedRt->userId,
-            storedRt->orgId,
-            storedRt->scope,
-            [self, callback, storedRt, now](
-              std::optional<fulla::common::ports::OrgContextInfo> orgCtx
-            ) {
+          // P0-1 (#255): the rotation body below runs with a (possibly
+          // normalized) subject. Legacy pre-hard-cut refresh families minted
+          // the NUMERIC internal id as the subject; every issuance path now
+          // unifies on the UUID public_sub, so a numeric subject is
+          // translated once through the injected normalizer
+          // (oauth2_subject_mappings -> users.public_sub) and the rotated
+          // pair carries the UUID from then on. An unresolvable numeric
+          // subject is rejected fail-closed (audited), never guessed.
+          const bool numericSubject =
+            !storedRt->userId.empty() &&
+            storedRt->userId.find_first_not_of("0123456789") == std::string::npos;
+          auto withSubject = std::make_shared<std::function<void(std::string)>>(
+            [self, callback, storedRt, now](std::string subject) mutable {
+              storedRt->userId = std::move(subject);
+              // v1.4.0 M1 (design §2.1 item 4): refresh preserves the org
+              // binding along the family and re-resolves org_ctx (O7: a
+              // member removed from the org stops getting org_ctx on
+              // refresh-issued id_tokens immediately). Nullopt hop when not
+              // applicable.
+              self->resolveOrgContextForClaims(
+                storedRt->userId,
+                storedRt->orgId,
+                storedRt->scope,
+                [self, callback, storedRt, now](
+                  std::optional<fulla::common::ports::OrgContextInfo> orgCtx
+                ) {
           auto newTokenStr = generateSecureToken(*self->crypto_);
           auto newRefreshTokenStr = generateSecureToken(*self->crypto_);
           // P2-1: refuse issuance on CSPRNG failure ("" results).
@@ -671,8 +686,44 @@ void TokenService::refreshAccessToken(
                 callback(json);
             }
           );
-              }
+                }
               );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
+            });
+          if (!numericSubject)
+          {
+              (*withSubject)(storedRt->userId);
+              return;
+          }
+          if (!self->subjectNormalizer_)
+          {
+              self->audit(
+                "refresh_subject_normalization_failed",
+                "failure",
+                storedRt->userId,
+                "token",
+                ""
+              );
+              callback(makeError("invalid_grant", "Legacy subject cannot be normalized"));
+              return;
+          }
+          self->subjectNormalizer_(
+            storedRt->userId,
+            [self, withSubject, storedRt, callback](
+              std::optional<std::string> normalized) mutable {
+                if (!normalized || normalized->empty())
+                {
+                    self->audit(
+                      "refresh_subject_normalization_failed",
+                      "failure",
+                      storedRt->userId,
+                      "token",
+                      ""
+                    );
+                    callback(makeError("invalid_grant", "Legacy subject cannot be normalized"));
+                    return;
+                }
+                (*withSubject)(*normalized);
+            });
       }
     );
 }

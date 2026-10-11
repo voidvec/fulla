@@ -447,11 +447,18 @@ void AuthorizationEndpointController::authorize(
                 // checkUserConsentAndProceed). The engine returns a single
                 // ScopeValidationSummary the controller maps to a response.
                 std::string userId;
+                // P0-1 (#255): codes mint the OIDC subject (UUID public_sub,
+                // session "sub" — #55 has written it at login since long
+                // before v1.4.0); the numeric session userId stays for
+                // internal uses only (role lookups, the org-gate stoi below).
+                std::string publicSub;
                 bool mfaPendingSession = false;
                 bool mustChangePasswordSession = false;
                 if (req->session())
                 {
                     userId = req->session()->get<std::string>("userId");
+                    if (req->session()->find("sub"))
+                        publicSub = req->session()->get<std::string>("sub");
                     // #144: a session paused at the MFA challenge (password
                     // verified, second factor outstanding) is NOT a usable
                     // authenticated session for authorize — treating it as
@@ -466,7 +473,7 @@ void AuthorizationEndpointController::authorize(
                           req->session()->get<bool>("must_change_password");
                 }
 
-                if (userId.empty() || mfaPendingSession || mustChangePasswordSession)
+                if (userId.empty() || publicSub.empty() || mfaPendingSession || mustChangePasswordSession)
                 {
                     // F-022 (OIDC Core §3.1.2.1): prompt=none requires that
                     // no UI be shown. Without a fully usable session (none,
@@ -627,7 +634,7 @@ void AuthorizationEndpointController::authorize(
                 // scope/consent/issuance tail; the tail body keeps its
                 // original indentation so the wrap stays diff-reviewable.
                 auto proceedWithOrgContext =
-                  [plugin, req, clientId, userId, redirectUri, state, scope,
+                  [plugin, req, clientId, userId, publicSub, redirectUri, state, scope,
                    codeChallenge, codeChallengeMethod, nonce, promptNone,
                    promptConsent, sessAuthTime, sessAmr, requestedScopes,
                    callback = std::move(callback)](
@@ -705,6 +712,7 @@ void AuthorizationEndpointController::authorize(
                    req,
                    clientId,
                    userId,
+                   publicSub,
                    redirectUri,
                    state,
                    scope,
@@ -771,7 +779,7 @@ void AuthorizationEndpointController::authorize(
                           }
                           std::string location =
                             consentUrl + "?client_id=" + ::drogon::utils::urlEncode(clientId) +
-                            "&user_id=" + ::drogon::utils::urlEncode(userId) +
+                            "&user_id=" + ::drogon::utils::urlEncode(publicSub) +
                             "&scope=" + ::drogon::utils::urlEncode(scope) +
                             "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
                             "&state=" + ::drogon::utils::urlEncode(state);
@@ -879,9 +887,11 @@ void AuthorizationEndpointController::authorize(
                       }
 
                       // canProceed(): every scope Valid -> issue an auth code.
+                      // P0-1 (#255): the subject is the UUID public_sub —
+                      // never the numeric internal id.
                       plugin->generateAuthorizationCode(
                         clientId,
-                        userId,
+                        publicSub,
                         scope,
                         redirectUri,
                         codeChallenge,

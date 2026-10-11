@@ -111,6 +111,21 @@ class TokenService : public std::enable_shared_from_this<TokenService>
         orgContextResolver_ = std::move(resolver);
     }
 
+    /// P0-1 (#255): optional one-shot normalizer for legacy numeric-subject
+    /// refresh families. The v1.5.0 hard cut unifies every issuance path on
+    /// the UUID public_sub; families minted before it carry the NUMERIC
+    /// internal id as subject and are translated at rotation time (the
+    /// product layer injects an oauth2_subject_mappings -> users.public_sub
+    /// chain), so the rotated pair carries the UUID from then on. Unwired
+    /// (Domain unit tests, memory-mode hosts) = a numeric subject reaching
+    /// refresh is REJECTED fail-closed, never guessed.
+    using SubjectNormalizer = std::function<
+      void(const std::string &, std::function<void(std::optional<std::string>)> &&)>;
+    void setSubjectNormalizer(SubjectNormalizer normalizer)
+    {
+        subjectNormalizer_ = std::move(normalizer);
+    }
+
     /// Generate an Authorization Code. Original:
     /// oauth2::TokenService::generateAuthorizationCode.
     void generateAuthorizationCode(
@@ -196,6 +211,8 @@ class TokenService : public std::enable_shared_from_this<TokenService>
     std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
     std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
     std::shared_ptr<fulla::common::ports::IOrgContextResolver> orgContextResolver_;
+    /// P0-1 (#255): see setSubjectNormalizer().
+    SubjectNormalizer subjectNormalizer_;
     int64_t authCodeTtl_;
     int64_t accessTokenTtl_;
     int64_t refreshTokenTtl_;
