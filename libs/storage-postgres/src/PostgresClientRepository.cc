@@ -114,6 +114,21 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                       client.redirectUris.push_back(uri);
                   }
 
+                  // P0-7b (#261): dedicated post-logout whitelist, same
+                  // comma-joined convention. Empty (NULL column) = no
+                  // dedicated registration: end_session falls back to the
+                  // login redirect_uris.
+                  std::string postLogoutUris = row.getValueOfPostLogoutRedirectUris();
+                  if (!postLogoutUris.empty())
+                  {
+                      std::stringstream pls(postLogoutUris);
+                      std::string plUri;
+                      while (std::getline(pls, plUri, ','))
+                      {
+                          client.postLogoutRedirectUris.push_back(plUri);
+                      }
+                  }
+
                   // #220: comma-joined column, same storage convention as
                   // redirect_uris. Empty (NULL column) stays empty = the token
                   // endpoint's grant gate treats it as unrestricted (legacy rows).

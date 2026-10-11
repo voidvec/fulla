@@ -69,6 +69,12 @@ struct OAuth2Client
     // refresh_token is implied by an authorization_code or device_code
     // registration (those flows mint refresh tokens unconditionally).
     std::vector<std::string> allowedGrantTypes;
+    // P0-7b (#261): dedicated post-logout redirect registrations
+    // (OIDC RP-Initiated Logout §2.3 "post_logout_redirect_uris"). Empty =
+    // no dedicated whitelist: end_session falls back to validating against
+    // the LOGIN redirect_uris (the pre-v1.5.0 behavior, preserved for
+    // unmigrated clients).
+    std::vector<std::string> postLogoutRedirectUris;
 };
 
 /**

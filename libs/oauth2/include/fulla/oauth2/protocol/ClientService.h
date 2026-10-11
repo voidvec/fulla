@@ -52,6 +52,18 @@ class ClientService
       std::function<void(bool)> &&callback
     );
 
+    /// P0-7b (#261, OIDC RP-Initiated Logout §2.3): validate a
+    /// post_logout_redirect_uri. A non-empty dedicated
+    /// post_logout_redirect_uris registration is AUTHORITATIVE (a URI valid
+    /// for login but not registered for logout is rejected); an empty one
+    /// (unmigrated client) falls back to the login redirect_uris — the
+    /// pre-v1.5.0 behavior.
+    void validatePostLogoutRedirectUri(
+      const std::string &clientId,
+      const std::string &redirectUri,
+      std::function<void(bool)> &&callback
+    );
+
     /// Validate that every requested scope is in the client's allowlist
     /// (Tier 1). On failure, the error message lists every disallowed
     /// scope (matches the original's comma-joined message format).

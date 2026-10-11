@@ -185,6 +185,15 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
       std::function<void(bool)> &&callback
     );
 
+    // P0-7b (#261): validate a post_logout_redirect_uri — dedicated
+    // post_logout_redirect_uris registration is authoritative when present,
+    // otherwise falls back to the login redirect_uris (pre-v1.5.0 behavior).
+    void validatePostLogoutRedirectUri(
+      const std::string &clientId,
+      const std::string &redirectUri,
+      std::function<void(bool)> &&callback
+    );
+
     // P0-4 audit fix: hard authorization boundary shared by EVERY code
     // issuance path (login, consent approve, MFA verify, authorize silent
     // re-auth). Previously only /oauth2/authorize enforced these, so the

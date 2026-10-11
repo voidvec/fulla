@@ -44,6 +44,42 @@ void ClientService::validateRedirectUri(
     );
 }
 
+void ClientService::validatePostLogoutRedirectUri(
+  const std::string &clientId,
+  const std::string &redirectUri,
+  std::function<void(bool)> &&callback
+)
+{
+    if (!clients_)
+    {
+        callback(false);
+        return;
+    }
+
+    // P0-7b (#261, OIDC RP-Initiated Logout §2.3): a non-empty dedicated
+    // post-logout whitelist is AUTHORITATIVE — a URI valid for login but
+    // not registered for logout is rejected. Empty whitelist = unmigrated
+    // client: legacy fallback to the login redirect_uris.
+    clients_->getClient(
+      clientId,
+      [callback = std::move(callback),
+       redirectUri](std::optional<fulla::oauth2::model::OAuth2Client> client) {
+          if (!client)
+          {
+              callback(false);
+              return;
+          }
+          fulla::oauth2::model::Client agg(*client);
+          if (agg.hasPostLogoutWhitelist())
+          {
+              callback(agg.isRegisteredPostLogoutRedirectUri(redirectUri));
+              return;
+          }
+          callback(agg.isRegisteredRedirectUri(redirectUri));
+      }
+    );
+}
+
 void ClientService::validateClientScopes(
   const std::string &clientId,
   const std::vector<std::string> &requestedScopes,

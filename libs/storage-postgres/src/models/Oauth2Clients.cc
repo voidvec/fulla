@@ -30,6 +30,7 @@ const std::string Oauth2Clients::Cols::_token_endpoint_auth_method = "\"token_en
 const std::string Oauth2Clients::Cols::_backchannel_logout_uri = "\"backchannel_logout_uri\"";
 const std::string Oauth2Clients::Cols::_backchannel_logout_session_required = "\"backchannel_logout_session_required\"";
 const std::string Oauth2Clients::Cols::_deleted_at = "\"deleted_at\"";
+const std::string Oauth2Clients::Cols::_post_logout_redirect_uris = "\"post_logout_redirect_uris\"";
 const std::string Oauth2Clients::primaryKeyName = "client_id";
 const bool Oauth2Clients::hasPrimaryKey = true;
 const std::string Oauth2Clients::tableName = "\"oauth2_clients\"";
@@ -45,7 +46,8 @@ const std::vector<typename Oauth2Clients::MetaData> Oauth2Clients::metaData_={
 {"token_endpoint_auth_method","std::string","character varying",50,0,0,0},
 {"backchannel_logout_uri","std::string","character varying",512,0,0,0},
 {"backchannel_logout_session_required","bool","boolean",1,0,0,0},
-{"deleted_at","::trantor::Date","timestamp with time zone",0,0,0,0}
+{"deleted_at","::trantor::Date","timestamp with time zone",0,0,0,0},
+{"post_logout_redirect_uris","std::string","text",0,0,0,0}
 };
 const std::string &Oauth2Clients::getColumnName(size_t index) noexcept(false)
 {
@@ -118,11 +120,15 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
                 deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
         }
+        if(!r["post_logout_redirect_uris"].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(r["post_logout_redirect_uris"].as<std::string>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 11 > r.size())
+        if(offset + 12 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -201,13 +207,18 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
                 deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
         }
+        index = offset + 11;
+        if(!r[index].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(r[index].as<std::string>());
+        }
     }
 
 }
 
 Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 11)
+    if(pMasqueradingVector.size() != 12)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -316,6 +327,14 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::st
                 }
                 deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
+        }
+    }
+    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson[pMasqueradingVector[11]].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
 }
@@ -428,12 +447,20 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson) noexcept(false)
             }
         }
     }
+    if(pJson.isMember("post_logout_redirect_uris"))
+    {
+        dirtyFlag_[11]=true;
+        if(!pJson["post_logout_redirect_uris"].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(pJson["post_logout_redirect_uris"].asString());
+        }
+    }
 }
 
 void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 11)
+    if(pMasqueradingVector.size() != 12)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -543,6 +570,14 @@ void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
             }
         }
     }
+    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson[pMasqueradingVector[11]].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
+        }
+    }
 }
 
 void Oauth2Clients::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -650,6 +685,14 @@ void Oauth2Clients::updateByJson(const Json::Value &pJson) noexcept(false)
                 }
                 deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
+        }
+    }
+    if(pJson.isMember("post_logout_redirect_uris"))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson["post_logout_redirect_uris"].isNull())
+        {
+            postLogoutRedirectUris_=std::make_shared<std::string>(pJson["post_logout_redirect_uris"].asString());
         }
     }
 }
@@ -926,6 +969,33 @@ void Oauth2Clients::setDeletedAtToNull() noexcept
     dirtyFlag_[10] = true;
 }
 
+const std::string &Oauth2Clients::getValueOfPostLogoutRedirectUris() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(postLogoutRedirectUris_)
+        return *postLogoutRedirectUris_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Oauth2Clients::getPostLogoutRedirectUris() const noexcept
+{
+    return postLogoutRedirectUris_;
+}
+void Oauth2Clients::setPostLogoutRedirectUris(const std::string &pPostLogoutRedirectUris) noexcept
+{
+    postLogoutRedirectUris_ = std::make_shared<std::string>(pPostLogoutRedirectUris);
+    dirtyFlag_[11] = true;
+}
+void Oauth2Clients::setPostLogoutRedirectUris(std::string &&pPostLogoutRedirectUris) noexcept
+{
+    postLogoutRedirectUris_ = std::make_shared<std::string>(std::move(pPostLogoutRedirectUris));
+    dirtyFlag_[11] = true;
+}
+void Oauth2Clients::setPostLogoutRedirectUrisToNull() noexcept
+{
+    postLogoutRedirectUris_.reset();
+    dirtyFlag_[11] = true;
+}
+
 void Oauth2Clients::updateId(const uint64_t id)
 {
 }
@@ -943,7 +1013,8 @@ const std::vector<std::string> &Oauth2Clients::insertColumns() noexcept
         "token_endpoint_auth_method",
         "backchannel_logout_uri",
         "backchannel_logout_session_required",
-        "deleted_at"
+        "deleted_at",
+        "post_logout_redirect_uris"
     };
     return inCols;
 }
@@ -1071,6 +1142,17 @@ void Oauth2Clients::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[11])
+    {
+        if(getPostLogoutRedirectUris())
+        {
+            binder << getValueOfPostLogoutRedirectUris();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Oauth2Clients::updateColumns() const
@@ -1119,6 +1201,10 @@ const std::vector<std::string> Oauth2Clients::updateColumns() const
     if(dirtyFlag_[10])
     {
         ret.push_back(getColumnName(10));
+    }
+    if(dirtyFlag_[11])
+    {
+        ret.push_back(getColumnName(11));
     }
     return ret;
 }
@@ -1246,6 +1332,17 @@ void Oauth2Clients::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[11])
+    {
+        if(getPostLogoutRedirectUris())
+        {
+            binder << getValueOfPostLogoutRedirectUris();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Oauth2Clients::toJson() const
 {
@@ -1338,6 +1435,14 @@ Json::Value Oauth2Clients::toJson() const
     {
         ret["deleted_at"]=Json::Value();
     }
+    if(getPostLogoutRedirectUris())
+    {
+        ret["post_logout_redirect_uris"]=getValueOfPostLogoutRedirectUris();
+    }
+    else
+    {
+        ret["post_logout_redirect_uris"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1350,7 +1455,7 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 11)
+    if(pMasqueradingVector.size() == 12)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1473,6 +1578,17 @@ Json::Value Oauth2Clients::toMasqueradedJson(
                 ret[pMasqueradingVector[10]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[11].empty())
+        {
+            if(getPostLogoutRedirectUris())
+            {
+                ret[pMasqueradingVector[11]]=getValueOfPostLogoutRedirectUris();
+            }
+            else
+            {
+                ret[pMasqueradingVector[11]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1564,6 +1680,14 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     {
         ret["deleted_at"]=Json::Value();
     }
+    if(getPostLogoutRedirectUris())
+    {
+        ret["post_logout_redirect_uris"]=getValueOfPostLogoutRedirectUris();
+    }
+    else
+    {
+        ret["post_logout_redirect_uris"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1639,13 +1763,18 @@ bool Oauth2Clients::validateJsonForCreation(const Json::Value &pJson, std::strin
         if(!validJsonOfField(10, "deleted_at", pJson["deleted_at"], err, true))
             return false;
     }
+    if(pJson.isMember("post_logout_redirect_uris"))
+    {
+        if(!validJsonOfField(11, "post_logout_redirect_uris", pJson["post_logout_redirect_uris"], err, true))
+            return false;
+    }
     return true;
 }
 bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                        const std::vector<std::string> &pMasqueradingVector,
                                                        std::string &err)
 {
-    if(pMasqueradingVector.size() != 11)
+    if(pMasqueradingVector.size() != 12)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1754,6 +1883,14 @@ bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[11].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[11]))
+          {
+              if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1824,13 +1961,18 @@ bool Oauth2Clients::validateJsonForUpdate(const Json::Value &pJson, std::string 
         if(!validJsonOfField(10, "deleted_at", pJson["deleted_at"], err, false))
             return false;
     }
+    if(pJson.isMember("post_logout_redirect_uris"))
+    {
+        if(!validJsonOfField(11, "post_logout_redirect_uris", pJson["post_logout_redirect_uris"], err, false))
+            return false;
+    }
     return true;
 }
 bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 11)
+    if(pMasqueradingVector.size() != 12)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1894,6 +2036,11 @@ bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
       {
           if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+      {
+          if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
               return false;
       }
     }
@@ -2083,6 +2230,17 @@ bool Oauth2Clients::validJsonOfField(size_t index,
             }
             break;
         case 10:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 11:
             if(pJson.isNull())
             {
                 return true;
