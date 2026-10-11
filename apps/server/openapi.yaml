@@ -253,23 +253,38 @@ components:
       type: object
     UserInfoResponse:
       description: >-
-        OIDC Core §5.3 userinfo claims. email_verified present iff email
-        present; roles present iff non-empty. org_ctx present iff the token
-        was issued in org context, carries the org scope, and the user is
-        still a member (v1.4.0; membership is re-checked in real time).
+        OIDC Core §5.3 userinfo claims, scope-gated per §5.4 (P0-2): profile
+        claims (name/preferred_username/picture) require the profile scope;
+        email/email_verified require the email scope; sub is unconditional.
+        email_verified present iff email present; roles present iff
+        non-empty. org_ctx present iff the token was issued in org context,
+        carries the org scope, and the user is still a member (v1.4.0;
+        membership is re-checked in real time).
       properties:
         sub:
           type: string
           description: Subject (public user id, stringified).
         name:
           type: string
-          description: 'Username (fallback: email, then sub).'
+          description: 'display_name when set, else username, else email
+            (profile scope).'
+        preferred_username:
+          type: string
+          description: 'Standard OIDC claim name (profile scope); the legacy
+            username key dual-emits alongside it until v1.6.0.'
         username:
           type: string
+          description: 'Legacy key (deprecated, removed in v1.6.0) — use
+            preferred_username (profile scope).'
+        picture:
+          type: string
+          description: Avatar URL (profile scope).
         email:
           type: string
+          description: Email address (email scope).
         email_verified:
           type: boolean
+          description: Email verification status (email scope).
         roles:
           type: array
           items:
