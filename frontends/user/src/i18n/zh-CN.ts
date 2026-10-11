@@ -222,6 +222,8 @@ export default {
     },
     security: {
       title: '安全设置',
+      backupCodesExhausted:
+        '恢复码已全部用完。请重新绑定身份验证器（先禁用再重新启用 MFA）——没有可用的第二因子可能导致账号被锁死。',
       changePassword: '修改密码',
       currentPassword: '当前密码',
       changing: '修改中…',

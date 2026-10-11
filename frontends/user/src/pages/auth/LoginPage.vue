@@ -131,6 +131,11 @@ async function handleLogin() {
 async function handleMfa() {
   const result = await auth.verifyMfa(mfaToken.value, mfaCode.value)
   if (result.success) {
+    // P0-3 (#257): backup codes exhausted — flag it so the security page (the
+    // login flow itself redirects away) shows a forced re-bind banner.
+    if (result.backupCodesRemaining === 0) {
+      localStorage.setItem('fulla_mfa_backup_exhausted', '1')
+    }
     navigateAfterLogin()
   }
 }

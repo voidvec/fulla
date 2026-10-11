@@ -1,6 +1,7 @@
 #include <fulla/drogon/controllers/MfaController.h>
 #include <fulla/identity/TotpUtils.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
+#include <fulla/drogon/utils/MfaBackupCodes.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>
@@ -55,6 +56,111 @@ void respondError(
       std::move(code),
       std::move(detailForLog)
     );
+}
+
+// P0-3 (#257): consume one backup code for the given internal user id.
+// Case-insensitive hash match (the two production write paths hash backup
+// codes with different hex case) + one-shot string-equality CAS over
+// users.mfa_backup_codes — the column is a text JSON array, not JSONB, so a
+// JSONB containment operator cannot express "remove exactly this entry
+// once"; UPDATE ... RETURNING is the documented raw-SQL exemption (same CAS
+// pattern as PostgresGrantRepository::consumeAuthCode). `next` runs exactly
+// once with (ok, remainingAfterConsume); ok=false always maps to the
+// caller's generic invalid-credentials answer so a prober gets no
+// consumption oracle.
+void attemptBackupCode(
+  int32_t userId,
+  const std::string &publicSub,
+  const std::string &code,
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(bool ok, int remaining)> &&next
+)
+{
+    auto nextShared = std::make_shared<std::function<void(bool, int)>>(std::move(next));
+    ::drogon::orm::DbClientPtr db;
+    try
+    {
+        db = ::drogon::app().getDbClient();
+    }
+    catch (...)
+    {
+        (*nextShared)(false, -1);
+        return;
+    }
+    if (!db)
+    {
+        (*nextShared)(false, -1);
+        return;
+    }
+    try
+    {
+        Mapper<drogon_model::fulla_db::Users>(db).findBy(
+          Criteria(drogon_model::fulla_db::Users::Cols::_id, CompareOperator::EQ, userId),
+          [db, userId, code, req, publicSub, nextShared](
+            const std::vector<drogon_model::fulla_db::Users> &users
+          ) {
+              if (users.empty())
+              {
+                  (*nextShared)(false, -1);
+                  return;
+              }
+              const std::string stored = users[0].getValueOfMfaBackupCodes();
+              const int idx = ::fulla::drogon::utils::mfa_backup::matchBackupCode(stored, code);
+              if (idx < 0)
+              {
+                  (*nextShared)(false, -1);
+                  return;
+              }
+              const std::string updated =
+                ::fulla::drogon::utils::mfa_backup::removeEntry(stored, idx);
+              if (updated.empty())
+              {
+                  // Unparsable mid-flight write: fail closed, never wipe.
+                  (*nextShared)(false, -1);
+                  return;
+              }
+              const int remaining = ::fulla::drogon::utils::mfa_backup::countEntries(updated);
+              db->execSqlAsync(
+                "UPDATE users SET mfa_backup_codes = $1 "
+                "WHERE id = $2 AND mfa_backup_codes = $3 "
+                "RETURNING id",
+                [remaining, req, publicSub, nextShared](const ::drogon::orm::Result &r) {
+                    if (r.empty())
+                    {
+                        // Lost the CAS race: a concurrent request consumed a
+                        // code first and rewrote the array. Generic failure.
+                        (*nextShared)(false, -1);
+                        return;
+                    }
+                    ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                      ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
+                      "mfa_backup_code_used",
+                      "success",
+                      req,
+                      publicSub,
+                      "user",
+                      publicSub
+                    );
+                    (*nextShared)(true, remaining);
+                },
+                [nextShared](const ::drogon::orm::DrogonDbException &e) {
+                    LOG_WARN << "verifyLogin: backup-code consumption failed: " << e.base().what();
+                    (*nextShared)(false, -1);
+                },
+                updated,
+                userId,
+                stored);
+          },
+          [nextShared](const ::drogon::orm::DrogonDbException &e) {
+              LOG_WARN << "verifyLogin: backup-code lookup failed: " << e.base().what();
+              (*nextShared)(false, -1);
+          });
+    }
+    catch (...)
+    {
+        LOG_ERROR << "verifyLogin: backup-code Mapper construction failed";
+        (*nextShared)(false, -1);
+    }
 }
 
 struct MfaControllerDocs
@@ -701,6 +807,10 @@ void MfaController::verifyLogin(
                         .count();
     int64_t mfaAuthTime = static_cast<int64_t>(mfaNowSecs);
     std::string mfaAmr = "pwd mfa";
+    // P0-3 (#257): backup-code consumption outcome threaded into the token
+    // response (-1 = the second factor was TOTP; >=0 = a backup code was
+    // consumed and this many remain — 0 forces a TOTP re-bind in the UI).
+    auto backupRemaining = std::make_shared<int>(-1);
     auto elevateSessionAfterMfa = [req, mfaAuthTime, mfaAmr]() {
         if (req->session())
         {
@@ -723,7 +833,7 @@ void MfaController::verifyLogin(
             req->session()->erase("mfa_code_challenge_method");
         }
     };
-    auto onTotpVerified = [sharedCb, req, plugin, clientId, redirectUri, scope, nonce, mfaToken, mfaAuthTime, mfaAmr, codeVerifier, elevateSessionAfterMfa](
+    auto onTotpVerified = [sharedCb, req, plugin, clientId, redirectUri, scope, nonce, mfaToken, mfaAuthTime, mfaAmr, backupRemaining, codeVerifier, elevateSessionAfterMfa](
                             std::string publicSub,
                             std::string pendingClientId,
                             std::string pendingRedirectUri,
@@ -750,6 +860,7 @@ void MfaController::verifyLogin(
            mfaAuthTime,
            mfaAmr,
            clearPendingBinding,
+           backupRemaining,
            codeVerifier](::OAuth2Plugin::CodeIssuanceGuardResult guard) {
               if (!guard.ok)
               {
@@ -810,6 +921,7 @@ void MfaController::verifyLogin(
                        redirectUri,
                        publicSub,
                        clearPendingBinding,
+                       backupRemaining,
                        codeVerifier](
                         bool success, std::string authCode, std::string genError
                       ) {
@@ -830,7 +942,7 @@ void MfaController::verifyLogin(
                             "",
                             redirectUri,
                             codeVerifier,
-                            [sharedCb, req, publicSub, clearPendingBinding](
+                            [sharedCb, req, publicSub, clearPendingBinding, backupRemaining](
                               const Json::Value &tokenResult
                             ) {
                                 if (tokenResult.isMember("error"))
@@ -862,6 +974,13 @@ void MfaController::verifyLogin(
                                 Json::Value json = tokenResult;
                                 json["message"] = "MFA verification successful";
                                 json["mfa_verified"] = true;
+                                // P0-3 (#257): surface the backup-code state
+                                // when the second factor was a backup code.
+                                if (*backupRemaining >= 0)
+                                {
+                                    json["backup_codes_remaining"] = *backupRemaining;
+                                    json["mfa_rebind_required"] = (*backupRemaining == 0);
+                                }
 
                                 auto sendSuccess = [sharedCb, json]() {
                                     auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
@@ -896,7 +1015,7 @@ void MfaController::verifyLogin(
 
         userRepo_->findByPublicSub(
           mfaToken,
-          [this, sharedCb, req, code, mfaToken, onTotpVerified](std::optional<fulla::identity::UserData> user) {
+          [this, sharedCb, req, code, mfaToken, onTotpVerified, backupRemaining](std::optional<fulla::identity::UserData> user) {
               if (!user)
               {
                   respondError(
@@ -923,39 +1042,68 @@ void MfaController::verifyLogin(
               }
               std::string publicSub = user->publicSub;
               int32_t userId = user->id;
-              mfaService_->verifyLoginCode(
-                userId,
-                code,
-                [this, sharedCb, req, userId, publicSub, onTotpVerified](bool codeValid) {
-                    if (!codeValid)
-                    {
-                        respondError(
-                          req,
-                          sharedCb,
-                          "AUTH_INVALID_CREDENTIALS",
-                          "verifyLogin: TOTP code is incorrect"
-                        );
-                        return;
-                    }
-                    mfaService_->getPendingBinding(
-                      userId,
-                      [this, sharedCb, publicSub, userId, onTotpVerified](
-                        std::optional<std::pair<std::string, std::string>> pending
-                      ) {
-                          std::string pendingClientId = pending ? pending->first : "";
-                          std::string pendingRedirectUri = pending ? pending->second : "";
-                          auto clearPendingBinding = [this, userId](std::function<void()> &&done) {
-                              mfaService_->clearPendingBinding(
-                                userId, [done = std::move(done)](bool) { done(); }
+                    // P0-3 (#257): a failed TOTP attempt falls through to the
+                    // backup codes before rejecting; both success routes share
+                    // the pending-binding continuation below.
+                    auto proceedAfterFactor = std::make_shared<std::function<void()>>(
+                      [this, sharedCb, req, userId, publicSub, onTotpVerified]() {
+                          mfaService_->getPendingBinding(
+                            userId,
+                            [this, sharedCb, publicSub, userId, onTotpVerified](
+                              std::optional<std::pair<std::string, std::string>> pending
+                            ) {
+                              std::string pendingClientId = pending ? pending->first : "";
+                              std::string pendingRedirectUri = pending ? pending->second : "";
+                              auto clearPendingBinding = [this, userId](std::function<void()> &&done) {
+                                  mfaService_->clearPendingBinding(
+                                    userId, [done = std::move(done)](bool) { done(); }
+                                  );
+                              };
+                              onTotpVerified(
+                                publicSub, pendingClientId, pendingRedirectUri, clearPendingBinding
                               );
-                          };
-                          onTotpVerified(
-                            publicSub, pendingClientId, pendingRedirectUri, clearPendingBinding
-                          );
+                          }
+                        );
+                      });
+                    mfaService_->verifyLoginCode(
+                      userId,
+                      code,
+                      [this,
+                       sharedCb,
+                       req,
+                       userId,
+                       publicSub,
+                       code,
+                       onTotpVerified,
+                       proceedAfterFactor,
+                       backupRemaining](bool codeValid) {
+                          if (codeValid)
+                          {
+                              (*proceedAfterFactor)();
+                              return;
+                          }
+                          attemptBackupCode(
+                            userId,
+                            publicSub,
+                            code,
+                            req,
+                            [proceedAfterFactor, sharedCb, req, backupRemaining](
+                              bool backupOk, int remaining) {
+                                if (!backupOk)
+                                {
+                                    respondError(
+                                      req,
+                                      sharedCb,
+                                      "AUTH_INVALID_CREDENTIALS",
+                                      "verifyLogin: TOTP or backup code is incorrect"
+                                    );
+                                    return;
+                                }
+                                *backupRemaining = remaining;
+                                (*proceedAfterFactor)();
+                            });
                       }
                     );
-                }
-              );
           }
         );
         return;
@@ -1010,8 +1158,25 @@ void MfaController::verifyLogin(
           auto puri = u.getMfaPendingRedirectUri();
           std::string pendingRedirectUri = puri ? *puri : "";
 
-          if (::fulla::identity::totp::verifyCode(secret, code, mfaNowSeconds()))
-          {
+          const bool totpOk = ::fulla::identity::totp::verifyCode(secret, code, mfaNowSeconds());
+          // P0-3 (#257): shared continuation for either second factor (TOTP
+          // or a consumed backup code) — the body below is the former
+          // TOTP-success branch, unchanged.
+          auto finishLegacyVerify = std::make_shared<std::function<void()>>(
+            [sharedCb,
+             req,
+             plugin,
+             clientId,
+             redirectUri,
+             scope,
+             nonce,
+             mfaToken,
+             mfaAuthTime,
+             mfaAmr,
+             publicSub,
+             pendingClientId,
+             pendingRedirectUri,
+             elevateSessionAfterMfa]() {
               // #144: legacy path mirror of the wired path's onTotpVerified
               // prologue -- the TOTP code verified, so NOW the session may be
               // elevated to amr="pwd mfa" and the mfa_pending marker cleared
@@ -1194,11 +1359,32 @@ void MfaController::verifyLogin(
                     }
                 );
               return;
+            });
+          if (totpOk)
+          {
+              (*finishLegacyVerify)();
           }
-
-          respondError(
-            req, sharedCb, "AUTH_INVALID_CREDENTIALS", "verifyLogin: TOTP code is incorrect"
-          );
+          else
+          {
+              attemptBackupCode(
+                users[0].getValueOfId(),
+                publicSub,
+                code,
+                req,
+                [finishLegacyVerify, sharedCb, req](bool backupOk, int /*remaining*/) {
+                    if (backupOk)
+                    {
+                        (*finishLegacyVerify)();
+                        return;
+                    }
+                    respondError(
+                      req,
+                      sharedCb,
+                      "AUTH_INVALID_CREDENTIALS",
+                      "verifyLogin: TOTP or backup code is incorrect"
+                    );
+                });
+          }
           },
           [sharedCb, req](const ::drogon::orm::DrogonDbException &e) {
               respondError(
