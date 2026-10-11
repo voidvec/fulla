@@ -351,6 +351,10 @@ void TokenService::exchangeCodeForToken(
                       // v1.4.0 M1 (design §2.1 item 4): the org binding
                       // inherited from the code rides the token pair.
                       token.orgId = authCode.orgId;
+                      // P0-4 (#258): the audience column finally earns its
+                      // keep — aud = the client the token was issued to, so
+                      // introspection's aud stops being permanently empty.
+                      token.audience = authCode.clientId;
 
                       fulla::oauth2::model::OAuth2RefreshToken refreshToken;
                       refreshToken.token = hashToken(*self->crypto_, refreshTokenStr);
@@ -595,8 +599,11 @@ void TokenService::refreshAccessToken(
           token.expiresAt = now + self->accessTokenTtl_;
           // F-016: same issuer stamping as the authorization_code path above.
           token.issuer = self->issuer_;
-          // v1.4.0 M1: the org binding survives rotation.
-          token.orgId = storedRt->orgId;
+            // v1.4.0 M1: the org binding survives rotation.
+            token.orgId = storedRt->orgId;
+            // P0-4 (#258): audience survives rotation with the same value
+            // (aud = issuing client).
+            token.audience = storedRt->clientId;
 
           fulla::oauth2::model::OAuth2RefreshToken newRt;
           newRt.token = hashToken(*self->crypto_, newRefreshTokenStr);
