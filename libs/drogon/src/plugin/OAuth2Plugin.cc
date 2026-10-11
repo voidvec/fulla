@@ -27,6 +27,10 @@
 #include <fulla/oauth2/repository/ITokenRepository.h>
 #include <fulla/oauth2/repository/IConsentRepository.h>
 #include <fulla/oauth2/pkce/Pkce.h>
+// P0-1 (#255): the refresh-time legacy-subject normalizer chain resolves
+// through the subject-mapping table and the users row (public_sub).
+#include <fulla/storage/postgres/ClientOwnersRepository.h>
+#include <fulla/storage/postgres/models/Users.h>
 // fulla::identity::IdentityService (the thin forwarder over bundle repos) is still
 // constructed here for the scopeRequiresAdminRole pure-function path.
 #include <fulla/drogon/services/IdentityService.h>
@@ -285,6 +289,85 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
         authorizationService_->setOrgConsentResolver(
           std::make_shared<fulla::drogon::adapters::StorageOrgConsentResolver>(orgConsentDb)
         );
+    }
+    // P0-1 (#255): normalize legacy numeric-subject refresh families to the
+    // UUID public_sub once, at rotation (fail-closed on mapping miss —
+    // TokenService rejects rather than guessing). Same storage-type guard
+    // as the M1/M2 blocks above: memory mode leaves the normalizer unwired
+    // (it holds no legacy families by construction).
+    {
+        ::drogon::orm::DbClientPtr normalizeDb;
+        if (storageType_ != "memory")
+        {
+            try
+            {
+                normalizeDb = ::drogon::app().getDbClient();
+            }
+            catch (...)
+            {
+                normalizeDb = nullptr;
+            }
+        }
+        if (normalizeDb)
+        {
+            tokenService_->setSubjectNormalizer(
+              [normalizeDb](
+                const std::string &subject,
+                std::function<void(std::optional<std::string>)> &&cb
+              ) {
+                  auto cbShared = std::make_shared<
+                    std::function<void(std::optional<std::string>)>>(std::move(cb));
+                  try
+                  {
+                      auto repo = std::make_shared<
+                        fulla::storage::postgres::ClientOwnersRepository>(normalizeDb);
+                      repo->findUserIdBySubject(
+                        subject,
+                        [normalizeDb, cbShared](std::optional<int32_t> internalId) {
+                            if (!internalId)
+                            {
+                                (*cbShared)(std::nullopt);
+                                return;
+                            }
+                            try
+                            {
+                                ::drogon::orm::Mapper<drogon_model::fulla_db::Users>(normalizeDb)
+                                  .findBy(
+                                    ::drogon::orm::Criteria(
+                                      drogon_model::fulla_db::Users::Cols::_id,
+                                      ::drogon::orm::CompareOperator::EQ,
+                                      *internalId
+                                    ),
+                                    [cbShared](
+                                      const std::vector<drogon_model::fulla_db::Users> &users
+                                    ) {
+                                        const std::string sub =
+                                          users.empty() ? "" : users[0].getValueOfPublicSub();
+                                        (*cbShared)(
+                                          sub.empty() ? std::nullopt
+                                                      : std::optional<std::string>{sub}
+                                        );
+                                    },
+                                    [cbShared](const ::drogon::orm::DrogonDbException &e) {
+                                        LOG_WARN << "P0-1 subject normalization user lookup "
+                                                    "failed: "
+                                                 << e.base().what();
+                                        (*cbShared)(std::nullopt);
+                                    }
+                                  );
+                            }
+                            catch (...)
+                            {
+                                (*cbShared)(std::nullopt);
+                            }
+                        });
+                  }
+                  catch (...)
+                  {
+                      (*cbShared)(std::nullopt);
+                  }
+              });
+        }
     }
     clientService_ = std::make_shared<fulla::oauth2::protocol::ClientService>(clientRepo_);
     identityService_ = std::make_shared<fulla::identity::IdentityService>(
@@ -946,7 +1029,69 @@ void OAuth2Plugin::getInternalUserId(
   std::function<void(std::optional<int32_t>)> &&callback
 )
 {
-    identityService_->getInternalUserId(subject, std::move(callback));
+    // P0-1 (#255): dual-key resolution. The mapping table's local rows are
+    // keyed by the NUMERIC internal id (V027 backfill / #143), while every
+    // issuance path now hands the UUID public_sub as the subject. A mapping
+    // miss therefore falls through to users.public_sub — the same dual-key
+    // contract ClientOwnersRepository::findUserIdBySubject already applies
+    // for userinfo — instead of failing the caller with 500. The
+    // deleted_at IS NULL predicate preserves the mapping path's liveness
+    // check (#54) on the fallback leg too.
+    auto sharedCb =
+      std::make_shared<std::function<void(std::optional<int32_t>)>>(std::move(callback));
+    identityService_->getInternalUserId(
+      subject,
+      [subject, sharedCb](std::optional<int32_t> viaMapping) mutable {
+          if (viaMapping)
+          {
+              (*sharedCb)(viaMapping);
+              return;
+          }
+          ::drogon::orm::DbClientPtr db;
+          try
+          {
+              db = ::drogon::app().getDbClient();
+          }
+          catch (...)
+          {
+              db = nullptr;
+          }
+          if (!db)
+          {
+              (*sharedCb)(std::nullopt);
+              return;
+          }
+          try
+          {
+              ::drogon::orm::Mapper<drogon_model::fulla_db::Users>(db)
+                .findBy(
+                  ::drogon::orm::Criteria(
+                    drogon_model::fulla_db::Users::Cols::_public_sub,
+                    ::drogon::orm::CompareOperator::EQ,
+                    subject
+                  ) &&
+                    ::drogon::orm::Criteria(
+                      drogon_model::fulla_db::Users::Cols::_deleted_at,
+                      ::drogon::orm::CompareOperator::IsNull
+                    ),
+                  [sharedCb](const std::vector<drogon_model::fulla_db::Users> &users) {
+                      (*sharedCb)(
+                        users.empty() ? std::nullopt
+                                      : std::optional<int32_t>{users[0].getValueOfId()}
+                      );
+                  },
+                  [sharedCb](const ::drogon::orm::DrogonDbException &e) {
+                      LOG_WARN << "P0-1 dual-key subject fallback failed: " << e.base().what();
+                      (*sharedCb)(std::nullopt);
+                  }
+                );
+          }
+          catch (...)
+          {
+              (*sharedCb)(std::nullopt);
+          }
+      }
+    );
 }
 
 void OAuth2Plugin::hasUserConsent(

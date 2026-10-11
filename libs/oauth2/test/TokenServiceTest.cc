@@ -494,6 +494,76 @@ TEST(TokenServiceTest, RefreshToken_HappyPathThenReuse_YieldsInvalidGrant)
     EXPECT_EQ(reuse["error"].asString(), "invalid_grant");
 }
 
+// P0-1 (#255): a legacy numeric-subject refresh family is normalized to the
+// UUID public_sub once, at rotation — the rotated pair carries the UUID from
+// then on (the family keeps minting UUID subjects on later rotations).
+TEST(TokenServiceTest, RefreshToken_NumericSubject_NormalizedAtRotation)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto svc = makeService(clients, grants, tokens);
+    const std::string redirectUri = "https://example.test/cb";
+
+    // Mint a pair whose subject is the legacy numeric form (pre-hard-cut
+    // families carried the internal id as the subject).
+    std::string rawCode = issueAuthCode(*svc, "test-client", "42", "openid", redirectUri);
+    Json::Value exchanged;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) {
+          exchanged = j;
+      });
+    const std::string rt = exchanged["refresh_token"].asString();
+    ASSERT_FALSE(rt.empty());
+
+    svc->setSubjectNormalizer(
+      [](const std::string &subject, std::function<void(std::optional<std::string>)> &&cb) {
+          EXPECT_EQ(subject, "42");
+          cb(std::optional<std::string>{"550e8400-e29b-41d4-a716-446655440000"});
+      });
+
+    Json::Value refreshed;
+    bool called = false;
+    svc->refreshAccessToken(rt, "test-client", [&](const Json::Value &j) {
+        refreshed = j;
+        called = true;
+    });
+    ASSERT_TRUE(called);
+    EXPECT_FALSE(refreshed.isMember("error"));
+
+    std::shared_ptr<OAuth2AccessToken> rotated;
+    svc->validateAccessToken(refreshed["access_token"].asString(), [&](auto at) { rotated = at; });
+    ASSERT_NE(rotated, nullptr);
+    EXPECT_EQ(rotated->userId, "550e8400-e29b-41d4-a716-446655440000");
+    // P0-4: audience survives the normalized rotation too.
+    EXPECT_EQ(rotated->audience, "test-client");
+}
+
+// P0-1 (#255): an unwired normalizer must reject a numeric subject
+// fail-closed — the UUID subject is resolved through the mapping table or
+// not at all, never guessed.
+TEST(TokenServiceTest, RefreshToken_NumericSubject_WithoutNormalizer_Rejected)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto svc = makeService(clients, grants, tokens);
+    const std::string redirectUri = "https://example.test/cb";
+
+    std::string rawCode = issueAuthCode(*svc, "test-client", "7", "openid", redirectUri);
+    Json::Value exchanged;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) {
+          exchanged = j;
+      });
+    const std::string rt = exchanged["refresh_token"].asString();
+    ASSERT_FALSE(rt.empty());
+
+    Json::Value rejected;
+    svc->refreshAccessToken(rt, "test-client", [&](const Json::Value &j) { rejected = j; });
+    EXPECT_EQ(rejected["error"].asString(), "invalid_grant");
+}
+
 TEST(TokenServiceTest, RevokeAccessToken_ThenValidateFails)
 {
     auto clients = makeSeededClients();
