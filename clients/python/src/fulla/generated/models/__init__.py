@@ -196,6 +196,8 @@ from .post_oauth_2_introspect_body import PostOauth2IntrospectBody
 from .post_oauth_2_logout_body import PostOauth2LogoutBody
 from .post_oauth_2_mfa_verify_response_200 import PostOauth2MfaVerifyResponse200
 from .post_oauth_2_password_change_body import PostOauth2PasswordChangeBody
+from .post_oauth_2_register_body import PostOauth2RegisterBody
+from .post_oauth_2_register_body_client_type import PostOauth2RegisterBodyClientType
 from .post_oauth_2_revoke_body import PostOauth2RevokeBody
 from .put_api_admin_clients_client_id_body import PutApiAdminClientsClientIdBody
 from .put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
@@ -360,6 +362,8 @@ __all__ = (
     "PostOauth2LogoutBody",
     "PostOauth2MfaVerifyResponse200",
     "PostOauth2PasswordChangeBody",
+    "PostOauth2RegisterBody",
+    "PostOauth2RegisterBodyClientType",
     "PostOauth2RevokeBody",
     "PutApiAdminClientsClientIdBody",
     "PutApiAdminClientsClientIdScopesBody",

@@ -97,6 +97,30 @@ class Client
                dto_.redirectUris.end();
     }
 
+    // P0-7b (#261): dedicated post-logout whitelist (OIDC RP-Initiated
+    // Logout §2.3). Empty list = no dedicated registration: end_session
+    // falls back to the login redirect_uris (pre-v1.5.0 behavior).
+    const std::vector<std::string> &postLogoutRedirectUris() const noexcept
+    {
+        return dto_.postLogoutRedirectUris;
+    }
+
+    bool hasPostLogoutWhitelist() const noexcept
+    {
+        return !dto_.postLogoutRedirectUris.empty();
+    }
+
+    /// True iff `uri` exactly matches a dedicated post-logout registration.
+    /// Only meaningful when hasPostLogoutWhitelist() is true.
+    bool isRegisteredPostLogoutRedirectUri(const std::string &uri) const
+    {
+        return std::find(
+                 dto_.postLogoutRedirectUris.begin(),
+                 dto_.postLogoutRedirectUris.end(),
+                 uri
+               ) != dto_.postLogoutRedirectUris.end();
+    }
+
     /// True iff `scope` is in this client's allowed-scopes list.
     bool allowsScope(const std::string &scope) const
     {

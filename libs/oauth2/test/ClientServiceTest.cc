@@ -92,6 +92,51 @@ TEST(ClientServiceTest, ValidateRedirectUri_Unregistered_ReturnsFalse)
     EXPECT_FALSE(valid);
 }
 
+// P0-7b (#261): empty post_logout_redirect_uris = legacy fallback — the
+// LOGIN redirect_uris decide (pre-v1.5.0 behavior preserved).
+TEST(ClientServiceTest, ValidatePostLogoutRedirectUri_EmptyWhitelist_FallsBackToLoginUris)
+{
+    auto repo = makeSeededClients();
+    ClientService svc(repo);
+
+    bool loginUriValid = false;
+    svc.validatePostLogoutRedirectUri(
+      "test-client", "https://example.test/cb", [&](bool v) { loginUriValid = v; }
+    );
+    EXPECT_TRUE(loginUriValid);
+
+    bool otherUriValid = true;
+    svc.validatePostLogoutRedirectUri(
+      "test-client", "https://evil.test/cb", [&](bool v) { otherUriValid = v; }
+    );
+    EXPECT_FALSE(otherUriValid);
+}
+
+// P0-7b: a non-empty dedicated whitelist is AUTHORITATIVE — a URI valid for
+// LOGIN but not registered for logout must be rejected, and a logout-only
+// URI (not a login redirect) must be accepted.
+TEST(ClientServiceTest, ValidatePostLogoutRedirectUri_WhitelistIsAuthoritative)
+{
+    auto repo = makeSeededClients();
+    OAuth2Client &c = repo->clients["test-client"];
+    c.postLogoutRedirectUris = {"https://example.test/logged-out"};
+    ClientService svc(repo);
+
+    bool dedicatedValid = false;
+    svc.validatePostLogoutRedirectUri(
+      "test-client", "https://example.test/logged-out", [&](bool v) { dedicatedValid = v; }
+    );
+    EXPECT_TRUE(dedicatedValid);
+
+    // Registered for LOGIN but NOT for logout -> rejected once the
+    // dedicated whitelist exists.
+    bool loginOnlyValid = true;
+    svc.validatePostLogoutRedirectUri(
+      "test-client", "https://example.test/cb", [&](bool v) { loginOnlyValid = v; }
+    );
+    EXPECT_FALSE(loginOnlyValid);
+}
+
 TEST(ClientServiceTest, ValidateClientScopes_AllAllowed_ReturnsTrue)
 {
     auto repo = makeSeededClients();

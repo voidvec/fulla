@@ -2460,7 +2460,10 @@ void SessionController::endSession(
                   );
                   return;
               }
-              plugin->validateRedirectUri(
+              // P0-7b (#261): dedicated post-logout whitelist is
+              // authoritative when registered; empty falls back to the login
+              // redirect_uris (pre-v1.5.0 behavior, inside the validator).
+              plugin->validatePostLogoutRedirectUri(
                 (*candidates)[index],
                 postLogoutRedirectUri,
                 [req, postLogoutRedirectUri, state, finish, subject, index, candidates,

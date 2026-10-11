@@ -195,6 +195,35 @@ void ClientRegistrationService::registerClient(
         grantTypesArray.append("authorization_code");
     }
 
+    // P0-7b (#261): optional dedicated post-logout registrations (same
+    // scheme policy as redirect_uris; comma-joined column).
+    std::string postLogoutUris;
+    Json::Value postLogoutUrisArray(Json::arrayValue);
+    if (jsonBody->isMember("post_logout_redirect_uris") &&
+        (*jsonBody)["post_logout_redirect_uris"].isArray())
+    {
+        const auto &uris = (*jsonBody)["post_logout_redirect_uris"];
+        for (Json::ArrayIndex i = 0; i < uris.size(); ++i)
+        {
+            std::string uri = uris[i].asString();
+            auto uriError = ::fulla::drogon::validation::RuleSet::validateRedirectUri(uri);
+            if (uriError)
+            {
+                respondError(
+                  req,
+                  sharedCb,
+                  "VALIDATION_FORMAT_ERROR",
+                  "registerClient: invalid post_logout_redirect_uri '" + uri + "': " + *uriError
+                );
+                return;
+            }
+            if (i > 0)
+                postLogoutUris += ",";
+            postLogoutUris += uri;
+            postLogoutUrisArray.append(uri);
+        }
+    }
+
     std::string clientId = ::drogon::utils::getUuid();
     std::string clientSecret = ::fulla::drogon::utils::generateSecureToken();
     // F-002: salt FIRST, then salted hash. The validation paths
@@ -224,6 +253,8 @@ void ClientRegistrationService::registerClient(
         // F-017: persist the declared token-endpoint auth method so the
         // token/introspect/revoke endpoints can enforce it.
         client.setTokenEndpointAuthMethod(tokenEndpointAuthMethod);
+        // P0-7b (#261)
+        client.setPostLogoutRedirectUris(postLogoutUris);
 
         Mapper<Oauth2Clients> mapper(db);
         mapper.insert(
@@ -234,6 +265,7 @@ void ClientRegistrationService::registerClient(
            clientName,
            redirectUrisArray,
            grantTypesArray,
+           postLogoutUrisArray,
            issuedAt,
            tokenEndpointAuthMethod,
            req](const Oauth2Clients &) {
@@ -244,6 +276,7 @@ void ClientRegistrationService::registerClient(
               json["redirect_uris"] = redirectUrisArray;
               json["grant_types"] = grantTypesArray;
               json["token_endpoint_auth_method"] = tokenEndpointAuthMethod;
+              json["post_logout_redirect_uris"] = postLogoutUrisArray;
               json["client_id_issued_at"] = static_cast<Json::Int64>(issuedAt);
               json["client_secret_expires_at"] = 0;
 

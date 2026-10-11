@@ -5559,8 +5559,45 @@ paths:
       - Session
   /oauth2/register:
     post:
-      description: Dynamic client registration.
+      description: "Dynamic client registration (admin-gated). Accepted
+        metadata: client_name, client_type (CONFIDENTIAL|PUBLIC),
+        token_endpoint_auth_method, redirect_uris (https enforced, loopback
+        exempt), grant_types, and — P0-7b — optional
+        post_logout_redirect_uris (dedicated RP-initiated-logout redirect
+        registrations, same scheme policy; when registered they are
+        authoritative for end_session's post_logout_redirect_uri
+        validation)."
       operationId: post_oauth2_register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_name:
+                  type: string
+                client_type:
+                  type: string
+                  enum: [CONFIDENTIAL, PUBLIC]
+                token_endpoint_auth_method:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                grant_types:
+                  type: array
+                  items:
+                    type: string
+                post_logout_redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                  description: 'P0-7b: dedicated post-logout redirect
+                    registrations (comma-joined at rest). Empty/unset: end_session
+                    validates post_logout_redirect_uri against the login
+                    redirect_uris (pre-v1.5.0 behavior).'
       responses:
         '201':
           description: Client registered successfully

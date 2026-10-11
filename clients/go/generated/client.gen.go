@@ -431,6 +431,24 @@ func (e PostOauth2ConsentParamsAction) Valid() bool {
 	}
 }
 
+// Defines values for PostOauth2RegisterJSONBodyClientType.
+const (
+	PostOauth2RegisterJSONBodyClientTypeCONFIDENTIAL PostOauth2RegisterJSONBodyClientType = "CONFIDENTIAL"
+	PostOauth2RegisterJSONBodyClientTypePUBLIC       PostOauth2RegisterJSONBodyClientType = "PUBLIC"
+)
+
+// Valid indicates whether the value is a known member of the PostOauth2RegisterJSONBodyClientType enum.
+func (e PostOauth2RegisterJSONBodyClientType) Valid() bool {
+	switch e {
+	case PostOauth2RegisterJSONBodyClientTypeCONFIDENTIAL:
+		return true
+	case PostOauth2RegisterJSONBodyClientTypePUBLIC:
+		return true
+	default:
+		return false
+	}
+}
+
 // AuthProvider An external login provider currently enabled on this deployment (v1.4.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
 type AuthProvider struct {
 	AuthorizeUrl string               `json:"authorize_url"`
@@ -1357,6 +1375,21 @@ type PostOauth2PasswordChangeJSONBody struct {
 	OldPassword string `json:"old_password"`
 }
 
+// PostOauth2RegisterJSONBody defines parameters for PostOauth2Register.
+type PostOauth2RegisterJSONBody struct {
+	ClientName *string                               `json:"client_name,omitempty"`
+	ClientType *PostOauth2RegisterJSONBodyClientType `json:"client_type,omitempty"`
+	GrantTypes *[]string                             `json:"grant_types,omitempty"`
+
+	// PostLogoutRedirectUris P0-7b: dedicated post-logout redirect registrations (comma-joined at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris (pre-v1.5.0 behavior).
+	PostLogoutRedirectUris  *[]string `json:"post_logout_redirect_uris,omitempty"`
+	RedirectUris            *[]string `json:"redirect_uris,omitempty"`
+	TokenEndpointAuthMethod *string   `json:"token_endpoint_auth_method,omitempty"`
+}
+
+// PostOauth2RegisterJSONBodyClientType defines parameters for PostOauth2Register.
+type PostOauth2RegisterJSONBodyClientType string
+
 // PostOauth2RevokeFormdataBody defines parameters for PostOauth2Revoke.
 type PostOauth2RevokeFormdataBody struct {
 	// ClientId Client identifier (alternative to HTTP Basic authentication).
@@ -1545,6 +1578,9 @@ type PostOauth2MfaVerifyFormdataRequestBody = MfaVerifyRequest
 
 // PostOauth2PasswordChangeJSONRequestBody defines body for PostOauth2PasswordChange for application/json ContentType.
 type PostOauth2PasswordChangeJSONRequestBody PostOauth2PasswordChangeJSONBody
+
+// PostOauth2RegisterJSONRequestBody defines body for PostOauth2Register for application/json ContentType.
+type PostOauth2RegisterJSONRequestBody PostOauth2RegisterJSONBody
 
 // PostOauth2RevokeFormdataRequestBody defines body for PostOauth2Revoke for application/x-www-form-urlencoded ContentType.
 type PostOauth2RevokeFormdataRequestBody PostOauth2RevokeFormdataBody
@@ -3119,12 +3155,23 @@ type ClientInterface interface {
 	// Corresponds with POST /oauth2/password/change (the `PostOauth2PasswordChange` operationId).
 	PostOauth2PasswordChange(ctx context.Context, body PostOauth2PasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOauth2Register Register Client
+	// PostOauth2RegisterWithBody Register Client
 	//
-	// Dynamic client registration.
+	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	//
+	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
-	PostOauth2Register(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostOauth2RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOauth2Register Register Client
+	//
+	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
+	PostOauth2Register(ctx context.Context, body PostOauth2RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOauth2RevokeWithBody Revoke token
 	//
@@ -6277,13 +6324,34 @@ func (c *Client) PostOauth2PasswordChange(ctx context.Context, body PostOauth2Pa
 	return c.Client.Do(req)
 }
 
-// PostOauth2Register Register Client
+// PostOauth2RegisterWithBody Register Client
 //
-// Dynamic client registration.
+// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+//
+// Takes any type of body and a specified content type.
 //
 // Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
-func (c *Client) PostOauth2Register(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostOauth2RegisterRequest(c.Server)
+func (c *Client) PostOauth2RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOauth2RegisterRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOauth2Register Register Client
+//
+// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
+func (c *Client) PostOauth2Register(ctx context.Context, body PostOauth2RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOauth2RegisterRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11129,8 +11197,19 @@ func NewPostOauth2PasswordChangeRequestWithBody(server string, contentType strin
 	return req, nil
 }
 
-// NewPostOauth2RegisterRequest constructs an http.Request for the PostOauth2Register method
-func NewPostOauth2RegisterRequest(server string) (*http.Request, error) {
+// NewPostOauth2RegisterRequest calls the generic PostOauth2Register builder with application/json body
+func NewPostOauth2RegisterRequest(server string, body PostOauth2RegisterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOauth2RegisterRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostOauth2RegisterRequestWithBody constructs an http.Request for the PostOauth2Register method, with any body, and a specified content type
+func NewPostOauth2RegisterRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11148,10 +11227,12 @@ func NewPostOauth2RegisterRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -12886,14 +12967,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /oauth2/password/change (the `PostOauth2PasswordChange` operationId).
 	PostOauth2PasswordChangeWithResponse(ctx context.Context, body PostOauth2PasswordChangeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOauth2PasswordChangeResponse, error)
 
-	// PostOauth2RegisterWithResponse Register Client
+	// PostOauth2RegisterWithBodyWithResponse Register Client
 	//
-	// Dynamic client registration.
+	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
-	PostOauth2RegisterWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error)
+	PostOauth2RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error)
+
+	// PostOauth2RegisterWithResponse Register Client
+	//
+	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
+	PostOauth2RegisterWithResponse(ctx context.Context, body PostOauth2RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error)
 
 	// PostOauth2RevokeWithBodyWithResponse Revoke token
 	//
@@ -21587,15 +21677,30 @@ func (c *ClientWithResponses) PostOauth2PasswordChangeWithResponse(ctx context.C
 	return ParsePostOauth2PasswordChangeResponse(rsp)
 }
 
-// PostOauth2RegisterWithResponse Register Client
+// PostOauth2RegisterWithBodyWithResponse Register Client
 //
-// Dynamic client registration.
+// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
-func (c *ClientWithResponses) PostOauth2RegisterWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error) {
-	rsp, err := c.PostOauth2Register(ctx, reqEditors...)
+func (c *ClientWithResponses) PostOauth2RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error) {
+	rsp, err := c.PostOauth2RegisterWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOauth2RegisterResponse(rsp)
+}
+
+// PostOauth2RegisterWithResponse Register Client
+//
+// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /oauth2/register (the `PostOauth2Register` operationId).
+func (c *ClientWithResponses) PostOauth2RegisterWithResponse(ctx context.Context, body PostOauth2RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOauth2RegisterResponse, error) {
+	rsp, err := c.PostOauth2Register(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

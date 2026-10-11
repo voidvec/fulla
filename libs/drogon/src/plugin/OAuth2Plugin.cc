@@ -852,6 +852,15 @@ void OAuth2Plugin::validateRedirectUri(
     clientService_->validateRedirectUri(clientId, redirectUri, std::move(callback));
 }
 
+void OAuth2Plugin::validatePostLogoutRedirectUri(
+  const std::string &clientId,
+  const std::string &redirectUri,
+  std::function<void(bool)> &&callback
+)
+{
+    clientService_->validatePostLogoutRedirectUri(clientId, redirectUri, std::move(callback));
+}
+
 void OAuth2Plugin::checkCodeIssuanceGuards(
   const std::string &clientId,
   const std::string &redirectUri,

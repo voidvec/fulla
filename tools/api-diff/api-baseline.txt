@@ -3175,6 +3175,11 @@ const std::string &clientId,
 const std::string &redirectUri,
 std::function<void(bool)> &&callback
 );
+void validatePostLogoutRedirectUri(
+const std::string &clientId,
+const std::string &redirectUri,
+std::function<void(bool)> &&callback
+);
 struct CodeIssuanceGuardResult
 {
 bool ok = false;
@@ -5349,6 +5354,12 @@ const std::string &tokenEndpointAuthMethod() const noexcept
 ;
 bool isRegisteredRedirectUri(const std::string &redirectUri) const
 ;
+const std::vector<std::string> &postLogoutRedirectUris() const noexcept
+;
+bool hasPostLogoutWhitelist() const noexcept
+;
+bool isRegisteredPostLogoutRedirectUri(const std::string &uri) const
+;
 bool allowsScope(const std::string &scope) const
 ;
 bool allowsAllScopes(const std::string &requestedScope) const
@@ -5395,6 +5406,7 @@ std::vector<std::string> redirectUris;
 std::vector<std::string> allowedScopes;
 std::string tokenEndpointAuthMethod;
 std::vector<std::string> allowedGrantTypes;
+std::vector<std::string> postLogoutRedirectUris;
 };
 struct OAuth2AuthCode
 {
@@ -5602,6 +5614,11 @@ const std::string &clientSecret,
 std::function<void(bool)> &&callback
 );
 void validateRedirectUri(
+const std::string &clientId,
+const std::string &redirectUri,
+std::function<void(bool)> &&callback
+);
+void validatePostLogoutRedirectUri(
 const std::string &clientId,
 const std::string &redirectUri,
 std::function<void(bool)> &&callback
@@ -7699,6 +7716,7 @@ static const std::string _token_endpoint_auth_method;
 static const std::string _backchannel_logout_uri;
 static const std::string _backchannel_logout_session_required;
 static const std::string _deleted_at;
+static const std::string _post_logout_redirect_uris;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -7775,6 +7793,11 @@ const ::trantor::Date &getValueOfDeletedAt() const noexcept;
 const std::shared_ptr<::trantor::Date> &getDeletedAt() const noexcept;
 void setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept;
 void setDeletedAtToNull() noexcept;
+const std::string &getValueOfPostLogoutRedirectUris() const noexcept;
+const std::shared_ptr<std::string> &getPostLogoutRedirectUris() const noexcept;
+void setPostLogoutRedirectUris(const std::string &pPostLogoutRedirectUris) noexcept;
+void setPostLogoutRedirectUris(std::string &&pPostLogoutRedirectUris) noexcept;
+void setPostLogoutRedirectUrisToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -7825,6 +7848,7 @@ std::shared_ptr<std::string> tokenEndpointAuthMethod_;
 std::shared_ptr<std::string> backchannelLogoutUri_;
 std::shared_ptr<bool> backchannelLogoutSessionRequired_;
 std::shared_ptr<::trantor::Date> deletedAt_;
+std::shared_ptr<std::string> postLogoutRedirectUris_;
 struct MetaData
 {
 const std::string colName_;
@@ -7836,7 +7860,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[11]={ false };
+bool dirtyFlag_[12]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

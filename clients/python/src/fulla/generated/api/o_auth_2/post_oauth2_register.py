@@ -5,16 +5,26 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.post_oauth_2_register_body import PostOauth2RegisterBody
 from ...types import Response
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    body: PostOauth2RegisterBody,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/oauth2/register",
     }
 
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -46,10 +56,18 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
+    body: PostOauth2RegisterBody,
 ) -> Response[Any]:
     """Register Client
 
-     Dynamic client registration.
+     Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type
+    (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt),
+    grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout
+    redirect registrations, same scheme policy; when registered they are authoritative for end_session's
+    post_logout_redirect_uri validation).
+
+    Args:
+        body (PostOauth2RegisterBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -59,7 +77,9 @@ def sync_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -71,10 +91,18 @@ def sync_detailed(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
+    body: PostOauth2RegisterBody,
 ) -> Response[Any]:
     """Register Client
 
-     Dynamic client registration.
+     Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type
+    (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt),
+    grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout
+    redirect registrations, same scheme policy; when registered they are authoritative for end_session's
+    post_logout_redirect_uri validation).
+
+    Args:
+        body (PostOauth2RegisterBody):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -84,7 +112,9 @@ async def asyncio_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        body=body,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 
