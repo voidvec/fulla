@@ -9,6 +9,41 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [1.5.0] - 2026-10-15
+
+The correctness & trust release: the 2026-10 IAM gap analysis drove a P0 sprint
+that unifies the token subject, scope-gates userinfo claims, makes MFA backup
+codes actually consumable, and gives discovery metadata a CI-enforced
+reconciliation contract — verified end-to-end by a new three-library RP
+interop gate. One migration (V039, additive).
+
+### ⚠️ Breaking / Required reading before upgrading
+
+- **Token subject unified on the UUID `public_sub` (hard cut)**: previously the login path minted the UUID subject while the authorize-silent and consent paths minted the NUMERIC internal id — one human could resolve to two RP identities. Every issuance path now mints the UUID. Relying parties that stored the numeric subject will see it become the UUID at the user's next login/refresh: re-map accounts via a secondary identity (e.g. email) or force re-login. Legacy numeric-subject refresh families are normalized once at rotation (via `oauth2_subject_mappings`); an unresolvable numeric subject is rejected fail-closed, never guessed.
+- **userinfo claims are scope-gated (OIDC Core §5.4)**: `name`/`preferred_username`/`picture` now require the `profile` scope and `email`/`email_verified` the `email` scope; `sub` alone is unconditional. Tokens that previously received profile/email claims under a bare `openid` scope now receive `sub` only — request the matching scopes. The standard `preferred_username` claim is emitted (the legacy `username` key dual-emits until v1.6.0).
+- **PKCE is S256-only at the authorize endpoint** (RFC 9700 §2.1.1 direction): `code_challenge_method=plain` is rejected, and an omitted method no longer defaults to plain (the RFC 7636 §4.3 default) — a challenge must name S256 explicitly. The `auth.allow_pkce_plain` config escape hatch (default false) re-enables plain for one release.
+
+### Added
+
+- **MFA backup codes are usable at login** (they were generated, stored and displayed but never consumable — a lost authenticator locked the account out). A failed TOTP attempt falls through to the backup codes on both the wired and legacy verify paths; matching is case-insensitive over the hex (the two historical write paths hashed with different case), consumption is a one-shot string-equality CAS (`UPDATE … WHERE id=$ AND mfa_backup_codes=$old RETURNING id`), the audit trail gains `mfa_backup_code_used`, and the token response carries `backup_codes_remaining` — exhausting the last code forces a TOTP re-bind prompt on the security page.
+- **Application display name on the login and consent screens**: new public `GET /oauth2/authorize-context?client_id=` (active clients only; every failure degrades to the raw id), a "Continue to {app}" header when resuming an authorization, and the consent screen renders the registered name instead of the raw client id.
+- **`DELETE /api/me/webauthn/credentials/{credentialId}`**: passkeys finally removable; the delete predicate binds ownership (user_id AND credential_id) so foreign and unknown ids answer the same generic 404; audited as `webauthn_credential_deleted`.
+- **Dedicated `post_logout_redirect_uris` registration** (V039): end_session previously validated the post-logout redirect against the client's LOGIN redirect list. A non-empty dedicated registration is now authoritative (a login-valid URI not registered for logout is rejected); empty preserves the legacy fallback. Dynamic registration accepts/echoes the new array.
+- **Catalog-backed discovery + reconciliation contract**: `scopes_supported` is served from the DB scope catalog (60 s cache; memory-mode fallback) on both metadata endpoints — `org` and the resource-scope family stop being implemented-but-unadvertised; `claims_supported` is reconciled to the actually emitted set; new integration tests freeze grants/auth-methods/PKCE/scopes/claims on BOTH endpoints so metadata drift fails CI.
+- **RP interop smoke gate** (`tests/interop/` + `.github/workflows/interop.yml`): openid-client v6, authlib and go-oidc drive discovery → auth-code + PKCE(S256) → strict id_token verification → userinfo sub-consistency → refresh rotation → end-session against a real stack; all three verified green against the live server (identical subject across libraries — the unification proven cross-library). Runs on master/release branches as the release gate.
+- **ADR-0014**: the RBAC permission-enforcement design contract (permissions = a role's resource-scope set, integrated into BOTH existing admin-scope gates; delegated administrators unlocked) for the v1.6.0 implementation.
+
+### Changed
+
+- **Audience is written on every issuance path** (authorization code, client credentials, refresh rotation): the `audience` column existed since V002 but was never written, so introspection's `aud` was permanently empty. No new protocol parameters — RFC 8707 resource indicators stay on the roadmap.
+- Subject resolution is dual-key end to end: `getInternalUserId` falls back from the mapping table (numeric-keyed local rows, V027) to `users.public_sub` with the liveness check preserved.
+
+### Fixed
+
+- Documentation drift from the gap analysis: the unimplemented **front-channel logout claim removed from README**; the oidc-guide id_token claims tables rewritten (profile/email claims come from userinfo with scope gating, not the id_token; `auth_time`/`amr`/`acr` documented); TECH_SPECS and the drogon AGENTS.md now state the real password hashing (PBKDF2-SHA256, 310k iterations).
+- The consent-context endpoint's session gate accepts the OIDC subject (it still compared the numeric internal id and 403'd every request after the subject unification).
+- Memory-mode deployments no longer reach `getDbClient()` on the new code paths (Debug builds abort there, not throw): the backup-code consumption, WebAuthn credential delete, dual-key subject fallback and scope-catalog fetch all degrade gracefully instead.
+
 ## [1.4.0] - 2026-10-09
 
 The multi-tenancy release: organizations become real protocol-level tenants, the
