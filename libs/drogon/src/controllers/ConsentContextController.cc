@@ -160,8 +160,10 @@ void ConsentContextController::context(
     }
 
     // Gate 2 - the context is for the session user (consent POST Gate 2's
-    // exact rule).
-    if (userId.empty() || userId != sessUserId)
+    // exact rule, P0-1 (#255) form: the authorize->consent redirect embeds
+    // the OIDC subject (UUID public_sub), so the comparison key is
+    // session["sub"]).
+    if (userId.empty() || userId != sessSub)
     {
         respondError(
           req, *sharedCb, "AUTHZ_ACCESS_DENIED",

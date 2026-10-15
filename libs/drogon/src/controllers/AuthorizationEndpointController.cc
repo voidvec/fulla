@@ -393,9 +393,16 @@ void AuthorizationEndpointController::authorize(
                 // auth.allow_pkce_plain escape hatch is enabled (default
                 // false, one-release transition for legacy PUBLIC clients);
                 // an omitted method no longer defaults to plain (the RFC
-                // 7636 §4.3 default) — a challenge must name S256.
+                // 7636 §4.3 default) — a challenge must name S256. All
+                // method checks are gated on a challenge being PRESENT: a
+                // challenge-less request is handled by the PKCE-required
+                // policy further down (or legitimately proceeds where that
+                // policy is disabled), exactly as before P0-5 — the
+                // no-session prompt=none/consent legs must still reach the
+                // login_required / login-redirect branches.
                 // client_id/redirect_uri are already verified above, so per
                 // the F-007 rule the errors redirect back to the client.
+                if (!codeChallenge.empty())
                 {
                     auto cfg = ::drogon::app().getCustomConfig();
                     bool allowPlain = false;
@@ -414,26 +421,26 @@ void AuthorizationEndpointController::authorize(
                         );
                         return;
                     }
-                    if (codeChallengeMethod != "S256" && codeChallengeMethod != "plain")
+                    if (codeChallengeMethod.empty())
+                    {
+                        callback(
+                          buildAuthorizeErrorRedirect(
+                            redirectUri,
+                            "invalid_request",
+                            "code_challenge_method is required when code_challenge is "
+                            "present (S256)",
+                            state
+                          )
+                        );
+                        return;
+                    }
+                    if (codeChallengeMethod != "S256")
                     {
                         callback(
                           buildAuthorizeErrorRedirect(
                             redirectUri,
                             "invalid_request",
                             "code_challenge_method must be 'S256'",
-                            state
-                          )
-                        );
-                        return;
-                    }
-                    if (codeChallengeMethod.empty() && !codeChallenge.empty())
-                    {
-                        callback(
-                          buildAuthorizeErrorRedirect(
-                            redirectUri,
-                            "invalid_request",
-                            "code_challenge_method is required when code_challenge is present "
-                            "(S256)",
                             state
                           )
                         );
