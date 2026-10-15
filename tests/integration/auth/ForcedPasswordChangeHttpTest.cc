@@ -111,23 +111,6 @@ bool userFlag(const std::string &username, bool &flag)
     return p.get_future().get();
 }
 
-std::string userInternalId(const std::string &username)
-{
-    auto db = app().getDbClient();
-    if (!db)
-        return "";
-    std::promise<std::string> p;
-    db->execSqlAsync(
-        "SELECT id FROM users WHERE username = $1",
-        [&](const Result &rows) {
-            p.set_value(rows.empty() ? "" : std::to_string(rows[0]["id"].as<int32_t>()));
-        },
-        [&](const DrogonDbException &) { p.set_value(""); },
-        username
-    );
-    return p.get_future().get();
-}
-
 // P0-1 (#255): the authorize->consent chain now carries the OIDC subject
 // (UUID public_sub) as user_id — consent Gate 2 compares against
 // session["sub"], so tests must submit the public subject.
