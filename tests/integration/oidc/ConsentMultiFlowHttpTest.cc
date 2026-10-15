@@ -163,17 +163,19 @@ struct AdminMfaRestore
 };
 
 
-// Internal id of the seeded admin (Gate 2 needs user_id = session["userId"]).
-std::string adminInternalId()
+// P0-1 (#255): the authorize->consent chain now carries the OIDC subject
+// (UUID public_sub) as user_id — consent gates compare against
+// session["sub"], so tests submit the public subject.
+std::string adminPublicSub()
 {
     auto db = app().getDbClient();
     if (!db)
         return "";
     std::promise<std::string> p;
     db->execSqlAsync(
-      "SELECT id FROM users WHERE username = 'admin'",
+      "SELECT public_sub FROM users WHERE username = 'admin'",
       [&](const Result &rows) {
-          p.set_value(rows.empty() ? "" : std::to_string(rows[0]["id"].as<int32_t>()));
+          p.set_value(rows.empty() ? "" : rows[0]["public_sub"].as<std::string>());
       },
       [&](const DrogonDbException &) { p.set_value(""); }
     );
@@ -311,7 +313,7 @@ DROGON_TEST(Integration_P1_MfaPending_Consent_Returns401)
     // intentionally survives until the next login, and the DB flag must not
     // leak into other tests.
 
-    const std::string userId = adminInternalId();
+    const std::string userId = adminPublicSub();
     REQUIRE(!userId.empty());
 
     auto consent = post(
