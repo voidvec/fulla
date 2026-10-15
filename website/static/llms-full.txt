@@ -2396,7 +2396,7 @@ The images also carry a `latest` tag; `<ver>-amd64` / `<ver>-arm64` are single-a
 
 ```bash
 # 1) 解包
-tar xzf fulla-sdk-1.4.0-linux-x86_64.tar.gz   # -> fulla-sdk-1.4.0-linux-x86_64/
+tar xzf fulla-sdk-1.5.0-linux-x86_64.tar.gz   # -> fulla-sdk-1.5.0-linux-x86_64/
 
 # 2) 用仓库的 conanfile.py 解析依赖（生成 toolchain + 各依赖的 CMake config）
 conan install <fulla-repo> --output-folder=deps --build=missing \
@@ -2406,7 +2406,7 @@ conan install <fulla-repo> --output-folder=deps --build=missing \
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=$PWD/deps/conan_toolchain.cmake \
-  -DCMAKE_PREFIX_PATH=$PWD/fulla-sdk-1.4.0-linux-x86_64
+  -DCMAKE_PREFIX_PATH=$PWD/fulla-sdk-1.5.0-linux-x86_64
 cmake --build build -j
 ```
 
@@ -2439,7 +2439,7 @@ Reference consumers (continuously verified by the repository CI):
 ## 5. Using the Images
 
 ```bash
-docker pull ghcr.io/voidvec/fulla-backend:1.4.0
+docker pull ghcr.io/voidvec/fulla-backend:1.5.0
 ```
 
 The three images correspond one-to-one to the build targets in `deploy/docker/docker-compose.yml` (`backend-runtime` / `frontend-runtime` / `frontends/admin/Dockerfile`); environment variables and mount conventions are taken directly from the compose file's `fulla-backend` service section (`FULLA_DB_HOST` / `FULLA_REDIS_HOST` / `FULLA_AUTO_MIGRATE`, etc.).
@@ -5227,7 +5227,7 @@ Container naming: `fulla-{service}[-debug]` (backend/frontend/postgres/redis); n
 ## Debug Environment (source mounts / GDB)
 
 ```bash
-docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.4.0 .
+docker build -f deploy/docker/Dockerfile --target backend-dev -t fulla-backend-debug:v1.5.0 .
 docker compose -f deploy/docker/docker-compose.debug.yml up -d
 docker compose -f deploy/docker/docker-compose.debug.yml run --rm debug-env bash
 ```
