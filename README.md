@@ -469,4 +469,4 @@ See [Commercial Licensing](https://fulla.dev/commercial) for details and contact
 
 ---
 
-**Project Status**: Production Ready | **Version**: v1.4.0
+**Project Status**: Production Ready | **Version**: v1.5.0
