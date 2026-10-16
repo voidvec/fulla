@@ -81,7 +81,7 @@ DROGON_TEST(Integration_P0_Discovery_GrantsMethods_AcrossBothEndpoints)
     const std::set<std::string> kAuthMethods = {"client_secret_basic", "client_secret_post"};
     const std::set<std::string> kPkce = {"S256"};
 
-    for (const std::string &path :
+    for (const char *path :
          {"/.well-known/openid-configuration", "/.well-known/oauth-authorization-server"})
     {
         Json::Value doc = fetchMetadata(path);
@@ -103,7 +103,7 @@ DROGON_TEST(Integration_P0_Discovery_Scopes_CatalogBacked)
     REQUIRE(!doc.isNull());
     auto scopes = stringSet(doc["scopes_supported"]);
 
-    for (const std::string &must :
+    for (const char *must :
          {"openid", "profile", "email", "admin", "org", "users:read", "clients:read", "audit:read"})
     {
         CHECK(scopes.count(must) == 1);

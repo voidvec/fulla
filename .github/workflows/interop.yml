@@ -45,6 +45,32 @@ jobs:
           conan install . --output-folder=build/linux-release --build=missing \
             -s build_type=Release -s compiler.cppstd=17
 
+      - name: Add drogon_ctl (Conan package) to PATH
+        # drogon_create_views() invokes `drogon_ctl` as a bare command at BUILD
+        # time (the server's login.csp view), so it must be on PATH — the
+        # first run failed with "apps/server/login.h Error 127" without this.
+        # Same discovery as _build-test.yml: read the resolved package folder
+        # from CMakeDeps' Drogon-*-data.cmake instead of hardcoding the cache
+        # layout.
+        run: |
+          data_file=$(find build/linux-release -maxdepth 1 -name 'Drogon-*-data.cmake' | head -n1)
+          if [ -z "$data_file" ]; then
+            echo "::error::Could not find Drogon-*-data.cmake under build/linux-release/ (conan install may have failed)"
+            exit 1
+          fi
+          drogon_folder=$(grep -E 'set\(drogon_PACKAGE_FOLDER_RELEASE "' "$data_file" | sed -E 's/.*"(.+)".*/\1/')
+          if [ -z "$drogon_folder" ]; then
+            echo "::error::Could not parse drogon_PACKAGE_FOLDER_RELEASE from $data_file"
+            exit 1
+          fi
+          drogon_bin="$drogon_folder/bin"
+          if [ ! -x "$drogon_bin/drogon_ctl" ] && [ ! -f "$drogon_bin/drogon_ctl.exe" ]; then
+            echo "::error::drogon_ctl not found under $drogon_bin"
+            exit 1
+          fi
+          echo "Adding $drogon_bin to PATH"
+          echo "$drogon_bin" >> "$GITHUB_PATH"
+
       - name: Configure + build server
         run: |
           cmake --preset "$CMAKE_PRESET"
