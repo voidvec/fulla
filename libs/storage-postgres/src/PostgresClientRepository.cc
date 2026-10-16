@@ -143,7 +143,22 @@ void PostgresClientRepository::getClient(const std::string &clientId, ClientCall
                       }
                   }
 
-                  // Fetch allowed scopes from oauth2_client_scopes table
+                  // Fetch allowed scopes from oauth2_client_scopes table.
+                  // UBSan guard: the generated relation method dereferences
+                  // the row's clientId shared_ptr (`<< *clientId_`); GCC's
+                  // UBSan flags that deref when the pointer is null, and the
+                  // model files are drogon_ctl-generated (no hand edits), so
+                  // the guard lives here at the call site. A null PK is not a
+                  // meaningful state for a findOne hit — degrade exactly like
+                  // the scope-fetch error path below (client, empty scopes).
+                  if (!row.getClientId())
+                  {
+                      LOG_WARN << "Postgres getClient: row for " << clientId
+                               << " has a null client_id pointer; returning client "
+                                  "with empty scopes";
+                      (*sharedCb)(client);
+                      return;
+                  }
                   LOG_DEBUG << "Postgres getClient: Fetching allowed scopes for " << client.clientId;
                   row.getScope(
                     dbClientReader_,
