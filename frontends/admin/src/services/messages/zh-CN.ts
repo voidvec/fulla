@@ -48,6 +48,11 @@ export const zhCN: Record<string, string> = {
   VALIDATION_DEVICE_CODE_INVALID: '设备码无效、已过期或已被处理',
   VALIDATION_RATE_LIMITED: '请求过于频繁，请稍后重试',
   VALIDATION_REDIRECT_URI_NOT_REGISTERED: '登出重定向地址未注册',
+  // --- P1-2 (#278): email-template admin codes (admin console only) ---
+  EMAIL_TEMPLATE_NOT_FOUND: '邮件模板不存在',
+  EMAIL_TEMPLATE_CONTENT_REJECTED: '模板含禁用标签或外链域名不在允许列表',
+  EMAIL_TEST_RECIPIENT_DENIED: '测试收件人不在白名单（须为本人邮箱或 email.test_recipients 配置项）',
+  EMAIL_TEST_QUOTA_EXCEEDED: '测试发送配额已用尽，请稍后重试',
   AUTH_MFA_CODE_INVALID: '验证码不正确',
   AUTH_MFA_NOT_CONFIGURED: '尚未设置双重验证，请先完成设置',
 

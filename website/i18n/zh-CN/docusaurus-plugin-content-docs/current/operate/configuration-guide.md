@@ -182,3 +182,50 @@ JWKS 端点（`/.well-known/jwks.json`）当前只服务**单个静态 `kid`**�
 
 生产轮换已登记为运维待办。在此之前，将密钥泄露纳入威胁模型的运维者应
 以新 JWK 物料重启服务器（并接受此前签发的全部令牌失效）。
+
+## 12. 邮件模板（P1-2，#278）
+
+三封生产邮件（邮箱验证、密码重置、组织邀请）改为从数据库模板渲染
+（V040 `email_templates`：3 个 key × `en`/`zh-CN` 种子，每行含主题 +
+HTML + 纯文本）。发送通道仍由环境变量驱动（`FULLA_SMTP_*` 选择 Console
+或 SMTP）；模板在其上叠加本地化、可编辑与 multipart/alternative HTML
+投递。
+
+管理 API（admin 角色 + `roles:read`/`roles:write` scope）：
+`GET /api/admin/email-templates`、`GET|PUT /api/admin/email-templates/{key}/{locale}`、
+`POST /api/admin/email-templates/{key}/{locale}/test-send`。仅 Postgres——
+memory 部署返回 404（无模板存储；实际发送时引擎回退到编译期内建模板）。
+
+模板变量使用 `{{name}}` 占位符；引擎对每个替换值做 HTML 转义（组织名是
+无过滤自由文本）。保存时内容策略拒绝 `<script>/<iframe>/<form>/<object>/
+<embed>/<base>` 标签、`javascript:`/`data:`/`vbscript:` URL，以及任何
+不在允许列表内的外链 `http(s)` href（见下方 `allowed_link_domains`），
+返回 `EMAIL_TEMPLATE_CONTENT_REJECTED`（400）。
+
+配置（custom_config）：
+
+```json
+"email": {
+    "allowed_link_domains": ["portal.example.com"],
+    "test_recipients": ["admin@example.com"],
+    "test_send_quota_per_day": 10,
+    "allow_org_logo": false
+}
+```
+
+- `allowed_link_domains` —— 保存模板中字面 `http(s)` href 允许的主机
+  （精确或子域匹配；条目接受裸主机或 `https://host/` 写法）。为空或缺省
+  = 不允许任何外链；变量链接（`{{verify_link}}`、`{{reset_link}}）由引擎
+  供给，不受此列表影响。
+- `test_recipients` —— 管理端 test-send 额外授权的收件地址（各管理员
+  本人账号邮箱始终允许）。
+- `test_send_quota_per_day` —— 每管理员滚动 24 小时 test-send 配额
+  （默认 10；按最近 24 小时的 `email_test_sent` 审计行计数——刻意不是
+  自然日）。
+- `allow_org_logo` —— 邀请模板中组织品牌变量的占位开关；**邮件中的远程
+  组织 logo 是收件人打点隐私面，默认保持关闭**。种子模板不引用组织
+  logo 变量。
+
+**链接信任锚（D8 红线）**：验证与重置链接的域名只来自全局 `frontend.url`
+配置——组织可控的输入永远不会被拼进安全链接；且无论配置如何，验证/重置
+邮件不携带组织品牌。

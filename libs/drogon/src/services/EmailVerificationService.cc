@@ -4,6 +4,7 @@
 #include <fulla/common/utils/RateLimiter.h>
 #include <fulla/storage/postgres/models/EmailVerificationTokens.h>
 #include <fulla/storage/postgres/models/Users.h>
+#include <fulla/drogon/services/EmailTemplateService.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/EmailService.h>
 #include <fulla/drogon/error/ErrorResponder.h>
@@ -82,6 +83,15 @@ bool verificationStorageAvailable()
 
 void EmailVerificationService::sendVerificationEmail(int internalUserId, const std::string &email)
 {
+    sendVerificationEmail(internalUserId, email, "en");
+}
+
+void EmailVerificationService::sendVerificationEmail(
+  int internalUserId,
+  const std::string &email,
+  const std::string &locale
+)
+{
     if (email.empty())
         return;
 
@@ -105,8 +115,10 @@ void EmailVerificationService::sendVerificationEmail(int internalUserId, const s
     Mapper<EmailVerificationTokens> mapper(db);
     mapper.insert(
       token,
-      [rawToken, email](const EmailVerificationTokens &) {
-          // Build verification link using frontend URL
+      [rawToken, email, locale](const EmailVerificationTokens &) {
+          // P1-2 (#278): localized template send. The link domain comes ONLY
+          // from global config (config.frontend.url) -- org-controlled input
+          // is never interpolated into a verification link (D8 red line).
           auto customConfig = ::drogon::app().getCustomConfig();
           std::string frontendUrl = "http://localhost:5173";
           if (customConfig.isMember("frontend") && customConfig["frontend"].isMember("url"))
@@ -114,10 +126,12 @@ void EmailVerificationService::sendVerificationEmail(int internalUserId, const s
               frontendUrl = customConfig["frontend"]["url"].asString();
           }
           std::string verifyLink = frontendUrl + "/verify-email?token=" + rawToken;
-          std::string body = "Please verify your email by clicking:\n\n" + verifyLink +
-                             "\n\nThis link expires in 24 hours.";
 
-          getEmailSvc().sendEmail(email, "Verify Your Email", body, [](bool) {});
+          EmailTemplateService::send(
+            EmailTemplateService::kKeyEmailVerification,
+            locale,
+            email,
+            {{"verify_link", verifyLink}});
       },
       [](const DrogonDbException &e) {
           LOG_ERROR << "Failed to store verification token: " << e.base().what();
@@ -263,7 +277,7 @@ void EmailVerificationService::resendVerification(
               return;
           }
 
-          sendVerificationEmail(user.getValueOfId(), email);
+          sendVerificationEmail(user.getValueOfId(), email, EmailTemplateService::resolveLocale(req));
 
           Json::Value json;
           json["message"] = "Verification email sent";
@@ -396,7 +410,7 @@ void EmailVerificationService::requestVerificationByEmail(
         Mapper<Users> mapper(db);
         mapper.findOne(
           Criteria(Users::Cols::_email, CompareOperator::EQ, normalized),
-          [respondGeneric](const Users &user) {
+          [respondGeneric, req](const Users &user) {
               if (user.getValueOfEmailVerified())
               {
                   respondGeneric();
@@ -408,7 +422,8 @@ void EmailVerificationService::requestVerificationByEmail(
                   respondGeneric();
                   return;
               }
-              sendVerificationEmail(user.getValueOfId(), stored);
+              sendVerificationEmail(
+                user.getValueOfId(), stored, EmailTemplateService::resolveLocale(req));
               respondGeneric();
           },
           [respondGeneric](const DrogonDbException &e) {

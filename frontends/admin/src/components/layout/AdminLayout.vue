@@ -47,6 +47,7 @@ const navSections = computed(() => [
     label: t('nav.monitoring'),
     items: [
       { name: t('nav.auditLogs'), path: '/logs', icon: 'logs' },
+      { name: t('nav.emailTemplates'), path: '/email-templates', icon: 'settings' },
       { name: t('nav.settings'), path: '/settings', icon: 'settings' },
     ],
   },

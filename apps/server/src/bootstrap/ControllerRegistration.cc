@@ -34,6 +34,7 @@
 #include <fulla/drogon/controllers/ClientAdminController.h>
 #include <fulla/drogon/controllers/UserAdminController.h>
 #include <fulla/drogon/controllers/RoleScopeAdminController.h>
+#include <fulla/drogon/controllers/EmailTemplateAdminController.h>
 #include <fulla/drogon/controllers/TokenAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/filters/AuthorizationFilter.h>
@@ -113,6 +114,9 @@ void registerAllControllers()
     );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::RoleScopeAdminController>()
+    );
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::EmailTemplateAdminController>()
     );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::TokenAdminController>()

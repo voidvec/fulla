@@ -38,7 +38,8 @@
     "V036__organization_consents_org_context.sql": "ddfd63b6638e25d9c3d8c2e8adbfc6e18d899a31eca9572abce3fdcd76708731",
     "V037__organization_succession_nominations.sql": "86d052f3cc98fc4acd4e8b4317869bea1c1533bfacdce8325f800eb84aa1e045",
     "V038__organization_consent_requests.sql": "73d6c40e923b7c46800c01910fcb620bc35c41d8bad90557f5a056e0b149dbea",
-    "V039__post_logout_redirect_uris.sql": "481fa6899e496d4409dc5b17bb6294557492105ff0294a8fa9785435798e7770"
+    "V039__post_logout_redirect_uris.sql": "481fa6899e496d4409dc5b17bb6294557492105ff0294a8fa9785435798e7770",
+    "V040__email_templates.sql": "fb33cddb70aa8830361be1edc5ae0e82edac93ce49e9b083bdf7cb1cb8fa1e77"
   },
   "ratified_destructive": [
     "V036__organization_consents_org_context.sql"

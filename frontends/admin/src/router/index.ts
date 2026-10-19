@@ -80,6 +80,11 @@ const router = createRouter({
           name: 'settings',
           component: () => import('../pages/settings/SettingsPage.vue'),
         },
+        {
+          path: 'email-templates',
+          name: 'email-templates',
+          component: () => import('../pages/email/EmailTemplatesPage.vue'),
+        },
       ],
     },
   ],

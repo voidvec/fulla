@@ -6,6 +6,7 @@
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/drogon/services/EmailTemplateService.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/common/utils/EmailNormalizer.h>
 #include <fulla/drogon/utils/EmailService.h>
@@ -33,11 +34,6 @@ void respondError(
       std::move(code),
       std::move(detailForLog)
     );
-}
-
-::fulla::drogon::utils::IEmailService &getEmailSvc()
-{
-    return ::fulla::drogon::utils::getEmailService();
 }
 
 ::drogon::orm::DbClientPtr getDbOrRespond(
@@ -101,7 +97,7 @@ void PasswordResetService::requestReset(
     Mapper<Users> mapper(db);
     mapper.findOne(
       crit,
-      [sharedCb, email, db](const Users &user) {
+      [sharedCb, email, db, req](const Users &user) {
           Json::Value json;
           json["message"] = "If the email exists, a reset link has been sent";
 
@@ -125,16 +121,22 @@ void PasswordResetService::requestReset(
 
           Mapper<PasswordResetTokens>(db).insert(
             resetToken,
-            [sharedCb, json, rawToken, email](const PasswordResetTokens &) {
+            [sharedCb, json, rawToken, email, req](const PasswordResetTokens &) {
+                // P1-2 (#278): localized template send. Reset-link domains
+                // come ONLY from global config (config.frontend.url) -- the
+                // D8 red line (org-controlled sources would be a phishing
+                // chain).
                 auto customConfig = ::drogon::app().getCustomConfig();
                 std::string frontendUrl = "http://localhost:5173";
                 if (customConfig.isMember("frontend") && customConfig["frontend"].isMember("url"))
                     frontendUrl = customConfig["frontend"]["url"].asString();
                 std::string resetLink = frontendUrl + "/reset-password?token=" + rawToken;
-                std::string emailBody = "Click the following link to reset your password:\n\n" +
-                                        resetLink + "\n\nThis link expires in 15 minutes.";
 
-                getEmailSvc().sendEmail(email, "Password Reset Request", emailBody, [](bool) {});
+                EmailTemplateService::send(
+                  EmailTemplateService::kKeyPasswordReset,
+                  EmailTemplateService::resolveLocale(req),
+                  email,
+                  {{"reset_link", resetLink}});
 
                 auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
                 (*sharedCb)(resp);

@@ -30,7 +30,8 @@
         "oauth2_client_owners",
         "organization_consents",
         "organization_succession_nominations",
-        "organization_consent_requests"
+        "organization_consent_requests",
+        "email_templates"
     ],
     "relationships": {
         "enabled": true,

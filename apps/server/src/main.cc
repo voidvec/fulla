@@ -22,6 +22,7 @@
 #include <fulla/drogon/controllers/ClientAdminController.h>
 #include <fulla/drogon/controllers/TokenAdminController.h>
 #include <fulla/drogon/controllers/RoleScopeAdminController.h>
+#include <fulla/drogon/controllers/EmailTemplateAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/controllers/AuthProvidersController.h>
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
@@ -290,6 +291,7 @@ int main(int argc, char *argv[])
     fulla::drogon::controllers::ClientAdminController::initApiDocs();
     fulla::drogon::controllers::TokenAdminController::initApiDocs();
     fulla::drogon::controllers::RoleScopeAdminController::initApiDocs();
+    fulla::drogon::controllers::EmailTemplateAdminController::initApiDocs();
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     fulla::drogon::controllers::AuthProvidersController::initApiDocs();

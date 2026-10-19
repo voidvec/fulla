@@ -1237,6 +1237,174 @@ paths:
       tags:
       - Admin
       - Dashboard
+  /api/admin/email-templates:
+    get:
+      description: 'P1-2 (#278): list all email templates (template_key x locale).
+        Memory-storage deployments answer 404 (no template store).'
+      operationId: get_api_admin_email_templates
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        template_key:
+                          type: string
+                        locale:
+                          type: string
+                        subject:
+                          type: string
+                        body_html:
+                          type: string
+                        body_text:
+                          type: string
+                        updated_at:
+                          type: string
+                type: object
+          description: Email template list
+        '404':
+          description: Memory mode (no template store)
+      security:
+      - bearerAuth: []
+      summary: List Email Templates
+      tags:
+      - Admin
+      - Email
+  /api/admin/email-templates/{key}/{locale}:
+    get:
+      description: Fetch one email template by key and locale.
+      operationId: get_api_admin_email_templates_{key}_{locale}
+      parameters:
+      - description: Template key (e.g. email_verification, password_reset, org_invitation)
+        in: path
+        name: key
+        required: true
+        schema:
+          type: string
+      - description: 'Locale tag (BCP47-light: e.g. en, zh-CN)'
+        in: path
+        name: locale
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Template row (subject/body_html/body_text/updated_at)
+        '404':
+          description: 'No row for key/locale (EMAIL_TEMPLATE_NOT_FOUND)'
+      security:
+      - bearerAuth: []
+      summary: Get Email Template
+      tags:
+      - Admin
+      - Email
+    put:
+      description: 'Create or update a template. Save-time content policy rejects
+        script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs,
+        and outbound http(s) links outside the configured email.allowed_link_domains
+        (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders;
+        substituted values are HTML-escaped by the engine.'
+      operationId: put_api_admin_email_templates_{key}_{locale}
+      parameters:
+      - description: Template key
+        in: path
+        name: key
+        required: true
+        schema:
+          type: string
+      - description: Locale tag (e.g. en, zh-CN)
+        in: path
+        name: locale
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - subject
+              - body_html
+              properties:
+                subject:
+                  type: string
+                  maxLength: 256
+                body_html:
+                  type: string
+                  maxLength: 65536
+                body_text:
+                  type: string
+                  maxLength: 65536
+      responses:
+        '200':
+          description: Template saved (audited as email_template_updated)
+        '400':
+          description: 'Validation failure or content policy rejection (EMAIL_TEMPLATE_CONTENT_REJECTED)'
+      security:
+      - bearerAuth: []
+      summary: Upsert Email Template
+      tags:
+      - Admin
+      - Email
+  /api/admin/email-templates/{key}/{locale}/test-send:
+    post:
+      description: 'Render a template with synthetic sample variables (no real user
+        PII) and send it. Recipient must be the admin''s own address or listed in
+        email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin
+        quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day,
+        default 10). Audited as email_test_sent.'
+      operationId: post_api_admin_email_templates_{key}_{locale}_test_send
+      parameters:
+      - description: Template key
+        in: path
+        name: key
+        required: true
+        schema:
+          type: string
+      - description: Locale tag (e.g. en, zh-CN)
+        in: path
+        name: locale
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - to
+              properties:
+                to:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Test email sent (response carries the rendered subject)
+        '403':
+          description: 'Recipient not whitelisted (EMAIL_TEST_RECIPIENT_DENIED)'
+        '404':
+          description: 'Template not found (EMAIL_TEMPLATE_NOT_FOUND) or memory mode'
+        '429':
+          description: 'Rolling-24h quota reached (EMAIL_TEST_QUOTA_EXCEEDED)'
+      security:
+      - bearerAuth: []
+      summary: Test-send Email Template
+      tags:
+      - Admin
+      - Email
   /api/admin/logs:
     get:
       description: Get a paginated list of system audit logs.
