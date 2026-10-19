@@ -229,3 +229,30 @@ memory 部署返回 404（无模板存储；实际发送时引擎回退到编译
 **链接信任锚（D8 红线）**：验证与重置链接的域名只来自全局 `frontend.url`
 配置——组织可控的输入永远不会被拼进安全链接；且无论配置如何，验证/重置
 邮件不携带组织品牌。
+
+## 13. 审计日志导出与保留（P1-6，#283）
+
+`GET /api/admin/logs/export`（admin 角色 + `audit:read` scope）以 CSV 附件
+形式导出审计流水。过滤器与列表端点相同（`action`/`outcome`/`actor_id`），
+另加**强制时间窗**（`from`/`to`，unix epoch 秒）——除非调用方以 `all=true`
+显式选择全表；行数硬上限防止无界导出。单元格做了公式注入加固：以
+`= + - @` 或制表符/CR 开头的单元格前置撇号（OWASP）——`user_agent`、`ip`
+与 `details` 完全用户可控，导出是注入出口。每次导出都会写审计
+（`audit_exported`）。
+
+配置（custom_config）：
+
+```json
+"audit": {
+    "retention_months": 0,
+    "export_max_rows": 500000
+}
+```
+
+- `retention_months` —— 审计保留窗口（默认 0 = 永久保留）。清理周期
+  （与推进分区前瞻的同一周期）会 DROP 整个月都在窗口之前的
+  `audit_logs_pYYYY_MM` 月分区。只有精确匹配该命名模式的分区才会成为
+  候选；DEFAULT 分区永远不会被 DROP。被 DROP 历史的恢复方式 = 重新导入
+  导出的 CSV。
+- `export_max_rows` —— 导出行数上限（默认 50 万）。请求级 `limit` 参数只
+  允许调低；超限导出返回 400 `AUDIT_EXPORT_TOO_LARGE` 并提示收窄窗口。

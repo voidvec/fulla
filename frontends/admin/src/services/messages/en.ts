@@ -47,6 +47,9 @@ export const en: Record<string, string> = {
   EMAIL_TEMPLATE_CONTENT_REJECTED: 'Template rejected: forbidden tag or outbound link outside email.allowed_link_domains',
   EMAIL_TEST_RECIPIENT_DENIED: 'Test recipient not whitelisted (your own address or email.test_recipients)',
   EMAIL_TEST_QUOTA_EXCEEDED: 'Test-send quota reached. Please try again later',
+  // --- P1-6 (#283): audit export guard codes ---
+  AUDIT_EXPORT_WINDOW_REQUIRED: 'Audit export requires a time window (from/to) or an explicit full export',
+  AUDIT_EXPORT_TOO_LARGE: 'Export exceeds the row cap. Please narrow the time window',
   AUTH_MFA_CODE_INVALID: 'Incorrect verification code',
   AUTH_MFA_NOT_CONFIGURED: 'Two-factor authentication is not configured yet. Set it up first',
 

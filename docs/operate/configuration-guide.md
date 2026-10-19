@@ -401,3 +401,34 @@ Configuration (custom_config):
 derive ONLY from the global `frontend.url` key — org-controlled input is
 never interpolated into a security link, and verification/reset emails
 carry no org branding regardless of configuration.
+
+## 13. Audit Log Export & Retention (P1-6, #283)
+
+`GET /api/admin/logs/export` (admin role + `audit:read` scope) streams the
+audit trail as CSV (attachment). Same filters as the list endpoint
+(`action`/`outcome`/`actor_id`) plus a **mandatory time window**
+(`from`/`to`, unix epoch seconds) unless the caller explicitly opts into
+the full table with `all=true`; a hard row cap guards unbounded exports.
+Cells are formula-injection hardened: any cell starting with
+`= + - @` or a tab/CR gets an apostrophe prefix (OWASP) — `user_agent`,
+`ip` and `details` are fully user-controlled and the export is the
+injection egress. Every export is audited (`audit_exported`).
+
+Configuration (custom_config):
+
+```json
+"audit": {
+    "retention_months": 0,
+    "export_max_rows": 500000
+}
+```
+
+- `retention_months` — audit retention window (default 0 = keep forever).
+  The cleanup cycle (the same one that advances the partition horizon)
+  drops monthly `audit_logs_pYYYY_MM` partitions whose whole month lies
+  before the window. Only partitions matching that exact naming pattern
+  are ever candidates; the DEFAULT partition is never dropped. Recovery
+  from dropped history = re-import the exported CSVs.
+- `export_max_rows` — export row cap (default 500k). The per-request
+  `limit` parameter may only LOWER it; over-cap exports answer 400
+  `AUDIT_EXPORT_TOO_LARGE` with a hint to narrow the window.
