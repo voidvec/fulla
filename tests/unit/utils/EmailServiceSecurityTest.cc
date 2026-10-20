@@ -146,3 +146,59 @@ DROGON_TEST(Unit_P2_EmailSecurity_BuildMime_BodyNewlinesPreserved)
 
     CHECK(msg.find("Line1\r\nLine2\r\nLine3") != std::string::npos);
 }
+
+// ---------------------------------------------------------------------------
+// P1-2 (#278): multipart/alternative assembly (buildMimeMessageMultipart).
+// Same sanitization contract as the single-part builder, plus structural
+// requirements of RFC 2046 §5.1.4 (boundary-delimited parts, text part
+// first, HTML part last/preferred).
+// ---------------------------------------------------------------------------
+
+DROGON_TEST(Unit_P1_EmailSecurity_BuildMimeMultipart_Structure)
+{
+    std::string msg = SmtpEmailService::buildMimeMessageMultipart(
+      "alice@example.com",
+      "Verify your email",
+      "Click the link to verify.",
+      "<p>Click <a href=\"https://example.com/v\">the link</a>.</p>",
+      "OAuth2 Platform",
+      "noreply@example.com"
+    );
+
+    const std::string boundary = SmtpEmailService::multipartBoundary();
+    // One multipart Content-Type header naming the boundary.
+    CHECK(msg.find("Content-Type: multipart/alternative; boundary=\"" + boundary + "\"") !=
+          std::string::npos);
+    // Opening boundary appears twice (one per part); the closing delimiter
+    // "--boundary--" once.
+    CHECK(countOccurrences(msg, "--" + boundary + "\r\n") == 2);
+    CHECK(countOccurrences(msg, "--" + boundary + "--\r\n") == 1);
+    // Both part content types, text before HTML.
+    std::size_t textPart = msg.find("Content-Type: text/plain; charset=UTF-8");
+    std::size_t htmlPart = msg.find("Content-Type: text/html; charset=UTF-8");
+    REQUIRE(textPart != std::string::npos);
+    REQUIRE(htmlPart != std::string::npos);
+    CHECK(textPart < htmlPart);
+    // Both bodies verbatim inside their parts.
+    CHECK(msg.find("Click the link to verify.") != std::string::npos);
+    CHECK(msg.find(R"(<p>Click <a href="https://example.com/v">the link</a>.</p>)") !=
+          std::string::npos);
+}
+
+DROGON_TEST(Unit_P1_EmailSecurity_BuildMimeMultipart_HeaderInjectionInert)
+{
+    std::string msg = SmtpEmailService::buildMimeMessageMultipart(
+      "alice@example.com",
+      "Subject\r\nBcc: victim@example.com",
+      "text body",
+      "<p>html body</p>",
+      "Platform\r\nX-Evil: yes",
+      "noreply@example.com"
+    );
+
+    // CR/LF stripped from header values: no injected Bcc/X-Evil header line.
+    CHECK(msg.find("\r\nBcc:") == std::string::npos);
+    CHECK(msg.find("\nX-Evil:") == std::string::npos);
+    CHECK(countOccurrences(msg, "Subject:") == 1);
+    CHECK(countOccurrences(msg, "From:") == 1);
+}

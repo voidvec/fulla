@@ -90,7 +90,12 @@ async function main() {
   const rels = (await walkMarkdown(docsDir)).filter((r) => r !== 'README.md');
   const docs = [];
   for (const rel of rels) {
-    docs.push(parseDoc(rel, await readFile(path.join(docsDir, rel), 'utf8')));
+    // Normalize CRLF -> LF on read: Windows checkouts (core.autocrlf=true)
+    // would otherwise embed \r into llms-full.txt and inflate the reported
+    // size, making the CI freshness gate (LF working copies) diff against
+    // a byte-different regeneration.
+    const raw = (await readFile(path.join(docsDir, rel), 'utf8')).replace(/\r\n/g, '\n');
+    docs.push(parseDoc(rel, raw));
   }
 
   const buckets = categoryOrder.map((c) => ({ ...c, docs: [] }));

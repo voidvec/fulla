@@ -907,6 +907,18 @@ type PutApiAdminClientsClientIdScopesJSONBody = map[string]interface{}
 // PostApiAdminClientsClientIdSuspendJSONBody defines parameters for PostApiAdminClientsClientIdSuspend.
 type PostApiAdminClientsClientIdSuspendJSONBody = map[string]interface{}
 
+// PutApiAdminEmailTemplatesKeyLocaleJSONBody defines parameters for PutApiAdminEmailTemplatesKeyLocale.
+type PutApiAdminEmailTemplatesKeyLocaleJSONBody struct {
+	BodyHtml string  `json:"body_html"`
+	BodyText *string `json:"body_text,omitempty"`
+	Subject  string  `json:"subject"`
+}
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSendJSONBody defines parameters for PostApiAdminEmailTemplatesKeyLocaleTestSend.
+type PostApiAdminEmailTemplatesKeyLocaleTestSendJSONBody struct {
+	To openapi_types.Email `json:"to"`
+}
+
 // PostApiAdminOrganizationsJSONBody defines parameters for PostApiAdminOrganizations.
 type PostApiAdminOrganizationsJSONBody struct {
 	IssuerOverride *string `json:"issuer_override,omitempty"`
@@ -1423,6 +1435,12 @@ type PutApiAdminClientsClientIdScopesJSONRequestBody = PutApiAdminClientsClientI
 // PostApiAdminClientsClientIdSuspendJSONRequestBody defines body for PostApiAdminClientsClientIdSuspend for application/json ContentType.
 type PostApiAdminClientsClientIdSuspendJSONRequestBody = PostApiAdminClientsClientIdSuspendJSONBody
 
+// PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody defines body for PutApiAdminEmailTemplatesKeyLocale for application/json ContentType.
+type PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody PutApiAdminEmailTemplatesKeyLocaleJSONBody
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody defines body for PostApiAdminEmailTemplatesKeyLocaleTestSend for application/json ContentType.
+type PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody PostApiAdminEmailTemplatesKeyLocaleTestSendJSONBody
+
 // PostApiAdminOrganizationsJSONRequestBody defines body for PostApiAdminOrganizations for application/json ContentType.
 type PostApiAdminOrganizationsJSONRequestBody PostApiAdminOrganizationsJSONBody
 
@@ -1923,6 +1941,56 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/admin/dashboard/stats (the `GetApiAdminDashboardStats` operationId).
 	GetApiAdminDashboardStats(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminEmailTemplates List Email Templates
+	//
+	// P1-2 (#278): list all email templates (template_key x locale). Memory-storage deployments answer 404 (no template store).
+	//
+	// Corresponds with GET /api/admin/email-templates (the `GetApiAdminEmailTemplates` operationId).
+	GetApiAdminEmailTemplates(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminEmailTemplatesKeyLocale Get Email Template
+	//
+	// Fetch one email template by key and locale.
+	//
+	// Corresponds with GET /api/admin/email-templates/{key}/{locale} (the `GetApiAdminEmailTemplatesKeyLocale` operationId).
+	GetApiAdminEmailTemplatesKeyLocale(ctx context.Context, key string, locale string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminEmailTemplatesKeyLocaleWithBody Upsert Email Template
+	//
+	// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+	PutApiAdminEmailTemplatesKeyLocaleWithBody(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminEmailTemplatesKeyLocale Upsert Email Template
+	//
+	// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+	PutApiAdminEmailTemplatesKeyLocale(ctx context.Context, key string, locale string, body PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminEmailTemplatesKeyLocaleTestSendWithBody Test-send Email Template
+	//
+	// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+	PostApiAdminEmailTemplatesKeyLocaleTestSendWithBody(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminEmailTemplatesKeyLocaleTestSend Test-send Email Template
+	//
+	// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+	PostApiAdminEmailTemplatesKeyLocaleTestSend(ctx context.Context, key string, locale string, body PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminLogs List Audit Logs
 	//
@@ -3613,6 +3681,116 @@ func (c *Client) GetApiAdminDashboard(ctx context.Context, reqEditors ...Request
 // Corresponds with GET /api/admin/dashboard/stats (the `GetApiAdminDashboardStats` operationId).
 func (c *Client) GetApiAdminDashboardStats(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiAdminDashboardStatsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminEmailTemplates List Email Templates
+//
+// P1-2 (#278): list all email templates (template_key x locale). Memory-storage deployments answer 404 (no template store).
+//
+// Corresponds with GET /api/admin/email-templates (the `GetApiAdminEmailTemplates` operationId).
+func (c *Client) GetApiAdminEmailTemplates(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminEmailTemplatesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminEmailTemplatesKeyLocale Get Email Template
+//
+// Fetch one email template by key and locale.
+//
+// Corresponds with GET /api/admin/email-templates/{key}/{locale} (the `GetApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *Client) GetApiAdminEmailTemplatesKeyLocale(ctx context.Context, key string, locale string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminEmailTemplatesKeyLocaleRequest(c.Server, key, locale)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminEmailTemplatesKeyLocaleWithBody Upsert Email Template
+//
+// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *Client) PutApiAdminEmailTemplatesKeyLocaleWithBody(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminEmailTemplatesKeyLocaleRequestWithBody(c.Server, key, locale, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminEmailTemplatesKeyLocale Upsert Email Template
+//
+// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *Client) PutApiAdminEmailTemplatesKeyLocale(ctx context.Context, key string, locale string, body PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminEmailTemplatesKeyLocaleRequest(c.Server, key, locale, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSendWithBody Test-send Email Template
+//
+// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+func (c *Client) PostApiAdminEmailTemplatesKeyLocaleTestSendWithBody(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequestWithBody(c.Server, key, locale, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSend Test-send Email Template
+//
+// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+func (c *Client) PostApiAdminEmailTemplatesKeyLocaleTestSend(ctx context.Context, key string, locale string, body PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequest(c.Server, key, locale, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7045,6 +7223,182 @@ func NewGetApiAdminDashboardStatsRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetApiAdminEmailTemplatesRequest constructs an http.Request for the GetApiAdminEmailTemplates method
+func NewGetApiAdminEmailTemplatesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/email-templates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiAdminEmailTemplatesKeyLocaleRequest constructs an http.Request for the GetApiAdminEmailTemplatesKeyLocale method
+func NewGetApiAdminEmailTemplatesKeyLocaleRequest(server string, key string, locale string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "key", key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "locale", locale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/email-templates/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiAdminEmailTemplatesKeyLocaleRequest calls the generic PutApiAdminEmailTemplatesKeyLocale builder with application/json body
+func NewPutApiAdminEmailTemplatesKeyLocaleRequest(server string, key string, locale string, body PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminEmailTemplatesKeyLocaleRequestWithBody(server, key, locale, "application/json", bodyReader)
+}
+
+// NewPutApiAdminEmailTemplatesKeyLocaleRequestWithBody constructs an http.Request for the PutApiAdminEmailTemplatesKeyLocale method, with any body, and a specified content type
+func NewPutApiAdminEmailTemplatesKeyLocaleRequestWithBody(server string, key string, locale string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "key", key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "locale", locale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/email-templates/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequest calls the generic PostApiAdminEmailTemplatesKeyLocaleTestSend builder with application/json body
+func NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequest(server string, key string, locale string, body PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequestWithBody(server, key, locale, "application/json", bodyReader)
+}
+
+// NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequestWithBody constructs an http.Request for the PostApiAdminEmailTemplatesKeyLocaleTestSend method, with any body, and a specified content type
+func NewPostApiAdminEmailTemplatesKeyLocaleTestSendRequestWithBody(server string, key string, locale string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "key", key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "locale", locale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/email-templates/%s/%s/test-send", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -11644,6 +11998,60 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/admin/dashboard/stats (the `GetApiAdminDashboardStats` operationId).
 	GetApiAdminDashboardStatsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminDashboardStatsResponse, error)
 
+	// GetApiAdminEmailTemplatesWithResponse List Email Templates
+	//
+	// P1-2 (#278): list all email templates (template_key x locale). Memory-storage deployments answer 404 (no template store).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/email-templates (the `GetApiAdminEmailTemplates` operationId).
+	GetApiAdminEmailTemplatesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminEmailTemplatesResponse, error)
+
+	// GetApiAdminEmailTemplatesKeyLocaleWithResponse Get Email Template
+	//
+	// Fetch one email template by key and locale.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/email-templates/{key}/{locale} (the `GetApiAdminEmailTemplatesKeyLocale` operationId).
+	GetApiAdminEmailTemplatesKeyLocaleWithResponse(ctx context.Context, key string, locale string, reqEditors ...RequestEditorFn) (*GetApiAdminEmailTemplatesKeyLocaleResponse, error)
+
+	// PutApiAdminEmailTemplatesKeyLocaleWithBodyWithResponse Upsert Email Template
+	//
+	// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+	PutApiAdminEmailTemplatesKeyLocaleWithBodyWithResponse(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminEmailTemplatesKeyLocaleResponse, error)
+
+	// PutApiAdminEmailTemplatesKeyLocaleWithResponse Upsert Email Template
+	//
+	// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+	PutApiAdminEmailTemplatesKeyLocaleWithResponse(ctx context.Context, key string, locale string, body PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminEmailTemplatesKeyLocaleResponse, error)
+
+	// PostApiAdminEmailTemplatesKeyLocaleTestSendWithBodyWithResponse Test-send Email Template
+	//
+	// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+	PostApiAdminEmailTemplatesKeyLocaleTestSendWithBodyWithResponse(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminEmailTemplatesKeyLocaleTestSendResponse, error)
+
+	// PostApiAdminEmailTemplatesKeyLocaleTestSendWithResponse Test-send Email Template
+	//
+	// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+	PostApiAdminEmailTemplatesKeyLocaleTestSendWithResponse(ctx context.Context, key string, locale string, body PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminEmailTemplatesKeyLocaleTestSendResponse, error)
+
 	// GetApiAdminLogsWithResponse List Audit Logs
 	//
 	// Get a paginated list of system audit logs.
@@ -13671,6 +14079,171 @@ func (r GetApiAdminDashboardStatsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetApiAdminDashboardStatsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminEmailTemplatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Status    *string `json:"status,omitempty"`
+		Templates *[]struct {
+			BodyHtml    *string `json:"body_html,omitempty"`
+			BodyText    *string `json:"body_text,omitempty"`
+			Locale      *string `json:"locale,omitempty"`
+			Subject     *string `json:"subject,omitempty"`
+			TemplateKey *string `json:"template_key,omitempty"`
+			UpdatedAt   *string `json:"updated_at,omitempty"`
+		} `json:"templates,omitempty"`
+		Total *int `json:"total,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminEmailTemplatesResponse) GetJSON200() *struct {
+	Status    *string `json:"status,omitempty"`
+	Templates *[]struct {
+		BodyHtml    *string `json:"body_html,omitempty"`
+		BodyText    *string `json:"body_text,omitempty"`
+		Locale      *string `json:"locale,omitempty"`
+		Subject     *string `json:"subject,omitempty"`
+		TemplateKey *string `json:"template_key,omitempty"`
+		UpdatedAt   *string `json:"updated_at,omitempty"`
+	} `json:"templates,omitempty"`
+	Total *int `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminEmailTemplatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminEmailTemplatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminEmailTemplatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminEmailTemplatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminEmailTemplatesKeyLocaleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminEmailTemplatesKeyLocaleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminEmailTemplatesKeyLocaleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminEmailTemplatesKeyLocaleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminEmailTemplatesKeyLocaleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutApiAdminEmailTemplatesKeyLocaleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PutApiAdminEmailTemplatesKeyLocaleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiAdminEmailTemplatesKeyLocaleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiAdminEmailTemplatesKeyLocaleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutApiAdminEmailTemplatesKeyLocaleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAdminEmailTemplatesKeyLocaleTestSendResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminEmailTemplatesKeyLocaleTestSendResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminEmailTemplatesKeyLocaleTestSendResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminEmailTemplatesKeyLocaleTestSendResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminEmailTemplatesKeyLocaleTestSendResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19472,6 +20045,96 @@ func (c *ClientWithResponses) GetApiAdminDashboardStatsWithResponse(ctx context.
 	return ParseGetApiAdminDashboardStatsResponse(rsp)
 }
 
+// GetApiAdminEmailTemplatesWithResponse List Email Templates
+//
+// P1-2 (#278): list all email templates (template_key x locale). Memory-storage deployments answer 404 (no template store).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/email-templates (the `GetApiAdminEmailTemplates` operationId).
+func (c *ClientWithResponses) GetApiAdminEmailTemplatesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminEmailTemplatesResponse, error) {
+	rsp, err := c.GetApiAdminEmailTemplates(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminEmailTemplatesResponse(rsp)
+}
+
+// GetApiAdminEmailTemplatesKeyLocaleWithResponse Get Email Template
+//
+// Fetch one email template by key and locale.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/email-templates/{key}/{locale} (the `GetApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *ClientWithResponses) GetApiAdminEmailTemplatesKeyLocaleWithResponse(ctx context.Context, key string, locale string, reqEditors ...RequestEditorFn) (*GetApiAdminEmailTemplatesKeyLocaleResponse, error) {
+	rsp, err := c.GetApiAdminEmailTemplatesKeyLocale(ctx, key, locale, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminEmailTemplatesKeyLocaleResponse(rsp)
+}
+
+// PutApiAdminEmailTemplatesKeyLocaleWithBodyWithResponse Upsert Email Template
+//
+// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *ClientWithResponses) PutApiAdminEmailTemplatesKeyLocaleWithBodyWithResponse(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminEmailTemplatesKeyLocaleResponse, error) {
+	rsp, err := c.PutApiAdminEmailTemplatesKeyLocaleWithBody(ctx, key, locale, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminEmailTemplatesKeyLocaleResponse(rsp)
+}
+
+// PutApiAdminEmailTemplatesKeyLocaleWithResponse Upsert Email Template
+//
+// Create or update a template. Save-time content policy rejects script/iframe/form/object/embed/base tags, javascript:/data:/vbscript: URLs, and outbound http(s) links outside the configured email.allowed_link_domains (EMAIL_TEMPLATE_CONTENT_REJECTED). Variables use {{name}} placeholders; substituted values are HTML-escaped by the engine.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/email-templates/{key}/{locale} (the `PutApiAdminEmailTemplatesKeyLocale` operationId).
+func (c *ClientWithResponses) PutApiAdminEmailTemplatesKeyLocaleWithResponse(ctx context.Context, key string, locale string, body PutApiAdminEmailTemplatesKeyLocaleJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminEmailTemplatesKeyLocaleResponse, error) {
+	rsp, err := c.PutApiAdminEmailTemplatesKeyLocale(ctx, key, locale, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminEmailTemplatesKeyLocaleResponse(rsp)
+}
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSendWithBodyWithResponse Test-send Email Template
+//
+// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+func (c *ClientWithResponses) PostApiAdminEmailTemplatesKeyLocaleTestSendWithBodyWithResponse(ctx context.Context, key string, locale string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminEmailTemplatesKeyLocaleTestSendResponse, error) {
+	rsp, err := c.PostApiAdminEmailTemplatesKeyLocaleTestSendWithBody(ctx, key, locale, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminEmailTemplatesKeyLocaleTestSendResponse(rsp)
+}
+
+// PostApiAdminEmailTemplatesKeyLocaleTestSendWithResponse Test-send Email Template
+//
+// Render a template with synthetic sample variables (no real user PII) and send it. Recipient must be the admin's own address or listed in email.test_recipients (EMAIL_TEST_RECIPIENT_DENIED); rolling-24h per-admin quota applies (EMAIL_TEST_QUOTA_EXCEEDED, email.test_send_quota_per_day, default 10). Audited as email_test_sent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/email-templates/{key}/{locale}/test-send (the `PostApiAdminEmailTemplatesKeyLocaleTestSend` operationId).
+func (c *ClientWithResponses) PostApiAdminEmailTemplatesKeyLocaleTestSendWithResponse(ctx context.Context, key string, locale string, body PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminEmailTemplatesKeyLocaleTestSendResponse, error) {
+	rsp, err := c.PostApiAdminEmailTemplatesKeyLocaleTestSend(ctx, key, locale, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminEmailTemplatesKeyLocaleTestSendResponse(rsp)
+}
+
 // GetApiAdminLogsWithResponse List Audit Logs
 //
 // Get a paginated list of system audit logs.
@@ -22182,6 +22845,94 @@ func ParseGetApiAdminDashboardStatsResponse(rsp *http.Response) (*GetApiAdminDas
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminEmailTemplatesResponse parses an HTTP response from a GetApiAdminEmailTemplatesWithResponse call
+func ParseGetApiAdminEmailTemplatesResponse(rsp *http.Response) (*GetApiAdminEmailTemplatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminEmailTemplatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Status    *string `json:"status,omitempty"`
+			Templates *[]struct {
+				BodyHtml    *string `json:"body_html,omitempty"`
+				BodyText    *string `json:"body_text,omitempty"`
+				Locale      *string `json:"locale,omitempty"`
+				Subject     *string `json:"subject,omitempty"`
+				TemplateKey *string `json:"template_key,omitempty"`
+				UpdatedAt   *string `json:"updated_at,omitempty"`
+			} `json:"templates,omitempty"`
+			Total *int `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminEmailTemplatesKeyLocaleResponse parses an HTTP response from a GetApiAdminEmailTemplatesKeyLocaleWithResponse call
+func ParseGetApiAdminEmailTemplatesKeyLocaleResponse(rsp *http.Response) (*GetApiAdminEmailTemplatesKeyLocaleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminEmailTemplatesKeyLocaleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePutApiAdminEmailTemplatesKeyLocaleResponse parses an HTTP response from a PutApiAdminEmailTemplatesKeyLocaleWithResponse call
+func ParsePutApiAdminEmailTemplatesKeyLocaleResponse(rsp *http.Response) (*PutApiAdminEmailTemplatesKeyLocaleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiAdminEmailTemplatesKeyLocaleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAdminEmailTemplatesKeyLocaleTestSendResponse parses an HTTP response from a PostApiAdminEmailTemplatesKeyLocaleTestSendWithResponse call
+func ParsePostApiAdminEmailTemplatesKeyLocaleTestSendResponse(rsp *http.Response) (*PostApiAdminEmailTemplatesKeyLocaleTestSendResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminEmailTemplatesKeyLocaleTestSendResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
