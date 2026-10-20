@@ -23,6 +23,8 @@ class PostApiMeApplicationsBody:
         allowed_grant_types (list[str] | Unset):
         org_slug (str | Unset): Register under this organization (caller must be its owner/admin); omit for a personal
             application.
+        logo_uri (str | Unset): P1-1 (#279): application brand image for the login/consent screens (https-only, loopback
+            hosts exempt).
     """
 
     name: str | Unset = UNSET
@@ -31,6 +33,7 @@ class PostApiMeApplicationsBody:
     scopes: list[str] | Unset = UNSET
     allowed_grant_types: list[str] | Unset = UNSET
     org_slug: str | Unset = UNSET
+    logo_uri: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,6 +57,8 @@ class PostApiMeApplicationsBody:
 
         org_slug = self.org_slug
 
+        logo_uri = self.logo_uri
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({})
@@ -69,6 +74,8 @@ class PostApiMeApplicationsBody:
             field_dict["allowed_grant_types"] = allowed_grant_types
         if org_slug is not UNSET:
             field_dict["org_slug"] = org_slug
+        if logo_uri is not UNSET:
+            field_dict["logo_uri"] = logo_uri
 
         return field_dict
 
@@ -92,6 +99,8 @@ class PostApiMeApplicationsBody:
 
         org_slug = d.pop("org_slug", UNSET)
 
+        logo_uri = d.pop("logo_uri", UNSET)
+
         post_api_me_applications_body = cls(
             name=name,
             client_type=client_type,
@@ -99,6 +108,7 @@ class PostApiMeApplicationsBody:
             scopes=scopes,
             allowed_grant_types=allowed_grant_types,
             org_slug=org_slug,
+            logo_uri=logo_uri,
         )
 
         post_api_me_applications_body.additional_properties = d

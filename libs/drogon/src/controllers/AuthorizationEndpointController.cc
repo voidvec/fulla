@@ -389,9 +389,9 @@ void AuthorizationEndpointController::authorize(
                 }
 
                 // F-013 (RFC 7636 §4.2) + P0-5 (#259): S256-only (RFC 9700
-                // §2.1.1 direction). `plain` is rejected unless the explicit
-                // auth.allow_pkce_plain escape hatch is enabled (default
-                // false, one-release transition for legacy PUBLIC clients);
+                // §2.1.1 direction), enforced unconditionally since P1-1
+                // (the v1.5.0 auth.allow_pkce_plain transition window is
+                // closed);
                 // an omitted method no longer defaults to plain (the RFC
                 // 7636 §4.3 default) — a challenge must name S256. All
                 // method checks are gated on a challenge being PRESENT: a
@@ -404,18 +404,17 @@ void AuthorizationEndpointController::authorize(
                 // the F-007 rule the errors redirect back to the client.
                 if (!codeChallenge.empty())
                 {
-                    auto cfg = ::drogon::app().getCustomConfig();
-                    bool allowPlain = false;
-                    if (cfg.isMember("auth") && cfg["auth"].isMember("allow_pkce_plain"))
-                        allowPlain = cfg["auth"]["allow_pkce_plain"].asBool();
-                    if (!allowPlain && codeChallengeMethod == "plain")
+                    // P1-1: the auth.allow_pkce_plain escape hatch that
+                    // shipped in v1.5.0 is REMOVED (the one-release
+                    // transition window closed) — plain is unconditionally
+                    // rejected.
+                    if (codeChallengeMethod == "plain")
                     {
                         callback(
                           buildAuthorizeErrorRedirect(
                             redirectUri,
                             "invalid_request",
-                            "code_challenge_method 'plain' is not allowed; use S256 "
-                            "(auth.allow_pkce_plain temporarily re-enables it)",
+                            "code_challenge_method 'plain' is not allowed; use S256",
                             state
                           )
                         );

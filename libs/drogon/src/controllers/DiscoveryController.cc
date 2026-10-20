@@ -278,8 +278,9 @@ void DiscoveryController::metadata(
     metadata["subject_types_supported"].append("public");
 
     // PKCE support — P0-5 (#259): S256-only (RFC 9700 §2.1.1 direction);
-    // plain is no longer accepted at authorize (short of the
-    // auth.allow_pkce_plain escape hatch) and is no longer advertised.
+    // plain is not accepted at authorize (unconditional since P1-1 removed
+    // the v1.5.0 auth.allow_pkce_plain transition hatch) and is not
+    // advertised.
     metadata["code_challenge_methods_supported"] = Json::Value(Json::arrayValue);
     metadata["code_challenge_methods_supported"].append("S256");
 

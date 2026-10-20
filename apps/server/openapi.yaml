@@ -894,6 +894,13 @@ paths:
                   description: OIDC Back-Channel Logout 1.0 RP endpoint. MUST
                     use https (spec §2.3). When set, the OP POSTs a signed
                     logout_token here on user logout.
+                logo_uri:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): client brand image for the
+                    login/consent screens. https-only (loopback hosts exempt
+                    for dev); no userinfo/fragment. NOT the redirect
+                    registration rule.'
       responses:
         '201':
           description: Client created successfully
@@ -981,6 +988,11 @@ paths:
                   format: uri
                   description: Set to an https URI to enable OIDC back-channel
                     logout notifications to this RP; an empty string clears it.
+                logo_uri:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): client brand image (https-only,
+                    loopback exempt). An empty string clears it.'
       responses:
         '200':
           description: Client updated successfully
@@ -1855,6 +1867,11 @@ paths:
               properties:
                 description:
                   type: string
+                  maxLength: 512
+                description_zh:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): zh-CN consent-screen copy.'
                 is_default:
                   type: boolean
                 mapped_role:
@@ -1919,6 +1936,13 @@ paths:
               properties:
                 description:
                   type: string
+                  maxLength: 512
+                description_zh:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): zh-CN consent-screen copy; the
+                    consent context serves it for zh pages. Empty clears it.
+                    Description changes are audited with a before/after diff.'
                 is_default:
                   type: boolean
                 mapped_role:
@@ -2713,6 +2737,11 @@ paths:
                   type: string
                   description: Register under this organization (caller must
                     be its owner/admin); omit for a personal application.
+                logo_uri:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): application brand image for the
+                    login/consent screens (https-only, loopback hosts exempt).'
       responses:
         '201':
           content:
@@ -2815,9 +2844,9 @@ paths:
       - Applications
     patch:
       description: Update name / redirect_uris / allowed_grant_types / scopes
-        of a self-registered application (personal apps are managed by the
-        creator, org apps by org owner/admin members). Absent keys are left
-        unchanged.
+        / logo_uri of a self-registered application (personal apps are
+        managed by the creator, org apps by org owner/admin members). Absent
+        keys are left unchanged.
       operationId: patch_api_me_applications_{clientId}
       parameters:
       - description: Client ID
@@ -2849,6 +2878,12 @@ paths:
                   type: array
                   items:
                     type: string
+                logo_uri:
+                  type: string
+                  maxLength: 512
+                  description: 'P1-1 (#279): application brand image
+                    (https-only, loopback hosts exempt). An empty string
+                    clears it.'
       responses:
         '200':
           content:
@@ -5170,9 +5205,13 @@ paths:
         screens (P0-6): answers {client_name} for active clients, so the user
         sees WHICH application is asking for credentials before typing a
         password. Unknown or soft-deleted clients answer 404; every other
-        failure degrades to {client_name: <client_id>}. Carries only the
-        display name — client_id is not a secret (it appears in every
-        authorize redirect).'
+        failure degrades to {client_name: <client_id>}. P1-1 (#279) extends
+        the payload additively with the client''s logo_uri (V041, https-only
+        at write time) and, for org-owned applications, the owning
+        organization''s brand block {org_name, logo_uri?, primary_color?}.
+        Branding is display-only and untrusted — the consent screen pairs it
+        with the owner attribution label. client_id is not a secret (it
+        appears in every authorize redirect).'
       operationId: get_oauth2_authorize_context
       parameters:
       - name: client_id
@@ -5182,7 +5221,7 @@ paths:
           type: string
       responses:
         '200':
-          description: Application display name
+          description: Application display name + branding
           content:
             application/json:
               schema:
@@ -5190,11 +5229,24 @@ paths:
                 properties:
                   client_name:
                     type: string
+                  logo_uri:
+                    type: string
+                    description: Client brand image (absent when unset)
+                  org:
+                    nullable: true
+                    type: object
+                    properties:
+                      org_name:
+                        type: string
+                      logo_uri:
+                        type: string
+                      primary_color:
+                        type: string
         '400':
           description: Missing client_id
         '404':
           description: Unknown or soft-deleted client
-      summary: Authorize Context (client display name)
+      summary: Authorize Context (client display name + branding)
       tags:
       - OAuth2
   /oauth2/consent/context:
@@ -5241,6 +5293,21 @@ paths:
         required: true
         schema:
           type: string
+      - description: 'P1-1 (#279): the flow''s requested scopes (space- or
+          comma-separated); when present, the response carries localized
+          descriptions per scope from the oauth2_scopes catalog'
+        in: query
+        name: scope
+        required: false
+        schema:
+          type: string
+      - description: 'P1-1 (#279): page locale (a "zh*" prefix selects the
+          zh-CN description column; anything else selects the en column)'
+        in: query
+        name: locale
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -5253,6 +5320,26 @@ paths:
                     description: 'Attribution label: org name for org apps, the
                       creator''s display name for personal apps; empty for
                       admin-seeded clients and on storage degradation.'
+                  client_name:
+                    type: string
+                    description: 'P1-1: the client''s display name (falls back
+                      to the client_id).'
+                  logo_uri:
+                    type: string
+                    description: 'P1-1: the client''s brand image (absent when
+                      unset).'
+                  scope_descriptions:
+                    type: array
+                    description: 'P1-1: localized descriptions for the scopes
+                      named in the `scope` parameter (unknown names omitted;
+                      the frontend dictionary is the missing-key fallback).'
+                    items:
+                      type: object
+                      properties:
+                        scope:
+                          type: string
+                        description_i18n:
+                          type: string
                   org:
                     nullable: true
                     type: object
@@ -5261,9 +5348,14 @@ paths:
                         type: integer
                       org_name:
                         type: string
+                      logo_uri:
+                        type: string
+                      primary_color:
+                        type: string
                     description: The org context this flow is authorizing
                       under (design 2.1); null when the flow has no org
-                      binding.
+                      binding. P1-1 adds the org brand fields (absent when
+                      unset).
           description: Consent context (owner_name empty for admin-seeded clients; org null for flows without an org binding)
         '400':
           description: Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)

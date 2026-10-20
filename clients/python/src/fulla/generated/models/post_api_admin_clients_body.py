@@ -24,6 +24,8 @@ class PostApiAdminClientsBody:
         token_endpoint_auth_method (str | Unset):
         backchannel_logout_uri (str | Unset): OIDC Back-Channel Logout 1.0 RP endpoint. MUST use https (spec §2.3). When
             set, the OP POSTs a signed logout_token here on user logout.
+        logo_uri (str | Unset): P1-1 (#279): client brand image for the login/consent screens. https-only (loopback
+            hosts exempt for dev); no userinfo/fragment. NOT the redirect registration rule.
     """
 
     name: str
@@ -32,6 +34,7 @@ class PostApiAdminClientsBody:
     allowed_grant_types: str | Unset = "authorization_code"
     token_endpoint_auth_method: str | Unset = UNSET
     backchannel_logout_uri: str | Unset = UNSET
+    logo_uri: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,6 +51,8 @@ class PostApiAdminClientsBody:
         token_endpoint_auth_method = self.token_endpoint_auth_method
 
         backchannel_logout_uri = self.backchannel_logout_uri
+
+        logo_uri = self.logo_uri
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -66,6 +71,8 @@ class PostApiAdminClientsBody:
             field_dict["token_endpoint_auth_method"] = token_endpoint_auth_method
         if backchannel_logout_uri is not UNSET:
             field_dict["backchannel_logout_uri"] = backchannel_logout_uri
+        if logo_uri is not UNSET:
+            field_dict["logo_uri"] = logo_uri
 
         return field_dict
 
@@ -89,6 +96,8 @@ class PostApiAdminClientsBody:
 
         backchannel_logout_uri = d.pop("backchannel_logout_uri", UNSET)
 
+        logo_uri = d.pop("logo_uri", UNSET)
+
         post_api_admin_clients_body = cls(
             name=name,
             client_type=client_type,
@@ -96,6 +105,7 @@ class PostApiAdminClientsBody:
             allowed_grant_types=allowed_grant_types,
             token_endpoint_auth_method=token_endpoint_auth_method,
             backchannel_logout_uri=backchannel_logout_uri,
+            logo_uri=logo_uri,
         )
 
         post_api_admin_clients_body.additional_properties = d

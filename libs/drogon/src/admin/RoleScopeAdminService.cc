@@ -1,5 +1,7 @@
 #include <fulla/drogon/admin/RoleScopeAdminService.h>
 
+#include <fulla/drogon/adapters/DrogonAuditSink.h>
+#include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/models/Roles.h>
 #include <fulla/storage/postgres/models/Oauth2Scopes.h>
 #include <fulla/storage/postgres/models/UserRoles.h>
@@ -67,6 +69,7 @@ Json::Value scopeRowToJson(const Oauth2Scopes &row)
     scope["id"] = row.getValueOfId();
     scope["name"] = row.getValueOfName();
     scope["description"] = row.getValueOfDescription();
+    scope["description_zh"] = row.getValueOfDescriptionZh();
     scope["mapped_role"] = row.getValueOfMappedRole();
     scope["is_default"] = row.getValueOfIsDefault();
     scope["requires_admin_role"] = row.getValueOfRequiresAdminRole();
@@ -381,6 +384,15 @@ void RoleScopeAdminService::createScope(const ::drogon::HttpRequestPtr &req, Res
 
     std::string name = (*jsonBody)["name"].asString();
     std::string description = jsonBody->get("description", "").asString();
+    // P1-1 (#279): locale dimension of consent-screen scope copy. Length
+    // cap keeps the consent screen readable and blunts misleading-essay
+    // scope descriptions (design §P1-1 item 4).
+    std::string descriptionZh = jsonBody->get("description_zh", "").asString();
+    if (description.size() > 512 || descriptionZh.size() > 512)
+    {
+        respondError(req, cb, "VALIDATION_FORMAT_ERROR", "descriptions are capped at 512 chars");
+        return;
+    }
     std::string mappedRole = jsonBody->get("mapped_role", "").asString();
     bool isDefault = jsonBody->get("is_default", false).asBool();
     bool requiresAdminRole = jsonBody->get("requires_admin_role", false).asBool();
@@ -403,12 +415,14 @@ void RoleScopeAdminService::createScope(const ::drogon::HttpRequestPtr &req, Res
       [cb, req](const Oauth2Scopes &) {
           respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT", "Scope name already exists");
       },
-      [cb, req, db, name, description, mappedRole, isDefault, requiresAdminRole](
+      [cb, req, db, name, description, descriptionZh, mappedRole, isDefault, requiresAdminRole](
         const ::drogon::orm::DrogonDbException &
       ) {
           Oauth2Scopes row;
           row.setName(name);
           row.setDescription(description);
+          if (!descriptionZh.empty())
+              row.setDescriptionZh(descriptionZh);
           if (mappedRole.empty())
           {
               row.setMappedRoleToNull();
@@ -462,12 +476,21 @@ void RoleScopeAdminService::updateScope(
         return;
     }
     bool hasDescription = jsonBody->isMember("description");
+    bool hasDescriptionZh = jsonBody->isMember("description_zh");
     bool hasMappedRole = jsonBody->isMember("mapped_role");
     bool hasIsDefault = jsonBody->isMember("is_default");
     bool hasRequiresAdmin = jsonBody->isMember("requires_admin_role");
-    if (!hasDescription && !hasMappedRole && !hasIsDefault && !hasRequiresAdmin)
+    if (
+      !hasDescription && !hasDescriptionZh && !hasMappedRole && !hasIsDefault && !hasRequiresAdmin)
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "No updatable fields provided");
+        return;
+    }
+    // P1-1 (#279): same 512-char cap as create.
+    if ((hasDescription && (*jsonBody)["description"].asString().size() > 512) ||
+        (hasDescriptionZh && (*jsonBody)["description_zh"].asString().size() > 512))
+    {
+        respondError(req, cb, "VALIDATION_FORMAT_ERROR", "descriptions are capped at 512 chars");
         return;
     }
 
@@ -491,12 +514,31 @@ void RoleScopeAdminService::updateScope(
     Mapper<Oauth2Scopes> mapper(db);
     mapper.findOne(
       Criteria(Oauth2Scopes::Cols::_id, CompareOperator::EQ, id),
-      [cb, req, jsonBody, hasDescription, hasMappedRole, hasIsDefault, hasRequiresAdmin, db](
+      [cb, req, jsonBody, hasDescription, hasDescriptionZh, hasMappedRole, hasIsDefault,
+       hasRequiresAdmin, db, id](
         Oauth2Scopes row
       ) {
+          // P1-1 (#279): audit diff of the description fields (the
+          // consent-screen copy is user-facing wording — changes are
+          // attributable).
+          Json::Value diff;
+          diff["scope_id"] = id;
+          diff["name"] = row.getValueOfName();
           if (hasDescription)
           {
+              diff["description_from"] = row.getValueOfDescription();
+              diff["description_to"] = (*jsonBody)["description"].asString();
               row.setDescription((*jsonBody)["description"].asString());
+          }
+          if (hasDescriptionZh)
+          {
+              diff["description_zh_from"] = row.getValueOfDescriptionZh();
+              diff["description_zh_to"] = (*jsonBody)["description_zh"].asString();
+              const std::string zh = (*jsonBody)["description_zh"].asString();
+              if (zh.empty())
+                  row.setDescriptionZhToNull();
+              else
+                  row.setDescriptionZh(zh);
           }
           if (hasMappedRole)
           {
@@ -513,7 +555,19 @@ void RoleScopeAdminService::updateScope(
           Mapper<Oauth2Scopes> updateMapper(db);
           updateMapper.update(
             row,
-            [cb, req](const size_t) {
+            [cb, req, diff](const size_t) {
+                if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>(); plugin)
+                {
+                    ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                      plugin->getAuditSink(),
+                      "scope_updated",
+                      "success",
+                      req,
+                      "",
+                      "scope",
+                      diff["name"].asString(),
+                      diff);
+                }
                 Json::Value json;
                 json["status"] = "success";
                 json["message"] = "Scope updated successfully";

@@ -10,6 +10,9 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.get_oauth_2_consent_context_response_200_org_type_0 import GetOauth2ConsentContextResponse200OrgType0
+    from ..models.get_oauth_2_consent_context_response_200_scope_descriptions_item import (
+        GetOauth2ConsentContextResponse200ScopeDescriptionsItem,
+    )
 
 
 T = TypeVar("T", bound="GetOauth2ConsentContextResponse200")
@@ -21,11 +24,19 @@ class GetOauth2ConsentContextResponse200:
     Attributes:
         owner_name (str | Unset): Attribution label: org name for org apps, the creator's display name for personal
             apps; empty for admin-seeded clients and on storage degradation.
+        client_name (str | Unset): P1-1: the client's display name (falls back to the client_id).
+        logo_uri (str | Unset): P1-1: the client's brand image (absent when unset).
+        scope_descriptions (list[GetOauth2ConsentContextResponse200ScopeDescriptionsItem] | Unset): P1-1: localized
+            descriptions for the scopes named in the `scope` parameter (unknown names omitted; the frontend dictionary is
+            the missing-key fallback).
         org (GetOauth2ConsentContextResponse200OrgType0 | None | Unset): The org context this flow is authorizing under
-            (design 2.1); null when the flow has no org binding.
+            (design 2.1); null when the flow has no org binding. P1-1 adds the org brand fields (absent when unset).
     """
 
     owner_name: str | Unset = UNSET
+    client_name: str | Unset = UNSET
+    logo_uri: str | Unset = UNSET
+    scope_descriptions: list[GetOauth2ConsentContextResponse200ScopeDescriptionsItem] | Unset = UNSET
     org: GetOauth2ConsentContextResponse200OrgType0 | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -35,6 +46,17 @@ class GetOauth2ConsentContextResponse200:
         )
 
         owner_name = self.owner_name
+
+        client_name = self.client_name
+
+        logo_uri = self.logo_uri
+
+        scope_descriptions: list[dict[str, Any]] | Unset = UNSET
+        if not isinstance(self.scope_descriptions, Unset):
+            scope_descriptions = []
+            for scope_descriptions_item_data in self.scope_descriptions:
+                scope_descriptions_item = scope_descriptions_item_data.to_dict()
+                scope_descriptions.append(scope_descriptions_item)
 
         org: dict[str, Any] | None | Unset
         if isinstance(self.org, Unset):
@@ -49,6 +71,12 @@ class GetOauth2ConsentContextResponse200:
         field_dict.update({})
         if owner_name is not UNSET:
             field_dict["owner_name"] = owner_name
+        if client_name is not UNSET:
+            field_dict["client_name"] = client_name
+        if logo_uri is not UNSET:
+            field_dict["logo_uri"] = logo_uri
+        if scope_descriptions is not UNSET:
+            field_dict["scope_descriptions"] = scope_descriptions
         if org is not UNSET:
             field_dict["org"] = org
 
@@ -59,9 +87,27 @@ class GetOauth2ConsentContextResponse200:
         from ..models.get_oauth_2_consent_context_response_200_org_type_0 import (
             GetOauth2ConsentContextResponse200OrgType0,
         )
+        from ..models.get_oauth_2_consent_context_response_200_scope_descriptions_item import (
+            GetOauth2ConsentContextResponse200ScopeDescriptionsItem,
+        )
 
         d = dict(src_dict)
         owner_name = d.pop("owner_name", UNSET)
+
+        client_name = d.pop("client_name", UNSET)
+
+        logo_uri = d.pop("logo_uri", UNSET)
+
+        _scope_descriptions = d.pop("scope_descriptions", UNSET)
+        scope_descriptions: list[GetOauth2ConsentContextResponse200ScopeDescriptionsItem] | Unset = UNSET
+        if _scope_descriptions is not UNSET:
+            scope_descriptions = []
+            for scope_descriptions_item_data in _scope_descriptions:
+                scope_descriptions_item = GetOauth2ConsentContextResponse200ScopeDescriptionsItem.from_dict(
+                    scope_descriptions_item_data
+                )
+
+                scope_descriptions.append(scope_descriptions_item)
 
         def _parse_org(data: object) -> GetOauth2ConsentContextResponse200OrgType0 | None | Unset:
             if data is None:
@@ -82,6 +128,9 @@ class GetOauth2ConsentContextResponse200:
 
         get_oauth_2_consent_context_response_200 = cls(
             owner_name=owner_name,
+            client_name=client_name,
+            logo_uri=logo_uri,
+            scope_descriptions=scope_descriptions,
             org=org,
         )
 

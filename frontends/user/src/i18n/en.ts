@@ -344,6 +344,8 @@ export default {
       redirectUris: 'Redirect URIs (https, comma- or space-separated)',
       redirectUrisPlaceholder: 'https://my-app.example/callback',
       scopes: 'Scopes (space-separated, from the self-service allowlist)',
+      logoUri: 'Logo URI (optional, https)',
+      logoUriPlaceholder: 'https://cdn.example.com/logo.svg',
       submit: 'Register',
       clientId: 'Client ID:',
       rotate: 'Rotate secret',

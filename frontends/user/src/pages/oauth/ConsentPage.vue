@@ -6,10 +6,16 @@ import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
 import DData from '../../components/ui/DData.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const auth = useAuthStore()
 const loading = ref(false)
+// P1-1 (#279): locale for the server-side scope-description dimension
+// (zh* pages ask the server for the zh-CN column; the frontend dictionary
+// below remains the missing-key fallback).
+const localeTag = computed(() =>
+  String(locale.value).toLowerCase().startsWith('zh') ? 'zh-CN' : 'en',
+)
 
 const clientId = route.query.client_id as string || ''
 const scope = route.query.scope as string || ''
@@ -41,6 +47,14 @@ const orgName = ref('')
 // P0-6 (#260): the application's display name (falls back to the raw
 // client_id — a branding lookup never blocks the consent flow).
 const clientName = ref('')
+// P1-1 (#279): brand surfaces. Logos render ONLY via <img src> (SVG in an
+// img context does not execute scripts; never wrapped in an anchor).
+const clientLogoUri = ref('')
+const orgLogoUri = ref('')
+const orgPrimaryColor = ref('')
+// P1-1 (#279): server-side localized scope descriptions (fallback to the
+// frontend dictionary per missing key).
+const serverScopeDescriptions = ref<Record<string, string>>({})
 
 onMounted(async () => {
   if (!consentCsrf) return
@@ -50,14 +64,30 @@ onMounted(async () => {
       client_id: clientId,
       redirect_uri: redirectUri,
       user_id: serverUserId,
+      // P1-1 (#279): localized scope descriptions ride the same call.
+      locale: localeTag.value,
     })
+    if (scope) params.set('scope', scope)
     if (state) params.set('state', state)
     const resp = await axios.get('/oauth2/consent/context', { params })
     ownerName.value = typeof resp.data?.owner_name === 'string' ? resp.data.owner_name : ''
     const org = resp.data?.org
     if (org && typeof org === 'object' && typeof org.org_name === 'string') {
       orgName.value = org.org_name
+      if (typeof org.logo_uri === 'string' && org.logo_uri) orgLogoUri.value = org.logo_uri
+      if (typeof org.primary_color === 'string' && org.primary_color)
+        orgPrimaryColor.value = org.primary_color
     }
+    if (Array.isArray(resp.data?.scope_descriptions)) {
+      const map: Record<string, string> = {}
+      for (const d of resp.data.scope_descriptions) {
+        if (d && typeof d.scope === 'string' && typeof d.description_i18n === 'string')
+          map[d.scope] = d.description_i18n
+      }
+      serverScopeDescriptions.value = map
+    }
+    if (typeof resp.data?.client_name === 'string' && resp.data.client_name)
+      clientName.value = resp.data.client_name
   } catch {
     // Degrade silently: the consent screen stays usable without attribution.
   }
@@ -65,6 +95,16 @@ onMounted(async () => {
     const resp = await axios.get('/oauth2/authorize-context', { params: { client_id: clientId } })
     if (typeof resp.data?.client_name === 'string' && resp.data.client_name) {
       clientName.value = resp.data.client_name
+    }
+    // P1-1: client logo + owning-org brand (display-only; the owner
+    // attribution label above is the anti-phishing pairing).
+    if (typeof resp.data?.logo_uri === 'string' && resp.data.logo_uri)
+      clientLogoUri.value = resp.data.logo_uri
+    if (resp.data?.org && typeof resp.data.org === 'object') {
+      if (typeof resp.data.org.logo_uri === 'string' && resp.data.org.logo_uri)
+        orgLogoUri.value = resp.data.org.logo_uri
+      if (typeof resp.data.org.primary_color === 'string' && resp.data.org.primary_color)
+        orgPrimaryColor.value = resp.data.org.primary_color
     }
   } catch {
     // Degrade silently: the raw client_id renders instead.
@@ -98,6 +138,16 @@ const scopeDescriptions = computed<Record<string, string>>(() => ({
   'roles:write': t('oauth.scopes.roles:write'),
   'audit:read': t('oauth.scopes.audit:read'),
 }))
+
+/**
+ * P1-1 (#279): the server-side localized description (admin-editable,
+ * locale-aware) wins; the frontend dictionary above is the missing-key
+ * fallback (custom scopes the dictionary never knew); the raw scope name is
+ * the last resort.
+ */
+function describeScope(s: string): string {
+  return serverScopeDescriptions.value[s] || scopeDescriptions.value[s] || s
+}
 
 /**
  * Submit consent via a native form POST (not XHR).
@@ -155,13 +205,27 @@ function handleConsent(action: 'approve' | 'deny') {
     </p>
 
     <!-- Org-membership banner (v1.4.0 M1b): server-derived from the flow's
-         org binding — shown only when the authorization is org-scoped. -->
+         org binding — shown only when the authorization is org-scoped.
+         P1-1 (#279): the banner carries the org brand (logo via <img> only,
+         accent color); branding is display-only and stays paired with the
+         owner attribution label below (anti-phishing). -->
     <div
       v-if="orgName"
-      class="flex items-center gap-2.5 mt-5 px-4 py-3 bg-brand-50 border border-brand-200 rounded-card text-sm text-brand-800"
+      class="flex items-center gap-2.5 mt-5 px-4 py-3 bg-brand-50 border rounded-card text-sm text-brand-800"
+      :style="orgPrimaryColor ? { borderColor: orgPrimaryColor } : undefined"
       data-testid="consent-org-banner"
     >
+      <!-- Logo ONLY in an img context (SVG scripts inert); never an <a>. -->
+      <img
+        v-if="orgLogoUri"
+        :src="orgLogoUri"
+        alt=""
+        class="w-5 h-5 rounded-[4px] object-contain shrink-0"
+        referrerpolicy="no-referrer"
+        @error="orgLogoUri = ''"
+      >
       <svg
+        v-else
         class="w-4 h-4 shrink-0"
         viewBox="0 0 20 20"
         fill="currentColor"
@@ -176,7 +240,20 @@ function handleConsent(action: 'approve' | 'deny') {
 
     <!-- Client identity block -->
     <div class="flex items-center gap-3.5 mt-6 px-4 py-3.5 bg-page border border-neutral-200 rounded-card">
-      <div class="w-[38px] h-[38px] rounded-[9px] bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[15px] shrink-0">
+      <!-- P1-1 (#279): client logo in img context only (no anchor wrap). -->
+      <img
+        v-if="clientLogoUri"
+        :src="clientLogoUri"
+        alt=""
+        class="w-[38px] h-[38px] rounded-[9px] object-contain shrink-0 bg-page border border-neutral-200"
+        referrerpolicy="no-referrer"
+        data-testid="consent-client-logo"
+        @error="clientLogoUri = ''"
+      >
+      <div
+        v-else
+        class="w-[38px] h-[38px] rounded-[9px] bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[15px] shrink-0"
+      >
         {{ clientId.slice(0, 2).toUpperCase() || 'CL' }}
       </div>
       <div class="min-w-0">
@@ -229,7 +306,7 @@ function handleConsent(action: 'approve' | 'deny') {
             />
           </svg>
         </span>
-        <span class="flex-1 text-sm text-neutral-600">{{ scopeDescriptions[s] || s }}</span>
+        <span class="flex-1 text-sm text-neutral-600">{{ describeScope(s) }}</span>
         <DData :value="s" />
       </div>
     </div>

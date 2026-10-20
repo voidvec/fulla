@@ -53,6 +53,7 @@ class Oauth2Scopes
         static const std::string _is_default;
         static const std::string _requires_admin_role;
         static const std::string _self_service;
+        static const std::string _description_zh;
     };
 
     static const int primaryKeyNumber;
@@ -167,8 +168,18 @@ class Oauth2Scopes
     ///Set the value of the column self_service
     void setSelfService(const bool &pSelfService) noexcept;
 
+    /**  For column description_zh  */
+    ///Get the value of the column description_zh, returns the default value if the column is null
+    const std::string &getValueOfDescriptionZh() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getDescriptionZh() const noexcept;
+    ///Set the value of the column description_zh
+    void setDescriptionZh(const std::string &pDescriptionZh) noexcept;
+    void setDescriptionZh(std::string &&pDescriptionZh) noexcept;
+    void setDescriptionZhToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 7;  }
+
+    static size_t getColumnNumber() noexcept {  return 8;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -201,6 +212,7 @@ class Oauth2Scopes
     std::shared_ptr<bool> isDefault_;
     std::shared_ptr<bool> requiresAdminRole_;
     std::shared_ptr<bool> selfService_;
+    std::shared_ptr<std::string> descriptionZh_;
     struct MetaData
     {
         const std::string colName_;
@@ -212,7 +224,7 @@ class Oauth2Scopes
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[7]={ false };
+    bool dirtyFlag_[8]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -264,6 +276,11 @@ class Oauth2Scopes
         if(!dirtyFlag_[6])
         {
             needSelection=true;
+        }
+        if(dirtyFlag_[7])
+        {
+            sql += "description_zh,";
+            ++parametersCount;
         }
         needSelection=true;
         if(parametersCount > 0)
@@ -319,6 +336,11 @@ class Oauth2Scopes
         else
         {
             sql +="default,";
+        }
+        if(dirtyFlag_[7])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
         }
         if(parametersCount > 0)
         {

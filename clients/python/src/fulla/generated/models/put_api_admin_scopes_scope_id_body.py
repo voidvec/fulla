@@ -16,12 +16,15 @@ class PutApiAdminScopesScopeIdBody:
     """
     Attributes:
         description (str | Unset):
+        description_zh (str | Unset): P1-1 (#279): zh-CN consent-screen copy; the consent context serves it for zh
+            pages. Empty clears it. Description changes are audited with a before/after diff.
         is_default (bool | Unset):
         mapped_role (str | Unset):
         requires_admin_role (bool | Unset):
     """
 
     description: str | Unset = UNSET
+    description_zh: str | Unset = UNSET
     is_default: bool | Unset = UNSET
     mapped_role: str | Unset = UNSET
     requires_admin_role: bool | Unset = UNSET
@@ -29,6 +32,8 @@ class PutApiAdminScopesScopeIdBody:
 
     def to_dict(self) -> dict[str, Any]:
         description = self.description
+
+        description_zh = self.description_zh
 
         is_default = self.is_default
 
@@ -41,6 +46,8 @@ class PutApiAdminScopesScopeIdBody:
         field_dict.update({})
         if description is not UNSET:
             field_dict["description"] = description
+        if description_zh is not UNSET:
+            field_dict["description_zh"] = description_zh
         if is_default is not UNSET:
             field_dict["is_default"] = is_default
         if mapped_role is not UNSET:
@@ -55,6 +62,8 @@ class PutApiAdminScopesScopeIdBody:
         d = dict(src_dict)
         description = d.pop("description", UNSET)
 
+        description_zh = d.pop("description_zh", UNSET)
+
         is_default = d.pop("is_default", UNSET)
 
         mapped_role = d.pop("mapped_role", UNSET)
@@ -63,6 +72,7 @@ class PutApiAdminScopesScopeIdBody:
 
         put_api_admin_scopes_scope_id_body = cls(
             description=description,
+            description_zh=description_zh,
             is_default=is_default,
             mapped_role=mapped_role,
             requires_admin_role=requires_admin_role,
