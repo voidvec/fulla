@@ -39,12 +39,6 @@ void respondError(
     );
 }
 
-// Lazy accessor for EmailService -- avoids static init order issues.
-::fulla::drogon::utils::IEmailService &getEmailSvc()
-{
-    return ::fulla::drogon::utils::getEmailService();
-}
-
 // Lazily resolve the DbClient. Kept identical to pre-B5 controller behavior.
 ::drogon::orm::DbClientPtr getDbOrRespond(
   const ::drogon::HttpRequestPtr &req,

@@ -215,7 +215,7 @@ memory 部署返回 404（无模板存储；实际发送时引擎回退到编译
 
 - `allowed_link_domains` —— 保存模板中字面 `http(s)` href 允许的主机
   （精确或子域匹配；条目接受裸主机或 `https://host/` 写法）。为空或缺省
-  = 不允许任何外链；变量链接（`{{verify_link}}`、`{{reset_link}}）由引擎
+  = 不允许任何外链；变量链接（`{{verify_link}}`、`{{reset_link}}`）由引擎
   供给，不受此列表影响。
 - `test_recipients` —— 管理端 test-send 额外授权的收件地址（各管理员
   本人账号邮箱始终允许）。
