@@ -85,8 +85,12 @@ from .get_api_me_organizations_slug_members_response_200_members_item_role impor
     GetApiMeOrganizationsSlugMembersResponse200MembersItemRole,
 )
 from .get_oauth_2_authorize_context_response_200 import GetOauth2AuthorizeContextResponse200
+from .get_oauth_2_authorize_context_response_200_org_type_0 import GetOauth2AuthorizeContextResponse200OrgType0
 from .get_oauth_2_consent_context_response_200 import GetOauth2ConsentContextResponse200
 from .get_oauth_2_consent_context_response_200_org_type_0 import GetOauth2ConsentContextResponse200OrgType0
+from .get_oauth_2_consent_context_response_200_scope_descriptions_item import (
+    GetOauth2ConsentContextResponse200ScopeDescriptionsItem,
+)
 from .health_status import HealthStatus
 from .health_status_status import HealthStatusStatus
 from .introspection_response import IntrospectionResponse
@@ -278,8 +282,10 @@ __all__ = (
     "GetApiMeOrganizationsSlugMembersResponse200MembersItem",
     "GetApiMeOrganizationsSlugMembersResponse200MembersItemRole",
     "GetOauth2AuthorizeContextResponse200",
+    "GetOauth2AuthorizeContextResponse200OrgType0",
     "GetOauth2ConsentContextResponse200",
     "GetOauth2ConsentContextResponse200OrgType0",
+    "GetOauth2ConsentContextResponse200ScopeDescriptionsItem",
     "HealthStatus",
     "HealthStatusStatus",
     "IntrospectionResponse",

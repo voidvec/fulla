@@ -6,6 +6,7 @@
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/services/EmailTemplateService.h>
+#include <fulla/drogon/utils/BrandValidator.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/EmailService.h>
 #include <fulla/storage/postgres/AdvisoryLock.h>
@@ -306,6 +307,26 @@ void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCa
     {
         respondError(req, cb, "VALIDATION_MISSING_REQUIRED_FIELD", "create org: name is required (<=100 chars)");
         return;
+    }
+
+    // P1-1 (#279): brand fields are optional but, when present, validated —
+    // the color regex is the tightened ^#[0-9a-fA-F]{3,6}$ (the {3,8} draft
+    // form contradicted the VARCHAR(7) column); the logo is the brand-image
+    // rule (https + loopback exemption), NOT the redirect rule.
+    {
+        const std::string colorErr =
+          ::fulla::drogon::utils::validatePrimaryColor(primaryColor);
+        if (!colorErr.empty())
+        {
+            respondError(req, cb, "VALIDATION_FORMAT_ERROR", "create org: " + colorErr);
+            return;
+        }
+        const std::string logoErr = ::fulla::drogon::utils::validateBrandUri(logoUri);
+        if (!logoErr.empty())
+        {
+            respondError(req, cb, "VALIDATION_FORMAT_ERROR", "create org: " + logoErr);
+            return;
+        }
     }
 
     const auto cfg = openplatform::OpenPlatformConfig::load();

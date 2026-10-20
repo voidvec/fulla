@@ -22,6 +22,7 @@ const std::string Oauth2Scopes::Cols::_mapped_role = "\"mapped_role\"";
 const std::string Oauth2Scopes::Cols::_is_default = "\"is_default\"";
 const std::string Oauth2Scopes::Cols::_requires_admin_role = "\"requires_admin_role\"";
 const std::string Oauth2Scopes::Cols::_self_service = "\"self_service\"";
+const std::string Oauth2Scopes::Cols::_description_zh = "\"description_zh\"";
 const std::string Oauth2Scopes::primaryKeyName = "id";
 const bool Oauth2Scopes::hasPrimaryKey = true;
 const std::string Oauth2Scopes::tableName = "\"oauth2_scopes\"";
@@ -33,7 +34,8 @@ const std::vector<typename Oauth2Scopes::MetaData> Oauth2Scopes::metaData_={
 {"mapped_role","std::string","character varying",50,0,0,0},
 {"is_default","bool","boolean",1,0,0,0},
 {"requires_admin_role","bool","boolean",1,0,0,0},
-{"self_service","bool","boolean",1,0,0,1}
+{"self_service","bool","boolean",1,0,0,1},
+{"description_zh","std::string","character varying",512,0,0,0}
 };
 const std::string &Oauth2Scopes::getColumnName(size_t index) noexcept(false)
 {
@@ -72,11 +74,15 @@ Oauth2Scopes::Oauth2Scopes(const Row &r, const ssize_t indexOffset) noexcept
         {
             selfService_=std::make_shared<bool>(r["self_service"].as<bool>());
         }
+        if(!r["description_zh"].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(r["description_zh"].as<std::string>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 7 > r.size())
+        if(offset + 8 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -117,13 +123,18 @@ Oauth2Scopes::Oauth2Scopes(const Row &r, const ssize_t indexOffset) noexcept
         {
             selfService_=std::make_shared<bool>(r[index].as<bool>());
         }
+        index = offset + 7;
+        if(!r[index].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(r[index].as<std::string>());
+        }
     }
 
 }
 
 Oauth2Scopes::Oauth2Scopes(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 7)
+    if(pMasqueradingVector.size() != 8)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -182,6 +193,14 @@ Oauth2Scopes::Oauth2Scopes(const Json::Value &pJson, const std::vector<std::stri
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
             selfService_=std::make_shared<bool>(pJson[pMasqueradingVector[6]].asBool());
+        }
+    }
+    if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson[pMasqueradingVector[7]].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
         }
     }
 }
@@ -244,12 +263,20 @@ Oauth2Scopes::Oauth2Scopes(const Json::Value &pJson) noexcept(false)
             selfService_=std::make_shared<bool>(pJson["self_service"].asBool());
         }
     }
+    if(pJson.isMember("description_zh"))
+    {
+        dirtyFlag_[7]=true;
+        if(!pJson["description_zh"].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(pJson["description_zh"].asString());
+        }
+    }
 }
 
 void Oauth2Scopes::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 7)
+    if(pMasqueradingVector.size() != 8)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -309,6 +336,14 @@ void Oauth2Scopes::updateByMasqueradedJson(const Json::Value &pJson,
             selfService_=std::make_shared<bool>(pJson[pMasqueradingVector[6]].asBool());
         }
     }
+    if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson[pMasqueradingVector[7]].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
+        }
+    }
 }
 
 void Oauth2Scopes::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -366,6 +401,14 @@ void Oauth2Scopes::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["self_service"].isNull())
         {
             selfService_=std::make_shared<bool>(pJson["self_service"].asBool());
+        }
+    }
+    if(pJson.isMember("description_zh"))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson["description_zh"].isNull())
+        {
+            descriptionZh_=std::make_shared<std::string>(pJson["description_zh"].asString());
         }
     }
 }
@@ -529,6 +572,33 @@ void Oauth2Scopes::setSelfService(const bool &pSelfService) noexcept
     dirtyFlag_[6] = true;
 }
 
+const std::string &Oauth2Scopes::getValueOfDescriptionZh() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(descriptionZh_)
+        return *descriptionZh_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Oauth2Scopes::getDescriptionZh() const noexcept
+{
+    return descriptionZh_;
+}
+void Oauth2Scopes::setDescriptionZh(const std::string &pDescriptionZh) noexcept
+{
+    descriptionZh_ = std::make_shared<std::string>(pDescriptionZh);
+    dirtyFlag_[7] = true;
+}
+void Oauth2Scopes::setDescriptionZh(std::string &&pDescriptionZh) noexcept
+{
+    descriptionZh_ = std::make_shared<std::string>(std::move(pDescriptionZh));
+    dirtyFlag_[7] = true;
+}
+void Oauth2Scopes::setDescriptionZhToNull() noexcept
+{
+    descriptionZh_.reset();
+    dirtyFlag_[7] = true;
+}
+
 void Oauth2Scopes::updateId(const uint64_t id)
 {
 }
@@ -541,7 +611,8 @@ const std::vector<std::string> &Oauth2Scopes::insertColumns() noexcept
         "mapped_role",
         "is_default",
         "requires_admin_role",
-        "self_service"
+        "self_service",
+        "description_zh"
     };
     return inCols;
 }
@@ -614,6 +685,17 @@ void Oauth2Scopes::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[7])
+    {
+        if(getDescriptionZh())
+        {
+            binder << getValueOfDescriptionZh();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Oauth2Scopes::updateColumns() const
@@ -642,6 +724,10 @@ const std::vector<std::string> Oauth2Scopes::updateColumns() const
     if(dirtyFlag_[6])
     {
         ret.push_back(getColumnName(6));
+    }
+    if(dirtyFlag_[7])
+    {
+        ret.push_back(getColumnName(7));
     }
     return ret;
 }
@@ -714,6 +800,17 @@ void Oauth2Scopes::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[7])
+    {
+        if(getDescriptionZh())
+        {
+            binder << getValueOfDescriptionZh();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Oauth2Scopes::toJson() const
 {
@@ -774,6 +871,14 @@ Json::Value Oauth2Scopes::toJson() const
     {
         ret["self_service"]=Json::Value();
     }
+    if(getDescriptionZh())
+    {
+        ret["description_zh"]=getValueOfDescriptionZh();
+    }
+    else
+    {
+        ret["description_zh"]=Json::Value();
+    }
     return ret;
 }
 
@@ -786,7 +891,7 @@ Json::Value Oauth2Scopes::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 7)
+    if(pMasqueradingVector.size() == 8)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -865,6 +970,17 @@ Json::Value Oauth2Scopes::toMasqueradedJson(
                 ret[pMasqueradingVector[6]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[7].empty())
+        {
+            if(getDescriptionZh())
+            {
+                ret[pMasqueradingVector[7]]=getValueOfDescriptionZh();
+            }
+            else
+            {
+                ret[pMasqueradingVector[7]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -924,6 +1040,14 @@ Json::Value Oauth2Scopes::toMasqueradedJson(
     {
         ret["self_service"]=Json::Value();
     }
+    if(getDescriptionZh())
+    {
+        ret["description_zh"]=getValueOfDescriptionZh();
+    }
+    else
+    {
+        ret["description_zh"]=Json::Value();
+    }
     return ret;
 }
 
@@ -969,13 +1093,18 @@ bool Oauth2Scopes::validateJsonForCreation(const Json::Value &pJson, std::string
         if(!validJsonOfField(6, "self_service", pJson["self_service"], err, true))
             return false;
     }
+    if(pJson.isMember("description_zh"))
+    {
+        if(!validJsonOfField(7, "description_zh", pJson["description_zh"], err, true))
+            return false;
+    }
     return true;
 }
 bool Oauth2Scopes::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                       const std::vector<std::string> &pMasqueradingVector,
                                                       std::string &err)
 {
-    if(pMasqueradingVector.size() != 7)
+    if(pMasqueradingVector.size() != 8)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1042,6 +1171,14 @@ bool Oauth2Scopes::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[7].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[7]))
+          {
+              if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1092,13 +1229,18 @@ bool Oauth2Scopes::validateJsonForUpdate(const Json::Value &pJson, std::string &
         if(!validJsonOfField(6, "self_service", pJson["self_service"], err, false))
             return false;
     }
+    if(pJson.isMember("description_zh"))
+    {
+        if(!validJsonOfField(7, "description_zh", pJson["description_zh"], err, false))
+            return false;
+    }
     return true;
 }
 bool Oauth2Scopes::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                     const std::vector<std::string> &pMasqueradingVector,
                                                     std::string &err)
 {
-    if(pMasqueradingVector.size() != 7)
+    if(pMasqueradingVector.size() != 8)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1142,6 +1284,11 @@ bool Oauth2Scopes::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
       {
           if(!validJsonOfField(6, pMasqueradingVector[6], pJson[pMasqueradingVector[6]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+      {
+          if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, false))
               return false;
       }
     }
@@ -1258,6 +1405,25 @@ bool Oauth2Scopes::validJsonOfField(size_t index,
             if(!pJson.isBool())
             {
                 err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 7:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            if(pJson.isString() && std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>{}
+                .from_bytes(pJson.asCString()).size() > 512)
+            {
+                err="String length exceeds limit for the " +
+                    fieldName +
+                    " field (the maximum value is 512)";
                 return false;
             }
             break;

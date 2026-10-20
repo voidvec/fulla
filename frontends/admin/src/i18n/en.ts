@@ -199,6 +199,9 @@ export default {
       backchannelLabelEdit: 'Backchannel Logout URI',
       backchannelHintEdit:
         'OIDC Back-Channel Logout 1.0. When set (https), the OP POSTs a signed logout_token here on user logout. Leave empty to disable.',
+      logoUriLabel: 'Logo URI',
+      logoUriHint:
+        'Brand image for the login/consent screens. https only (loopback hosts allowed for dev); leave empty for none.',
       noChangesToSave: 'No changes to save',
       changesSaved: 'Changes saved successfully',
       scopesUpdated: 'Scopes updated successfully',
@@ -346,6 +349,8 @@ export default {
       noneFound: 'No scopes found',
       namePlaceholder: 'e.g. reports:read',
       descriptionPlaceholder: 'What this scope grants access to',
+      descriptionZh: 'Description (zh-CN)',
+      descriptionZhPlaceholder: 'Consent-screen copy shown on zh pages',
       mappedRolePlaceholder: 'e.g. user',
       defaultScope: 'Default scope',
       created: 'Scope "{name}" created',

@@ -62,6 +62,7 @@ class Oauth2Clients
         static const std::string _backchannel_logout_session_required;
         static const std::string _deleted_at;
         static const std::string _post_logout_redirect_uris;
+        static const std::string _logo_uri;
     };
 
     static const int primaryKeyNumber;
@@ -227,8 +228,18 @@ class Oauth2Clients
     void setPostLogoutRedirectUris(std::string &&pPostLogoutRedirectUris) noexcept;
     void setPostLogoutRedirectUrisToNull() noexcept;
 
+    /**  For column logo_uri  */
+    ///Get the value of the column logo_uri, returns the default value if the column is null
+    const std::string &getValueOfLogoUri() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getLogoUri() const noexcept;
+    ///Set the value of the column logo_uri
+    void setLogoUri(const std::string &pLogoUri) noexcept;
+    void setLogoUri(std::string &&pLogoUri) noexcept;
+    void setLogoUriToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 12;  }
+
+    static size_t getColumnNumber() noexcept {  return 13;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -282,6 +293,7 @@ class Oauth2Clients
     std::shared_ptr<bool> backchannelLogoutSessionRequired_;
     std::shared_ptr<::trantor::Date> deletedAt_;
     std::shared_ptr<std::string> postLogoutRedirectUris_;
+    std::shared_ptr<std::string> logoUri_;
     struct MetaData
     {
         const std::string colName_;
@@ -293,7 +305,7 @@ class Oauth2Clients
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[12]={ false };
+    bool dirtyFlag_[13]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -373,6 +385,11 @@ class Oauth2Clients
             sql += "post_logout_redirect_uris,";
             ++parametersCount;
         }
+        if(dirtyFlag_[12])
+        {
+            sql += "logo_uri,";
+            ++parametersCount;
+        }
         if(parametersCount > 0)
         {
             sql[sql.length()-1]=')';
@@ -448,6 +465,11 @@ class Oauth2Clients
             sql.append(placeholderStr, n);
         }
         if(dirtyFlag_[11])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        if(dirtyFlag_[12])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);

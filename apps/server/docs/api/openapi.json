@@ -2946,10 +2946,10 @@
     {
       "get" : 
       {
-        "description" : "P0-6: public application-name discovery for the login/consent screens. Answers {client_name} for active clients; unknown or soft-deleted clients answer 404. Carries only the display name (client_id is not secret); rate-limited via the process-wide limiter config on prod profiles.",
+        "description" : "P0-6: public application-name discovery for the login/consent screens. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-only at write time) and the owning organization's brand block {org_name, logo_uri?, primary_color?} when the client is org-owned. Unknown or soft-deleted clients answer 404. Branding is display-only and untrusted (the consent screen pairs it with an owner attribution label); client_id is not secret; rate-limited via the process-wide limiter config on prod profiles.",
         "operationId" : "get_oauth2_authorize-context",
         "responses" : null,
-        "summary" : "Authorize Context (client display name)",
+        "summary" : "Authorize Context (client display name + branding)",
         "tags" : 
         [
           "OAuth2"

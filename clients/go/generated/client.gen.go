@@ -893,7 +893,10 @@ type PostApiAdminClientsJSONBody struct {
 	// BackchannelLogoutUri OIDC Back-Channel Logout 1.0 RP endpoint. MUST use https (spec §2.3). When set, the OP POSTs a signed logout_token here on user logout.
 	BackchannelLogoutUri *string                                `json:"backchannel_logout_uri,omitempty"`
 	ClientType           *PostApiAdminClientsJSONBodyClientType `json:"client_type,omitempty"`
-	Name                 string                                 `json:"name"`
+
+	// LogoUri P1-1 (#279): client brand image for the login/consent screens. https-only (loopback hosts exempt for dev); no userinfo/fragment. NOT the redirect registration rule.
+	LogoUri *string `json:"logo_uri,omitempty"`
+	Name    string  `json:"name"`
 
 	// RedirectUris Comma-separated redirect URIs (https required).
 	RedirectUris            *string `json:"redirect_uris,omitempty"`
@@ -909,8 +912,11 @@ type PutApiAdminClientsClientIdJSONBody struct {
 
 	// BackchannelLogoutUri Set to an https URI to enable OIDC back-channel logout notifications to this RP; an empty string clears it.
 	BackchannelLogoutUri *string `json:"backchannel_logout_uri,omitempty"`
-	Name                 *string `json:"name,omitempty"`
-	RedirectUris         *string `json:"redirect_uris,omitempty"`
+
+	// LogoUri P1-1 (#279): client brand image (https-only, loopback exempt). An empty string clears it.
+	LogoUri      *string `json:"logo_uri,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	RedirectUris *string `json:"redirect_uris,omitempty"`
 }
 
 // PostApiAdminClientsClientIdResetSecretJSONBody defines parameters for PostApiAdminClientsClientIdResetSecret.
@@ -992,7 +998,10 @@ type PutApiAdminRolesRoleIdJSONBody struct {
 
 // PostApiAdminScopesJSONBody defines parameters for PostApiAdminScopes.
 type PostApiAdminScopesJSONBody struct {
-	Description       *string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty"`
+
+	// DescriptionZh P1-1 (#279): zh-CN consent-screen copy.
+	DescriptionZh     *string `json:"description_zh,omitempty"`
 	IsDefault         *bool   `json:"is_default,omitempty"`
 	MappedRole        *string `json:"mapped_role,omitempty"`
 	Name              string  `json:"name"`
@@ -1001,7 +1010,10 @@ type PostApiAdminScopesJSONBody struct {
 
 // PutApiAdminScopesScopeIdJSONBody defines parameters for PutApiAdminScopesScopeId.
 type PutApiAdminScopesScopeIdJSONBody struct {
-	Description       *string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty"`
+
+	// DescriptionZh P1-1 (#279): zh-CN consent-screen copy; the consent context serves it for zh pages. Empty clears it. Description changes are audited with a before/after diff.
+	DescriptionZh     *string `json:"description_zh,omitempty"`
 	IsDefault         *bool   `json:"is_default,omitempty"`
 	MappedRole        *string `json:"mapped_role,omitempty"`
 	RequiresAdminRole *bool   `json:"requires_admin_role,omitempty"`
@@ -1098,7 +1110,10 @@ type GetApiMeApplications200JSONResponseBodyApplicationsStatus string
 type PostApiMeApplicationsJSONBody struct {
 	AllowedGrantTypes *[]string                                `json:"allowed_grant_types,omitempty"`
 	ClientType        *PostApiMeApplicationsJSONBodyClientType `json:"client_type,omitempty"`
-	Name              *string                                  `json:"name,omitempty"`
+
+	// LogoUri P1-1 (#279): application brand image for the login/consent screens (https-only, loopback hosts exempt).
+	LogoUri *string `json:"logo_uri,omitempty"`
+	Name    *string `json:"name,omitempty"`
 
 	// OrgSlug Register under this organization (caller must be its owner/admin); omit for a personal application.
 	OrgSlug      *string   `json:"org_slug,omitempty"`
@@ -1115,9 +1130,12 @@ type PostApiMeApplications201JSONResponseBodyClientType string
 // PatchApiMeApplicationsClientIdJSONBody defines parameters for PatchApiMeApplicationsClientId.
 type PatchApiMeApplicationsClientIdJSONBody struct {
 	AllowedGrantTypes *[]string `json:"allowed_grant_types,omitempty"`
-	Name              *string   `json:"name,omitempty"`
-	RedirectUris      *[]string `json:"redirect_uris,omitempty"`
-	Scopes            *[]string `json:"scopes,omitempty"`
+
+	// LogoUri P1-1 (#279): application brand image (https-only, loopback hosts exempt). An empty string clears it.
+	LogoUri      *string   `json:"logo_uri,omitempty"`
+	Name         *string   `json:"name,omitempty"`
+	RedirectUris *[]string `json:"redirect_uris,omitempty"`
+	Scopes       *[]string `json:"scopes,omitempty"`
 }
 
 // PostApiMeApplicationsClientIdRotateSecretJSONBody defines parameters for PostApiMeApplicationsClientIdRotateSecret.
@@ -1350,6 +1368,12 @@ type GetOauth2ConsentContextParams struct {
 
 	// UserId The session user id echoed from the consent URL (required; must match the session)
 	UserId string `form:"user_id" json:"user_id"`
+
+	// Scope P1-1 (#279): the flow's requested scopes (space- or comma-separated); when present, the response carries localized descriptions per scope from the oauth2_scopes catalog
+	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
+
+	// Locale P1-1 (#279): page locale (a "zh*" prefix selects the zh-CN description column; anything else selects the en column)
+	Locale *string `form:"locale,omitempty" json:"locale,omitempty"`
 }
 
 // PostOauth2DeviceApproveFormdataBody defines parameters for PostOauth2DeviceApprove.
@@ -2474,7 +2498,7 @@ type ClientInterface interface {
 
 	// PatchApiMeApplicationsClientIdWithBody Update Application
 	//
-	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2483,7 +2507,7 @@ type ClientInterface interface {
 
 	// PatchApiMeApplicationsClientId Update Application
 	//
-	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3096,9 +3120,9 @@ type ClientInterface interface {
 	// Corresponds with GET /oauth2/authorize (the `GetOauth2Authorize` operationId).
 	GetOauth2Authorize(ctx context.Context, params *GetOauth2AuthorizeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOauth2AuthorizeContext Authorize Context (client display name)
+	// GetOauth2AuthorizeContext Authorize Context (client display name + branding)
 	//
-	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-only at write time) and, for org-owned applications, the owning organization's brand block {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize redirect).
 	//
 	// Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
 	GetOauth2AuthorizeContext(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4820,7 +4844,7 @@ func (c *Client) DeleteApiMeApplicationsClientId(ctx context.Context, clientId s
 
 // PatchApiMeApplicationsClientIdWithBody Update Application
 //
-// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4839,7 +4863,7 @@ func (c *Client) PatchApiMeApplicationsClientIdWithBody(ctx context.Context, cli
 
 // PatchApiMeApplicationsClientId Update Application
 //
-// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6182,9 +6206,9 @@ func (c *Client) GetOauth2Authorize(ctx context.Context, params *GetOauth2Author
 	return c.Client.Do(req)
 }
 
-// GetOauth2AuthorizeContext Authorize Context (client display name)
+// GetOauth2AuthorizeContext Authorize Context (client display name + branding)
 //
-// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-only at write time) and, for org-owned applications, the owning organization's brand block {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize redirect).
 //
 // Corresponds with GET /oauth2/authorize-context (the `GetOauth2AuthorizeContext` operationId).
 func (c *Client) GetOauth2AuthorizeContext(ctx context.Context, params *GetOauth2AuthorizeContextParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11250,6 +11274,30 @@ func NewGetOauth2ConsentContextRequest(server string, params *GetOauth2ConsentCo
 			}
 		}
 
+		if params.Scope != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "scope", *params.Scope, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Locale != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "locale", *params.Locale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -12726,7 +12774,7 @@ type ClientWithResponsesInterface interface {
 
 	// PatchApiMeApplicationsClientIdWithBodyWithResponse Update Application
 	//
-	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12735,7 +12783,7 @@ type ClientWithResponsesInterface interface {
 
 	// PatchApiMeApplicationsClientIdWithResponse Update Application
 	//
-	// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+	// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13390,9 +13438,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /oauth2/authorize (the `GetOauth2Authorize` operationId).
 	GetOauth2AuthorizeWithResponse(ctx context.Context, params *GetOauth2AuthorizeParams, reqEditors ...RequestEditorFn) (*GetOauth2AuthorizeResponse, error)
 
-	// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name)
+	// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name + branding)
 	//
-	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+	// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-only at write time) and, for org-owned applications, the owning organization's brand block {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize redirect).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18965,12 +19013,28 @@ type GetOauth2AuthorizeContextResponse struct {
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
 		ClientName *string `json:"client_name,omitempty"`
+
+		// LogoUri Client brand image (absent when unset)
+		LogoUri *string `json:"logo_uri,omitempty"`
+		Org     *struct {
+			LogoUri      *string `json:"logo_uri,omitempty"`
+			OrgName      *string `json:"org_name,omitempty"`
+			PrimaryColor *string `json:"primary_color,omitempty"`
+		} `json:"org,omitempty"`
 	}
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetOauth2AuthorizeContextResponse) GetJSON200() *struct {
 	ClientName *string `json:"client_name,omitempty"`
+
+	// LogoUri Client brand image (absent when unset)
+	LogoUri *string `json:"logo_uri,omitempty"`
+	Org     *struct {
+		LogoUri      *string `json:"logo_uri,omitempty"`
+		OrgName      *string `json:"org_name,omitempty"`
+		PrimaryColor *string `json:"primary_color,omitempty"`
+	} `json:"org,omitempty"`
 } {
 	return r.JSON200
 }
@@ -19043,27 +19107,55 @@ type GetOauth2ConsentContextResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+		// ClientName P1-1: the client's display name (falls back to the client_id).
+		ClientName *string `json:"client_name,omitempty"`
+
+		// LogoUri P1-1: the client's brand image (absent when unset).
+		LogoUri *string `json:"logo_uri,omitempty"`
+
+		// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding. P1-1 adds the org brand fields (absent when unset).
 		Org *struct {
-			OrgId   *int    `json:"org_id,omitempty"`
-			OrgName *string `json:"org_name,omitempty"`
+			LogoUri      *string `json:"logo_uri,omitempty"`
+			OrgId        *int    `json:"org_id,omitempty"`
+			OrgName      *string `json:"org_name,omitempty"`
+			PrimaryColor *string `json:"primary_color,omitempty"`
 		} `json:"org,omitempty"`
 
 		// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
 		OwnerName *string `json:"owner_name,omitempty"`
+
+		// ScopeDescriptions P1-1: localized descriptions for the scopes named in the `scope` parameter (unknown names omitted; the frontend dictionary is the missing-key fallback).
+		ScopeDescriptions *[]struct {
+			DescriptionI18n *string `json:"description_i18n,omitempty"`
+			Scope           *string `json:"scope,omitempty"`
+		} `json:"scope_descriptions,omitempty"`
 	}
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetOauth2ConsentContextResponse) GetJSON200() *struct {
-	// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+	// ClientName P1-1: the client's display name (falls back to the client_id).
+	ClientName *string `json:"client_name,omitempty"`
+
+	// LogoUri P1-1: the client's brand image (absent when unset).
+	LogoUri *string `json:"logo_uri,omitempty"`
+
+	// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding. P1-1 adds the org brand fields (absent when unset).
 	Org *struct {
-		OrgId   *int    `json:"org_id,omitempty"`
-		OrgName *string `json:"org_name,omitempty"`
+		LogoUri      *string `json:"logo_uri,omitempty"`
+		OrgId        *int    `json:"org_id,omitempty"`
+		OrgName      *string `json:"org_name,omitempty"`
+		PrimaryColor *string `json:"primary_color,omitempty"`
 	} `json:"org,omitempty"`
 
 	// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
 	OwnerName *string `json:"owner_name,omitempty"`
+
+	// ScopeDescriptions P1-1: localized descriptions for the scopes named in the `scope` parameter (unknown names omitted; the frontend dictionary is the missing-key fallback).
+	ScopeDescriptions *[]struct {
+		DescriptionI18n *string `json:"description_i18n,omitempty"`
+		Scope           *string `json:"scope,omitempty"`
+	} `json:"scope_descriptions,omitempty"`
 } {
 	return r.JSON200
 }
@@ -21170,7 +21262,7 @@ func (c *ClientWithResponses) DeleteApiMeApplicationsClientIdWithResponse(ctx co
 
 // PatchApiMeApplicationsClientIdWithBodyWithResponse Update Application
 //
-// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21185,7 +21277,7 @@ func (c *ClientWithResponses) PatchApiMeApplicationsClientIdWithBodyWithResponse
 
 // PatchApiMeApplicationsClientIdWithResponse Update Application
 //
-// Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
+// Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered application (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are left unchanged.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22278,9 +22370,9 @@ func (c *ClientWithResponses) GetOauth2AuthorizeWithResponse(ctx context.Context
 	return ParseGetOauth2AuthorizeResponse(rsp)
 }
 
-// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name)
+// GetOauth2AuthorizeContextWithResponse Authorize Context (client display name + branding)
 //
-// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. Carries only the display name — client_id is not a secret (it appears in every authorize redirect).
+// Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for active clients, so the user sees WHICH application is asking for credentials before typing a password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name: <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-only at write time) and, for org-owned applications, the owning organization's brand block {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize redirect).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -26162,6 +26254,14 @@ func ParseGetOauth2AuthorizeContextResponse(rsp *http.Response) (*GetOauth2Autho
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			ClientName *string `json:"client_name,omitempty"`
+
+			// LogoUri Client brand image (absent when unset)
+			LogoUri *string `json:"logo_uri,omitempty"`
+			Org     *struct {
+				LogoUri      *string `json:"logo_uri,omitempty"`
+				OrgName      *string `json:"org_name,omitempty"`
+				PrimaryColor *string `json:"primary_color,omitempty"`
+			} `json:"org,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -26211,14 +26311,28 @@ func ParseGetOauth2ConsentContextResponse(rsp *http.Response) (*GetOauth2Consent
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding.
+			// ClientName P1-1: the client's display name (falls back to the client_id).
+			ClientName *string `json:"client_name,omitempty"`
+
+			// LogoUri P1-1: the client's brand image (absent when unset).
+			LogoUri *string `json:"logo_uri,omitempty"`
+
+			// Org The org context this flow is authorizing under (design 2.1); null when the flow has no org binding. P1-1 adds the org brand fields (absent when unset).
 			Org *struct {
-				OrgId   *int    `json:"org_id,omitempty"`
-				OrgName *string `json:"org_name,omitempty"`
+				LogoUri      *string `json:"logo_uri,omitempty"`
+				OrgId        *int    `json:"org_id,omitempty"`
+				OrgName      *string `json:"org_name,omitempty"`
+				PrimaryColor *string `json:"primary_color,omitempty"`
 			} `json:"org,omitempty"`
 
 			// OwnerName Attribution label: org name for org apps, the creator's display name for personal apps; empty for admin-seeded clients and on storage degradation.
 			OwnerName *string `json:"owner_name,omitempty"`
+
+			// ScopeDescriptions P1-1: localized descriptions for the scopes named in the `scope` parameter (unknown names omitted; the frontend dictionary is the missing-key fallback).
+			ScopeDescriptions *[]struct {
+				DescriptionI18n *string `json:"description_i18n,omitempty"`
+				Scope           *string `json:"scope,omitempty"`
+			} `json:"scope_descriptions,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

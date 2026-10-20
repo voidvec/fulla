@@ -2,6 +2,7 @@
 #include "OpenPlatformConfig.h"
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
+#include <fulla/drogon/utils/BrandValidator.h>
 #include <fulla/drogon/utils/ClientCacheInvalidator.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
@@ -664,7 +665,8 @@ void insertApplication(
   const std::string &grantTypes,
   const std::set<std::string> &scopes,
   const ResolvedUser &caller,
-  std::shared_ptr<int32_t> orgId
+  std::shared_ptr<int32_t> orgId,
+  const std::string &logoUri = ""
 )
 {
     const std::string clientId = "app_" + ::fulla::drogon::utils::generateSecureToken(8);
@@ -699,6 +701,8 @@ void insertApplication(
     row.setName(name);
     row.setRedirectUris(redirectUris);
     row.setAllowedGrantTypes(grantTypes);
+    if (!logoUri.empty())
+        row.setLogoUri(logoUri);
     // F-017 per-type default, same as the admin/dynamic registration paths.
     row.setTokenEndpointAuthMethod(confidential ? "client_secret_basic" : "none");
 
@@ -985,6 +989,15 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
     if (grantTypes.empty())
         grantTypes = clientType == "PUBLIC" ? "authorization_code" : "client_credentials";
 
+    // P1-1 (#279): optional brand image (https-only + loopback exemption).
+    const std::string logoUri = (*jsonBody).get("logo_uri", "").asString();
+    const std::string logoErr = ::fulla::drogon::utils::validateBrandUri(logoUri);
+    if (!logoErr.empty())
+    {
+        respondError(req, cb, "VALIDATION_FORMAT_ERROR", "create application: " + logoErr);
+        return;
+    }
+
     const bool hasOrgSlug = (*jsonBody).isMember("org_slug") &&
                             (*jsonBody)["org_slug"].isString() &&
                             !(*jsonBody)["org_slug"].asString().empty();
@@ -1002,12 +1015,12 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
 
     validateSelfServiceScopes(db, *jsonBody, req, cb,
       [req, cb, db, cfg, name, clientType, redirectUris, grantTypes, hasOrgSlug, userIdAttr,
-       jsonBody](bool ok, const std::set<std::string> &scopes) {
+       jsonBody, logoUri](bool ok, const std::set<std::string> &scopes) {
           if (!ok)
               return;
           resolveCaller(db, userIdAttr, req, cb,
             [req, cb, db, cfg, name, clientType, redirectUris, grantTypes, scopes, hasOrgSlug,
-             jsonBody](bool found, const ResolvedUser &caller) {
+             jsonBody, logoUri](bool found, const ResolvedUser &caller) {
                 if (!found)
                     return;
                 const int64_t nowSec = ::trantor::Date::now().secondsSinceEpoch();
@@ -1021,14 +1034,14 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                 // prevents cross-flow deadlocks).
                 auto runCreationChecks =
                   [req, cb, cfg, caller, nowSec, name, clientType, redirectUris, grantTypes,
-                   scopes](const std::shared_ptr<::drogon::orm::Transaction> &txn,
+                   scopes, logoUri](const std::shared_ptr<::drogon::orm::Transaction> &txn,
                            std::shared_ptr<int32_t> orgId) {
                       // Rate limit + personal quota both key off "my creations".
                       findOwners(txn,
                         Criteria(OwnerModel::Cols::_creator_user_id, CompareOperator::EQ, caller.id),
                         req, cb,
                         [req, cb, txn, cfg, name, clientType, redirectUris, grantTypes, scopes,
-                         caller, nowSec, orgId](const std::vector<OwnerModel> &mine) {
+                         caller, nowSec, orgId, logoUri](const std::vector<OwnerModel> &mine) {
                           std::size_t recent = 0;
                           std::vector<std::string> personalIds;
                           for (const auto &o : mine)
@@ -1048,7 +1061,7 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                           {
                               countAliveClients(txn, personalIds, req, cb,
                                 [req, cb, txn, name, clientType, redirectUris, grantTypes, scopes,
-                                 caller, cfg](std::size_t alive) {
+                                 caller, cfg, logoUri](std::size_t alive) {
                                     if (static_cast<int>(alive) >= cfg.maxAppsPerUser)
                                     {
                                         respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
@@ -1057,7 +1070,7 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                                         return;
                                     }
                                     insertApplication(req, cb, txn, name, clientType, redirectUris,
-                                      grantTypes, scopes, caller, nullptr);
+                                      grantTypes, scopes, caller, nullptr, logoUri);
                                 });
                               return;
                           }
@@ -1067,14 +1080,14 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                                      CompareOperator::EQ, *orgId),
                             req, cb,
                             [req, cb, txn, cfg, name, clientType, redirectUris, grantTypes,
-                             scopes, caller, orgId](
+                             scopes, caller, orgId, logoUri](
                               const std::vector<OwnerModel> &orgApps) {
                                 std::vector<std::string> ids;
                                 for (const auto &o : orgApps)
                                     ids.push_back(o.getValueOfClientId());
                                 countAliveClients(txn, ids, req, cb,
                                   [req, cb, txn, cfg, name, clientType, redirectUris,
-                                   grantTypes, scopes, caller, orgId](std::size_t alive) {
+                                   grantTypes, scopes, caller, orgId, logoUri](std::size_t alive) {
                                       if (static_cast<int>(alive) >= cfg.maxOrgApps)
                                       {
                                           respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
@@ -1084,7 +1097,7 @@ void ApplicationService::create(const ::drogon::HttpRequestPtr &req, ResponseCal
                                       }
                                       insertApplication(req, cb, txn, name, clientType,
                                         redirectUris, grantTypes, scopes, caller,
-                                        orgId);
+                                        orgId, logoUri);
                                   });
                             });
                           return;
@@ -1194,12 +1207,25 @@ void ApplicationService::update(
     const bool urisRequested = (*jsonBody).isMember("redirect_uris");
     const bool grantsRequested = (*jsonBody).isMember("allowed_grant_types");
     const bool scopesRequested = (*jsonBody).isMember("scopes");
-    if (!nameRequested && !urisRequested && !grantsRequested && !scopesRequested)
+    const bool logoRequested = (*jsonBody).isMember("logo_uri");
+    if (!nameRequested && !urisRequested && !grantsRequested && !scopesRequested && !logoRequested)
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT",
           "update application: no editable field present "
-          "(name / redirect_uris / allowed_grant_types / scopes)");
+          "(name / redirect_uris / allowed_grant_types / scopes / logo_uri)");
         return;
+    }
+    // P1-1 (#279): logo_uri is a brand image — https-only + loopback
+    // exemption, NOT the redirect-registration rule.
+    if (logoRequested)
+    {
+        const std::string err = ::fulla::drogon::utils::validateBrandUri(
+          (*jsonBody).get("logo_uri", "").asString());
+        if (!err.empty())
+        {
+            respondError(req, cb, "VALIDATION_FORMAT_ERROR", "update application: " + err);
+            return;
+        }
     }
     std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
     auto db = getDbOrRespond(req, cb);
@@ -1208,12 +1234,12 @@ void ApplicationService::update(
 
     resolveCaller(db, userIdAttr, req, cb,
       [req, cb, db, cfg, clientId, jsonBody, nameRequested, urisRequested, grantsRequested,
-       scopesRequested](bool found, const ResolvedUser &caller) {
+       scopesRequested, logoRequested](bool found, const ResolvedUser &caller) {
           if (!found)
               return;
           requireManagePermission(db, clientId, caller, req, cb,
             [req, cb, db, cfg, clientId, jsonBody, nameRequested, urisRequested,
-             grantsRequested, scopesRequested](bool ok, const OwnerModel &) {
+             grantsRequested, scopesRequested, logoRequested](bool ok, const OwnerModel &) {
                 if (!ok)
                     return;
                 try
@@ -1222,7 +1248,8 @@ void ApplicationService::update(
                       Criteria(ClientModel::Cols::_client_id, CompareOperator::EQ, clientId) &&
                         Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
                       [req, cb, db, cfg, clientId, jsonBody, nameRequested, urisRequested,
-                       grantsRequested, scopesRequested](const ClientModel &client) {
+                       grantsRequested, scopesRequested,
+                       logoRequested](const ClientModel &client) {
                           std::string name;
                           std::string redirectUris;
                           std::string grantTypes;
@@ -1265,7 +1292,7 @@ void ApplicationService::update(
                           validateSelfServiceScopes(db, *jsonBody, req, cb,
                             [req, cb, db, clientId, jsonBody, client, name, redirectUris,
                              grantTypes, nameRequested, urisRequested, grantsRequested,
-                             scopesRequested](bool scopesOk, const std::set<std::string> &scopes) {
+                             scopesRequested, logoRequested](bool scopesOk, const std::set<std::string> &scopes) {
                                 if (!scopesOk)
                                     return;
                                 ClientModel updated = client;
@@ -1283,6 +1310,16 @@ void ApplicationService::update(
                                 if (grantsRequested)
                                 {
                                     updated.setAllowedGrantTypes(grantTypes);
+                                    touched = true;
+                                }
+                                if (logoRequested)
+                                {
+                                    const std::string logoUri =
+                                      (*jsonBody).get("logo_uri", "").asString();
+                                    if (logoUri.empty())
+                                        updated.setLogoUriToNull();
+                                    else
+                                        updated.setLogoUri(logoUri);
                                     touched = true;
                                 }
                                 // Cache invalidation fires AFTER the write

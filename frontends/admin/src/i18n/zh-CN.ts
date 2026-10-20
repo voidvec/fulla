@@ -195,6 +195,8 @@ export default {
       backchannelLabelEdit: 'Backchannel Logout URI',
       backchannelHintEdit:
         'OIDC Back-Channel Logout 1.0。设置后（https），用户登出时 OP 会向此地址 POST 一个签名的 logout_token。留空表示禁用。',
+      logoUriLabel: 'Logo URI',
+      logoUriHint: '登录/同意页展示的品牌图片。仅允许 https（开发可用回环地址）；留空表示不设置。',
       noChangesToSave: '没有需要保存的更改',
       changesSaved: '更改已保存',
       scopesUpdated: '作用域已更新',
@@ -337,6 +339,8 @@ export default {
       noneFound: '未找到作用域',
       namePlaceholder: '例如 reports:read',
       descriptionPlaceholder: '该作用域授予的访问权限',
+      descriptionZh: '描述（zh-CN）',
+      descriptionZhPlaceholder: '中文页面同意屏展示的文案',
       mappedRolePlaceholder: '例如 user',
       defaultScope: '默认作用域',
       created: '作用域“{name}”已创建',

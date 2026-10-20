@@ -330,6 +330,8 @@ export default {
       redirectUris: '回调 URI（https，逗号或空格分隔）',
       redirectUrisPlaceholder: 'https://my-app.example/callback',
       scopes: '作用域（空格分隔，限自助白名单内）',
+      logoUri: 'Logo URI（可选，https）',
+      logoUriPlaceholder: 'https://cdn.example.com/logo.svg',
       submit: '注册',
       clientId: '客户端 ID：',
       rotate: '轮换密钥',

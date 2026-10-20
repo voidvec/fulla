@@ -50,6 +50,8 @@ const editName = ref('')
 const editRedirectUris = ref('')
 const editGrantTypes = ref<string[]>([])
 const editBackchannelLogoutUri = ref('')
+// P1-1 (#279): client brand image (https-only at the server).
+const editLogoUri = ref('')
 
 // Scopes data
 const allScopes = ref<any[]>([])
@@ -98,6 +100,7 @@ async function fetchClient() {
       ? resp.data.allowed_grant_types.split(',').filter((s: string) => s)
       : []
     editBackchannelLogoutUri.value = resp.data.backchannel_logout_uri || ''
+    editLogoUri.value = resp.data.logo_uri || ''
     clientScopes.value = resp.data.scopes || []
   } catch (e: unknown) {
     showError(normalizeError(e))
@@ -139,6 +142,9 @@ async function saveChanges() {
     }
     if (editBackchannelLogoutUri.value !== (client.value.backchannel_logout_uri || '')) {
       body.backchannel_logout_uri = editBackchannelLogoutUri.value
+    }
+    if (editLogoUri.value !== (client.value.logo_uri || '')) {
+      body.logo_uri = editLogoUri.value
     }
 
     if (Object.keys(body).length === 0) {
@@ -369,6 +375,18 @@ onMounted(() => {
           >
           <p class="text-xs text-neutral-500 mt-1">
             {{ $t('admin.applications.backchannelHintEdit') }}
+          </p>
+        </div>
+        <!-- P1-1 (#279): client brand image (https-only, loopback exempt). -->
+        <div>
+          <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.applications.logoUriLabel') }}</label>
+          <input
+            v-model="editLogoUri"
+            class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm font-mono focus:ring-brand-500 focus:border-brand-500"
+            placeholder="https://cdn.example.com/logo.svg"
+          >
+          <p class="text-xs text-neutral-500 mt-1">
+            {{ $t('admin.applications.logoUriHint') }}
           </p>
         </div>
       </div>

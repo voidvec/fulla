@@ -31,6 +31,7 @@ const std::string Oauth2Clients::Cols::_backchannel_logout_uri = "\"backchannel_
 const std::string Oauth2Clients::Cols::_backchannel_logout_session_required = "\"backchannel_logout_session_required\"";
 const std::string Oauth2Clients::Cols::_deleted_at = "\"deleted_at\"";
 const std::string Oauth2Clients::Cols::_post_logout_redirect_uris = "\"post_logout_redirect_uris\"";
+const std::string Oauth2Clients::Cols::_logo_uri = "\"logo_uri\"";
 const std::string Oauth2Clients::primaryKeyName = "client_id";
 const bool Oauth2Clients::hasPrimaryKey = true;
 const std::string Oauth2Clients::tableName = "\"oauth2_clients\"";
@@ -47,7 +48,8 @@ const std::vector<typename Oauth2Clients::MetaData> Oauth2Clients::metaData_={
 {"backchannel_logout_uri","std::string","character varying",512,0,0,0},
 {"backchannel_logout_session_required","bool","boolean",1,0,0,0},
 {"deleted_at","::trantor::Date","timestamp with time zone",0,0,0,0},
-{"post_logout_redirect_uris","std::string","text",0,0,0,0}
+{"post_logout_redirect_uris","std::string","text",0,0,0,0},
+{"logo_uri","std::string","character varying",512,0,0,0}
 };
 const std::string &Oauth2Clients::getColumnName(size_t index) noexcept(false)
 {
@@ -124,11 +126,15 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
         {
             postLogoutRedirectUris_=std::make_shared<std::string>(r["post_logout_redirect_uris"].as<std::string>());
         }
+        if(!r["logo_uri"].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(r["logo_uri"].as<std::string>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 12 > r.size())
+        if(offset + 13 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -212,13 +218,18 @@ Oauth2Clients::Oauth2Clients(const Row &r, const ssize_t indexOffset) noexcept
         {
             postLogoutRedirectUris_=std::make_shared<std::string>(r[index].as<std::string>());
         }
+        index = offset + 12;
+        if(!r[index].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(r[index].as<std::string>());
+        }
     }
 
 }
 
 Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -335,6 +346,14 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson, const std::vector<std::st
         if(!pJson[pMasqueradingVector[11]].isNull())
         {
             postLogoutRedirectUris_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
+        }
+    }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
         }
     }
 }
@@ -455,12 +474,20 @@ Oauth2Clients::Oauth2Clients(const Json::Value &pJson) noexcept(false)
             postLogoutRedirectUris_=std::make_shared<std::string>(pJson["post_logout_redirect_uris"].asString());
         }
     }
+    if(pJson.isMember("logo_uri"))
+    {
+        dirtyFlag_[12]=true;
+        if(!pJson["logo_uri"].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(pJson["logo_uri"].asString());
+        }
+    }
 }
 
 void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -578,6 +605,14 @@ void Oauth2Clients::updateByMasqueradedJson(const Json::Value &pJson,
             postLogoutRedirectUris_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
+    if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson[pMasqueradingVector[12]].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
+        }
+    }
 }
 
 void Oauth2Clients::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -693,6 +728,14 @@ void Oauth2Clients::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["post_logout_redirect_uris"].isNull())
         {
             postLogoutRedirectUris_=std::make_shared<std::string>(pJson["post_logout_redirect_uris"].asString());
+        }
+    }
+    if(pJson.isMember("logo_uri"))
+    {
+        dirtyFlag_[12] = true;
+        if(!pJson["logo_uri"].isNull())
+        {
+            logoUri_=std::make_shared<std::string>(pJson["logo_uri"].asString());
         }
     }
 }
@@ -996,6 +1039,33 @@ void Oauth2Clients::setPostLogoutRedirectUrisToNull() noexcept
     dirtyFlag_[11] = true;
 }
 
+const std::string &Oauth2Clients::getValueOfLogoUri() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(logoUri_)
+        return *logoUri_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Oauth2Clients::getLogoUri() const noexcept
+{
+    return logoUri_;
+}
+void Oauth2Clients::setLogoUri(const std::string &pLogoUri) noexcept
+{
+    logoUri_ = std::make_shared<std::string>(pLogoUri);
+    dirtyFlag_[12] = true;
+}
+void Oauth2Clients::setLogoUri(std::string &&pLogoUri) noexcept
+{
+    logoUri_ = std::make_shared<std::string>(std::move(pLogoUri));
+    dirtyFlag_[12] = true;
+}
+void Oauth2Clients::setLogoUriToNull() noexcept
+{
+    logoUri_.reset();
+    dirtyFlag_[12] = true;
+}
+
 void Oauth2Clients::updateId(const uint64_t id)
 {
 }
@@ -1014,7 +1084,8 @@ const std::vector<std::string> &Oauth2Clients::insertColumns() noexcept
         "backchannel_logout_uri",
         "backchannel_logout_session_required",
         "deleted_at",
-        "post_logout_redirect_uris"
+        "post_logout_redirect_uris",
+        "logo_uri"
     };
     return inCols;
 }
@@ -1153,6 +1224,17 @@ void Oauth2Clients::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getLogoUri())
+        {
+            binder << getValueOfLogoUri();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Oauth2Clients::updateColumns() const
@@ -1205,6 +1287,10 @@ const std::vector<std::string> Oauth2Clients::updateColumns() const
     if(dirtyFlag_[11])
     {
         ret.push_back(getColumnName(11));
+    }
+    if(dirtyFlag_[12])
+    {
+        ret.push_back(getColumnName(12));
     }
     return ret;
 }
@@ -1343,6 +1429,17 @@ void Oauth2Clients::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[12])
+    {
+        if(getLogoUri())
+        {
+            binder << getValueOfLogoUri();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Oauth2Clients::toJson() const
 {
@@ -1443,6 +1540,14 @@ Json::Value Oauth2Clients::toJson() const
     {
         ret["post_logout_redirect_uris"]=Json::Value();
     }
+    if(getLogoUri())
+    {
+        ret["logo_uri"]=getValueOfLogoUri();
+    }
+    else
+    {
+        ret["logo_uri"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1455,7 +1560,7 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 12)
+    if(pMasqueradingVector.size() == 13)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1589,6 +1694,17 @@ Json::Value Oauth2Clients::toMasqueradedJson(
                 ret[pMasqueradingVector[11]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[12].empty())
+        {
+            if(getLogoUri())
+            {
+                ret[pMasqueradingVector[12]]=getValueOfLogoUri();
+            }
+            else
+            {
+                ret[pMasqueradingVector[12]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1688,6 +1804,14 @@ Json::Value Oauth2Clients::toMasqueradedJson(
     {
         ret["post_logout_redirect_uris"]=Json::Value();
     }
+    if(getLogoUri())
+    {
+        ret["logo_uri"]=getValueOfLogoUri();
+    }
+    else
+    {
+        ret["logo_uri"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1768,13 +1892,18 @@ bool Oauth2Clients::validateJsonForCreation(const Json::Value &pJson, std::strin
         if(!validJsonOfField(11, "post_logout_redirect_uris", pJson["post_logout_redirect_uris"], err, true))
             return false;
     }
+    if(pJson.isMember("logo_uri"))
+    {
+        if(!validJsonOfField(12, "logo_uri", pJson["logo_uri"], err, true))
+            return false;
+    }
     return true;
 }
 bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                        const std::vector<std::string> &pMasqueradingVector,
                                                        std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1891,6 +2020,14 @@ bool Oauth2Clients::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[12].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[12]))
+          {
+              if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1966,13 +2103,18 @@ bool Oauth2Clients::validateJsonForUpdate(const Json::Value &pJson, std::string 
         if(!validJsonOfField(11, "post_logout_redirect_uris", pJson["post_logout_redirect_uris"], err, false))
             return false;
     }
+    if(pJson.isMember("logo_uri"))
+    {
+        if(!validJsonOfField(12, "logo_uri", pJson["logo_uri"], err, false))
+            return false;
+    }
     return true;
 }
 bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 12)
+    if(pMasqueradingVector.size() != 13)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2041,6 +2183,11 @@ bool Oauth2Clients::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
       {
           if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
+      {
+          if(!validJsonOfField(12, pMasqueradingVector[12], pJson[pMasqueradingVector[12]], err, false))
               return false;
       }
     }
@@ -2248,6 +2395,25 @@ bool Oauth2Clients::validJsonOfField(size_t index,
             if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 12:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            if(pJson.isString() && std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>{}
+                .from_bytes(pJson.asCString()).size() > 512)
+            {
+                err="String length exceeds limit for the " +
+                    fieldName +
+                    " field (the maximum value is 512)";
                 return false;
             }
             break;

@@ -4,12 +4,16 @@
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
 #include <fulla/drogon/utils/OrgContextSlots.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
+#include <fulla/storage/postgres/models/Oauth2Clients.h>
+#include <fulla/storage/postgres/models/Oauth2Scopes.h>
 
 #include <json/json.h>
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 // v1.4.0 M1b (#223 second half): the consent screen's owner attribution and
 // org-membership banner are server-derived, not URL-trusted. Gates follow
@@ -57,6 +61,17 @@ OAuth2Plugin *ConsentContextController::resolvePlugin() const
 {
     return plugin_ ? plugin_ : ::drogon::app().getPlugin<OAuth2Plugin>();
 }
+
+// P1-1 tail of the context chain (owner label + org banner + brand
+// fields); defined below context().
+void finishOwnerAndOrg(
+  const ::drogon::HttpRequestPtr &req,
+  const std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>> &sharedCb,
+  const ::drogon::orm::DbClientPtr &db,
+  const std::string &clientId,
+  const std::string &state,
+  Json::Value json
+);
 
 void ConsentContextController::initApiDocs()
 {
@@ -137,6 +152,10 @@ void ConsentContextController::context(
     const std::string redirectUri = req->getParameter("redirect_uri");
     const std::string state = req->getParameter("state");
     const std::string userId = req->getParameter("user_id");
+    // P1-1 (#279): branding + localized scope descriptions.
+    const std::string scopesParam = req->getParameter("scope");
+    const std::string localeParam = req->getParameter("locale");
+    const bool zh = localeParam.rfind("zh", 0) == 0;
 
     // Gate 1 - authenticated session (consent POST Gate 1's exact rule: sub
     // AND userId must be present; an anonymous session never saw an
@@ -213,7 +232,7 @@ void ConsentContextController::context(
     plugin->validateRedirectUri(
       clientId,
       redirectUri,
-      [req, sharedCb, plugin, clientId, state](
+      [req, sharedCb, plugin, clientId, state, scopesParam, zh](
         bool validUri
       ) {
           if (!validUri)
@@ -228,6 +247,11 @@ void ConsentContextController::context(
           Json::Value json;
           json["owner_name"] = "";
           json["org"] = Json::Value(Json::nullValue);
+          // P1-1 (#279): client display block + localized scope
+          // descriptions (additive; degrade to the v1.4.0 shape on any
+          // failure below).
+          json["client_name"] = clientId;
+          json["scope_descriptions"] = Json::Value(Json::arrayValue);
 
           // Memory-mode guard (the M1 Debug-assert pitfall): db_clients is
           // empty in memory deployments and getDbClient() aborts there in
@@ -253,64 +277,194 @@ void ConsentContextController::context(
               return;
           }
 
-          // Owner label (org name / creator display name / "" for
-          // admin-seeded clients; every failure degrades to "").
-          ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
-          ownersRepo.resolveOwnerLabel(
-            clientId,
-            [req, sharedCb, db, state](
-              const std::string &label
-            ) {
-                Json::Value json;
-                json["owner_name"] = label;
-                json["org"] = Json::Value(Json::nullValue);
+          // Stage 1 (P1-1): client display row (name + logo_uri, V041).
+          try
+          {
+              ::drogon::orm::Mapper<drogon_model::fulla_db::Oauth2Clients> clientMapper(db);
+              clientMapper.findBy(
+                ::drogon::orm::Criteria(
+                  drogon_model::fulla_db::Oauth2Clients::Cols::_client_id,
+                  ::drogon::orm::CompareOperator::EQ,
+                  clientId) &&
+                  ::drogon::orm::Criteria(
+                    drogon_model::fulla_db::Oauth2Clients::Cols::_deleted_at,
+                    ::drogon::orm::CompareOperator::IsNull),
+                [req, sharedCb, db, clientId, state, scopesParam, zh, json](
+                  const std::vector<drogon_model::fulla_db::Oauth2Clients> &rows
+                ) mutable {
+                    if (!rows.empty())
+                    {
+                        const std::string name = rows[0].getValueOfName();
+                        if (!name.empty())
+                            json["client_name"] = name;
+                        const std::string logo = rows[0].getValueOfLogoUri();
+                        if (!logo.empty())
+                            json["logo_uri"] = logo;
+                    }
 
-                // Org banner: the binding stashed at authorize time (peek -
-                // the issuance-path consume stays untouched). Unknown/expired
-                // state or no binding -> org stays null.
-                const int64_t now = static_cast<int64_t>(
-                  ::trantor::Date::now().secondsSinceEpoch()
-                );
-                auto orgId = ::fulla::drogon::utils::OrgContextSlots::peek(
-                  req->session(), state, now
-                );
-                if (!orgId.has_value())
-                {
-                    (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
-                    return;
-                }
+                    // Stage 2 (P1-1): localized scope descriptions for the
+                    // flow's requested scopes. Unknown scope names are
+                    // simply omitted (the frontend dictionary is the
+                    // missing-key fallback).
+                    auto next = std::make_shared<std::function<void()>>(
+                      [req, sharedCb, db, clientId, state, json]() mutable {
+                          finishOwnerAndOrg(req, sharedCb, db, clientId, state, json);
+                      });
+                    if (scopesParam.empty())
+                    {
+                        (*next)();
+                        return;
+                    }
+                    std::vector<std::string> names;
+                    std::string current;
+                    auto flush = [&names, &current]() {
+                        if (!current.empty())
+                        {
+                            names.push_back(current);
+                            current.clear();
+                        }
+                    };
+                    for (char c : scopesParam)
+                    {
+                        if (c == ' ' || c == ',' || c == '+')
+                            flush();
+                        else
+                            current.push_back(c);
+                    }
+                    flush();
+                    if (names.empty())
+                    {
+                        (*next)();
+                        return;
+                    }
+                    try
+                    {
+                        ::drogon::orm::Mapper<drogon_model::fulla_db::Oauth2Scopes> scopeMapper(db);
+                        scopeMapper.findBy(
+                          ::drogon::orm::Criteria(
+                            drogon_model::fulla_db::Oauth2Scopes::Cols::_name,
+                            ::drogon::orm::CompareOperator::In,
+                            names),
+                          [next, zh, json](const std::vector<drogon_model::fulla_db::Oauth2Scopes> &scopeRows
+                          ) mutable {
+                              Json::Value arr(Json::arrayValue);
+                              for (const auto &row : scopeRows)
+                              {
+                                  Json::Value d;
+                                  d["scope"] = row.getValueOfName();
+                                  // Locale dimension (V041 description_zh);
+                                  // a NULL zh column falls back to the en
+                                  // description server-side.
+                                  if (zh && row.getDescriptionZh() != nullptr)
+                                      d["description_i18n"] = row.getValueOfDescriptionZh();
+                                  else
+                                      d["description_i18n"] = row.getValueOfDescription();
+                                  arr.append(d);
+                              }
+                              json["scope_descriptions"] = arr;
+                              (*next)();
+                          },
+                          [next](const ::drogon::orm::DrogonDbException &) {
+                              // Scope descriptions are display-only: degrade
+                              // to the empty array (frontend fallback).
+                              (*next)();
+                          });
+                    }
+                    catch (...)
+                    {
+                        (*next)();
+                    }
+                },
+                [req, sharedCb, db, clientId, state, json](
+                  const ::drogon::orm::DrogonDbException &) mutable {
+                    // Client display lookup failed: continue with the
+                    // id-as-name degrade shape.
+                    finishOwnerAndOrg(req, sharedCb, db, clientId, state, json);
+                });
+          }
+          catch (...)
+          {
+              finishOwnerAndOrg(req, sharedCb, db, clientId, state, json);
+          }
+      }
+    );
+}
 
-                // Org name by id (the slot's orgId is server-stashed, never
-                // client-supplied). NoRow (org deleted mid-flight) and Error
-                // both degrade to org=null - never a wrong-org banner.
-                try
-                {
-                    ::fulla::storage::postgres::ClientOwnersRepository repo(db);
-                    repo.findOrganization(
-                      std::to_string(*orgId),
-                      [sharedCb, orgId = *orgId, json](
-                        const ::fulla::storage::postgres::OrganizationLookup &lookup
-                      ) mutable {
-                          if (lookup.status ==
-                              ::fulla::storage::postgres::LookupStatus::Found)
-                          {
-                              Json::Value org;
-                              org["org_id"] = orgId;
-                              org["org_name"] = lookup.row.getValueOfName();
-                              json["org"] = org;
-                          }
-                          (*sharedCb)(
-                            ::drogon::HttpResponse::newHttpJsonResponse(json)
-                          );
-                      }
+// Shared tail of the consent-context chain: owner attribution label (P0-6
+// semantics) + org banner (v1.4.0 M1b), now with the P1-1 org brand fields
+// (logo_uri / primary_color). Every failure degrades to the pre-P1-1
+// shape, never to an error.
+void finishOwnerAndOrg(
+  const ::drogon::HttpRequestPtr &req,
+  const std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>> &sharedCb,
+  const ::drogon::orm::DbClientPtr &db,
+  const std::string &clientId,
+  const std::string &state,
+  Json::Value json
+)
+{
+    // Owner label (org name / creator display name / "" for
+    // admin-seeded clients; every failure degrades to "").
+    ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
+    ownersRepo.resolveOwnerLabel(
+      clientId,
+      [req, sharedCb, db, state, json](
+        const std::string &label
+      ) mutable {
+          json["owner_name"] = label;
+
+          // Org banner: the binding stashed at authorize time (peek -
+          // the issuance-path consume stays untouched). Unknown/expired
+          // state or no binding -> org stays null.
+          const int64_t now = static_cast<int64_t>(
+            ::trantor::Date::now().secondsSinceEpoch()
+          );
+          auto orgId = ::fulla::drogon::utils::OrgContextSlots::peek(
+            req->session(), state, now
+          );
+          if (!orgId.has_value())
+          {
+              (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+              return;
+          }
+
+          // Org name by id (the slot's orgId is server-stashed, never
+          // client-supplied). NoRow (org deleted mid-flight) and Error
+          // both degrade to org=null - never a wrong-org banner.
+          try
+          {
+              ::fulla::storage::postgres::ClientOwnersRepository repo(db);
+              repo.findOrganization(
+                std::to_string(*orgId),
+                [sharedCb, orgId = *orgId, json](
+                  const ::fulla::storage::postgres::OrganizationLookup &lookup
+                ) mutable {
+                    if (lookup.status ==
+                        ::fulla::storage::postgres::LookupStatus::Found)
+                    {
+                        Json::Value org;
+                        org["org_id"] = orgId;
+                        org["org_name"] = lookup.row.getValueOfName();
+                        // P1-1 (#279): org brand fields (display-only;
+                        // absent when unset).
+                        const std::string orgLogo = lookup.row.getValueOfLogoUri();
+                        if (!orgLogo.empty())
+                            org["logo_uri"] = orgLogo;
+                        const std::string orgColor = lookup.row.getValueOfPrimaryColor();
+                        if (!orgColor.empty())
+                            org["primary_color"] = orgColor;
+                        json["org"] = org;
+                    }
+                    (*sharedCb)(
+                      ::drogon::HttpResponse::newHttpJsonResponse(json)
                     );
                 }
-                catch (...)
-                {
-                    (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
-                }
-            }
-          );
+              );
+          }
+          catch (...)
+          {
+              (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          }
       }
     );
 }

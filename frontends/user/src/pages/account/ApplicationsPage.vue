@@ -32,6 +32,8 @@ const newName = ref('')
 const newType = ref<'PUBLIC' | 'CONFIDENTIAL'>('PUBLIC')
 const newRedirectUris = ref('')
 const newScopes = ref('openid profile')
+// P1-1 (#279): optional brand image (https-only at the server).
+const newLogoUri = ref('')
 
 // #181: destructive actions route through the shared confirm dialog instead
 // of native confirm() (which needed page.on('dialog') shims in the e2e suite).
@@ -74,6 +76,7 @@ async function createApp() {
     }
     if (uris.length) body.redirect_uris = uris
     if (scopes.length) body.scopes = scopes
+    if (newLogoUri.value.trim()) body.logo_uri = newLogoUri.value.trim()
     const resp = await http.post('/api/me/applications', JSON.stringify(body), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -278,6 +281,16 @@ onMounted(fetchApps)
           <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.scopes') }}</label>
           <input
             v-model="newScopes"
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          >
+        </div>
+        <!-- P1-1 (#279): brand image for the login/consent screens. -->
+        <div>
+          <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.logoUri') }}</label>
+          <input
+            v-model="newLogoUri"
+            :placeholder="$t('account.applications.logoUriPlaceholder')"
             class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >

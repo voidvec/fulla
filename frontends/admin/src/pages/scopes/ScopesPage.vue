@@ -25,8 +25,8 @@ const errorText = computed(() => {
   return typeof e === 'string' ? e : getErrorMessage(e.code)
 })
 
-const newScope = ref({ name: '', description: '', mapped_role: '', is_default: false, requires_admin_role: false })
-const editScope = ref({ description: '', mapped_role: '', is_default: false, requires_admin_role: false })
+const newScope = ref({ name: '', description: '', description_zh: '', mapped_role: '', is_default: false, requires_admin_role: false })
+const editScope = ref({ description: '', description_zh: '', mapped_role: '', is_default: false, requires_admin_role: false })
 
 function showSuccess(msg: string) {
   successMessage.value = msg
@@ -75,7 +75,7 @@ async function createScope() {
     await axios.post('/api/admin/scopes', newScope.value, { headers: { 'Content-Type': 'application/json' } })
     showSuccess(t('admin.scopes.created', { name: newScope.value.name }))
     showCreateModal.value = false
-    newScope.value = { name: '', description: '', mapped_role: '', is_default: false, requires_admin_role: false }
+    newScope.value = { name: '', description: '', description_zh: '', mapped_role: '', is_default: false, requires_admin_role: false }
     await fetchScopes()
   } catch (e: unknown) {
     showError(normalizeError(e))
@@ -88,6 +88,7 @@ function openEditModal(scope: any) {
   selectedScope.value = scope
   editScope.value = {
     description: scope.description || '',
+    description_zh: scope.description_zh || '',
     mapped_role: scope.mapped_role || '',
     is_default: scope.is_default || false,
     requires_admin_role: scope.requires_admin_role || false,
@@ -280,6 +281,14 @@ onMounted(fetchScopes)
             >
           </div>
           <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.scopes.descriptionZh') }}</label>
+            <input
+              v-model="newScope.description_zh"
+              class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              :placeholder="$t('admin.scopes.descriptionZhPlaceholder')"
+            >
+          </div>
+          <div>
             <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.scopes.mappedRole') }}</label>
             <input
               v-model="newScope.mapped_role"
@@ -338,6 +347,13 @@ onMounted(fetchScopes)
             <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('common.description') }}</label>
             <input
               v-model="editScope.description"
+              class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.scopes.descriptionZh') }}</label>
+            <input
+              v-model="editScope.description_zh"
               class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
             >
           </div>

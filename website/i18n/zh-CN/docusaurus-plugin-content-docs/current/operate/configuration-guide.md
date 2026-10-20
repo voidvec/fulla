@@ -256,3 +256,35 @@ memory 部署返回 404（无模板存储；实际发送时引擎回退到编译
   导出的 CSV。
 - `export_max_rows` —— 导出行数上限（默认 50 万）。请求级 `limit` 参数只
   允许调低；超限导出返回 400 `AUDIT_EXPORT_TOO_LARGE` 并提示收窄窗口。
+
+## 14. 品牌化消费链 + PKCE plain 移除（P1-1，#279）
+
+**PKCE `plain` 现被无条件拒绝。** v1.5.0 作为单版本过渡发布的
+`auth.allow_pkce_plain` 逃生阀已移除（过渡窗口已关闭）。配置键已删除：
+authorize 处 `code_challenge_method=plain` 无论配置如何都返回
+`invalid_request`；discovery 只公告 S256。仍依赖 plain 的部署必须在升级
+v1.6.0 前把客户端迁移到 S256。
+
+**品牌化消费。** 组织与客户端品牌字段现在到达用户侧界面：
+
+- `GET /oauth2/authorize-context`（additive）：客户端 `logo_uri`，以及
+  应用归属组织时的 `{org_name, logo_uri?, primary_color?}` 块。
+- `GET /oauth2/consent/context`（additive）：客户端展示块、本地化的
+  `scope_descriptions`（见下）、org 横幅上的品牌字段。品牌仅作展示、
+  不受信——始终与所有者归因标签成对渲染。
+- 同意屏的 logo 只以 `<img src>` 渲染（SVG 在 img 上下文不执行脚本；
+  禁止以锚点包裹）。nginx 层（用户 + 管理 SPA）现在下发
+  Content-Security-Policy（`img-src 'self' data: https:`）——此前两个
+  SPA 完全没有 CSP。
+
+**写路径与校验**（V041 增加 `oauth2_clients.logo_uri` 与
+`oauth2_scopes.description_zh`）：管理端客户端创建/编辑、门户我的应用
+创建/编辑接受 `logo_uri`；组织自助创建校验两个品牌字段。规则（刻意
+不是 redirect 注册规则）：
+
+- `logo_uri`：仅 https，回环主机豁免（开发用），禁 userinfo/fragment，
+  ≤512 字符——不继承 `auth.allow_http_redirect_uri`。
+- `primary_color`：`^#[0-9a-fA-F]{3,6}$`（原先无约束；列宽 VARCHAR(7)）。
+- `description_zh`（作用域管理 CRUD，≤512 字符）：中文同意屏文案。
+  consent context 按页面语言服务端下发；前端字典仅作缺失兜底。描述
+  变更带前后 diff 写审计（`scope_updated`）。

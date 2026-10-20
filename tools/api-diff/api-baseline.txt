@@ -3662,6 +3662,14 @@ static void requestReset(const ::drogon::HttpRequestPtr &req, ResponseCallback c
 static void confirmReset(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 };
 }
+=== libs/drogon/include/fulla/drogon/utils/BrandValidator.h
+#pragma once
+#include <string>
+namespace fulla::drogon::utils
+{
+std::string validateBrandUri(const std::string &uri);
+std::string validatePrimaryColor(const std::string &color);
+}
 === libs/drogon/include/fulla/drogon/utils/ClientCacheInvalidator.h
 #pragma once
 #include <drogon/drogon.h>
@@ -8054,6 +8062,7 @@ static const std::string _backchannel_logout_uri;
 static const std::string _backchannel_logout_session_required;
 static const std::string _deleted_at;
 static const std::string _post_logout_redirect_uris;
+static const std::string _logo_uri;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -8135,6 +8144,11 @@ const std::shared_ptr<std::string> &getPostLogoutRedirectUris() const noexcept;
 void setPostLogoutRedirectUris(const std::string &pPostLogoutRedirectUris) noexcept;
 void setPostLogoutRedirectUris(std::string &&pPostLogoutRedirectUris) noexcept;
 void setPostLogoutRedirectUrisToNull() noexcept;
+const std::string &getValueOfLogoUri() const noexcept;
+const std::shared_ptr<std::string> &getLogoUri() const noexcept;
+void setLogoUri(const std::string &pLogoUri) noexcept;
+void setLogoUri(std::string &&pLogoUri) noexcept;
+void setLogoUriToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -8186,6 +8200,7 @@ std::shared_ptr<std::string> backchannelLogoutUri_;
 std::shared_ptr<bool> backchannelLogoutSessionRequired_;
 std::shared_ptr<::trantor::Date> deletedAt_;
 std::shared_ptr<std::string> postLogoutRedirectUris_;
+std::shared_ptr<std::string> logoUri_;
 struct MetaData
 {
 const std::string colName_;
@@ -8197,7 +8212,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[12]={ false };
+bool dirtyFlag_[13]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -8813,6 +8828,7 @@ static const std::string _mapped_role;
 static const std::string _is_default;
 static const std::string _requires_admin_role;
 static const std::string _self_service;
+static const std::string _description_zh;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -8868,6 +8884,11 @@ void setRequiresAdminRoleToNull() noexcept;
 const bool &getValueOfSelfService() const noexcept;
 const std::shared_ptr<bool> &getSelfService() const noexcept;
 void setSelfService(const bool &pSelfService) noexcept;
+const std::string &getValueOfDescriptionZh() const noexcept;
+const std::shared_ptr<std::string> &getDescriptionZh() const noexcept;
+void setDescriptionZh(const std::string &pDescriptionZh) noexcept;
+void setDescriptionZh(std::string &&pDescriptionZh) noexcept;
+void setDescriptionZhToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -8898,6 +8919,7 @@ std::shared_ptr<std::string> mappedRole_;
 std::shared_ptr<bool> isDefault_;
 std::shared_ptr<bool> requiresAdminRole_;
 std::shared_ptr<bool> selfService_;
+std::shared_ptr<std::string> descriptionZh_;
 struct MetaData
 {
 const std::string colName_;
@@ -8909,7 +8931,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[7]={ false };
+bool dirtyFlag_[8]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

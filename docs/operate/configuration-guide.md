@@ -432,3 +432,46 @@ Configuration (custom_config):
 - `export_max_rows` — export row cap (default 500k). The per-request
   `limit` parameter may only LOWER it; over-cap exports answer 400
   `AUDIT_EXPORT_TOO_LARGE` with a hint to narrow the window.
+
+## 14. Branding consumption chain + PKCE plain removal (P1-1, #279)
+
+**PKCE `plain` is now unconditionally rejected.** The
+`auth.allow_pkce_plain` escape hatch that shipped in v1.5.0 as a
+one-release transition for legacy PUBLIC clients is REMOVED (the window
+has closed). The config key is gone: `code_challenge_method=plain` at
+authorize answers `invalid_request` regardless of configuration, and
+discovery keeps advertising S256 only. Deployments that still relied on
+plain must migrate clients to S256 before upgrading to v1.6.0.
+
+**Branding consumption.** Org and client brand fields now reach the
+user-facing screens:
+
+- `GET /oauth2/authorize-context` (additive): client `logo_uri` plus the
+  owning organization's `{org_name, logo_uri?, primary_color?}` when the
+  application is org-owned.
+- `GET /oauth2/consent/context` (additive): client display block,
+  localized `scope_descriptions` (see below), and the org brand fields on
+  the org banner. Branding is display-only and untrusted — it always
+  renders paired with the owner attribution label.
+- The consent screen renders logos ONLY via `<img src>` (SVG in an img
+  context does not execute scripts; never wrapped in an anchor). The
+  nginx layer (user + admin SPA) now sets a Content-Security-Policy
+  (`img-src 'self' data: https:`) — previously the SPAs carried no CSP
+  at all.
+
+**Write paths & validation** (V041 adds `oauth2_clients.logo_uri` and
+`oauth2_scopes.description_zh`): admin client create/edit, portal
+My Applications create/edit accept `logo_uri`; org self-service create
+validates both brand fields. Rules (deliberately NOT the redirect
+registration rule):
+
+- `logo_uri`: https-only, loopback hosts exempted for dev, no
+  userinfo/fragment, ≤512 chars — does NOT inherit
+  `auth.allow_http_redirect_uri`.
+- `primary_color`: `^#[0-9a-fA-F]{3,6}$` (the previous acceptance was
+  unbounded; the column is VARCHAR(7)).
+- `description_zh` (scope admin CRUD, ≤512 chars): the zh-CN
+  consent-screen copy. The consent context serves it for zh pages
+  (server-side locale dimension); the frontend dictionary is only the
+  missing-key fallback. Description changes are audited with a
+  before/after diff (`scope_updated`).
