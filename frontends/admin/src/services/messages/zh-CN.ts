@@ -53,6 +53,9 @@ export const zhCN: Record<string, string> = {
   EMAIL_TEMPLATE_CONTENT_REJECTED: '模板含禁用标签或外链域名不在允许列表',
   EMAIL_TEST_RECIPIENT_DENIED: '测试收件人不在白名单（须为本人邮箱或 email.test_recipients 配置项）',
   EMAIL_TEST_QUOTA_EXCEEDED: '测试发送配额已用尽，请稍后重试',
+  // --- P1-6 (#283): audit export guard codes ---
+  AUDIT_EXPORT_WINDOW_REQUIRED: '导出审计日志必须限定时间范围（from/to）或显式选择全量导出',
+  AUDIT_EXPORT_TOO_LARGE: '导出行数超过上限，请收窄时间范围后重试',
   AUTH_MFA_CODE_INVALID: '验证码不正确',
   AUTH_MFA_NOT_CONFIGURED: '尚未设置双重验证，请先完成设置',
 

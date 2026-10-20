@@ -5,6 +5,8 @@
 #include <fulla/oauth2/repository/ITokenRepository.h>
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace fulla::drogon
 {
@@ -42,6 +44,28 @@ class OAuth2CleanupService : public std::enable_shared_from_this<OAuth2CleanupSe
     /// forget with logging; failures never block the cleanup cycle. Public as
     /// the integration-test seam. `completion` (optional) always fires.
     void maintainAuditPartitions(std::function<void()> &&completion = nullptr);
+
+    /// P1-6 (#283): audit retention. Drops audit_logs monthly partitions whose
+    /// month lies entirely before the retention window
+    /// (custom_config.audit.retention_months; 0/unset = keep forever). Only
+    /// partitions matching the REAL naming pattern audit_logs_pYYYY_MM
+    /// (V025) are candidates — the DEFAULT partition is never dropped. No-op
+    /// unless a DbClient is injected AND postgres storage is declared.
+    /// Fire-and-forget with logging; failures never block the cleanup cycle.
+    void maintainAuditRetention();
+
+    /// Pure helper (unit-tested): from a list of relation names attached to
+    /// audit_logs, return those entirely older than the retention window.
+    /// `nowSeconds` is injectable for mock-clock tests. A partition
+    /// audit_logs_pYYYY_MM is droppable iff its (yyyy,mm) tuple is strictly
+    /// before the cutoff month (now - retentionMonths): the whole partition
+    /// month then predates the retention window, so no retained row can live
+    /// in it. Non-matching names (DEFAULT, future/foreign) are ignored.
+    static std::vector<std::string> retentionDropCandidates(
+      const std::vector<std::string> &partitionNames,
+      int retentionMonths,
+      int64_t nowSeconds
+    );
 
   private:
     std::shared_ptr<::fulla::oauth2::repository::IGrantRepository> grantRepo_;

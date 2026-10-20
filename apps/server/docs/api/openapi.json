@@ -648,6 +648,35 @@
         ]
       }
     },
+    "/api/admin/logs/export" : 
+    {
+      "get" : 
+      {
+        "description" : "P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint plus a mandatory time window (from/to, epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows, default 500k; `limit` may only lower it) \u2014 over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading = + - @ tab CR get a ' prefix). Audited as audit_exported. Memory deployments answer 404.",
+        "operationId" : "get_api_admin_logs_export",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Export Audit Logs (CSV)",
+        "tags" : 
+        [
+          "Admin",
+          "Logs"
+        ],
+        "x-required-scopes" : 
+        [
+          "audit:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/oidc/keys" : 
     {
       "get" : 

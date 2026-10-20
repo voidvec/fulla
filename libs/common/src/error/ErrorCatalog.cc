@@ -65,9 +65,9 @@ struct RawEntry
 
 // Verbatim copy of oauth2::error::ErrorCatalog's table (numeric codes/messages
 // preserved unchanged); grows as new codes are ratified.
-const std::array<RawEntry, 38> &rawEntries()
+const std::array<RawEntry, 40> &rawEntries()
 {
-    static const std::array<RawEntry, 38> kEntries = {{
+    static const std::array<RawEntry, 40> kEntries = {{
       // NETWORK (1000-1099)
       {"NET_CONNECTION_FAILED",
        1001,
@@ -299,6 +299,19 @@ const std::array<RawEntry, 38> &rawEntries()
        "测试发送配额已用尽",
        "滚动 24 小时 test-send 配额已用尽（VALIDATION 类，HTTP 429）",
        429},
+
+      // VALIDATION (3000-3099) —— P1-6 (#283)：审计导出。均为 400（请求
+      // 参数层面的防护性拒绝）。
+      {"AUDIT_EXPORT_WINDOW_REQUIRED",
+       3021,
+       ErrorCategory::VALIDATION,
+       "导出必须限定时间窗",
+       "审计导出要求 from/to（epoch 秒）或显式 all=true（VALIDATION 类，HTTP 400）"},
+      {"AUDIT_EXPORT_TOO_LARGE",
+       3022,
+       ErrorCategory::VALIDATION,
+       "导出行数超过上限",
+       "导出行数超过上限（audit.export_max_rows 或 limit），请收窄时间窗（VALIDATION 类，HTTP 400）"},
     }};
     return kEntries;
 }

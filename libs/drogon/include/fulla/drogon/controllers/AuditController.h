@@ -30,6 +30,13 @@ class AuditController : public ::drogon::HttpController<AuditController, false>
       ::drogon::Get,
       "fulla::drogon::filters::AuthorizationFilter"
     );
+    // P1-6 (#283): CSV export of the audit trail.
+    ADD_METHOD_TO(
+      AuditController::exportLogs,
+      "/api/admin/logs/export",
+      ::drogon::Get,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
     // Dashboard Stats
     ADD_METHOD_TO(
       AuditController::getDashboardStats,
@@ -40,6 +47,11 @@ class AuditController : public ::drogon::HttpController<AuditController, false>
     METHOD_LIST_END
 
     void listLogs(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+
+    void exportLogs(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
     );

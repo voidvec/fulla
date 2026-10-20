@@ -200,18 +200,36 @@ func (e PostApiAdminClientsJSONBodyClientType) Valid() bool {
 	}
 }
 
+// Defines values for GetApiAdminLogsExportParamsAll.
+const (
+	GetApiAdminLogsExportParamsAllN1   GetApiAdminLogsExportParamsAll = "1"
+	GetApiAdminLogsExportParamsAllTrue GetApiAdminLogsExportParamsAll = "true"
+)
+
+// Valid indicates whether the value is a known member of the GetApiAdminLogsExportParamsAll enum.
+func (e GetApiAdminLogsExportParamsAll) Valid() bool {
+	switch e {
+	case GetApiAdminLogsExportParamsAllN1:
+		return true
+	case GetApiAdminLogsExportParamsAllTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetApiAdminUsersParamsLocked.
 const (
-	False GetApiAdminUsersParamsLocked = "false"
-	True  GetApiAdminUsersParamsLocked = "true"
+	GetApiAdminUsersParamsLockedFalse GetApiAdminUsersParamsLocked = "false"
+	GetApiAdminUsersParamsLockedTrue  GetApiAdminUsersParamsLocked = "true"
 )
 
 // Valid indicates whether the value is a known member of the GetApiAdminUsersParamsLocked enum.
 func (e GetApiAdminUsersParamsLocked) Valid() bool {
 	switch e {
-	case False:
+	case GetApiAdminUsersParamsLockedFalse:
 		return true
-	case True:
+	case GetApiAdminUsersParamsLockedTrue:
 		return true
 	default:
 		return false
@@ -918,6 +936,33 @@ type PutApiAdminEmailTemplatesKeyLocaleJSONBody struct {
 type PostApiAdminEmailTemplatesKeyLocaleTestSendJSONBody struct {
 	To openapi_types.Email `json:"to"`
 }
+
+// GetApiAdminLogsExportParams defines parameters for GetApiAdminLogsExport.
+type GetApiAdminLogsExportParams struct {
+	// Action Filter by action
+	Action *string `form:"action,omitempty" json:"action,omitempty"`
+
+	// Outcome Filter by outcome
+	Outcome *string `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// ActorId Filter by actor id
+	ActorId *string `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+
+	// From Window start (unix epoch seconds); required unless all=true
+	From *int64 `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Window end (unix epoch seconds); required unless all=true
+	To *int64 `form:"to,omitempty" json:"to,omitempty"`
+
+	// All Explicit full-table opt-in (window requirement waived; the row cap still applies)
+	All *GetApiAdminLogsExportParamsAll `form:"all,omitempty" json:"all,omitempty"`
+
+	// Limit Max rows to export (may only lower audit.export_max_rows)
+	Limit *int64 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetApiAdminLogsExportParamsAll defines parameters for GetApiAdminLogsExport.
+type GetApiAdminLogsExportParamsAll string
 
 // PostApiAdminOrganizationsJSONBody defines parameters for PostApiAdminOrganizations.
 type PostApiAdminOrganizationsJSONBody struct {
@@ -1998,6 +2043,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/admin/logs (the `GetApiAdminLogs` operationId).
 	GetApiAdminLogs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminLogsExport Export Audit Logs (CSV)
+	//
+	// P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint (action/outcome/actor_id) plus a mandatory time window (from/to, epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows, default 500k; the per-request `limit` may only lower it) — over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading = + - @ tab CR get a '' prefix). Audited as audit_exported. Memory deployments answer 404.
+	//
+	// Corresponds with GET /api/admin/logs/export (the `GetApiAdminLogsExport` operationId).
+	GetApiAdminLogsExport(ctx context.Context, params *GetApiAdminLogsExportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminOidcKeys Get OIDC Keys Info
 	//
@@ -3808,6 +3860,23 @@ func (c *Client) PostApiAdminEmailTemplatesKeyLocaleTestSend(ctx context.Context
 // Corresponds with GET /api/admin/logs (the `GetApiAdminLogs` operationId).
 func (c *Client) GetApiAdminLogs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiAdminLogsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminLogsExport Export Audit Logs (CSV)
+//
+// P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint (action/outcome/actor_id) plus a mandatory time window (from/to, epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows, default 500k; the per-request `limit` may only lower it) — over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading = + - @ tab CR get a ” prefix). Audited as audit_exported. Memory deployments answer 404.
+//
+// Corresponds with GET /api/admin/logs/export (the `GetApiAdminLogsExport` operationId).
+func (c *Client) GetApiAdminLogsExport(ctx context.Context, params *GetApiAdminLogsExportParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminLogsExportRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7420,6 +7489,132 @@ func NewGetApiAdminLogsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiAdminLogsExportRequest constructs an http.Request for the GetApiAdminLogsExport method
+func NewGetApiAdminLogsExportRequest(server string, params *GetApiAdminLogsExportParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/logs/export")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Action != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "action", *params.Action, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Outcome != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "outcome", *params.Outcome, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ActorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "actor_id", *params.ActorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.From != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "from", *params.From, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.To != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "to", *params.To, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.All != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "all", *params.All, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -12061,6 +12256,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/admin/logs (the `GetApiAdminLogs` operationId).
 	GetApiAdminLogsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminLogsResponse, error)
 
+	// GetApiAdminLogsExportWithResponse Export Audit Logs (CSV)
+	//
+	// P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint (action/outcome/actor_id) plus a mandatory time window (from/to, epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows, default 500k; the per-request `limit` may only lower it) — over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading = + - @ tab CR get a '' prefix). Audited as audit_exported. Memory deployments answer 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/logs/export (the `GetApiAdminLogsExport` operationId).
+	GetApiAdminLogsExportWithResponse(ctx context.Context, params *GetApiAdminLogsExportParams, reqEditors ...RequestEditorFn) (*GetApiAdminLogsExportResponse, error)
+
 	// GetApiAdminOidcKeysWithResponse Get OIDC Keys Info
 	//
 	// Live signing-keystore state (#110): every loaded kid with its status (active = signs new tokens, published = verification-only during a rotation grace window), the active_kid, and the key count. Cryptographic material (n/e) lives in /.well-known/jwks.json.
@@ -14278,6 +14482,40 @@ func (r GetApiAdminLogsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetApiAdminLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminLogsExportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminLogsExportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminLogsExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminLogsExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminLogsExportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20150,6 +20388,21 @@ func (c *ClientWithResponses) GetApiAdminLogsWithResponse(ctx context.Context, r
 	return ParseGetApiAdminLogsResponse(rsp)
 }
 
+// GetApiAdminLogsExportWithResponse Export Audit Logs (CSV)
+//
+// P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint (action/outcome/actor_id) plus a mandatory time window (from/to, epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows, default 500k; the per-request `limit` may only lower it) — over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading = + - @ tab CR get a ” prefix). Audited as audit_exported. Memory deployments answer 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/logs/export (the `GetApiAdminLogsExport` operationId).
+func (c *ClientWithResponses) GetApiAdminLogsExportWithResponse(ctx context.Context, params *GetApiAdminLogsExportParams, reqEditors ...RequestEditorFn) (*GetApiAdminLogsExportResponse, error) {
+	rsp, err := c.GetApiAdminLogsExport(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminLogsExportResponse(rsp)
+}
+
 // GetApiAdminOidcKeysWithResponse Get OIDC Keys Info
 //
 // Live signing-keystore state (#110): every loaded kid with its status (active = signs new tokens, published = verification-only during a rotation grace window), the active_kid, and the key count. Cryptographic material (n/e) lives in /.well-known/jwks.json.
@@ -22947,6 +23200,22 @@ func ParseGetApiAdminLogsResponse(rsp *http.Response) (*GetApiAdminLogsResponse,
 	}
 
 	response := &GetApiAdminLogsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminLogsExportResponse parses an HTTP response from a GetApiAdminLogsExportWithResponse call
+func ParseGetApiAdminLogsExportResponse(rsp *http.Response) (*GetApiAdminLogsExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminLogsExportResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
