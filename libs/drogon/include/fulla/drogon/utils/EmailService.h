@@ -38,6 +38,7 @@ class IEmailService
       std::function<void(bool)> &&callback
     )
     {
+        (void)bodyHtml;  // dropped by the text-only fallback (GCC unused-param)
         sendEmail(to, subject, bodyText, std::move(callback));
     }
 };

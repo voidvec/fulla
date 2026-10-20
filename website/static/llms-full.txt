@@ -1503,7 +1503,7 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `VALIDATION_RATE_LIMITED` | 3012 | VALIDATION | 429 | 请求过于频繁，请稍后重试 |
 | `VALIDATION_REDIRECT_URI_NOT_REGISTERED` | 3013 | VALIDATION | 400 | 登出重定向地址未注册 |
 | `EMAIL_TEMPLATE_NOT_FOUND` | 3017 | VALIDATION | 404 | 邮件模板不存在 |
-| `EMAIL_TEMPLATE_CONTENT_REJECTED` | 3018 | VALIDATION | 400 | 邮件模板内容被拒绝（禁用标签或外链域名不在允许列表） |
+| `EMAIL_TEMPLATE_CONTENT_REJECTED` | 3018 | VALIDATION | 400 | 邮件模板内容被拒绝 |
 | `EMAIL_TEST_RECIPIENT_DENIED` | 3019 | VALIDATION | 403 | 测试收件人不在白名单 |
 | `EMAIL_TEST_QUOTA_EXCEEDED` | 3020 | VALIDATION | 429 | 测试发送配额已用尽 |
 | `AUTH_INVALID_CREDENTIALS` | 4001 | AUTHENTICATION | 401 | 用户名或密码错误 |
