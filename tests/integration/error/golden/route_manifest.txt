@@ -1,4 +1,6 @@
 DELETE /api/admin/clients/{clientId}
+DELETE /api/admin/organizations/{slug}
+DELETE /api/admin/organizations/{slug}/members/{userId}
 DELETE /api/admin/roles/{roleId}
 DELETE /api/admin/scopes/{scopeId}
 DELETE /api/admin/tokens/{tokenPrefix}
@@ -28,6 +30,7 @@ GET /api/admin/logs/export
 GET /api/admin/oidc/keys
 GET /api/admin/organizations
 GET /api/admin/organizations/{slug}
+GET /api/admin/organizations/{slug}/members
 GET /api/admin/roles
 GET /api/admin/scopes
 GET /api/admin/scopes/resources
@@ -64,6 +67,7 @@ OPTIONS /api/github/login
 OPTIONS /api/google/login
 OPTIONS /api/wechat/login
 OPTIONS /metrics
+PATCH /api/admin/organizations/{slug}
 PATCH /api/me/applications/{clientId}
 PATCH /api/me/profile
 POST /api/admin/clients

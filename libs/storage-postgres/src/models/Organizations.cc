@@ -22,6 +22,7 @@ const std::string Organizations::Cols::_issuer_override = "\"issuer_override\"";
 const std::string Organizations::Cols::_created_at = "\"created_at\"";
 const std::string Organizations::Cols::_updated_at = "\"updated_at\"";
 const std::string Organizations::Cols::_require_mfa = "\"require_mfa\"";
+const std::string Organizations::Cols::_deleted_at = "\"deleted_at\"";
 const std::string Organizations::primaryKeyName = "id";
 const bool Organizations::hasPrimaryKey = true;
 const std::string Organizations::tableName = "\"organizations\"";
@@ -35,7 +36,8 @@ const std::vector<typename Organizations::MetaData> Organizations::metaData_={
 {"issuer_override","std::string","character varying",512,0,0,0},
 {"created_at","::trantor::Date","timestamp without time zone",0,0,0,0},
 {"updated_at","::trantor::Date","timestamp without time zone",0,0,0,0},
-{"require_mfa","bool","boolean",1,0,0,1}
+{"require_mfa","bool","boolean",1,0,0,1},
+{"deleted_at","::trantor::Date","timestamp with time zone",0,0,0,0}
 };
 const std::string &Organizations::getColumnName(size_t index) noexcept(false)
 {
@@ -118,11 +120,33 @@ Organizations::Organizations(const Row &r, const ssize_t indexOffset) noexcept
         {
             requireMfa_=std::make_shared<bool>(r["require_mfa"].as<bool>());
         }
+        if(!r["deleted_at"].isNull())
+        {
+            auto timeStr = r["deleted_at"].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 9 > r.size())
+        if(offset + 10 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -209,13 +233,36 @@ Organizations::Organizations(const Row &r, const ssize_t indexOffset) noexcept
         {
             requireMfa_=std::make_shared<bool>(r[index].as<bool>());
         }
+        index = offset + 9;
+        if(!r[index].isNull())
+        {
+            auto timeStr = r[index].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
     }
 
 }
 
 Organizations::Organizations(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -326,6 +373,32 @@ Organizations::Organizations(const Json::Value &pJson, const std::vector<std::st
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
             requireMfa_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+        }
+    }
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
         }
     }
 }
@@ -440,12 +513,38 @@ Organizations::Organizations(const Json::Value &pJson) noexcept(false)
             requireMfa_=std::make_shared<bool>(pJson["require_mfa"].asBool());
         }
     }
+    if(pJson.isMember("deleted_at"))
+    {
+        dirtyFlag_[9]=true;
+        if(!pJson["deleted_at"].isNull())
+        {
+            auto timeStr = pJson["deleted_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
 }
 
 void Organizations::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -557,6 +656,32 @@ void Organizations::updateByMasqueradedJson(const Json::Value &pJson,
             requireMfa_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
         }
     }
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
 }
 
 void Organizations::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -666,6 +791,32 @@ void Organizations::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["require_mfa"].isNull())
         {
             requireMfa_=std::make_shared<bool>(pJson["require_mfa"].asBool());
+        }
+    }
+    if(pJson.isMember("deleted_at"))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson["deleted_at"].isNull())
+        {
+            auto timeStr = pJson["deleted_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                deletedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
         }
     }
 }
@@ -878,6 +1029,28 @@ void Organizations::setRequireMfa(const bool &pRequireMfa) noexcept
     dirtyFlag_[8] = true;
 }
 
+const ::trantor::Date &Organizations::getValueOfDeletedAt() const noexcept
+{
+    static const ::trantor::Date defaultValue = ::trantor::Date();
+    if(deletedAt_)
+        return *deletedAt_;
+    return defaultValue;
+}
+const std::shared_ptr<::trantor::Date> &Organizations::getDeletedAt() const noexcept
+{
+    return deletedAt_;
+}
+void Organizations::setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept
+{
+    deletedAt_ = std::make_shared<::trantor::Date>(pDeletedAt);
+    dirtyFlag_[9] = true;
+}
+void Organizations::setDeletedAtToNull() noexcept
+{
+    deletedAt_.reset();
+    dirtyFlag_[9] = true;
+}
+
 void Organizations::updateId(const uint64_t id)
 {
 }
@@ -892,7 +1065,8 @@ const std::vector<std::string> &Organizations::insertColumns() noexcept
         "issuer_override",
         "created_at",
         "updated_at",
-        "require_mfa"
+        "require_mfa",
+        "deleted_at"
     };
     return inCols;
 }
@@ -987,6 +1161,17 @@ void Organizations::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[9])
+    {
+        if(getDeletedAt())
+        {
+            binder << getValueOfDeletedAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Organizations::updateColumns() const
@@ -1023,6 +1208,10 @@ const std::vector<std::string> Organizations::updateColumns() const
     if(dirtyFlag_[8])
     {
         ret.push_back(getColumnName(8));
+    }
+    if(dirtyFlag_[9])
+    {
+        ret.push_back(getColumnName(9));
     }
     return ret;
 }
@@ -1117,6 +1306,17 @@ void Organizations::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[9])
+    {
+        if(getDeletedAt())
+        {
+            binder << getValueOfDeletedAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Organizations::toJson() const
 {
@@ -1193,6 +1393,14 @@ Json::Value Organizations::toJson() const
     {
         ret["require_mfa"]=Json::Value();
     }
+    if(getDeletedAt())
+    {
+        ret["deleted_at"]=getDeletedAt()->toDbStringLocal();
+    }
+    else
+    {
+        ret["deleted_at"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1205,7 +1413,7 @@ Json::Value Organizations::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 9)
+    if(pMasqueradingVector.size() == 10)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1306,6 +1514,17 @@ Json::Value Organizations::toMasqueradedJson(
                 ret[pMasqueradingVector[8]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[9].empty())
+        {
+            if(getDeletedAt())
+            {
+                ret[pMasqueradingVector[9]]=getDeletedAt()->toDbStringLocal();
+            }
+            else
+            {
+                ret[pMasqueradingVector[9]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1381,6 +1600,14 @@ Json::Value Organizations::toMasqueradedJson(
     {
         ret["require_mfa"]=Json::Value();
     }
+    if(getDeletedAt())
+    {
+        ret["deleted_at"]=getDeletedAt()->toDbStringLocal();
+    }
+    else
+    {
+        ret["deleted_at"]=Json::Value();
+    }
     return ret;
 }
 
@@ -1441,13 +1668,18 @@ bool Organizations::validateJsonForCreation(const Json::Value &pJson, std::strin
         if(!validJsonOfField(8, "require_mfa", pJson["require_mfa"], err, true))
             return false;
     }
+    if(pJson.isMember("deleted_at"))
+    {
+        if(!validJsonOfField(9, "deleted_at", pJson["deleted_at"], err, true))
+            return false;
+    }
     return true;
 }
 bool Organizations::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                        const std::vector<std::string> &pMasqueradingVector,
                                                        std::string &err)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1535,6 +1767,14 @@ bool Organizations::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                   return false;
           }
       }
+      if(!pMasqueradingVector[9].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[9]))
+          {
+              if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1595,13 +1835,18 @@ bool Organizations::validateJsonForUpdate(const Json::Value &pJson, std::string 
         if(!validJsonOfField(8, "require_mfa", pJson["require_mfa"], err, false))
             return false;
     }
+    if(pJson.isMember("deleted_at"))
+    {
+        if(!validJsonOfField(9, "deleted_at", pJson["deleted_at"], err, false))
+            return false;
+    }
     return true;
 }
 bool Organizations::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1655,6 +1900,11 @@ bool Organizations::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
       {
           if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+      {
+          if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, false))
               return false;
       }
     }
@@ -1816,6 +2066,17 @@ bool Organizations::validJsonOfField(size_t index,
                 return false;
             }
             if(!pJson.isBool())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 9:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

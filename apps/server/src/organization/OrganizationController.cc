@@ -54,6 +54,33 @@ void OrganizationController::initApiDocsImpl()
       orgEp("/api/admin/organizations/{slug}", "GET", "Get Organization",
             "Get details of a specific organization by slug.", {"roles:read"}));
     openapi::OpenApiGenerator::addEndpoint(
+      orgEp("/api/admin/organizations/{slug}", "PATCH", "Update Organization",
+            "P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — "
+            "external reference anchor). Brand fields validated with the P1-1 "
+            "rules (https-only logo + loopback exemption, color "
+            "^#[0-9a-fA-F]{3,6}$). Audited as org_updated.",
+            {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      orgEp("/api/admin/organizations/{slug}", "DELETE", "Delete Organization",
+            "P1-4 (#281): soft delete with a CLOSED cascade (one transaction): "
+            "slug rewritten to a #del-<id> placeholder (no slug reuse), pending "
+            "invitations and succession nominations voided, org consents "
+            "revoked, owned clients suspended (their outstanding tokens "
+            "introspect inactive), memberships detached. Audited as org_deleted.",
+            {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      orgEp("/api/admin/organizations/{slug}/members", "GET", "List Organization Members",
+            "P1-4 (#281): read-only member roster (user_id, username, role, "
+            "joined_at).",
+            {"users:read"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      orgEp("/api/admin/organizations/{slug}/members/{userId}", "DELETE",
+            "Remove Organization Member",
+            "P1-4 (#281): remove a membership. Removing the last owner is "
+            "rejected — transfer ownership first. Audited as "
+            "org_member_removed.",
+            {"users:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
       orgEp("/api/admin/organizations/{slug}/transfer-ownership", "POST",
             "Transfer Organization Ownership",
             "Reassign the organization's owner seat to a live user (#221 admin "
@@ -91,6 +118,51 @@ void OrganizationController::getBySlug(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     OrganizationService::getBySlug(req, sharedCb, slug);
+}
+
+void OrganizationController::updateOrg(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrganizationService::updateOrg(req, sharedCb, slug);
+}
+
+void OrganizationController::deleteOrg(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrganizationService::deleteOrg(req, sharedCb, slug);
+}
+
+void OrganizationController::listMembers(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrganizationService::listMembers(req, sharedCb, slug);
+}
+
+void OrganizationController::removeMember(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &slug,
+  const std::string &userId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    OrganizationService::removeMember(req, sharedCb, slug, userId);
 }
 
 
