@@ -29,6 +29,10 @@ from .get_api_admin_email_templates_response_200 import GetApiAdminEmailTemplate
 from .get_api_admin_email_templates_response_200_templates_item import GetApiAdminEmailTemplatesResponse200TemplatesItem
 from .get_api_admin_logs_export_all import GetApiAdminLogsExportAll
 from .get_api_admin_organizations_response_200 import GetApiAdminOrganizationsResponse200
+from .get_api_admin_organizations_slug_members_response_200 import GetApiAdminOrganizationsSlugMembersResponse200
+from .get_api_admin_organizations_slug_members_response_200_members_item import (
+    GetApiAdminOrganizationsSlugMembersResponse200MembersItem,
+)
 from .get_api_admin_roles_response_200 import GetApiAdminRolesResponse200
 from .get_api_admin_roles_response_200_roles_item import GetApiAdminRolesResponse200RolesItem
 from .get_api_admin_scopes_resources_response_200 import GetApiAdminScopesResourcesResponse200
@@ -107,6 +111,7 @@ from .o_auth_authorization_server_metadata import OAuthAuthorizationServerMetada
 from .open_id_configuration import OpenIDConfiguration
 from .organization import Organization
 from .password_change_required_response import PasswordChangeRequiredResponse
+from .patch_api_admin_organizations_slug_body import PatchApiAdminOrganizationsSlugBody
 from .patch_api_me_applications_client_id_body import PatchApiMeApplicationsClientIdBody
 from .patch_api_me_applications_client_id_response_200 import PatchApiMeApplicationsClientIdResponse200
 from .patch_api_me_profile_body import PatchApiMeProfileBody
@@ -252,6 +257,8 @@ __all__ = (
     "GetApiAdminEmailTemplatesResponse200TemplatesItem",
     "GetApiAdminLogsExportAll",
     "GetApiAdminOrganizationsResponse200",
+    "GetApiAdminOrganizationsSlugMembersResponse200",
+    "GetApiAdminOrganizationsSlugMembersResponse200MembersItem",
     "GetApiAdminRolesResponse200",
     "GetApiAdminRolesResponse200RolesItem",
     "GetApiAdminScopesResourcesResponse200",
@@ -302,6 +309,7 @@ __all__ = (
     "OpenIDConfiguration",
     "Organization",
     "PasswordChangeRequiredResponse",
+    "PatchApiAdminOrganizationsSlugBody",
     "PatchApiMeApplicationsClientIdBody",
     "PatchApiMeApplicationsClientIdResponse200",
     "PatchApiMeProfileBody",

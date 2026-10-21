@@ -1638,6 +1638,156 @@ paths:
       tags:
       - Admin
       - Organization
+    delete:
+      description: 'P1-4 (#281): soft delete with a CLOSED cascade (one
+        transaction): slug rewritten to a #del-<id> placeholder (no slug
+        reuse), pending invitations and succession nominations voided, org
+        consents revoked, owned clients suspended (their outstanding tokens
+        introspect inactive), memberships detached. Audited as org_deleted.'
+      operationId: delete_api_admin_organizations_{slug}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Organization deleted (soft)
+        '401':
+          description: Unauthorized
+        '404':
+          description: Organization not found (or already deleted)
+      security:
+      - bearerAuth: []
+      summary: Delete Organization
+      tags:
+      - Admin
+      - Organization
+    patch:
+      description: 'P1-4 (#281): edit name/logo_uri/primary_color (slug is
+        immutable — external reference anchor). Brand fields validated with
+        the P1-1 rules (https-only logo + loopback exemption; color
+        ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.'
+      operationId: patch_api_admin_organizations_{slug}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                logo_uri:
+                  type: string
+                  maxLength: 512
+                  description: https-only (loopback exempt); empty clears.
+                primary_color:
+                  type: string
+                  pattern: '^#[0-9a-fA-F]{3,6}$'
+                  description: Empty clears.
+      responses:
+        '200':
+          description: Organization updated
+        '400':
+          description: Invalid field values or slug change attempted
+        '404':
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: Update Organization
+      tags:
+      - Admin
+      - Organization
+  /api/admin/organizations/{slug}/members:
+    get:
+      description: 'P1-4 (#281): read-only member roster (user_id, username,
+        role, joined_at).'
+      operationId: get_api_admin_organizations_{slug}_members
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+                  members:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id:
+                          type: integer
+                        username:
+                          type: string
+                        role:
+                          type: string
+                        joined_at:
+                          type: string
+          description: Member roster
+        '404':
+          description: Organization not found
+      security:
+      - bearerAuth: []
+      summary: List Organization Members
+      tags:
+      - Admin
+      - Organization
+  /api/admin/organizations/{slug}/members/{userId}:
+    delete:
+      description: 'P1-4 (#281): remove a membership. Removing the last owner
+        is rejected (409) — transfer ownership first. Audited as
+        org_member_removed.'
+      operationId: delete_api_admin_organizations_{slug}_members_{userId}
+      parameters:
+      - description: Organization slug
+        in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: User id
+        in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Member removed
+        '404':
+          description: Organization or membership not found
+        '409':
+          description: Last owner (transfer ownership first)
+      security:
+      - bearerAuth: []
+      summary: Remove Organization Member
+      tags:
+      - Admin
+      - Organization
   /api/admin/organizations/{slug}/transfer-ownership:
     post:
       description: Reassign the organization's owner seat to a live user (#221

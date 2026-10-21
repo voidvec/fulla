@@ -763,6 +763,32 @@
     },
     "/api/admin/organizations/{slug}" : 
     {
+      "delete" : 
+      {
+        "description" : "P1-4 (#281): soft delete with a CLOSED cascade (one transaction): slug rewritten to a #del-<id> placeholder (no slug reuse), pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their outstanding tokens introspect inactive), memberships detached. Audited as org_deleted.",
+        "operationId" : "delete_api_admin_organizations_{slug}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Delete Organization",
+        "tags" : 
+        [
+          "Admin",
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
       "get" : 
       {
         "description" : "Get details of a specific organization by slug.",
@@ -783,6 +809,90 @@
         "x-required-scopes" : 
         [
           "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "patch" : 
+      {
+        "description" : "P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable \u2014 external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption, color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.",
+        "operationId" : "patch_api_admin_organizations_{slug}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Update Organization",
+        "tags" : 
+        [
+          "Admin",
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/organizations/{slug}/members" : 
+    {
+      "get" : 
+      {
+        "description" : "P1-4 (#281): read-only member roster (user_id, username, role, joined_at).",
+        "operationId" : "get_api_admin_organizations_{slug}_members",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Organization Members",
+        "tags" : 
+        [
+          "Admin",
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "users:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/organizations/{slug}/members/{userId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "P1-4 (#281): remove a membership. Removing the last owner is rejected \u2014 transfer ownership first. Audited as org_member_removed.",
+        "operationId" : "delete_api_admin_organizations_{slug}_members_{userId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Remove Organization Member",
+        "tags" : 
+        [
+          "Admin",
+          "Organization"
+        ],
+        "x-required-scopes" : 
+        [
+          "users:write"
         ],
         "x-scope-implied-by" : 
         [

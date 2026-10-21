@@ -184,7 +184,12 @@ void ClientOwnersRepository::findOrganization(
                 return;
             }
             mapper.findOne(
-              Criteria(Organizations::Cols::_id, CompareOperator::EQ, orgId),
+              Criteria(Organizations::Cols::_id, CompareOperator::EQ, orgId) &&
+                // P1-4 (#281): soft-deleted orgs are invisible to EVERY
+                // caller of this repository (repo-layer filter per external
+                // verification A2 — the accept/consent paths resolve orgs
+                // through here and must never see a deleted row).
+                Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
               [sharedCb](const Organizations &org) {
                   OrganizationLookup lookup;
                   lookup.status = LookupStatus::Found;
@@ -208,7 +213,8 @@ void ClientOwnersRepository::findOrganization(
             return;
         }
         mapper.findOne(
-          Criteria(Organizations::Cols::_slug, CompareOperator::EQ, orgRef),
+          Criteria(Organizations::Cols::_slug, CompareOperator::EQ, orgRef) &&
+            Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
           [sharedCb](const Organizations &org) {
               OrganizationLookup lookup;
               lookup.status = LookupStatus::Found;
@@ -317,7 +323,10 @@ void ClientOwnersRepository::resolveOwnerLabel(const std::string &clientId, Owne
                   {
                       Mapper<Organizations> orgsMapper(db);
                       orgsMapper.findOne(
-                        Criteria(Organizations::Cols::_id, CompareOperator::EQ, orgId),
+                        Criteria(Organizations::Cols::_id, CompareOperator::EQ, orgId) &&
+                          // P1-4: owner label of a soft-deleted org degrades
+                          // to "" (same as lookup failure).
+                          Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
                         [sharedCb](const Organizations &org) {
                             (*sharedCb)(org.getValueOfName());
                         },

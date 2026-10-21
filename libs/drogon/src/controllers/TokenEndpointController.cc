@@ -611,69 +611,132 @@ void TokenEndpointController::introspect(
                     return;
                 }
 
-                // Token is active, return full metadata
-                if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                    m->incrementCounter(
-                      "oauth2_introspect_requests_total",
-                      fulla::common::ports::MetricLabels{{"client_id", clientId}}
-                    );
+                // Token metadata response builder — takes the FINAL active
+                // verdict (P1-4 overlay below may force it to false).
+                auto respondWith =
+                  [clientId, callback, introspection](bool active) mutable {
+                    if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
+                        m->incrementCounter(
+                          "oauth2_introspect_requests_total",
+                          fulla::common::ports::MetricLabels{{"client_id", clientId}}
+                        );
 
-                Json::Value response;
-                response["active"] = introspection->active;
-                response["client_id"] = introspection->clientId;
-                response["token_type"] = "Bearer";
+                    Json::Value response;
+                    response["active"] = active;
+                    response["client_id"] = introspection->clientId;
+                    response["token_type"] = "Bearer";
 
-                if (introspection->exp > 0)
+                    if (introspection->exp > 0)
+                    {
+                        response["exp"] = static_cast<Json::Int64>(introspection->exp);
+                    }
+                    if (introspection->iat > 0)
+                    {
+                        response["iat"] = static_cast<Json::Int64>(introspection->iat);
+                    }
+                    if (introspection->nbf > 0)
+                    {
+                        response["nbf"] = static_cast<Json::Int64>(introspection->nbf);
+                    }
+                    if (!introspection->sub.empty())
+                    {
+                        response["sub"] = introspection->sub;
+                    }
+                    // v1.4.0 M1 (design §2.1 item 4): the token's org binding.
+                    if (introspection->orgId.has_value())
+                    {
+                        response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
+                    }
+                    if (!introspection->aud.empty())
+                    {
+                        response["aud"] = introspection->aud;
+                    }
+                    if (!introspection->iss.empty())
+                    {
+                        response["iss"] = introspection->iss;
+                    }
+                    else
+                    {
+                        // F-016: backfill from the configured issuer when the
+                        // storage row carries none (legacy rows / backends that
+                        // never persisted issuer), so introspection iss is always
+                        // byte-identical to the discovery document's issuer.
+                        const auto &cfgIssuer =
+                          ::drogon::app().getPlugin<::OAuth2Plugin>()->getIssuer();
+                        if (!cfgIssuer.empty())
+                            response["iss"] = cfgIssuer;
+                    }
+                    if (!introspection->scope.empty())
+                    {
+                        response["scope"] = introspection->scope;
+                    }
+
+                    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(response);
+                    resp->setStatusCode(::drogon::k200OK);
+                    // F-019 (RFC 7667 §2.2): introspection responses carry token
+                    // metadata and MUST NOT be cached.
+                    applyNoStoreHeaders(resp);
+                    callback(resp);
+                };
+
+                if (!introspection->active)
                 {
-                    response["exp"] = static_cast<Json::Int64>(introspection->exp);
-                }
-                if (introspection->iat > 0)
-                {
-                    response["iat"] = static_cast<Json::Int64>(introspection->iat);
-                }
-                if (introspection->nbf > 0)
-                {
-                    response["nbf"] = static_cast<Json::Int64>(introspection->nbf);
-                }
-                if (!introspection->sub.empty())
-                {
-                    response["sub"] = introspection->sub;
-                }
-                // v1.4.0 M1 (design §2.1 item 4): the token's org binding.
-                if (introspection->orgId.has_value())
-                {
-                    response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
-                }
-                if (!introspection->aud.empty())
-                {
-                    response["aud"] = introspection->aud;
-                }
-                if (!introspection->iss.empty())
-                {
-                    response["iss"] = introspection->iss;
-                }
-                else
-                {
-                    // F-016: backfill from the configured issuer when the
-                    // storage row carries none (legacy rows / backends that
-                    // never persisted issuer), so introspection iss is always
-                    // byte-identical to the discovery document's issuer.
-                    const auto &cfgIssuer =
-                      ::drogon::app().getPlugin<::OAuth2Plugin>()->getIssuer();
-                    if (!cfgIssuer.empty())
-                        response["iss"] = cfgIssuer;
-                }
-                if (!introspection->scope.empty())
-                {
-                    response["scope"] = introspection->scope;
+                    respondWith(false);
+                    return;
                 }
 
-                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(response);
-                resp->setStatusCode(::drogon::k200OK);
-                // F-019 (RFC 7667 §2.2): introspection responses carry token
-                // metadata and MUST NOT be cached.
-                applyNoStoreHeaders(resp);
-                callback(resp);
+                // P1-4 (#281) org-deletion overlay (design §P1-4 item 4,
+                // option b): a token whose client is org-owned and whose org
+                // was soft-deleted (the delete cascade suspends the owners
+                // row) introspects as inactive — read-only, zero write
+                // amplification, V9 bulk-revocation red line untouched.
+                // Postgres-only; every failure degrades to the current
+                // behavior (active). Suspension via open-platform moderation
+                // rides the same status channel and now also deactivates
+                // outstanding tokens at introspection time.
+                {
+                    auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                    if (p != nullptr && p->getStorageType() != "memory")
+                    {
+                        ::drogon::orm::DbClientPtr db;
+                        try
+                        {
+                            db = ::drogon::app().getDbClient();
+                        }
+                        catch (...)
+                        {
+                        }
+                        if (db)
+                        {
+                            auto sharedFinish = std::make_shared<std::function<void(bool)>>(
+                              std::move(respondWith));
+                            try
+                            {
+                                ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
+                                ownersRepo.findOwnerRow(
+                                  introspection->clientId,
+                                  [sharedFinish](
+                                    const ::fulla::storage::postgres::OwnerRowLookup &lookup) {
+                                      // Error/NoRow both keep the current
+                                      // behavior (active) — the overlay only
+                                      // ever DEACTIVATES on a positive
+                                      // suspended verdict.
+                                      const bool suspended =
+                                        lookup.status ==
+                                          ::fulla::storage::postgres::LookupStatus::Found &&
+                                        lookup.row.getValueOfStatus() != "active";
+                                      (*sharedFinish)(!suspended);
+                                  });
+                            }
+                            catch (...)
+                            {
+                                (*sharedFinish)(true);
+                            }
+                            return;
+                        }
+                    }
+                    respondWith(true);
+                }
             }
           );
           }  // close validateClient callback
