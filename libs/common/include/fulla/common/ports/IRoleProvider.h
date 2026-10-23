@@ -71,6 +71,35 @@ class IRoleProvider
     {
         cb({});
     }
+
+    // ------------------------------------------------------------------
+    // P1-8 (#285): permission resolution for the three-chain RBAC
+    // enforcement (classification vs determination decoupled). Additive
+    // virtuals: implementations that don't override keep the historical
+    // behavior (no permissions -> admin-class scopes require the literal
+    // admin role).
+    // ------------------------------------------------------------------
+
+    using PermissionsCallback = std::function<void(std::vector<std::string>)>;
+
+    /// Whether this provider resolves role->permission unions. Default
+    /// false (the pre-P1-8 two-port shape).
+    virtual bool supportsPermissionLookup() const noexcept
+    {
+        return false;
+    }
+
+    /// Resolve the UNION of permission names held by the given roles.
+    /// Only invoked when supportsPermissionLookup() returns true. Invokes
+    /// `cb` with the permission-name list (empty on failure — callers
+    /// treat unresolved as ungranted, the conservative side).
+    virtual void getRolePermissions(
+      const std::vector<std::string> & /*roles*/,
+      PermissionsCallback &&cb
+    )
+    {
+        cb({});
+    }
 };
 
 }  // namespace fulla::common::ports

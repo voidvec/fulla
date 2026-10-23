@@ -1006,6 +1006,11 @@ type PutApiAdminRolesRoleIdJSONBody struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// PutApiAdminRolesRoleIdPermissionsJSONBody defines parameters for PutApiAdminRolesRoleIdPermissions.
+type PutApiAdminRolesRoleIdPermissionsJSONBody struct {
+	Permissions []string `json:"permissions"`
+}
+
 // PostApiAdminScopesJSONBody defines parameters for PostApiAdminScopes.
 type PostApiAdminScopesJSONBody struct {
 	Description *string `json:"description,omitempty"`
@@ -1534,6 +1539,9 @@ type PostApiAdminRolesJSONRequestBody PostApiAdminRolesJSONBody
 
 // PutApiAdminRolesRoleIdJSONRequestBody defines body for PutApiAdminRolesRoleId for application/json ContentType.
 type PutApiAdminRolesRoleIdJSONRequestBody PutApiAdminRolesRoleIdJSONBody
+
+// PutApiAdminRolesRoleIdPermissionsJSONRequestBody defines body for PutApiAdminRolesRoleIdPermissions for application/json ContentType.
+type PutApiAdminRolesRoleIdPermissionsJSONRequestBody PutApiAdminRolesRoleIdPermissionsJSONBody
 
 // PostApiAdminScopesJSONRequestBody defines body for PostApiAdminScopes for application/json ContentType.
 type PostApiAdminScopesJSONRequestBody PostApiAdminScopesJSONBody
@@ -2233,6 +2241,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /api/admin/roles/{roleId} (the `PutApiAdminRolesRoleId` operationId).
 	PutApiAdminRolesRoleId(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminRolesRoleIdPermissions List Role Permissions
+	//
+	// P1-8 (#285): the role's permission set (delegated administration surface).
+	//
+	// Corresponds with GET /api/admin/roles/{roleId}/permissions (the `GetApiAdminRolesRoleIdPermissions` operationId).
+	GetApiAdminRolesRoleIdPermissions(ctx context.Context, roleId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminRolesRoleIdPermissionsWithBody Replace Role Permissions
+	//
+	// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+	PutApiAdminRolesRoleIdPermissionsWithBody(ctx context.Context, roleId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminRolesRoleIdPermissions Replace Role Permissions
+	//
+	// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+	PutApiAdminRolesRoleIdPermissions(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminScopes List Scopes
 	//
@@ -4279,6 +4312,61 @@ func (c *Client) PutApiAdminRolesRoleIdWithBody(ctx context.Context, roleId int,
 // Corresponds with PUT /api/admin/roles/{roleId} (the `PutApiAdminRolesRoleId` operationId).
 func (c *Client) PutApiAdminRolesRoleId(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutApiAdminRolesRoleIdRequest(c.Server, roleId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminRolesRoleIdPermissions List Role Permissions
+//
+// P1-8 (#285): the role's permission set (delegated administration surface).
+//
+// Corresponds with GET /api/admin/roles/{roleId}/permissions (the `GetApiAdminRolesRoleIdPermissions` operationId).
+func (c *Client) GetApiAdminRolesRoleIdPermissions(ctx context.Context, roleId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminRolesRoleIdPermissionsRequest(c.Server, roleId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminRolesRoleIdPermissionsWithBody Replace Role Permissions
+//
+// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+func (c *Client) PutApiAdminRolesRoleIdPermissionsWithBody(ctx context.Context, roleId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminRolesRoleIdPermissionsRequestWithBody(c.Server, roleId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminRolesRoleIdPermissions Replace Role Permissions
+//
+// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+func (c *Client) PutApiAdminRolesRoleIdPermissions(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminRolesRoleIdPermissionsRequest(c.Server, roleId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8250,6 +8338,87 @@ func NewPutApiAdminRolesRoleIdRequestWithBody(server string, roleId int, content
 	}
 
 	operationPath := fmt.Sprintf("/api/admin/roles/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetApiAdminRolesRoleIdPermissionsRequest constructs an http.Request for the GetApiAdminRolesRoleIdPermissions method
+func NewGetApiAdminRolesRoleIdPermissionsRequest(server string, roleId int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "roleId", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/roles/%s/permissions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiAdminRolesRoleIdPermissionsRequest calls the generic PutApiAdminRolesRoleIdPermissions builder with application/json body
+func NewPutApiAdminRolesRoleIdPermissionsRequest(server string, roleId int, body PutApiAdminRolesRoleIdPermissionsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminRolesRoleIdPermissionsRequestWithBody(server, roleId, "application/json", bodyReader)
+}
+
+// NewPutApiAdminRolesRoleIdPermissionsRequestWithBody constructs an http.Request for the PutApiAdminRolesRoleIdPermissions method, with any body, and a specified content type
+func NewPutApiAdminRolesRoleIdPermissionsRequestWithBody(server string, roleId int, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "roleId", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/roles/%s/permissions", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12772,6 +12941,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/roles/{roleId} (the `PutApiAdminRolesRoleId` operationId).
 	PutApiAdminRolesRoleIdWithResponse(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminRolesRoleIdResponse, error)
 
+	// GetApiAdminRolesRoleIdPermissionsWithResponse List Role Permissions
+	//
+	// P1-8 (#285): the role's permission set (delegated administration surface).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/roles/{roleId}/permissions (the `GetApiAdminRolesRoleIdPermissions` operationId).
+	GetApiAdminRolesRoleIdPermissionsWithResponse(ctx context.Context, roleId int, reqEditors ...RequestEditorFn) (*GetApiAdminRolesRoleIdPermissionsResponse, error)
+
+	// PutApiAdminRolesRoleIdPermissionsWithBodyWithResponse Replace Role Permissions
+	//
+	// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+	PutApiAdminRolesRoleIdPermissionsWithBodyWithResponse(ctx context.Context, roleId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminRolesRoleIdPermissionsResponse, error)
+
+	// PutApiAdminRolesRoleIdPermissionsWithResponse Replace Role Permissions
+	//
+	// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+	PutApiAdminRolesRoleIdPermissionsWithResponse(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminRolesRoleIdPermissionsResponse, error)
+
 	// GetApiAdminScopesWithResponse List Scopes
 	//
 	// Get a list of all available scopes.
@@ -15472,6 +15668,89 @@ func (r PutApiAdminRolesRoleIdResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutApiAdminRolesRoleIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminRolesRoleIdPermissionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Permissions *[]string `json:"permissions,omitempty"`
+		Status      *string   `json:"status,omitempty"`
+		Total       *int      `json:"total,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminRolesRoleIdPermissionsResponse) GetJSON200() *struct {
+	Permissions *[]string `json:"permissions,omitempty"`
+	Status      *string   `json:"status,omitempty"`
+	Total       *int      `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminRolesRoleIdPermissionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminRolesRoleIdPermissionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminRolesRoleIdPermissionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminRolesRoleIdPermissionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutApiAdminRolesRoleIdPermissionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PutApiAdminRolesRoleIdPermissionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiAdminRolesRoleIdPermissionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiAdminRolesRoleIdPermissionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutApiAdminRolesRoleIdPermissionsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21268,6 +21547,51 @@ func (c *ClientWithResponses) PutApiAdminRolesRoleIdWithResponse(ctx context.Con
 	return ParsePutApiAdminRolesRoleIdResponse(rsp)
 }
 
+// GetApiAdminRolesRoleIdPermissionsWithResponse List Role Permissions
+//
+// P1-8 (#285): the role's permission set (delegated administration surface).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/roles/{roleId}/permissions (the `GetApiAdminRolesRoleIdPermissions` operationId).
+func (c *ClientWithResponses) GetApiAdminRolesRoleIdPermissionsWithResponse(ctx context.Context, roleId int, reqEditors ...RequestEditorFn) (*GetApiAdminRolesRoleIdPermissionsResponse, error) {
+	rsp, err := c.GetApiAdminRolesRoleIdPermissions(ctx, roleId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminRolesRoleIdPermissionsResponse(rsp)
+}
+
+// PutApiAdminRolesRoleIdPermissionsWithBodyWithResponse Replace Role Permissions
+//
+// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+func (c *ClientWithResponses) PutApiAdminRolesRoleIdPermissionsWithBodyWithResponse(ctx context.Context, roleId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminRolesRoleIdPermissionsResponse, error) {
+	rsp, err := c.PutApiAdminRolesRoleIdPermissionsWithBody(ctx, roleId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminRolesRoleIdPermissionsResponse(rsp)
+}
+
+// PutApiAdminRolesRoleIdPermissionsWithResponse Replace Role Permissions
+//
+// P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/roles/{roleId}/permissions (the `PutApiAdminRolesRoleIdPermissions` operationId).
+func (c *ClientWithResponses) PutApiAdminRolesRoleIdPermissionsWithResponse(ctx context.Context, roleId int, body PutApiAdminRolesRoleIdPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminRolesRoleIdPermissionsResponse, error) {
+	rsp, err := c.PutApiAdminRolesRoleIdPermissions(ctx, roleId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminRolesRoleIdPermissionsResponse(rsp)
+}
+
 // GetApiAdminScopesWithResponse List Scopes
 //
 // Get a list of all available scopes.
@@ -24235,6 +24559,55 @@ func ParsePutApiAdminRolesRoleIdResponse(rsp *http.Response) (*PutApiAdminRolesR
 	}
 
 	response := &PutApiAdminRolesRoleIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminRolesRoleIdPermissionsResponse parses an HTTP response from a GetApiAdminRolesRoleIdPermissionsWithResponse call
+func ParseGetApiAdminRolesRoleIdPermissionsResponse(rsp *http.Response) (*GetApiAdminRolesRoleIdPermissionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminRolesRoleIdPermissionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Permissions *[]string `json:"permissions,omitempty"`
+			Status      *string   `json:"status,omitempty"`
+			Total       *int      `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParsePutApiAdminRolesRoleIdPermissionsResponse parses an HTTP response from a PutApiAdminRolesRoleIdPermissionsWithResponse call
+func ParsePutApiAdminRolesRoleIdPermissionsResponse(rsp *http.Response) (*PutApiAdminRolesRoleIdPermissionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiAdminRolesRoleIdPermissionsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

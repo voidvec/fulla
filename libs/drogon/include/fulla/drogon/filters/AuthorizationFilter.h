@@ -4,6 +4,7 @@
 #include <drogon/drogon.h>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <regex>
 
@@ -46,8 +47,18 @@ class AuthorizationFilter : public HttpFilter<AuthorizationFilter>
     // Path regex -> Allowed Roles
     struct RbacRule
     {
+        // P1-8: pattern source retained for the load-time specificity sort
+        // (a compiled regex cannot recover its source string).
+        std::string sourcePattern;
         std::regex pathPattern;
         std::vector<std::string> allowedRoles;
+        // P1-8 (#285) gate-③ permission semantics: every listed permission
+        // must be covered by the caller's role->permission union. Entries
+        // are additive (array form = roles-only, unchanged); an object
+        // form {"roles": [...], "permissions": [...]} enables delegated
+        // administration (e.g. /api/admin/users.* -> {permissions:
+        // [users:read]} listed BEFORE the /api/admin/.* catch-all).
+        std::vector<std::string> requiredPermissions;
     };
 
     std::vector<RbacRule> rules_;
@@ -63,7 +74,16 @@ class AuthorizationFilter : public HttpFilter<AuthorizationFilter>
 
     void loadConfig();
     void loadRulesSafely();
+    // P1-8: the permission-aware overload is the live path; the
+    // roles-only signature is preserved verbatim (api-diff: change the
+    // query, keep the signature) and delegates with an empty permission
+    // set (the pre-P1-8 semantics).
     bool checkAccess(const std::vector<std::string> &userRoles, const std::string &path);
+    bool checkAccess(
+      const std::vector<std::string> &userRoles,
+      const std::unordered_set<std::string> &userPermissions,
+      const std::string &path
+    );
 };
 
 }  // namespace fulla::drogon::filters

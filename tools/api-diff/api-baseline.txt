@@ -560,6 +560,14 @@ virtual bool supportsSubjectLookup() const noexcept
 ;
 virtual void getRoles(const std::string & , RolesCallback &&cb)
 ;
+using PermissionsCallback = std::function<void(std::vector<std::string>)>;
+virtual bool supportsPermissionLookup() const noexcept
+;
+virtual void getRolePermissions(
+const std::vector<std::string> & ,
+PermissionsCallback &&cb
+)
+;
 };
 }
 === libs/common/include/fulla/common/ports/ISubjectResolver.h
@@ -1007,8 +1015,12 @@ private:
 === libs/drogon/include/fulla/drogon/adapters/StorageRoleProvider.h
 #pragma once
 #include <fulla/common/ports/IRoleProvider.h>
+#include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/identity/IRoleRepository.h>
 #include <memory>
+#include <string>
+#include <unordered_set>
+#include <vector>
 namespace fulla::drogon::adapters
 {
 class StorageRoleProvider : public fulla::common::ports::IRoleProvider
@@ -1017,14 +1029,28 @@ public:
 explicit StorageRoleProvider(std::shared_ptr<fulla::identity::IRoleRepository> roleRepo)
 : roleRepo_(std::move(roleRepo))
 ;
+StorageRoleProvider(
+std::shared_ptr<fulla::identity::IRoleRepository> roleRepo,
+std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> permissionResolver
+)
+: roleRepo_(std::move(roleRepo)), permissionResolver_(std::move(permissionResolver))
+;
 bool supportsSubjectLookup() const noexcept override
 ;
 void getRoles(const std::string &subject, RolesCallback &&cb) override
 ;
 void getRoles(int32_t internalUserId, RolesCallback &&cb) override
 ;
+bool supportsPermissionLookup() const noexcept override
+;
+void getRolePermissions(
+const std::vector<std::string> &roles,
+PermissionsCallback &&cb
+) override
+;
 private:
 std::shared_ptr<fulla::identity::IRoleRepository> roleRepo_;
+std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> permissionResolver_;
 };
 }
 === libs/drogon/include/fulla/drogon/adapters/StorageSubjectResolver.h
@@ -1186,6 +1212,16 @@ ResponseCallback cb,
 const std::string &roleId
 );
 static void deleteRole(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &roleId
+);
+static void getRolePermissions(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &roleId
+);
+static void putRolePermissions(
 const ::drogon::HttpRequestPtr &req,
 ResponseCallback cb,
 const std::string &roleId
@@ -1381,6 +1417,36 @@ static void clear();
 static bool isBuilt();
 static void clearPrefixes();
 };
+}
+=== libs/drogon/include/fulla/drogon/authz/RolePermissionResolver.h
+#pragma once
+#include <drogon/drogon.h>
+#include <fulla/storage/postgres/models/Roles.h>
+#include <fulla/storage/postgres/models/Permissions.h>
+#include <fulla/storage/postgres/models/RolePermissions.h>
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_set>
+#include <vector>
+namespace fulla::drogon::authz
+{
+inline const std::unordered_set<std::string> &defaultPermissionsForRole(const std::string &role)
+;
+inline const std::unordered_set<std::string> &defaultAdminClassScopes()
+;
+class RolePermissionResolver
+{
+public:
+using PermissionsCallback = std::function<void(std::unordered_set<std::string>)>;
+explicit RolePermissionResolver(bool postgresStorage);
+~RolePermissionResolver();
+void resolveForRoles(const std::vector<std::string> &roles, PermissionsCallback &&cb);
+private:
+bool postgresStorage_;
+};
+void invalidateRolePermissionCacheForRole(const std::string &role);
+void invalidateRolePermissionCacheAll();
 }
 === libs/drogon/include/fulla/drogon/authz/ScopeResolver.h
 #pragma once
@@ -2149,6 +2215,18 @@ RoleScopeAdminController::deleteRole,
 "fulla::drogon::filters::AuthorizationFilter"
 );
 ADD_METHOD_TO(
+RoleScopeAdminController::getRolePermissions,
+"/api/admin/roles/{roleId}/permissions",
+::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
+RoleScopeAdminController::putRolePermissions,
+"/api/admin/roles/{roleId}/permissions",
+::drogon::Put,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
 RoleScopeAdminController::listScopes,
 "/api/admin/scopes",
 ::drogon::Get,
@@ -2188,6 +2266,16 @@ const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 void updateRole(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &roleId
+);
+void getRolePermissions(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &roleId
+);
+void putRolePermissions(
 const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
 const std::string &roleId
@@ -2944,6 +3032,7 @@ static constexpr const char *kHeader = "X-Request-ID";
 #include <drogon/drogon.h>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <regex>
 using namespace drogon;
@@ -2966,8 +3055,10 @@ private:
 ::OAuth2Plugin *resolvePlugin() const;
 struct RbacRule
 {
+std::string sourcePattern;
 std::regex pathPattern;
 std::vector<std::string> allowedRoles;
+std::vector<std::string> requiredPermissions;
 };
 std::vector<RbacRule> rules_;
 std::vector<std::regex> publicPaths_;
@@ -2975,6 +3066,11 @@ std::once_flag initFlag_;
 void loadConfig();
 void loadRulesSafely();
 bool checkAccess(const std::vector<std::string> &userRoles, const std::string &path);
+bool checkAccess(
+const std::vector<std::string> &userRoles,
+const std::unordered_set<std::string> &userPermissions,
+const std::string &path
+);
 };
 }
 === libs/drogon/include/fulla/drogon/filters/OAuth2AuthFilter.h
@@ -3208,6 +3304,7 @@ void doPurge();
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
+#include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/identity/IRoleRepository.h>
 #include <fulla/identity/IUserRepository.h>
 #include <fulla/identity/ISubjectMappingRepository.h>
@@ -3386,6 +3483,9 @@ const std::string &getIssuer() const
 ;
 std::shared_ptr<fulla::common::ports::IAuditSink> getAuditSink() const
 ;
+std::shared_ptr<fulla::drogon::authz::RolePermissionResolver>
+getRolePermissionResolver() const
+;
 std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
 ;
 std::shared_ptr<fulla::oauth2::protocol::AuthorizationService>
@@ -3410,6 +3510,7 @@ std::shared_ptr<fulla::oauth2::protocol::TokenService> tokenService_;
 std::shared_ptr<fulla::oauth2::protocol::ClientService> clientService_;
 std::shared_ptr<fulla::identity::IdentityService> identityService_;
 std::shared_ptr<fulla::drogon::adapters::StorageRoleProvider> roleProvider_;
+std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
 std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
 std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::IMetrics> metrics_;
@@ -3586,7 +3687,9 @@ int internalUserId, const std::string &email, const std::string &locale
 #include <fulla/oauth2/repository/IConsentRepository.h>
 #include <fulla/oauth2/model/UserRef.h>
 #include <memory>
+#include <shared_mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <functional>
 #include <optional>
@@ -3640,6 +3743,10 @@ const std::vector<std::string> &scopes,
 std::function<void(bool, std::string)> &&callback
 );
 bool scopeRequiresAdminRole(const std::string &scope);
+static void setAdminScopeClass(std::unordered_set<std::string> scopes);
+private:
+static std::unordered_set<std::string> &adminScopeClassSet();
+static std::shared_mutex &adminScopeClassMutex();
 private:
 Repos repos_;
 };

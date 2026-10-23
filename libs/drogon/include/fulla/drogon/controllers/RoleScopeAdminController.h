@@ -40,6 +40,20 @@ class RoleScopeAdminController : public ::drogon::HttpController<RoleScopeAdminC
       ::drogon::Delete,
       "fulla::drogon::filters::AuthorizationFilter"
     );
+    // P1-8 (#285): role->permission administration (delegated
+    // administration surface; full-replace semantics).
+    ADD_METHOD_TO(
+      RoleScopeAdminController::getRolePermissions,
+      "/api/admin/roles/{roleId}/permissions",
+      ::drogon::Get,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      RoleScopeAdminController::putRolePermissions,
+      "/api/admin/roles/{roleId}/permissions",
+      ::drogon::Put,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
     // Scopes
     ADD_METHOD_TO(
       RoleScopeAdminController::listScopes,
@@ -88,6 +102,17 @@ class RoleScopeAdminController : public ::drogon::HttpController<RoleScopeAdminC
     );
 
     void updateRole(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &roleId
+    );
+
+    void getRolePermissions(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &roleId
+    );
+    void putRolePermissions(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &roleId

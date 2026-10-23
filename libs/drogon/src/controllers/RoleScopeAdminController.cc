@@ -76,6 +76,17 @@ void RoleScopeAdminController::initApiDocsImpl()
       adminEp("/api/admin/roles/{roleId}", "PUT", "Update Role",
               "Update a role's description.", {"Admin", "Roles"}, {"roles:write"}));
     openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/roles/{roleId}/permissions", "GET", "List Role Permissions",
+              "P1-8 (#285): the role's permission set (delegated administration).",
+              {"Admin", "Roles"}, {"roles:read"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/roles/{roleId}/permissions", "PUT", "Replace Role Permissions",
+              "P1-8 (#285): FULL-REPLACE the role's permission set. Every listed "
+              "name must exist in the permissions catalog; unknown names fail "
+              "the whole replace. Audited as role_permissions_updated; the "
+              "role-permission cache entry is invalidated on commit.",
+              {"Admin", "Roles"}, {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
       adminEp("/api/admin/roles/{roleId}", "DELETE", "Delete Role",
               "Delete a role. Built-in roles (admin, user) cannot be deleted.", {"Admin", "Roles"},
               {"roles:write"}));
@@ -128,6 +139,29 @@ void RoleScopeAdminController::deleteRole(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     RoleScopeService::deleteRole(req, sharedCb, roleId);
+}
+
+// P1-8 (#285): role->permission administration adapters.
+void RoleScopeAdminController::getRolePermissions(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &roleId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::getRolePermissions(req, sharedCb, roleId);
+}
+
+void RoleScopeAdminController::putRolePermissions(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &roleId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::putRolePermissions(req, sharedCb, roleId);
 }
 
 void RoleScopeAdminController::listScopes(

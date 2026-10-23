@@ -11,8 +11,8 @@ The RBAC schema (`V005`: `roles` / `permissions` / `user_roles` / `role_permissi
 
 What actually gates admin operations today are **two parallel, independent chains**:
 
-1. **DB-column chain**: `OAuth2Plugin` startup loads the `oauth2_scopes.requires_admin_role` column into an injected predicate (`OAuth2Plugin.cc:566-585`); `ScopeDecisionEngine.cc:31-36` consumes it (`scopeRequiresAdmin(scope) && !hasAdminRole → admin_role_required`). The engine itself never reads the column, and `AuthorizationService.cc:42-56` keeps a hardcoded `defaultAdminScopes()` fallback set used only when the DB has none.
-2. **Hardcoded chain**: `IdentityService::scopeRequiresAdminRole` (`IdentityService.cc:227-240`) writes a literal set `{admin, admin:read, admin:write, user:manage, settings:manage}` (with prefix matching), consumed by `validateUserRolesForScopes` (`:188-224`) and forwarded from `OAuth2Plugin.cc:1254-1256`.
+1. **DB-column chain**: `OAuth2Plugin` startup loads the `oauth2_scopes.requires_admin_role` column into an injected predicate (`OAuth2Plugin.cc:643-674`; P1-8 erratum: the original 566-585 anchor pointed at Redis cache code); `ScopeDecisionEngine.cc:31-36` consumes it (`scopeRequiresAdmin(scope) && !hasAdminRole → admin_role_required`). The engine itself never reads the column, and `AuthorizationService.cc:42-56` keeps a hardcoded `defaultAdminScopes()` fallback set used only when the DB has none.
+2. **Hardcoded chain**: `IdentityService::scopeRequiresAdminRole` (`IdentityService.cc:227-240`) writes a literal set `{admin, admin:read, admin:write, user:manage, settings:manage}` (with prefix matching), consumed by `validateUserRolesForScopes` (`:188-224`) and forwarded from `OAuth2Plugin.cc:1418-1420` (P1-8 erratum: original anchor 1254-1256 drifted).
 
 Because both chains require the literal `admin` **role**, a delegated administrator — e.g. a "helpdesk" role that may only read users — cannot be expressed at all. Decision D2 (2026-10-10, roadmap `deliverables/iam-improvement-roadmap-2026-10.md` §8) chose **enforcement over freeze/remove**, with an "integrate, don't duplicate" constraint.
 
@@ -37,3 +37,35 @@ Because both chains require the literal `admin` **role**, a delegated administra
 - `role_permissions` stops being dead schema and becomes the delegated-admin mechanism; `rbac-guide.md` is rewritten to the three-layer model (role = coarse, scope = fine, role→scope-set = the bridge).
 - The two deprecated gates (`requires_admin_role` column, `IdentityService` literal set) shrink to no-op shims for one release, then are removed.
 - Implementation is tracked as roadmap work package P1-8 (v1.6.0); this ADR is the design contract that issue/PR references.
+
+---
+
+## Erratum 2 — P1-8 execution (three-gate model, 2026-10)
+
+The original ADR described TWO chains. The P1-8 adversarial review
+(three independent reviewers) established the real topology is **three
+gates**: the two scope chains above PLUS the HTTP-layer role gate
+`AuthorizationFilter::checkAccess` (rbac_rules regex → literal roles,
+DEFAULT DENY) — without which delegated administration is unreachable
+(a helpdesk user is 403'd before any scope logic runs). The shipped
+P1-8 enforcement:
+
+1. **Classification vs determination decoupled** (security review H2):
+   `requires_admin_role` stays the admin-CLASS source (deprecated,
+   read through v2.0); WHETHER a user passes is permission-based
+   (role→permission union covers the scope, or the literal admin
+   super-role).
+2. **Chain①**: the engine predicate is now
+   `scope ∈ admin-class ∧ scope ∉ user's permission set → invalid`
+   (per-request closure; engine signature unchanged).
+3. **Chain②**: `IdentityService::scopeRequiresAdminRole` reads the
+   DB-loaded admin-class set (signature unchanged); determination in
+   `validateUserRolesForScopes` is permission-based.
+4. **Gate③**: rbac_rules entries accept `{"permissions": [...]}`;
+   most-specific-first matching; the catch-all and DEFAULT DENY
+   baseline are untouched.
+5. The 2-step login path now tiers scopes through the same engine
+   (previously it minted unfiltered codes).
+6. V043 seeds the permissions catalog (nine V023 names + admin);
+   the four legacy V005 names are retired in place (M4: UPDATE, not
+   DELETE).

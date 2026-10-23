@@ -364,6 +364,8 @@ export default {
       deleted: 'Role "{name}" deleted',
       deleteConfirm: 'Delete role "{name}"? This cannot be undone.',
       editTitle: 'Edit Role: {name}',
+      permissions: 'Permissions (delegated administration)',
+      permissionsHint: 'Full-replace on save; a role with no permissions keeps only its scope-independent access.',
     },
     scopes: {
       title: 'Scopes',

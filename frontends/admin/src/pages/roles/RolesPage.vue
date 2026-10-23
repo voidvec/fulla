@@ -28,6 +28,14 @@ const errorText = computed(() => {
 const newRoleName = ref('')
 const newRoleDescription = ref('')
 const editDescription = ref('')
+// P1-8 (#285): role->permission administration (V023 resource scopes +
+// admin only — legacy V005 names filtered).
+const kPermissionCatalog = [
+  'users:read', 'users:write', 'clients:read', 'clients:write',
+  'tokens:read', 'tokens:write', 'roles:read', 'roles:write',
+  'audit:read', 'admin',
+]
+const editPermissions = ref<string[]>([])
 
 function showSuccess(msg: string) {
   successMessage.value = msg
@@ -92,7 +100,18 @@ async function createRole() {
 function openEditModal(role: any) {
   selectedRole.value = role
   editDescription.value = role.description || ''
+  editPermissions.value = []
   showEditModal.value = true
+  // P1-8: load the role's permission set for the editor.
+  axios.get(`/api/admin/roles/${role.id}/permissions`)
+    .then((resp) => {
+      editPermissions.value = (resp.data?.permissions ?? []).filter(
+        (p: string) => kPermissionCatalog.includes(p),
+      )
+    })
+    .catch(() => {
+      // Degrade to empty — saving still works (full-replace).
+    })
 }
 
 async function updateRole() {
@@ -101,6 +120,10 @@ async function updateRole() {
   try {
     await axios.put(`/api/admin/roles/${selectedRole.value.id}`, {
       description: editDescription.value,
+    }, { headers: { 'Content-Type': 'application/json' } })
+    // P1-8: full-replace the permission set (same save action).
+    await axios.put(`/api/admin/roles/${selectedRole.value.id}/permissions`, {
+      permissions: editPermissions.value,
     }, { headers: { 'Content-Type': 'application/json' } })
     showSuccess(t('admin.roles.updated'))
     showEditModal.value = false
@@ -294,6 +317,27 @@ onMounted(fetchRoles)
             class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
             :placeholder="$t('admin.roles.optionalDescription')"
           >
+        </div>
+        <!-- P1-8 (#285): permission multi-select (V023 resource scopes +
+             admin; full-replace on save). -->
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.roles.permissions') }}</label>
+          <div class="flex flex-wrap gap-2">
+            <label
+              v-for="perm in kPermissionCatalog"
+              :key="perm"
+              class="flex items-center gap-1.5 text-sm cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-neutral-300 text-brand-600"
+                :value="perm"
+                v-model="editPermissions"
+              >
+              <span class="font-mono text-xs">{{ perm }}</span>
+            </label>
+          </div>
+          <p class="text-xs text-neutral-500 mt-1">{{ $t('admin.roles.permissionsHint') }}</p>
         </div>
         <div class="flex justify-end gap-3 mt-6">
           <button

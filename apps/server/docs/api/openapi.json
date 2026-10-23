@@ -1039,6 +1039,61 @@
         ]
       }
     },
+    "/api/admin/roles/{roleId}/permissions" : 
+    {
+      "get" : 
+      {
+        "description" : "P1-8 (#285): the role's permission set (delegated administration).",
+        "operationId" : "get_api_admin_roles_{roleId}_permissions",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Role Permissions",
+        "tags" : 
+        [
+          "Admin",
+          "Roles"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "put" : 
+      {
+        "description" : "P1-8 (#285): FULL-REPLACE the role's permission set. Every listed name must exist in the permissions catalog; unknown names fail the whole replace. Audited as role_permissions_updated; the role-permission cache entry is invalidated on commit.",
+        "operationId" : "put_api_admin_roles_{roleId}_permissions",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Replace Role Permissions",
+        "tags" : 
+        [
+          "Admin",
+          "Roles"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/scopes" : 
     {
       "get" : 

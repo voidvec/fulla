@@ -8,6 +8,7 @@
 #include <fulla/drogon/authz/InsufficientScopeResponder.h>
 #include <drogon/drogon.h>
 
+#include <algorithm>
 #include <string>
 
 namespace fulla::drogon::filters
@@ -53,19 +54,40 @@ void AuthorizationFilter::loadRulesSafely()
         {
             std::string pattern = it.name();
             RbacRule rule;
+            rule.sourcePattern = pattern;
             rule.pathPattern = std::regex(pattern);
 
             auto rolesJson = *it;
             if (rolesJson.isArray())
             {
+                // Legacy array form: roles only.
                 for (const auto &role : rolesJson)
                 {
                     rule.allowedRoles.push_back(role.asString());
                 }
             }
+            else if (rolesJson.isObject())
+            {
+                // P1-8 (#285) object form: {"roles": [...], "permissions":
+                // [...]} -- permissions require the caller's role->permission
+                // union to cover every listed name (delegated administration;
+                // list specific rules BEFORE catch-alls: first path match
+                // decides, and the /api/admin/.* -> ["admin"] DEFAULT-DENY
+                // baseline is untouched).
+                if (rolesJson.isMember("roles") && rolesJson["roles"].isArray())
+                {
+                    for (const auto &role : rolesJson["roles"])
+                        rule.allowedRoles.push_back(role.asString());
+                }
+                if (rolesJson.isMember("permissions") && rolesJson["permissions"].isArray())
+                {
+                    for (const auto &perm : rolesJson["permissions"])
+                        rule.requiredPermissions.push_back(perm.asString());
+                }
+            }
             localRules.push_back(rule);
             LOG_DEBUG << "RBAC Rule Loaded: " << pattern << " -> " << rule.allowedRoles.size()
-                      << " roles";
+                      << " roles, " << rule.requiredPermissions.size() << " permissions";
         }
     }
     // Load public paths (no auth required)
@@ -77,6 +99,19 @@ void AuthorizationFilter::loadRulesSafely()
             LOG_DEBUG << "Public path loaded: " << path.asString();
         }
     }
+
+    // P1-8 (#285): match MOST-SPECIFIC-FIRST. Json::Value object iteration
+    // is alphabetical, so "/api/admin/.*" (the catch-all) would precede
+    // "/api/admin/users.*" and swallow every specific rule. Longer pattern
+    // source = more specific (path-prefix catch-alls are the shortest
+    // strings in the family); ties keep insertion order (stable_sort).
+    std::stable_sort(
+      localRules.begin(),
+      localRules.end(),
+      [](const RbacRule &a, const RbacRule &b) {
+          return a.sourcePattern.size() > b.sourcePattern.size();
+      }
+    );
 
     // Commit atomically (w.r.t. exceptions): only reached when the full build
     // succeeded, so the members are never left in a partially-filled state.
@@ -225,22 +260,49 @@ void AuthorizationFilter::doFilter(
                     }
                 }
 
-                // 4. Check Access (RBAC role gate -- unchanged)
-                if (checkAccess(roles, req->path()))
+                // 4. Check Access (RBAC role gate + P1-8 permission
+                // semantics). Permissions resolve through the shared
+                // plugin resolver; an unavailable resolver degrades to
+                // the historical role-only gate (empty permission set —
+                // permissions-only rules then deny, the conservative side).
                 {
-                    (*nextCbPtr)();  // ALLOW -> Continue
-                }
-                else
-                {
-                    LOG_WARN << "Authorization failed: insufficient permissions for path "
-                             << req->path();
-                    auto error = fulla::common::error::Error::fromCode(
-                      "AUTHZ_INSUFFICIENT_PERMISSIONS",
-                      fulla::common::error::RequestId::resolve(req)
-                    );
-                    error.message = "Insufficient permissions";
-                    auto resp = fulla::common::error::ErrorResponder::buildResponse(req, error);
-                    (*denyCbPtr)(resp);  // DENY -> Return 403
+                    auto *permPlugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                    auto resolver =
+                      permPlugin ? permPlugin->getRolePermissionResolver() : nullptr;
+                    auto decide =
+                      std::make_shared<std::function<void(std::unordered_set<std::string>)>>(
+                        [this, req, denyCbPtr, nextCbPtr, roles](
+                          std::unordered_set<std::string> permissions) mutable {
+                            if (checkAccess(roles, permissions, req->path()))
+                            {
+                                (*nextCbPtr)();  // ALLOW -> Continue
+                            }
+                            else
+                            {
+                                LOG_WARN << "Authorization failed: insufficient permissions "
+                                            "for path "
+                                         << req->path();
+                                auto error = fulla::common::error::Error::fromCode(
+                                  "AUTHZ_INSUFFICIENT_PERMISSIONS",
+                                  fulla::common::error::RequestId::resolve(req)
+                                );
+                                error.message = "Insufficient permissions";
+                                auto resp =
+                                  fulla::common::error::ErrorResponder::buildResponse(req, error);
+                                (*denyCbPtr)(resp);  // DENY -> Return 403
+                            }
+                        });
+                    if (resolver)
+                    {
+                        resolver->resolveForRoles(
+                          roles, [decide](std::unordered_set<std::string> permissions) mutable {
+                              (*decide)(std::move(permissions));
+                          });
+                    }
+                    else
+                    {
+                        (*decide)({});
+                    }
                 }
             }
           );
@@ -253,6 +315,17 @@ bool AuthorizationFilter::checkAccess(
   const std::string &path
 )
 {
+    // Pre-P1-8 roles-only semantics (no permission resolution).
+    static const std::unordered_set<std::string> kNoPermissions;
+    return checkAccess(userRoles, kNoPermissions, path);
+}
+
+bool AuthorizationFilter::checkAccess(
+  const std::vector<std::string> &userRoles,
+  const std::unordered_set<std::string> &userPermissions,
+  const std::string &path
+)
+{
     // Check public paths first (no auth required)
     for (const auto &publicPath : publicPaths_)
     {
@@ -260,12 +333,32 @@ bool AuthorizationFilter::checkAccess(
             return true;
     }
 
-    // Check RBAC rules
+    // Check RBAC rules (first path match decides: specific rules must be
+    // listed BEFORE catch-alls -- documented in configuration-guide).
     for (const auto &rule : rules_)
     {
         if (std::regex_match(path, rule.pathPattern))
         {
-            // Rule matched - check if user has any of the allowed roles
+            // P1-8 (#285): an entry with a permissions requirement passes
+            // iff the caller's permission union covers every listed name
+            // (and, when the entry also lists roles, a role matches). A
+            // permissions-only entry is the delegated-administration shape
+            // (the helpdesk red line).
+            if (!rule.requiredPermissions.empty())
+            {
+                bool permissionsCovered = true;
+                for (const auto &perm : rule.requiredPermissions)
+                {
+                    if (userPermissions.find(perm) == userPermissions.end())
+                    {
+                        permissionsCovered = false;
+                        break;
+                    }
+                }
+                if (permissionsCovered && rule.allowedRoles.empty())
+                    return true;
+            }
+            // Roles check (unchanged semantics).
             for (const auto &allowed : rule.allowedRoles)
             {
                 for (const auto &userRole : userRoles)
@@ -274,7 +367,7 @@ bool AuthorizationFilter::checkAccess(
                         return true;
                 }
             }
-            // Rule matched but roles didn't -> DENY
+            // Rule matched but nothing entitled -> DENY
             return false;
         }
     }

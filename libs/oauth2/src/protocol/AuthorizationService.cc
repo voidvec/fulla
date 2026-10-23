@@ -127,7 +127,9 @@ void AuthorizationService::evaluateScopes(
                                              requestedScopes,
                                              internalUserId,
                                              callback =
-                                               std::move(callback)](bool hasAdminRole) mutable {
+                                               std::move(callback)](
+                  bool hasAdminRole,
+                  const std::vector<std::string> &userPermissions) mutable {
                     // Fan out consent lookups for every scope that is
                     // syntactically eligible (tiers 1-2 are re-checked
                     // inside evaluateScope itself; prefetching consent for
@@ -141,8 +143,16 @@ void AuthorizationService::evaluateScopes(
                             requestedScopes, *client, hasAdminRole, [](const std::string &) {
                                 return false;
                             },
-                            [this](const std::string &s) {
-                                return adminScopes_.count(s) > 0;
+                            // P1-8 (#285): classification vs
+                            // determination decoupled -- the scope passes
+                            // the admin tier when the user's permission
+                            // set covers it (hasAdminRole stays literal:
+                            // the admin super-role passes regardless).
+                            [this, &userPermissions](const std::string &s) {
+                                return adminScopes_.count(s) > 0 &&
+                                       std::find(userPermissions.begin(),
+                                                 userPermissions.end(),
+                                                 s) == userPermissions.end();
                             }
                           );
                         callback(std::move(summary));
@@ -158,8 +168,16 @@ void AuthorizationService::evaluateScopes(
                             requestedScopes, *client, hasAdminRole, [](const std::string &) {
                                 return false;
                             },
-                            [this](const std::string &s) {
-                                return adminScopes_.count(s) > 0;
+                            // P1-8 (#285): classification vs
+                            // determination decoupled -- the scope passes
+                            // the admin tier when the user's permission
+                            // set covers it (hasAdminRole stays literal:
+                            // the admin super-role passes regardless).
+                            [this, &userPermissions](const std::string &s) {
+                                return adminScopes_.count(s) > 0 &&
+                                       std::find(userPermissions.begin(),
+                                                 userPermissions.end(),
+                                                 s) == userPermissions.end();
                             }
                           )
                         );
@@ -181,7 +199,8 @@ void AuthorizationService::evaluateScopes(
                         // into it exactly once each.
                         auto finisher = std::make_shared<std::function<void(bool)>>(
                           [this, consentMap, remaining, scope, client, hasAdminRole,
-                           requestedScopes, callback](bool hasConsent) mutable {
+                           requestedScopes, callback,
+                           userPermissions](bool hasConsent) mutable {
                               try
                               {
                                   (*consentMap)[scope] = hasConsent;
@@ -196,8 +215,11 @@ void AuthorizationService::evaluateScopes(
                                               auto it = consentMap->find(s);
                                               return it != consentMap->end() && it->second;
                                           },
-                                          [this](const std::string &s) {
-                                              return adminScopes_.count(s) > 0;
+                                          [this, userPermissions](const std::string &s) {
+                                              return adminScopes_.count(s) > 0 &&
+                                                     std::find(userPermissions.begin(),
+                                                               userPermissions.end(),
+                                                               s) == userPermissions.end();
                                           }
                                         )
                                       );
@@ -235,16 +257,31 @@ void AuthorizationService::evaluateScopes(
 
                 if (!needsAdminCheck || !roleProvider_ || !internalUserId)
                 {
-                    proceedWithAdminFlag(false);
+                    proceedWithAdminFlag(false, {});
                     return;
                 }
 
                 roleProvider_->getRoles(
                   *internalUserId,
-                  [proceedWithAdminFlag =
-                     std::move(proceedWithAdminFlag)](std::vector<std::string> roles) mutable {
+                  [this, proceedWithAdminFlag = std::move(proceedWithAdminFlag)](
+                    std::vector<std::string> roles) mutable {
                       bool hasAdmin = std::find(roles.begin(), roles.end(), "admin") != roles.end();
-                      proceedWithAdminFlag(hasAdmin);
+                      // P1-8 (#285): determination needs the permission
+                      // union of the user's roles; providers without the
+                      // permission path keep the historical behavior
+                      // (empty set -> admin-class scopes require the
+                      // literal admin role).
+                      if (!roleProvider_->supportsPermissionLookup())
+                      {
+                          proceedWithAdminFlag(hasAdmin, {});
+                          return;
+                      }
+                      roleProvider_->getRolePermissions(
+                        roles,
+                        [hasAdmin, proceedWithAdminFlag = std::move(proceedWithAdminFlag)](
+                          std::vector<std::string> permissions) mutable {
+                            proceedWithAdminFlag(hasAdmin, permissions);
+                        });
                   }
                 );
             }

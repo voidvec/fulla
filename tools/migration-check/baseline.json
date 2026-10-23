@@ -41,7 +41,8 @@
     "V039__post_logout_redirect_uris.sql": "481fa6899e496d4409dc5b17bb6294557492105ff0294a8fa9785435798e7770",
     "V040__email_templates.sql": "fb33cddb70aa8830361be1edc5ae0e82edac93ce49e9b083bdf7cb1cb8fa1e77",
     "V041__client_logo_and_scope_description_zh.sql": "394529d29e327c941961cddc38c18acd2b70b49334cc889d10de55e649399311",
-    "V042__organizations_soft_delete.sql": "bc704bae070e48239197b6924503a2bf2cbe15d36775331c64acf29dd411efa8"
+    "V042__organizations_soft_delete.sql": "bc704bae070e48239197b6924503a2bf2cbe15d36775331c64acf29dd411efa8",
+    "V043__rbac_permissions_seed.sql": "83419a0dfe6df75d2289060a35c4fa8d7cef22e31273a317f404352f7c5ecade"
   },
   "ratified_destructive": [
     "V036__organization_consents_org_context.sql"
