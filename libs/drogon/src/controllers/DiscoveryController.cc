@@ -417,6 +417,18 @@ void DiscoveryController::oidcDiscovery(
     discovery["claims_supported"].append("email");
     discovery["claims_supported"].append("email_verified");
     discovery["claims_supported"].append("roles");
+    // P1-3 (#280): enabled claim mappings append their claim names (the
+    // reconciliation test's oracle = standard set ∪ enabled mappings).
+    // The plugin caches the enabled set (refreshed at startup + on admin
+    // mapping writes) so this handler stays synchronous.
+    if (auto *plugin = resolvePlugin(); plugin != nullptr)
+    {
+        for (const auto &extra : plugin->getMappedClaimNames())
+        {
+            if (!extra.empty())
+                discovery["claims_supported"].append(extra);
+        }
+    }
 
     // P0-5 (#259): the catalog-backed scope list lands here (async).
     scopesSupportedAsync(

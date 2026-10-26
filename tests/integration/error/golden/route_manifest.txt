@@ -1,3 +1,4 @@
+DELETE /api/admin/claim-mappings/{mappingId}
 DELETE /api/admin/clients/{clientId}
 DELETE /api/admin/organizations/{slug}
 DELETE /api/admin/organizations/{slug}/members/{userId}
@@ -18,6 +19,7 @@ DELETE /api/me/webauthn/credentials/{credentialId}
 GET /.well-known/jwks.json
 GET /.well-known/oauth-authorization-server
 GET /.well-known/openid-configuration
+GET /api/admin/claim-mappings
 GET /api/admin/clients
 GET /api/admin/clients/{clientId}
 GET /api/admin/clients/{clientId}/scopes
@@ -48,6 +50,7 @@ GET /api/me/organizations/{slug}/consent-requests
 GET /api/me/organizations/{slug}/consents
 GET /api/me/organizations/{slug}/invitations
 GET /api/me/organizations/{slug}/members
+GET /api/me/profile/custom-attributes
 GET /api/me/social/links
 GET /api/me/webauthn/credentials
 GET /api/verify-email
@@ -71,6 +74,7 @@ OPTIONS /metrics
 PATCH /api/admin/organizations/{slug}
 PATCH /api/me/applications/{clientId}
 PATCH /api/me/profile
+POST /api/admin/claim-mappings
 POST /api/admin/clients
 POST /api/admin/clients/{clientId}/reset-secret
 POST /api/admin/clients/{clientId}/resume
@@ -124,6 +128,7 @@ POST /oauth2/revoke
 POST /oauth2/token
 POST /oauth2/webauthn/authenticate/begin
 POST /oauth2/webauthn/authenticate/finish
+PUT /api/admin/claim-mappings/{mappingId}
 PUT /api/admin/clients/{clientId}
 PUT /api/admin/clients/{clientId}/scopes
 PUT /api/admin/email-templates/{key}/{locale}
@@ -134,3 +139,4 @@ PUT /api/admin/users/{userId}
 PUT /api/admin/users/{userId}/disable
 PUT /api/admin/users/{userId}/roles
 PUT /api/me/password
+PUT /api/me/profile/custom-attributes

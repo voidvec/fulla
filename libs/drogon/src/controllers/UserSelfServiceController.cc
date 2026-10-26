@@ -5,6 +5,9 @@
 #include <fulla/storage/postgres/models/Oauth2RefreshTokens.h>
 #include <fulla/storage/postgres/models/Oauth2UserConsents.h>
 #include <fulla/storage/postgres/models/Users.h>
+#include <fulla/drogon/utils/ClaimMappingValidator.h>
+
+#include <sstream>
 #include <fulla/drogon/utils/PasswordHasher.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/SuccessionGuard.h>
@@ -95,6 +98,16 @@ void UserSelfServiceController::initApiDocsImpl()
       selfServiceEp("/api/me", "DELETE", "Delete Account", "Soft-delete the current user's account."));
     openapi::OpenApiGenerator::addEndpoint(
       selfServiceEp("/api/me/password", "PUT", "Change Password", "Change the current user's password."));
+    // P1-3 (#280): claims-mapping source data (self-service).
+    openapi::OpenApiGenerator::addEndpoint(selfServiceEp(
+      "/api/me/profile/custom-attributes", "GET", "Get Custom Attributes",
+      "P1-3 (#280): the caller's custom-attributes document (claims-mapping "
+      "source data). Memory deployments answer 404."));
+    openapi::OpenApiGenerator::addEndpoint(selfServiceEp(
+      "/api/me/profile/custom-attributes", "PUT", "Replace Custom Attributes",
+      "P1-3 (#280): FULL-REPLACE the document. Validation: JSON object, depth "
+      "<= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-"
+      "pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID)."));
     openapi::OpenApiGenerator::addEndpoint(selfServiceEp(
       "/api/me/authorized-apps", "GET", "List Authorized Apps",
       "List OAuth2 clients authorized by the current user."));
@@ -1703,5 +1716,170 @@ void UserSelfServiceController::unlinkSocialAccount(
 }
 
 #endif  // WITH_SOCIAL
+
+
+// ---------------------------------------------------------------------------
+// P1-3 (#280): self-service custom attributes (GET/PUT /api/me/profile/
+// custom-attributes). The claims-mapping source whitelist only ever reads
+// custom_attributes.<key>, so the store is flat-by-design data the user
+// controls; write validation (depth/size/key grammar/prototype-pollution)
+// lives in fulla::drogon::utils::validateCustomAttributes.
+// ---------------------------------------------------------------------------
+
+void UserSelfServiceController::getCustomAttributes(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    std::string userId = req->getAttributes()->get<std::string>("userId");
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+
+    if (auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+        p != nullptr && p->getStorageType() == "memory")
+    {
+        respondError(req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND",
+                     "custom attributes require a database");
+        return;
+    }
+
+    try
+    {
+        auto db = ::drogon::app().getDbClient();
+        Criteria crit(Users::Cols::_public_sub, CompareOperator::EQ, userId);
+        Criteria deletedCrit(Users::Cols::_deleted_at, CompareOperator::IsNull);
+        Mapper<Users> mapper(db);
+        mapper.findBy(
+          crit && deletedCrit,
+          [sharedCb, req](const std::vector<Users> &users) {
+              if (users.empty())
+              {
+                  respondError(req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND", "user not found");
+                  return;
+              }
+              Json::Value json;
+              json["status"] = "success";
+              const std::string &raw = users.front().getValueOfCustomAttributes();
+              if (!raw.empty())
+              {
+                  Json::CharReaderBuilder rb;
+                  std::string errs;
+                  Json::Value parsed;
+                  std::istringstream in(raw);
+                  if (Json::parseFromStream(rb, in, &parsed, &errs) && parsed.isObject())
+                      json["custom_attributes"] = parsed;
+                  else
+                      json["custom_attributes"] = Json::Value(Json::objectValue);
+              }
+              else
+              {
+                  json["custom_attributes"] = Json::Value(Json::objectValue);
+              }
+              (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          },
+          [sharedCb, req](const DrogonDbException &e) {
+              respondError(req, sharedCb, "DB_QUERY_ERROR",
+                           std::string("load custom attributes failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, sharedCb, "DB_QUERY_ERROR", "custom attributes: Mapper construction failed");
+    }
+}
+
+void UserSelfServiceController::putCustomAttributes(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    std::string userId = req->getAttributes()->get<std::string>("userId");
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+
+    if (auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+        p != nullptr && p->getStorageType() == "memory")
+    {
+        respondError(req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND",
+                     "custom attributes require a database");
+        return;
+    }
+
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody || !jsonBody->isObject())
+    {
+        respondError(req, sharedCb, "CUSTOM_ATTRIBUTES_INVALID",
+                     "a JSON object body is required");
+        return;
+    }
+    // Validate the SERIALIZED document (the exact bytes that land in the
+    // column) — depth, size, key grammar and the prototype-pollution trio
+    // in one pass.
+    Json::StreamWriterBuilder wb;
+    wb["indentation"] = "";
+    const std::string document = Json::writeString(wb, *jsonBody);
+    const std::string rejection = ::fulla::drogon::utils::validateCustomAttributes(document);
+    if (!rejection.empty())
+    {
+        respondError(req, sharedCb, "CUSTOM_ATTRIBUTES_INVALID", rejection);
+        return;
+    }
+
+    try
+    {
+        auto db = ::drogon::app().getDbClient();
+        Criteria crit(Users::Cols::_public_sub, CompareOperator::EQ, userId);
+        Criteria deletedCrit(Users::Cols::_deleted_at, CompareOperator::IsNull);
+        Mapper<Users> mapper(db);
+        mapper.findBy(
+          crit && deletedCrit,
+          [sharedCb, req, db, document](const std::vector<Users> &users) {
+              if (users.empty())
+              {
+                  respondError(req, sharedCb, "VALIDATION_RESOURCE_NOT_FOUND", "user not found");
+                  return;
+              }
+              try
+              {
+                  Users row = users.front();
+                  row.setCustomAttributes(document);
+                  Mapper<Users> updateMapper(db);
+                  updateMapper.update(
+                    row,
+                    [sharedCb, document](const std::size_t) {
+                        Json::Value json;
+                        json["status"] = "success";
+                        json["message"] = "Custom attributes updated";
+                        Json::CharReaderBuilder rb;
+                        std::string errs;
+                        Json::Value parsed;
+                        std::istringstream in(document);
+                        if (Json::parseFromStream(rb, in, &parsed, &errs) && parsed.isObject())
+                            json["custom_attributes"] = parsed;
+                        (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                    },
+                    [sharedCb, req](const DrogonDbException &e) {
+                        respondError(req, sharedCb, "DB_QUERY_ERROR",
+                                     std::string("update custom attributes failed: ") +
+                                       e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, sharedCb, "DB_QUERY_ERROR",
+                               "update custom attributes: Mapper construction failed");
+              }
+          },
+          [sharedCb, req](const DrogonDbException &e) {
+              respondError(req, sharedCb, "DB_QUERY_ERROR",
+                           std::string("load for update failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, sharedCb, "DB_QUERY_ERROR",
+                     "update custom attributes: Mapper construction failed");
+    }
+}
 
 }  // namespace fulla::drogon::controllers

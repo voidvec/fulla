@@ -127,9 +127,10 @@ DROGON_TEST(Integration_P0_Userinfo_ProfileScope_ReleasesProfileClaimsOnly)
     Json::Value body;
     REQUIRE(parseJsonBody(resp, body));
     CHECK(body.isMember("name"));
-    // Standard claim + the one-release legacy dual-emit.
+    // Standard claim only: the legacy `username` dual-emission was REMOVED
+    // in v1.6.0 (P1-3/D5, pre-announced in the v1.5.0 CHANGELOG).
     CHECK(body.isMember("preferred_username"));
-    CHECK(body.isMember("username"));
+    CHECK(!body.isMember("username"));
     // The seed admin has an email address — the email claims must NOT be
     // released without the email scope.
     CHECK(!body.isMember("email"));

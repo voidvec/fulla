@@ -42,6 +42,20 @@ class UserSelfServiceController : public ::drogon::HttpController<UserSelfServic
       ::drogon::Put,
       "fulla::drogon::filters::OAuth2AuthFilter"
     );
+    // P1-3 (#280): self-service custom attributes (profile-gated by the
+    // /api/me catch-all prefix rule).
+    ADD_METHOD_TO(
+      UserSelfServiceController::getCustomAttributes,
+      "/api/me/profile/custom-attributes",
+      ::drogon::Get,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
+    ADD_METHOD_TO(
+      UserSelfServiceController::putCustomAttributes,
+      "/api/me/profile/custom-attributes",
+      ::drogon::Put,
+      "fulla::drogon::filters::OAuth2AuthFilter"
+    );
     ADD_METHOD_TO(
       UserSelfServiceController::listAuthorizedApps,
       "/api/me/authorized-apps",
@@ -105,6 +119,16 @@ class UserSelfServiceController : public ::drogon::HttpController<UserSelfServic
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
     );
     void changePassword(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+
+    // P1-3 (#280)
+    void getCustomAttributes(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+    void putCustomAttributes(
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
     );

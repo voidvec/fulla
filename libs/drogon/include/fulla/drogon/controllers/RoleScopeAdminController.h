@@ -89,6 +89,31 @@ class RoleScopeAdminController : public ::drogon::HttpController<RoleScopeAdminC
       ::drogon::Get,
       "fulla::drogon::filters::AuthorizationFilter"
     );
+    // P1-3 (#280): claim-mapping CRUD.
+    ADD_METHOD_TO(
+      RoleScopeAdminController::listClaimMappings,
+      "/api/admin/claim-mappings",
+      ::drogon::Get,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      RoleScopeAdminController::createClaimMapping,
+      "/api/admin/claim-mappings",
+      ::drogon::Post,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      RoleScopeAdminController::updateClaimMapping,
+      "/api/admin/claim-mappings/{mappingId}",
+      ::drogon::Put,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      RoleScopeAdminController::deleteClaimMapping,
+      "/api/admin/claim-mappings/{mappingId}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
     METHOD_LIST_END
 
     void listRoles(
@@ -138,6 +163,25 @@ class RoleScopeAdminController : public ::drogon::HttpController<RoleScopeAdminC
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &scopeId
+    );
+
+    void listClaimMappings(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+    void createClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+    );
+    void updateClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &mappingId
+    );
+    void deleteClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &mappingId
     );
 
     void deleteScope(

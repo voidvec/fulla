@@ -5,6 +5,7 @@
 #include <fulla/drogon/validation/RuleSet.h>
 #include <fulla/drogon/error/OAuth2ErrorHandler.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>
+#include <fulla/drogon/utils/ClaimMappingValidator.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/ScopeChecker.h>
 #include <fulla/oauth2/model/Client.h>
@@ -2216,10 +2217,10 @@ void TokenEndpointController::userInfo(
                                      : (!uname.empty() ? uname : email);
                       if (!uname.empty())
                       {
-                          // Standard OIDC claim name; the legacy `username`
-                          // key dual-emits for one release (v1.6.0 removes it).
+                          // Standard OIDC claim name. The legacy `username`
+                          // dual-emission was REMOVED in v1.6.0 (P1-3/D5 —
+                          // the v1.5.0 CHANGELOG pre-announced it; breaking).
                           userInfo["preferred_username"] = uname;
-                          userInfo["username"] = uname;
                       }
                       if (dbUserInfo->isMember("picture") &&
                           !(*dbUserInfo)["picture"].asString().empty())
@@ -2284,9 +2285,69 @@ void TokenEndpointController::userInfo(
                   auto resp = ::drogon::HttpResponse::newHttpJsonResponse(userInfoFinal);
                   callback(resp);
               };
+              // P1-3 (#280): mapped claims wrap the final response — the
+              // same trigger-scope + include_in(userinfo) gate as the
+              // id_token paths; an unwired provider (memory mode) keeps
+              // the pre-P1-3 response byte-for-byte.
+              auto finishWithMappedClaims =
+                [plugin, userId, scope,
+                 finishUserInfo = std::move(finishUserInfo)](
+                  Json::Value userInfoFinal) mutable {
+                    auto provider =
+                      plugin ? plugin->getClaimMappingsProvider() : nullptr;
+                    if (!provider)
+                    {
+                        finishUserInfo(userInfoFinal);
+                        return;
+                    }
+                    provider->getEnabledMappings(
+                      [plugin, userId, scope,
+                       finishUserInfo = std::move(finishUserInfo),
+                       userInfoFinal = std::move(userInfoFinal)](
+                        std::vector<fulla::common::ports::ClaimMappingEntry>
+                          mappings) mutable {
+                          std::vector<fulla::common::ports::ClaimMappingEntry>
+                            active;
+                          for (auto &m : mappings)
+                          {
+                              if (m.includeIn != "both" && m.includeIn != "userinfo")
+                                  continue;
+                              if (!fulla::drogon::utils::hasScope(scope, m.scopeName))
+                                  continue;
+                              active.push_back(std::move(m));
+                          }
+                          if (active.empty())
+                          {
+                              finishUserInfo(userInfoFinal);
+                              return;
+                          }
+                          auto *pl = plugin;
+                          auto finisher = std::make_shared<
+                            std::function<void(std::optional<std::string>)>>(
+                              [finishUserInfo = std::move(finishUserInfo),
+                               userInfoFinal = std::move(userInfoFinal),
+                               active = std::move(active)](
+                                std::optional<std::string> profileJson) mutable {
+                                  if (profileJson.has_value())
+                                  {
+                                      for (const auto &m : active)
+                                      {
+                                          std::string value;
+                                          if (::fulla::drogon::utils::
+                                                resolveClaimSourceValue(
+                                                  m.sourcePath, *profileJson,
+                                                  value))
+                                              userInfoFinal[m.claimName] = value;
+                                      }
+                                  }
+                                  finishUserInfo(userInfoFinal);
+                              });
+                          pl->resolveUserProfileForClaims(userId, std::move(*finisher));
+                      });
+                };
               if (!fulla::drogon::utils::hasScope(scope, "org"))
               {
-                  finishUserInfo(userInfo);
+                  finishWithMappedClaims(userInfo);
                   return;
               }
               {
@@ -2310,12 +2371,12 @@ void TokenEndpointController::userInfo(
                       }
                   }();
                   auto withOrgId = [plugin, req, userId, userInfo,
-                                    finishUserInfo = std::move(finishUserInfo),
+                                    finishWithMappedClaims = std::move(finishWithMappedClaims),
                                     hasOrgId,
                                     orgId]() mutable {
                         if (!hasOrgId)
                         {
-                            finishUserInfo(userInfo);
+                            finishWithMappedClaims(userInfo);
                             return;
                         }
                         // Storage-type-guarded (Debug asserts on an
@@ -2336,14 +2397,14 @@ void TokenEndpointController::userInfo(
                         if (!orgDb)
                         {
                             // Memory mode: no org rows, no org_ctx.
-                            finishUserInfo(userInfo);
+                            finishWithMappedClaims(userInfo);
                             return;
                         }
                         auto sharedFinish =
                           std::make_shared<std::function<void(Json::Value)>>(
-                            [finishUserInfo = std::move(finishUserInfo)](
+                            [finishWithMappedClaims = std::move(finishWithMappedClaims)](
                               Json::Value final) mutable {
-                                finishUserInfo(final);
+                                finishWithMappedClaims(final);
                             }
                         );
                         auto repo = std::make_shared<

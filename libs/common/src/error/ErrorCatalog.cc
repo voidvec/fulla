@@ -65,9 +65,9 @@ struct RawEntry
 
 // Verbatim copy of oauth2::error::ErrorCatalog's table (numeric codes/messages
 // preserved unchanged); grows as new codes are ratified.
-const std::array<RawEntry, 40> &rawEntries()
+const std::array<RawEntry, 44> &rawEntries()
 {
-    static const std::array<RawEntry, 40> kEntries = {{
+    static const std::array<RawEntry, 44> kEntries = {{
       // NETWORK (1000-1099)
       {"NET_CONNECTION_FAILED",
        1001,
@@ -312,6 +312,28 @@ const std::array<RawEntry, 40> &rawEntries()
        ErrorCategory::VALIDATION,
        "导出行数超过上限",
        "导出行数超过上限（audit.export_max_rows 或 limit），请收窄时间窗（VALIDATION 类，HTTP 400）"},
+
+      // VALIDATION (3000-3099) —— P1-3 (#280)：claims 映射与自定义属性。
+      {"CLAIM_MAPPING_RESERVED_CLAIM",
+       3023,
+       ErrorCategory::VALIDATION,
+       "claim 名为保留字",
+       "映射的 claim_name 撞标准/已发布 claim 保留字（VALIDATION 类，HTTP 400）"},
+      {"CLAIM_MAPPING_INVALID_SOURCE",
+       3024,
+       ErrorCategory::VALIDATION,
+       "映射源路径不在白名单",
+       "source_path 仅允许 custom_attributes.<key> 或 user.display_name（VALIDATION 类，HTTP 400）"},
+      {"CLAIM_MAPPING_FORBIDDEN_SCOPE",
+       3025,
+       ErrorCategory::VALIDATION,
+       "触发 scope 不允许",
+       "scope_name 禁止 openid（必带 scope，挂它等于零授权发布）（VALIDATION 类，HTTP 400）"},
+      {"CUSTOM_ATTRIBUTES_INVALID",
+       3026,
+       ErrorCategory::VALIDATION,
+       "自定义属性不合法",
+       "自定义属性须为对象、深度≤2、≤8KB、键名 ^[a-z][a-z0-9_]{0,63}$（VALIDATION 类，HTTP 400）"},
     }};
     return kEntries;
 }

@@ -43,6 +43,7 @@
 
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/ICryptoProvider.h>
+#include <fulla/common/ports/IClaimMappingsProvider.h>
 #include <fulla/common/ports/IOrgContextResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
@@ -109,6 +110,27 @@ class TokenService : public std::enable_shared_from_this<TokenService>
     )
     {
         orgContextResolver_ = std::move(resolver);
+    }
+
+    /// P1-3 (#280): publish the claims-mapping provider consumed at BOTH
+    /// id_token issuance sites. Nullable by design: unwired (Domain unit
+    /// tests, memory hosts) keeps the pre-P1-3 claim set byte-for-byte.
+    void setClaimMappingsProvider(
+      std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> provider
+    )
+    {
+        claimMappingsProvider_ = std::move(provider);
+    }
+
+    /// P1-3 (#280): the per-user profile JSON the mapping resolver reads
+    /// (display_name + custom_attributes). Injected by the product layer
+    /// as an async lookup keyed by the token subject; unwired = mapped
+    /// claims resolve nothing (absence, like org_ctx).
+    using UserProfileJsonResolver = std::function<
+      void(const std::string &, std::function<void(std::optional<std::string>)> &&)>;
+    void setUserProfileResolver(UserProfileJsonResolver resolver)
+    {
+        userProfileResolver_ = std::move(resolver);
     }
 
     /// P0-1 (#255): optional one-shot normalizer for legacy numeric-subject
@@ -211,6 +233,8 @@ class TokenService : public std::enable_shared_from_this<TokenService>
     std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
     std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
     std::shared_ptr<fulla::common::ports::IOrgContextResolver> orgContextResolver_;
+    std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+    UserProfileJsonResolver userProfileResolver_;
     /// P0-1 (#255): see setSubjectNormalizer().
     SubjectNormalizer subjectNormalizer_;
     int64_t authCodeTtl_;
@@ -239,6 +263,19 @@ class TokenService : public std::enable_shared_from_this<TokenService>
       const std::optional<int32_t> &orgId,
       const std::string &scope,
       std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
+    );
+
+    /// P1-3 (#280): resolve the MAPPED claims for a token. A mapping
+    /// publishes only when the token carries its trigger scope (same
+    /// authorization decision as org_ctx under `org`) and its source
+    /// resolves to a scalar on the user profile. `target` filters by the
+    /// mapping's include_in ("id_token" | "userinfo" | "both"). Failure
+    /// mode is an empty map (mapped claims are claim data).
+    void resolveMappedClaims(
+      const std::string &subject,
+      const std::string &scope,
+      const char *target,
+      std::function<void(Json::Value)> &&cb
     );
 
     void audit(

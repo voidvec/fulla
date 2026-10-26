@@ -50,6 +50,11 @@ export const en: Record<string, string> = {
   // --- P1-6 (#283): audit export guard codes ---
   AUDIT_EXPORT_WINDOW_REQUIRED: 'Audit export requires a time window (from/to) or an explicit full export',
   AUDIT_EXPORT_TOO_LARGE: 'Export exceeds the row cap. Please narrow the time window',
+  // --- P1-3 (#280): claims mapping + custom attributes ---
+  CLAIM_MAPPING_RESERVED_CLAIM: 'Mapped claim name is reserved and cannot shadow a standard claim',
+  CLAIM_MAPPING_INVALID_SOURCE: 'Source path is outside the whitelist (custom_attributes.<key> or user.display_name only)',
+  CLAIM_MAPPING_FORBIDDEN_SCOPE: 'Trigger scope not allowed (openid is always granted; mappings on it are forbidden)',
+  CUSTOM_ATTRIBUTES_INVALID: 'Invalid custom attributes (object, depth <= 2, <= 8KB, lowercase-first keys)',
   AUTH_MFA_CODE_INVALID: 'Incorrect verification code',
   AUTH_MFA_NOT_CONFIGURED: 'Two-factor authentication is not configured yet. Set it up first',
 

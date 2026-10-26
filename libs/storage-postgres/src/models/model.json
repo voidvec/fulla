@@ -31,7 +31,8 @@
         "organization_consents",
         "organization_succession_nominations",
         "organization_consent_requests",
-        "email_templates"
+        "email_templates",
+        "claim_mappings"
     ],    "relationships": {
         "enabled": true,
         "items": [

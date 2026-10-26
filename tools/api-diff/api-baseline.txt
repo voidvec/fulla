@@ -384,6 +384,28 @@ virtual ~IAuditSink() = default;
 virtual void record(const fulla::common::observability::AuditEvent &event) = 0;
 };
 }
+=== libs/common/include/fulla/common/ports/IClaimMappingsProvider.h
+#pragma once
+#include <functional>
+#include <string>
+#include <vector>
+namespace fulla::common::ports
+{
+struct ClaimMappingEntry
+{
+std::string scopeName;
+std::string claimName;
+std::string sourcePath;
+std::string includeIn;
+};
+class IClaimMappingsProvider
+{
+public:
+using MappingsCallback = std::function<void(std::vector<ClaimMappingEntry>)>;
+virtual ~IClaimMappingsProvider() = default;
+virtual void getEnabledMappings(MappingsCallback &&cb) = 0;
+};
+}
 === libs/common/include/fulla/common/ports/IClock.h
 #pragma once
 #include <cstdint>
@@ -965,6 +987,31 @@ int ttlSeconds_;
 };
 }
 #endif
+=== libs/drogon/include/fulla/drogon/adapters/StorageClaimMappingsProvider.h
+#pragma once
+#include <fulla/common/ports/IClaimMappingsProvider.h>
+#include <drogon/drogon.h>
+#include <functional>
+#include <memory>
+#include <string>
+namespace fulla::drogon::adapters
+{
+class StorageClaimMappingsProvider : public fulla::common::ports::IClaimMappingsProvider
+{
+public:
+explicit StorageClaimMappingsProvider(::drogon::orm::DbClientPtr dbClient);
+~StorageClaimMappingsProvider() override;
+void getEnabledMappings(MappingsCallback &&cb) override;
+private:
+::drogon::orm::DbClientPtr dbClient_;
+};
+using ProfileJsonCallback = std::function<void(std::optional<std::string>)>;
+void resolveUserProfileJson(
+const ::drogon::orm::DbClientPtr &db,
+const std::string &subject,
+ProfileJsonCallback &&cb
+);
+}
 === libs/drogon/include/fulla/drogon/adapters/StorageOrgConsentResolver.h
 #pragma once
 #include <fulla/common/ports/IOrgConsentResolver.h>
@@ -1225,6 +1272,24 @@ static void putRolePermissions(
 const ::drogon::HttpRequestPtr &req,
 ResponseCallback cb,
 const std::string &roleId
+);
+static void listClaimMappings(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb
+);
+static void createClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb
+);
+static void updateClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &mappingId
+);
+static void deleteClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &mappingId
 );
 static void listScopes(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 static void createScope(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
@@ -2256,6 +2321,30 @@ RoleScopeAdminController::scopeResources,
 ::drogon::Get,
 "fulla::drogon::filters::AuthorizationFilter"
 );
+ADD_METHOD_TO(
+RoleScopeAdminController::listClaimMappings,
+"/api/admin/claim-mappings",
+::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
+RoleScopeAdminController::createClaimMapping,
+"/api/admin/claim-mappings",
+::drogon::Post,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
+RoleScopeAdminController::updateClaimMapping,
+"/api/admin/claim-mappings/{mappingId}",
+::drogon::Put,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
+RoleScopeAdminController::deleteClaimMapping,
+"/api/admin/claim-mappings/{mappingId}",
+::drogon::Delete,
+"fulla::drogon::filters::AuthorizationFilter"
+);
 METHOD_LIST_END
 void listRoles(
 const ::drogon::HttpRequestPtr &req,
@@ -2297,6 +2386,24 @@ void updateScope(
 const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
 const std::string &scopeId
+);
+void listClaimMappings(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void createClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void updateClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &mappingId
+);
+void deleteClaimMapping(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &mappingId
 );
 void deleteScope(
 const ::drogon::HttpRequestPtr &req,
@@ -2696,6 +2803,18 @@ UserSelfServiceController::changePassword,
 "fulla::drogon::filters::OAuth2AuthFilter"
 );
 ADD_METHOD_TO(
+UserSelfServiceController::getCustomAttributes,
+"/api/me/profile/custom-attributes",
+::drogon::Get,
+"fulla::drogon::filters::OAuth2AuthFilter"
+);
+ADD_METHOD_TO(
+UserSelfServiceController::putCustomAttributes,
+"/api/me/profile/custom-attributes",
+::drogon::Put,
+"fulla::drogon::filters::OAuth2AuthFilter"
+);
+ADD_METHOD_TO(
 UserSelfServiceController::listAuthorizedApps,
 "/api/me/authorized-apps",
 ::drogon::Get,
@@ -2749,6 +2868,14 @@ const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 void changePassword(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void getCustomAttributes(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void putCustomAttributes(
 const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
@@ -3303,6 +3430,7 @@ void doPurge();
 #include <drogon/plugins/Plugin.h>
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
+#include <fulla/common/ports/IClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/identity/IRoleRepository.h>
@@ -3486,6 +3614,16 @@ std::shared_ptr<fulla::common::ports::IAuditSink> getAuditSink() const
 std::shared_ptr<fulla::drogon::authz::RolePermissionResolver>
 getRolePermissionResolver() const
 ;
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider>
+getClaimMappingsProvider() const
+;
+void resolveUserProfileForClaims(
+const std::string &subject,
+std::function<void(std::optional<std::string>)> &&cb
+);
+const std::vector<std::string> &getMappedClaimNames() const
+;
+void refreshMappedClaimNames();
 std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
 ;
 std::shared_ptr<fulla::oauth2::protocol::AuthorizationService>
@@ -3511,6 +3649,8 @@ std::shared_ptr<fulla::oauth2::protocol::ClientService> clientService_;
 std::shared_ptr<fulla::identity::IdentityService> identityService_;
 std::shared_ptr<fulla::drogon::adapters::StorageRoleProvider> roleProvider_;
 std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+std::vector<std::string> mappedClaimNames_;
 std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
 std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::IMetrics> metrics_;
@@ -3776,6 +3916,24 @@ namespace fulla::drogon::utils
 {
 std::string validateBrandUri(const std::string &uri);
 std::string validatePrimaryColor(const std::string &color);
+}
+=== libs/drogon/include/fulla/drogon/utils/ClaimMappingValidator.h
+#pragma once
+#include <string>
+namespace fulla::drogon::utils
+{
+std::string validateClaimMapping(
+const std::string &scopeName,
+const std::string &claimName,
+const std::string &sourcePath,
+const std::string &includeIn
+);
+std::string validateCustomAttributes(const std::string &jsonDocument);
+bool resolveClaimSourceValue(
+const std::string &sourcePath,
+const std::string &userJson,
+std::string &outValue
+);
 }
 === libs/drogon/include/fulla/drogon/utils/ClientCacheInvalidator.h
 #pragma once
@@ -5975,6 +6133,7 @@ const std::string &rawToken
 #pragma once
 #include <fulla/common/ports/IAuditSink.h>
 #include <fulla/common/ports/ICryptoProvider.h>
+#include <fulla/common/ports/IClaimMappingsProvider.h>
 #include <fulla/common/ports/IOrgContextResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
@@ -6012,6 +6171,14 @@ void setJwkManager(std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager)
 void setOrgContextResolver(
 std::shared_ptr<fulla::common::ports::IOrgContextResolver> resolver
 )
+;
+void setClaimMappingsProvider(
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> provider
+)
+;
+using UserProfileJsonResolver = std::function<
+void(const std::string &, std::function<void(std::optional<std::string>)> &&)>;
+void setUserProfileResolver(UserProfileJsonResolver resolver)
 ;
 using SubjectNormalizer = std::function<
 void(const std::string &, std::function<void(std::optional<std::string>)> &&)>;
@@ -6074,6 +6241,8 @@ std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
 std::shared_ptr<fulla::common::ports::IRoleProvider> roleProvider_;
 std::shared_ptr<fulla::common::ports::IOrgContextResolver> orgContextResolver_;
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+UserProfileJsonResolver userProfileResolver_;
 SubjectNormalizer subjectNormalizer_;
 int64_t authCodeTtl_;
 int64_t accessTokenTtl_;
@@ -6089,6 +6258,12 @@ const std::string &subject,
 const std::optional<int32_t> &orgId,
 const std::string &scope,
 std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
+);
+void resolveMappedClaims(
+const std::string &subject,
+const std::string &scope,
+const char *target,
+std::function<void(Json::Value)> &&cb
 );
 void audit(
 const std::string &action,
@@ -7330,6 +7505,146 @@ const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
 bool dirtyFlag_[13]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/models/ClaimMappings.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class ClaimMappings
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _scope_name;
+static const std::string _claim_name;
+static const std::string _source_path;
+static const std::string _include_in;
+static const std::string _enabled;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit ClaimMappings(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit ClaimMappings(const Json::Value &pJson) noexcept(false);
+ClaimMappings(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+ClaimMappings() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const std::string &getValueOfScopeName() const noexcept;
+const std::shared_ptr<std::string> &getScopeName() const noexcept;
+void setScopeName(const std::string &pScopeName) noexcept;
+void setScopeName(std::string &&pScopeName) noexcept;
+const std::string &getValueOfClaimName() const noexcept;
+const std::shared_ptr<std::string> &getClaimName() const noexcept;
+void setClaimName(const std::string &pClaimName) noexcept;
+void setClaimName(std::string &&pClaimName) noexcept;
+const std::string &getValueOfSourcePath() const noexcept;
+const std::shared_ptr<std::string> &getSourcePath() const noexcept;
+void setSourcePath(const std::string &pSourcePath) noexcept;
+void setSourcePath(std::string &&pSourcePath) noexcept;
+const std::string &getValueOfIncludeIn() const noexcept;
+const std::shared_ptr<std::string> &getIncludeIn() const noexcept;
+void setIncludeIn(const std::string &pIncludeIn) noexcept;
+void setIncludeIn(std::string &&pIncludeIn) noexcept;
+const bool &getValueOfEnabled() const noexcept;
+const std::shared_ptr<bool> &getEnabled() const noexcept;
+void setEnabled(const bool &pEnabled) noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+private:
+friend drogon::orm::Mapper<ClaimMappings>;
+friend drogon::orm::BaseBuilder<ClaimMappings, true, true>;
+friend drogon::orm::BaseBuilder<ClaimMappings, true, false>;
+friend drogon::orm::BaseBuilder<ClaimMappings, false, true>;
+friend drogon::orm::BaseBuilder<ClaimMappings, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<ClaimMappings>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<std::string> scopeName_;
+std::shared_ptr<std::string> claimName_;
+std::shared_ptr<std::string> sourcePath_;
+std::shared_ptr<std::string> includeIn_;
+std::shared_ptr<bool> enabled_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[6]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
@@ -11057,6 +11372,7 @@ static const std::string _deleted_at;
 static const std::string _must_change_password;
 static const std::string _display_name;
 static const std::string _avatar_url;
+static const std::string _custom_attributes;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -11174,6 +11490,10 @@ const std::shared_ptr<std::string> &getAvatarUrl() const noexcept;
 void setAvatarUrl(const std::string &pAvatarUrl) noexcept;
 void setAvatarUrl(std::string &&pAvatarUrl) noexcept;
 void setAvatarUrlToNull() noexcept;
+const std::string &getValueOfCustomAttributes() const noexcept;
+const std::shared_ptr<std::string> &getCustomAttributes() const noexcept;
+void setCustomAttributes(const std::string &pCustomAttributes) noexcept;
+void setCustomAttributes(std::string &&pCustomAttributes) noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -11246,6 +11566,7 @@ std::shared_ptr<::trantor::Date> deletedAt_;
 std::shared_ptr<bool> mustChangePassword_;
 std::shared_ptr<std::string> displayName_;
 std::shared_ptr<std::string> avatarUrl_;
+std::shared_ptr<std::string> customAttributes_;
 struct MetaData
 {
 const std::string colName_;
@@ -11257,7 +11578,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[21]={ false };
+bool dirtyFlag_[22]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;
