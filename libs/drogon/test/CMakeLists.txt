@@ -21,12 +21,13 @@ target_link_libraries(fulla-drogon-test
         GTest::gtest
 )
 
-# NOTE: deliberately NOT linking GTest::Main. fulla::drogon pulls Boost
-# transitively, whose umbrella links Boost::test_exec_monitor (a main() that
-# calls test_main). With GTest::Main (a .lib), MSVC can resolve main() from
-# the boost lib first, leaving test_main undefined. Providing main() as a
-# compiled object below (processed before any .lib) -- exactly how the main
-# app's main.cc avoids this -- sidesteps it.
+# NOTE: deliberately NOT linking GTest::Main; main() is provided by a
+# compiled object in the test sources (BackchannelLogoutNotifierTest.cc).
+# Historically this also dodged an MSVC link trap: the transitive Boost
+# umbrella linked Boost::test_exec_monitor (a main() that calls test_main),
+# which MSVC could resolve before GTest::Main's .lib, leaving test_main
+# undefined. drogon/*:with_boost=False removed Boost from the graph, so
+# that hazard is gone; the compiled-main pattern is kept as-is.
 
 set_target_properties(fulla-drogon-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 

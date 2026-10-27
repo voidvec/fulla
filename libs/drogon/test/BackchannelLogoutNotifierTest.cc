@@ -329,11 +329,12 @@ TEST(BackchannelLogoutNotifierSignatureTest, LogoutTokenVerifiesWithSigningKey)
 
 }  // namespace
 
-// Own main(): fulla::drogon -> Boost umbrella links Boost::test_exec_monitor
-// (a main() that calls test_main). Linking GTest::Main (a .lib) lets MSVC pick
-// boost's main first and leaves test_main unresolved. A compiled main() object
-// is processed before any .lib, so boost's main object is never pulled. See the
-// matching note in this target's CMakeLists.txt.
+// Own main(), compiled as an object (not GTest::Main's .lib). Historically
+// this dodged an MSVC link trap: the transitive Boost umbrella linked
+// Boost::test_exec_monitor (a main() that calls test_main), which MSVC could
+// resolve before GTest::Main. Since drogon/*:with_boost=False removed Boost
+// from the graph the trap is gone; the pattern is kept. See the matching
+// note in this target's CMakeLists.txt.
 int main(int argc, char **argv)
 {
     ::testing::InitGoogleTest(&argc, argv);

@@ -49,6 +49,15 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+REM drogon_create_views() build rules invoke drogon_ctl by bare name,
+REM PATH-resolved at build time. Call AFTER conan install above: on a
+REM fresh cache the drogon package only exists from this run onward.
+call "%SCRIPT_DIR%ensure_drogon_ctl.bat"
+if %errorlevel% neq 0 (
+    echo [Error] drogon_ctl resolution failed!
+    exit /b 1
+)
+
 echo Configuring CMake (preset %CMAKE_PRESET%)...
 cmake --preset %CMAKE_PRESET%
 if %errorlevel% neq 0 (

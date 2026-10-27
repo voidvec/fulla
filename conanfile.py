@@ -40,6 +40,11 @@ class FullaConan(ConanFile):
         "with_webauthn": True,
 
         # --- drogon options (M0 Task 1) ---
+        # with_boost=False: drogon 1.9.x upstream no longer uses Boost
+        # (no Boost reference anywhere in its CMake); the conancenter
+        # recipe's True default only drags boost/1.83.0 into the graph
+        # (and its Boost::test_exec_monitor main() into MSVC link lines).
+        "drogon/*:with_boost": False,
         "drogon/*:with_orm": True,
         "drogon/*:with_postgres": True,
         "drogon/*:with_redis": True,
