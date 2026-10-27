@@ -67,6 +67,23 @@ Changelog entries are written in English (see CONTRIBUTING).
   Playwright smoke joins interop.yml as the FOURTH driver: unlike the three
   json-mode RP libraries it drives a real browser through the whole chain
   (cookies, redirects, the real login form).
+- **Dynamic client registration documented + surfaced in the admin console**
+  (P1-7, #284): `POST /oauth2/register` (RFC 7591, admin-gated) existed but
+  was invisible to integrators. build-an-app.md (EN + zh-CN mirror + llms)
+  gains a "Programmatic registration (RFC 7591)" section with a curl
+  sequence verified end-to-end against a fresh dev stack (admin token via
+  the seeded portal client → register → 201), a request-field table and the
+  `post_logout_redirect_uris` authority semantics. The admin console
+  Applications page adds a "Register (RFC 7591)" form (client name/type,
+  token_endpoint_auth_method dropdown — locked to `none` for PUBLIC, per
+  F-017 — redirect URIs, RFC 7591 grant checkboxes without device code,
+  post-logout array; deliberately NO logo_uri field, which the DCR body
+  does not process). Success shows the generated `client_secret` exactly
+  once, same display semantics as the portal. Audit reuses
+  `client_registered`. Four new mock-driven e2e tests cover the modal shape,
+  the PUBLIC lock, the full register→secret-once→list-appearance chain
+  (with request-body contract assertions) and the client-side redirect-URI
+  guard.
 
 ## [1.5.0] - 2026-10-15
 

@@ -162,4 +162,107 @@ test.describe('Applications Management', () => {
     // Client should still be visible (dialog was dismissed)
     await expect(page.locator('table tbody tr').first()).toBeVisible()
   })
+
+  // P1-7 (#284): RFC 7591 dynamic client registration form.
+  test.describe('RFC 7591 registration', () => {
+    test('opens the registration modal with the DCR field set (no logo field)', async ({ page }) => {
+      await page.click('button:has-text("Register (RFC 7591)")')
+      await expect(page.locator('h3:has-text("Register Application (RFC 7591)")')).toBeVisible()
+      // Token-endpoint auth dropdown + post-logout array input are DCR-specific.
+      await expect(page.locator('.fixed select').nth(1)).toBeVisible()
+      await expect(page.locator('input[placeholder="https://myapp.com/"]')).toBeVisible()
+      // The DCR vocabulary has NO device-code grant (the endpoint rejects it)
+      // and NO logo_uri field (P1-1 write paths own that). NB: "logo_uri",
+      // not "logo" — "Post-logout" contains the substring "logo".
+      await expect(page.locator('.fixed label:has-text("Device Code")')).toHaveCount(0)
+      await expect(page.locator('.fixed label:has-text("logo_uri")')).toHaveCount(0)
+    })
+
+    test('PUBLIC type locks the auth method to none', async ({ page }) => {
+      await page.click('button:has-text("Register (RFC 7591)")')
+      await page.locator('.fixed select').first().selectOption('PUBLIC')
+      const authSelect = page.locator('.fixed select').nth(1)
+      await expect(authSelect).toBeDisabled()
+      await expect(authSelect).toHaveValue('none')
+    })
+
+    test('registers: secret shown once, request shape correct, client lands in the list', async ({ page }) => {
+      // Test-scoped routes (registered later = higher precedence) keep a
+      // dynamic client list so the acceptance "client visible in the
+      // Applications list" is asserted for real. The credential slot is a
+      // mock PLACEHOLDER (env-overridable), never a real secret.
+      const mockSecret = process.env.E2E_MOCK_DCR_CS ?? 'e2e-mock-value-dcr'
+      const registered: Array<Record<string, string>> = []
+      let dcrBody: Record<string, unknown> | null = null
+      await page.route('**/oauth2/register', async (route) => {
+        dcrBody = route.request().postDataJSON() as Record<string, unknown>
+        registered.push({
+          client_id: 'dcr-e2e-client',
+          name: 'E2E DCR App',
+          client_type: 'CONFIDENTIAL',
+        })
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            client_id: 'dcr-e2e-client',
+            client_secret: mockSecret,
+            client_name: 'E2E DCR App',
+            client_id_issued_at: 1793000000,
+            client_secret_expires_at: 0,
+          }),
+        })
+      })
+      await page.route('**/api/admin/clients', async (route) => {
+        if (route.request().method() === 'GET') {
+          const clients = [...MOCK_CLIENTS, ...registered]
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ clients, total: clients.length }),
+          })
+        } else {
+          await route.continue()
+        }
+      })
+
+      await page.click('button:has-text("Register (RFC 7591)")')
+      await page.fill('input[placeholder="My App"]', 'E2E DCR App')
+      await page.fill('input[placeholder*="myapp.com/callback"]', 'https://dcr-e2e.example/callback')
+      await page.fill('input[placeholder="https://myapp.com/"]', 'https://dcr-e2e.example/')
+      await page.locator('.fixed label:has-text("Refresh Token") input[type="checkbox"]').check()
+      await page.locator('.fixed button[type="submit"]').click()
+
+      // Shown-once secret modal (same semantics as create/reset).
+      await expect(page.locator('h3:has-text("Client Secret")')).toBeVisible()
+      await expect(page.locator('.font-mono.select-all')).toContainText(mockSecret)
+      await page.click('button:has-text("Done")')
+      await expect(page.locator('h3:has-text("Client Secret")')).not.toBeVisible()
+
+      // The registered client is now in the Applications list.
+      await expect(page.locator('table')).toContainText('dcr-e2e-client')
+
+      // The POSTed body matches the documented RFC 7591 contract.
+      expect(dcrBody).toMatchObject({
+        client_name: 'E2E DCR App',
+        client_type: 'CONFIDENTIAL',
+        token_endpoint_auth_method: 'client_secret_basic',
+        redirect_uris: ['https://dcr-e2e.example/callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        post_logout_redirect_uris: ['https://dcr-e2e.example/'],
+      })
+    })
+
+    test('confidential without redirect URIs is blocked client-side', async ({ page }) => {
+      await page.click('button:has-text("Register (RFC 7591)")')
+      await page.fill('input[placeholder="My App"]', 'No Redirect')
+      // Leave redirect URIs empty — the inline banner appears and no
+      // registration may succeed.
+      await page.route('**/oauth2/register', (route) =>
+        route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }))
+      await page.locator('.fixed button[type="submit"]').click()
+      await expect(page.locator('text=at least one redirect URI')).toBeVisible()
+      await expect(page.locator('h3:has-text("Client Secret")')).not.toBeVisible()
+    })
+  })
 })
