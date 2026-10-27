@@ -21,6 +21,22 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- **Two per-request DB round trips on hot paths found by the v1.6.0
+  five-scenario gate** (each cost its scenario 17-18% QPS vs v1.5.0, both
+  found and fixed in the same benchmark campaign):
+  - userinfo/issuance re-queried `claim_mappings` on EVERY call
+    (StorageClaimMappingsProvider had no cache) — now wrapped in a
+    process-local cache (CachedClaimMappingsProvider), invalidated from
+    every claim-mapping write path (the same hook that refreshes
+    discovery's claims_supported), TTL only bounding cross-process drift;
+  - introspection's P1-4 org-overlay queried `oauth2_client_owners` on
+    every call — now a 3s→60s TTL plugin cache (fast path: lock+lookup,
+    no allocation), invalidated precisely from the two owner-row write
+    paths (open-platform suspend/resume; org soft-delete cascade, after
+    commit). OrgLifecycle/ClaimsMapping semantics verified unchanged
+    (delete→introspect-inactive and CRUD→immediate-publication e2e both
+    green).
+
 - **Browser RP logins were silently broken by the login page's CSP**
   (`form-action 'self'`): modern Chrome/Edge enforce `form-action` across the
   redirect that follows a form POST, so the 302 to the relying party's

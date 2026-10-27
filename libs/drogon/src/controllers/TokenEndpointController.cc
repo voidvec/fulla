@@ -707,34 +707,25 @@ void TokenEndpointController::introspect(
                         catch (...)
                         {
                         }
-                        if (db)
-                        {
-                            auto sharedFinish = std::make_shared<std::function<void(bool)>>(
-                              std::move(respondWith));
-                            try
-                            {
-                                ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
-                                ownersRepo.findOwnerRow(
-                                  introspection->clientId,
-                                  [sharedFinish](
-                                    const ::fulla::storage::postgres::OwnerRowLookup &lookup) {
-                                      // Error/NoRow both keep the current
-                                      // behavior (active) — the overlay only
-                                      // ever DEACTIVATES on a positive
-                                      // suspended verdict.
-                                      const bool suspended =
-                                        lookup.status ==
-                                          ::fulla::storage::postgres::LookupStatus::Found &&
-                                        lookup.row.getValueOfStatus() != "active";
-                                      (*sharedFinish)(!suspended);
-                                  });
-                            }
-                            catch (...)
-                            {
-                                (*sharedFinish)(true);
-                            }
-                            return;
-                        }
+                        // P1-5 benchmark follow-up: the owner lookup rides
+                        // the plugin's 3s-TTL cache (write-path invalidated
+                        // from open-platform suspend/resume and the org
+                        // soft-delete cascade) instead of hitting
+                        // oauth2_client_owners on every introspection.
+                        auto sharedFinish =
+                          std::make_shared<std::function<void(bool)>>(std::move(respondWith));
+                        p->lookupOwnerStatus(
+                          introspection->clientId,
+                          [sharedFinish](std::optional<std::string> status) {
+                              // nullopt (no row / lookup failure) keeps the
+                              // current behavior (active) — the overlay only
+                              // ever DEACTIVATES on a positive suspended
+                              // verdict.
+                              const bool suspended =
+                                status.has_value() && *status != "active";
+                              (*sharedFinish)(!suspended);
+                          });
+                        return;
                     }
                     respondWith(true);
                 }
