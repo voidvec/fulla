@@ -5,14 +5,16 @@ name: Client SDKs
 # client-sdk-facility-design.md section 11.5).
 #
 # Kept OUTSIDE ci.yml's static-checks on purpose: that job is source-only
-# (no toolchains); this workflow needs Python + Go + the pinned generators.
-# Path-filtered so unrelated PRs are not affected.
+# (no toolchains); this workflow needs Python + Go + Node + the pinned
+# generators. Path-filtered so unrelated PRs are not affected.
 #
 # Local equivalents:
 #   python tools/clients/regen_clients.py --check --python-only
 #   python tools/clients/regen_clients.py --check --go-only
+#   python tools/clients/regen_clients.py --check --ts-only
 #   (cd clients/python && pytest)
 #   (cd clients/go && go test ./...)
+#   (cd clients/ts && npm run check)
 
 on:
   pull_request:
@@ -90,3 +92,33 @@ jobs:
 
       - name: Unit tests (httptest; integration suite behind -tags integration)
         run: go test ./...
+
+  ts:
+    name: TS client (drift + build + unit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: clients/ts
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: clients/ts/package-lock.json
+
+      - name: Install pinned generator (devDependency)
+        run: npm ci
+
+      - name: Drift gate (committed generated tree must match the spec)
+        working-directory: .
+        run: python tools/clients/regen_clients.py --check --ts-only
+
+      - name: Version linkage (package.json == pyproject == cmake)
+        working-directory: .
+        run: python tools/clients/regen_clients.py --version-only
+
+      - name: Build + unit tests (tsc emit + vitest red lines)
+        run: npm run check
