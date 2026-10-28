@@ -124,6 +124,29 @@ inline bool postgresAvailable()
 }
 
 // ---------------------------------------------------------------------------
+// One transparent retry on TRANSPORT failure. Slow instrumented builds
+// (ASan/gcov) run the in-process server and this client on the same loop
+// with per-request connections; at the P1 suite scale the connect churn
+// occasionally drops a request BEFORE it reaches the server, which used to
+// surface as random REQUIRE(resp != nullptr) failures rotating across
+// different tests every run. A retry only fires when ReqResult != Ok AND no
+// response exists (nothing was received); a delivered-but-slow response is
+// never retried, so no request double-sends after the server saw it.
+inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
+  const ::drogon::HttpClientPtr &client,
+  ::drogon::HttpRequestPtr req,
+  double timeout)
+{
+    auto attempt = [&]() { return client->sendRequest(req, timeout); };
+    auto [result, resp] = attempt();
+    if (result != ::drogon::ReqResult::Ok && resp == nullptr)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::tie(result, resp) = attempt();
+    }
+    return {result, resp};
+}
+
 // Request builders (synchronous sendRequest, returns HttpResponsePtr or nullptr)
 //
 // Each builder constructs an HttpClient pinned to the framework loop (so the
@@ -148,7 +171,7 @@ inline ::drogon::HttpResponsePtr sendGet(
         req->setPath(path);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -174,7 +197,7 @@ inline ::drogon::HttpResponsePtr sendDelete(
         req->setPath(path);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -209,7 +232,7 @@ inline ::drogon::HttpResponsePtr sendPostForm(
         req->setBody(formBody);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -240,7 +263,7 @@ inline ::drogon::HttpResponsePtr sendPostFormWithAuth(
         req->setContentTypeCode(::drogon::CT_APPLICATION_X_FORM);
         req->setBody(formBody);
         req->addHeader("Authorization", authorizationHeader);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -270,7 +293,7 @@ inline ::drogon::HttpResponsePtr sendPostJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -300,7 +323,7 @@ inline ::drogon::HttpResponsePtr sendPutJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -331,7 +354,7 @@ inline ::drogon::HttpResponsePtr sendPatchJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
