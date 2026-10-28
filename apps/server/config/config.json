@@ -205,6 +205,9 @@
             "min_password_length": 8
         },
         "rbac_rules": {
+            "/api/admin/users.*": {
+                "permissions": ["users:read"]
+            },
             "/api/admin/.*": [
                 "admin"
             ],

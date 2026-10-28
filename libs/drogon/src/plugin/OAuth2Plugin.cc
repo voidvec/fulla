@@ -205,7 +205,15 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
     // IRoleProvider port carries the string overload; oauth2::protocol::
     // TokenService prefers it, so no ISubjectResolver is needed (passed null).
     // Phase 4.6a: now backed by roleRepo_ (the identity split-repo), not storage_.
-    roleProvider_ = std::make_shared<fulla::drogon::adapters::StorageRoleProvider>(roleRepo_);
+    // P1-8 (#285): the provider also carries the permission path -- the
+    // shared RolePermissionResolver (Postgres-backed under DB storage; the
+    // compile-time V043-mirror map under memory). Also exposed via
+    // getRolePermissionResolver() for AuthorizationFilter's gate-③
+    // permission rules.
+    rolePermissionResolver_ =
+      std::make_shared<fulla::drogon::authz::RolePermissionResolver>(storageType_ != "memory");
+    roleProvider_ = std::make_shared<fulla::drogon::adapters::StorageRoleProvider>(
+      roleRepo_, rolePermissionResolver_);
 
     // B10 / Task 45: wire the Domain-layer AuthorizationService (the protocol
     // engine) so /oauth2/authorize can call evaluateScopes() instead of the
@@ -665,7 +673,11 @@ void OAuth2Plugin::initStorage(const Json::Value &config)
                   LOG_INFO << "Loaded " << adminScopes.size()
                            << " admin-scoped entries from DB (oauth2_scopes.requires_admin_role)";
                   if (authorizationService_)
-                      authorizationService_->setAdminScopes(std::move(adminScopes));
+                      authorizationService_->setAdminScopes(adminScopes);
+                  // P1-8 chain②: the same set backs IdentityService's
+                  // scopeRequiresAdminRole (was a hardcoded list).
+                  fulla::identity::IdentityService::setAdminScopeClass(
+                    std::unordered_set<std::string>(adminScopes));
               },
               [](const drogon::orm::DrogonDbException &e) {
                   LOG_ERROR << "OAuth2Plugin: failed to load admin scopes from DB ("
@@ -1417,6 +1429,9 @@ std::string OAuth2Plugin::signIdToken(
 
 bool OAuth2Plugin::scopeRequiresAdminRole(const std::string &scope)
 {
+    // P1-8: unchanged delegate shape; IdentityService's implementation now
+    // consults the DB-loaded admin-class set (same data AuthorizationService
+    // consumes) instead of a file-local hardcoded list.
     return fulla::identity::IdentityService({}).scopeRequiresAdminRole(scope);
 }
 

@@ -353,6 +353,8 @@ export default {
       deleted: '角色“{name}”已删除',
       deleteConfirm: '确定删除角色“{name}”？此操作无法撤销。',
       editTitle: '编辑角色：{name}',
+      permissions: '权限（委托管理）',
+      permissionsHint: '保存时全量替换；无权限的角色仅保留与 scope 无关的访问。',
     },
     scopes: {
       title: '作用域管理',

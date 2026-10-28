@@ -35,6 +35,7 @@ from .get_api_admin_organizations_slug_members_response_200_members_item import 
 )
 from .get_api_admin_roles_response_200 import GetApiAdminRolesResponse200
 from .get_api_admin_roles_response_200_roles_item import GetApiAdminRolesResponse200RolesItem
+from .get_api_admin_roles_role_id_permissions_response_200 import GetApiAdminRolesRoleIdPermissionsResponse200
 from .get_api_admin_scopes_resources_response_200 import GetApiAdminScopesResourcesResponse200
 from .get_api_admin_scopes_resources_response_200_resources_item import (
     GetApiAdminScopesResourcesResponse200ResourcesItem,
@@ -216,6 +217,7 @@ from .put_api_admin_clients_client_id_body import PutApiAdminClientsClientIdBody
 from .put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
 from .put_api_admin_email_templates_key_locale_body import PutApiAdminEmailTemplatesKeyLocaleBody
 from .put_api_admin_roles_role_id_body import PutApiAdminRolesRoleIdBody
+from .put_api_admin_roles_role_id_permissions_body import PutApiAdminRolesRoleIdPermissionsBody
 from .put_api_admin_scopes_scope_id_body import PutApiAdminScopesScopeIdBody
 from .put_api_admin_users_user_id_body import PutApiAdminUsersUserIdBody
 from .put_api_admin_users_user_id_disable_body import PutApiAdminUsersUserIdDisableBody
@@ -261,6 +263,7 @@ __all__ = (
     "GetApiAdminOrganizationsSlugMembersResponse200MembersItem",
     "GetApiAdminRolesResponse200",
     "GetApiAdminRolesResponse200RolesItem",
+    "GetApiAdminRolesRoleIdPermissionsResponse200",
     "GetApiAdminScopesResourcesResponse200",
     "GetApiAdminScopesResourcesResponse200ResourcesItem",
     "GetApiAdminScopesResponse200",
@@ -392,6 +395,7 @@ __all__ = (
     "PutApiAdminClientsClientIdScopesBody",
     "PutApiAdminEmailTemplatesKeyLocaleBody",
     "PutApiAdminRolesRoleIdBody",
+    "PutApiAdminRolesRoleIdPermissionsBody",
     "PutApiAdminScopesScopeIdBody",
     "PutApiAdminUsersUserIdBody",
     "PutApiAdminUsersUserIdDisableBody",

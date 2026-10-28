@@ -1,4 +1,6 @@
 #include <fulla/drogon/services/IdentityService.h>
+#include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/drogon/utils/SubjectGenerator.h>
 #include <drogon/drogon.h>
 
@@ -202,7 +204,8 @@ void IdentityService::validateUserRolesForScopes(
 
     getUserRoles(
       userId,
-      [callback = std::move(callback), adminScopes](std::vector<std::string> userRoles) mutable {
+      [this, callback = std::move(callback), adminScopes](
+        std::vector<std::string> userRoles) mutable {
           bool hasAdminRole = false;
           for (const auto &role : userRoles)
           {
@@ -212,31 +215,88 @@ void IdentityService::validateUserRolesForScopes(
                   break;
               }
           }
+          if (hasAdminRole)
+          {
+              callback(true, "");
+              return;
+          }
 
-          if (!hasAdminRole)
+          // P1-8 (#285): determination is permission-based (chain② joins
+          // the three-gate model): an admin-class scope passes when the
+          // user's role->permission union covers EVERY admin-class scope
+          // requested (classification vs determination decoupled — a
+          // helpdesk grant never de-classifies anything). Resolution rides
+          // the plugin's shared resolver; no plugin/no resolver keeps the
+          // historical literal-admin-role gate.
+          auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+          auto resolver = plugin ? plugin->getRolePermissionResolver() : nullptr;
+          if (!resolver)
           {
               callback(false, "Admin role required for requested scopes");
               return;
           }
-
-          callback(true, "");
+          resolver->resolveForRoles(
+            userRoles,
+            [callback = std::move(callback), adminScopes](
+              std::unordered_set<std::string> permissions) mutable {
+                for (const auto &scope : adminScopes)
+                {
+                    if (permissions.find(scope) == permissions.end())
+                    {
+                        callback(false, "Insufficient permissions for requested admin-class scopes");
+                        return;
+                    }
+                }
+                callback(true, "");
+            });
       }
     );
 }
 
 bool IdentityService::scopeRequiresAdminRole(const std::string &scope)
 {
-    static const std::vector<std::string> adminScopes =
-      {"admin", "admin:read", "admin:write", "user:manage", "settings:manage"};
+    // P1-8 (#285) chain② re-point: the data source is now the DB-loaded
+    // admin-class set (oauth2_scopes.requires_admin_role, pushed by
+    // OAuth2Plugin's startup load via setAdminScopeClass) with the
+    // compile-time default below as the pre-load / memory fallback. The
+    // signature is unchanged (api-diff: query changed, signature kept).
+    static const std::vector<std::string> defaultAdminScopes =
+      {"admin", "users:read", "users:write", "clients:read", "clients:write",
+       "tokens:read", "tokens:write", "roles:read", "roles:write", "audit:read"};
 
-    for (const auto &adminScope : adminScopes)
+    {
+        std::shared_lock<std::shared_mutex> lock(adminScopeClassMutex());
+        const auto &loaded = adminScopeClassSet();
+        if (!loaded.empty())
+            return loaded.count(scope) > 0;
+    }
+    // Prefix semantics preserved for the default set (custom deployments
+    // that relied on scoped children like "users:read:x" keep working
+    // pre-load).
+    for (const auto &adminScope : defaultAdminScopes)
     {
         if (scope == adminScope || scope.find(adminScope + ":") == 0)
-        {
             return true;
-        }
     }
     return false;
+}
+
+void IdentityService::setAdminScopeClass(std::unordered_set<std::string> scopes)
+{
+    std::unique_lock<std::shared_mutex> lock(adminScopeClassMutex());
+    adminScopeClassSet() = std::move(scopes);
+}
+
+std::unordered_set<std::string> &IdentityService::adminScopeClassSet()
+{
+    static std::unordered_set<std::string> instance;
+    return instance;
+}
+
+std::shared_mutex &IdentityService::adminScopeClassMutex()
+{
+    static std::shared_mutex mutex;
+    return mutex;
 }
 
 }  // namespace fulla::identity

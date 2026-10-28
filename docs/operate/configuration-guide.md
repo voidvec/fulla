@@ -475,3 +475,34 @@ registration rule):
   (server-side locale dimension); the frontend dictionary is only the
   missing-key fallback. Description changes are audited with a
   before/after diff (`scope_updated`).
+
+## 15. RBAC permission enforcement (P1-8, #285)
+
+Delegated administration is live: the three-gate RBAC model (ADR-0014
+rev.1) — scope tiering (chain①), IdentityService scope checks (chain②),
+and the AuthorizationFilter role/permission gate (gate③) — now resolves
+permissions from the `role_permissions` catalog (V043 seed; legacy V005
+names marked retired in place).
+
+- **rbac_rules object form** (additive): an entry may be
+  `{"permissions": ["users:read"]}` instead of a role array — the caller's
+  role→permission union must cover every listed name. Specific rules match
+  BEFORE the `/api/admin/.* -> ["admin"]` catch-all (most-specific-first
+  ordering is enforced at load). The shipped config demonstrates the
+  helpdesk shape: `/api/admin/users.*` requires `users:read`.
+- **Classification vs determination decoupled**: which scopes are
+  admin-class still comes from `oauth2_scopes.requires_admin_role`
+  (deprecated column, read this release); WHETHER a user passes is now
+  permission-based (or the literal admin super-role). Granting a role a
+  scope never de-classifies it.
+- **Login path tiers scopes too**: the 2-step portal login mints codes
+  with ONLY the scopes the three-tier engine validates (previously
+  unfiltered — a delegated console received admin-class scopes its user
+  held no permission for).
+- **Role permission administration**:
+  `GET/PUT /api/admin/roles/{id}/permissions` (full-replace; every listed
+  name must exist; audited `role_permissions_updated`; single-instance
+  cache invalidation on commit — multi-instance drift is a known
+  limitation until P3 shared storage).
+- **Memory mode**: the compile-time default map (admin → full ten-set,
+  user → none) mirrors the V043 seed.

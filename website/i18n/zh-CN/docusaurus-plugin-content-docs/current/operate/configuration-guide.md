@@ -288,3 +288,29 @@ v1.6.0 前把客户端迁移到 S256。
 - `description_zh`（作用域管理 CRUD，≤512 字符）：中文同意屏文案。
   consent context 按页面语言服务端下发；前端字典仅作缺失兜底。描述
   变更带前后 diff 写审计（`scope_updated`）。
+
+## 15. RBAC 权限 enforcement（P1-8，#285）
+
+委托管理已上线：三道门 RBAC 模型（ADR-0014 修订 1）——scope 分层（链①）、
+IdentityService scope 检查（链②）、AuthorizationFilter 角色/权限门（门③）
+——现在从 `role_permissions` 目录解析权限（V043 种子；V005 旧名原地标记
+退役）。
+
+- **rbac_rules 对象形式**（additive）：条目可以写
+  `{"permissions": ["users:read"]}` 替代角色数组——调用者的
+  角色→权限并集须覆盖每个列出的名字。具体规则先于
+  `/api/admin/.* -> ["admin"]` 兜底匹配（加载时强制最具体优先）。
+  发行配置演示了 helpdesk 形态：`/api/admin/users.*` 要求
+  `users:read`。
+- **分类与判定解耦**：哪些 scope 属 admin 级仍来自
+  `oauth2_scopes.requires_admin_role`（本版继续读取的弃用列）；用户能否
+  通过改为按权限判定（或字面 admin 超角色）。给角色授 scope 永不改变
+  分类。
+- **登录路径同样分层**：两步门户登录铸造的 code 只包含三层引擎判定
+  通过的 scope（此前未过滤——委托控制台会拿到其用户无权限的 admin 级
+  scope）。
+- **角色权限管理**：`GET/PUT /api/admin/roles/{id}/permissions`
+  （全量替换；名字必须全部存在；审计 `role_permissions_updated`；提交时
+  单实例缓存失效——多实例漂移是已知局限，P3 共享存储解决）。
+- **memory 模式**：编译期默认映射（admin → 全十项，user → 无）镜像
+  V043 种子。

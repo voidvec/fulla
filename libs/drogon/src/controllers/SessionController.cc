@@ -17,6 +17,7 @@
 #include <drogon/drogon.h>
 #include <drogon/HttpClient.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/oauth2/access/ScopeDecisionEngine.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <drogon/utils/Utilities.h>
 #include <algorithm>
@@ -1030,52 +1031,159 @@ void SessionController::login(
                   auto issueLoginCode =
                     [plugin, req, clientId, publicSub, scope, redirectUri,
                      state, codeChallenge, codeChallengeMethod, nonce,
-                     sessAuthTime, sessAmr, sharedCb](
+                     sessAuthTime, sessAmr, sharedCb, internalId](
                       const std::optional<int32_t> &orgId) {
-                      plugin->generateAuthorizationCode(
+                      // P1-8 (#285) chain① on the login path: the code
+                      // carries ONLY the scopes the three-tier engine
+                      // validates (client allowlist + admin-class
+                      // determination + consent pre-state).
+                      // /oauth2/authorize has always tiered; the login
+                      // 2-step flow minted unfiltered codes — a delegated
+                      // console logging in here would receive admin-class
+                      // scopes its user holds no permission for.
+                      auto authService = plugin->getAuthorizationService();
+                      if (!authService)
+                      {
+                          respondError(
+                            req, *sharedCb, "INTERNAL_ERROR",
+                            "login: authorization engine not available");
+                          return;
+                      }
+                      if (scope.empty())
+                      {
+                          // No scopes requested: nothing to tier (the
+                          // historical shape mints an empty-scope code).
+                          plugin->generateAuthorizationCode(
+                            clientId, publicSub, "", redirectUri, codeChallenge,
+                            codeChallengeMethod, nonce,
+                            [req, redirectUri, state, sharedCb](
+                              bool success, std::string code, std::string error) {
+                                if (!success)
+                                {
+                                    respondError(
+                                      req, *sharedCb, "INTERNAL_ERROR",
+                                      "login: failed to generate authorization code: " + error);
+                                    return;
+                                }
+                                std::string location =
+                                  redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                                if (!state.empty())
+                                    location += "&state=" + ::drogon::utils::urlEncode(state);
+                                if (req->getParameter("json") == "true")
+                                {
+                                    Json::Value ret;
+                                    ret["code"] = code;
+                                    ret["location"] = location;
+                                    (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(ret));
+                                    return;
+                                }
+                                (*sharedCb)(::drogon::HttpResponse::newRedirectionResponse(location));
+                            },
+                            sessAuthTime, sessAmr, orgId);
+                          return;
+                      }
+                      std::vector<std::string> requestedScopes;
+                      {
+                          std::string cur;
+                          for (char c : scope)
+                          {
+                              if (c == ' ')
+                              {
+                                  if (!cur.empty())
+                                  {
+                                      requestedScopes.push_back(cur);
+                                      cur.clear();
+                                  }
+                              }
+                              else
+                                  cur.push_back(c);
+                          }
+                          if (!cur.empty())
+                              requestedScopes.push_back(cur);
+                      }
+                      // Numeric subject (session userId shape): the same
+                      // form /oauth2/authorize passes — the subject resolver
+                      // maps it to the internal id directly.
+                      authService->evaluateScopes(
                         clientId,
-                        publicSub,
-                        scope,
-                        redirectUri,
-                        codeChallenge,
-                        codeChallengeMethod,
-                        nonce,
-                        [req, redirectUri, state, sharedCb](
-                          bool success, std::string code, std::string error) {
-                            if (!success)
+                        std::to_string(internalId),
+                        requestedScopes,
+                        [plugin, clientId, publicSub, redirectUri, codeChallenge,
+                         codeChallengeMethod, nonce, req, state, sessAuthTime,
+                         sessAmr, sharedCb, orgId](
+                          fulla::oauth2::access::ScopeValidationSummary summary) mutable {
+                            // Legacy login semantics keep consent-tier
+                            // scopes (the portal's consent state resolves
+                            // downstream); ONLY tier-1/2 Invalid scopes are
+                            // dropped (client allowlist + admin-class
+                            // determination — the P1-8 red line).
+                            std::string validScope;
+                            for (const auto &valid : summary.valid)
+                            {
+                                if (!validScope.empty())
+                                    validScope += " ";
+                                validScope += valid;
+                            }
+                            for (const auto &pending : summary.consentRequired)
+                            {
+                                if (!validScope.empty())
+                                    validScope += " ";
+                                validScope += pending;
+                            }
+                            if (validScope.empty())
                             {
                                 respondError(
-                                  req,
-                                  *sharedCb,
-                                  "INTERNAL_ERROR",
-                                  "login: failed to generate authorization code: " + error
-                                );
+                                  req, *sharedCb, "VALIDATION_INVALID_SCOPE",
+                                  "login: none of the requested scopes are authorized "
+                                  "for this user");
                                 return;
                             }
+                            plugin->generateAuthorizationCode(
+                              clientId,
+                              publicSub,
+                              validScope,
+                              redirectUri,
+                              codeChallenge,
+                              codeChallengeMethod,
+                              nonce,
+                              [req, redirectUri, state, sharedCb](
+                                bool success, std::string code, std::string error) {
+                                  if (!success)
+                                  {
+                                      respondError(
+                                        req,
+                                        *sharedCb,
+                                        "INTERNAL_ERROR",
+                                        "login: failed to generate authorization code: " +
+                                          error
+                                      );
+                                      return;
+                                  }
 
-                            // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode
-                            // code and state.
-                            std::string location =
-                              redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
-                            if (!state.empty())
-                                location += "&state=" + ::drogon::utils::urlEncode(state);
-                            if (req->getParameter("json") == "true")
-                            {
-                                Json::Value ret;
-                                ret["code"] = code;
-                                ret["location"] = location;
-                                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
-                                (*sharedCb)(resp);
-                                return;
-                            }
-                            auto resp =
-                              ::drogon::HttpResponse::newRedirectionResponse(location);
-                            (*sharedCb)(resp);
-                        },
-                        sessAuthTime,
-                        sessAmr,
-                        orgId
-                      );
+                                  // F-020 (RFC 6749 §4.1.2/§4.1.3):
+                                  // urlEncode code and state.
+                                  std::string location =
+                                    redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                                  if (!state.empty())
+                                      location += "&state=" + ::drogon::utils::urlEncode(state);
+                                  if (req->getParameter("json") == "true")
+                                  {
+                                      Json::Value ret;
+                                      ret["code"] = code;
+                                      ret["location"] = location;
+                                      auto resp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
+                                      (*sharedCb)(resp);
+                                      return;
+                                  }
+                                  auto resp =
+                                    ::drogon::HttpResponse::newRedirectionResponse(location);
+                                  (*sharedCb)(resp);
+                              },
+                              sessAuthTime,
+                              sessAmr,
+                              orgId
+                            );
+                        });
                   };
                   if (orgIdParam.empty())
                   {

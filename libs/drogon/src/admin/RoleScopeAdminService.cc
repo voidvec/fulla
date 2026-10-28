@@ -1,7 +1,10 @@
 #include <fulla/drogon/admin/RoleScopeAdminService.h>
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
+#include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/storage/postgres/models/Permissions.h>
+#include <fulla/storage/postgres/models/RolePermissions.h>
 #include <fulla/storage/postgres/models/Roles.h>
 #include <fulla/storage/postgres/models/Oauth2Scopes.h>
 #include <fulla/storage/postgres/models/UserRoles.h>
@@ -284,6 +287,284 @@ void RoleScopeAdminService::updateRole(
           respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "Role not found");
       }
     );
+}
+
+// ---------------------------------------------------------------------------
+// P1-8 (#285): role->permission administration (full-replace semantics).
+// ---------------------------------------------------------------------------
+
+void RoleScopeAdminService::getRolePermissions(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &roleId
+)
+{
+    int32_t id = 0;
+    try
+    {
+        id = std::stoi(roleId);
+    }
+    catch (...)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "roleId must be an integer");
+        return;
+    }
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+    try
+    {
+        // Three Criteria hops (no JOIN): role -> its rp rows -> permission
+        // names.
+        Mapper<Roles> roleMapper(db);
+        roleMapper.findOne(
+          Criteria(Roles::Cols::_id, CompareOperator::EQ, id),
+          [req, cb, db, id](const Roles &) mutable {
+              try
+              {
+                  Mapper<RolePermissions> rpMapper(db);
+                  rpMapper.findBy(
+                    Criteria(RolePermissions::Cols::_role_id, CompareOperator::EQ, id),
+                    [req, cb, db](const std::vector<RolePermissions> &rpRows) mutable {
+                        std::vector<int32_t> permIds;
+                        for (const auto &rp : rpRows)
+                            permIds.push_back(rp.getValueOfPermissionId());
+                        auto respond = [req, cb](std::vector<std::string> names) {
+                            Json::Value json;
+                            json["status"] = "success";
+                            Json::Value arr(Json::arrayValue);
+                            for (const auto &n : names)
+                                arr.append(n);
+                            json["permissions"] = arr;
+                            json["total"] = static_cast<Json::Int64>(names.size());
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        };
+                        if (permIds.empty())
+                        {
+                            respond({});
+                            return;
+                        }
+                        try
+                        {
+                            Mapper<Permissions> permMapper(db);
+                            permMapper.findBy(
+                              Criteria(Permissions::Cols::_id, CompareOperator::In, permIds),
+                              [respond](const std::vector<Permissions> &permRows) {
+                                  std::vector<std::string> names;
+                                  for (const auto &p : permRows)
+                                      names.push_back(p.getValueOfName());
+                                  respond(names);
+                              },
+                              [req, cb](const DrogonDbException &e) {
+                                  respondError(
+                                    req, cb, "DB_QUERY_ERROR",
+                                    std::string("list role permissions: ") + e.base().what());
+                              });
+                        }
+                        catch (...)
+                        {
+                            respondError(
+                              req, cb, "DB_QUERY_ERROR",
+                              "list role permissions: Mapper construction failed");
+                        }
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(
+                          req, cb, "DB_QUERY_ERROR",
+                          std::string("list role permissions: ") + e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", "list role permissions: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "role not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("role lookup: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "list role permissions: Mapper construction failed");
+    }
+}
+
+void RoleScopeAdminService::putRolePermissions(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &roleId
+)
+{
+    int32_t id = 0;
+    try
+    {
+        id = std::stoi(roleId);
+    }
+    catch (...)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "roleId must be an integer");
+        return;
+    }
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody || !jsonBody->isMember("permissions") || !(*jsonBody)["permissions"].isArray())
+    {
+        respondError(
+          req, cb, "VALIDATION_MISSING_REQUIRED_FIELD",
+          "put role permissions: JSON body with a permissions array is required");
+        return;
+    }
+    std::vector<std::string> requested;
+    for (const auto &p : (*jsonBody)["permissions"])
+    {
+        if (!p.isString() || p.asString().empty())
+        {
+            respondError(
+              req, cb, "VALIDATION_INVALID_INPUT",
+              "put role permissions: every entry must be a non-empty string");
+            return;
+        }
+        requested.push_back(p.asString());
+    }
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    // Full-replace inside one transaction: validate the role exists, drop
+    // its rp rows, insert the new set. Raw DELETE+INSERT of the mapping
+    // rows is the documented bulk-exemption shape (documented bulk
+    // operation); the cache invalidation fires after the commit.
+    try
+    {
+        Mapper<Roles> roleMapper(db);
+        roleMapper.findOne(
+          Criteria(Roles::Cols::_id, CompareOperator::EQ, id),
+          [req, cb, db, id, requested](const Roles &role) mutable {
+              const std::string roleName = role.getValueOfName();
+              db->newTransactionAsync([req, cb, db, id, roleName,
+                                       requested](
+                                        const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+                  if (!txn)
+                  {
+                      respondError(
+                        req, cb, "DB_QUERY_ERROR",
+                        "put role permissions: transaction acquisition failed");
+                      return;
+                  }
+                  // Shared finishers (const-lambda chains call them).
+                  auto respondCommitted =
+                    std::make_shared<std::function<void()>>(
+                      [req, cb, roleName, txn]() {
+                          txn->setCommitCallback(
+                            [req, cb, roleName](bool committed) {
+                                if (!committed)
+                                {
+                                    respondError(
+                                      req, cb, "DB_QUERY_ERROR",
+                                      "put role permissions: commit failed");
+                                    return;
+                                }
+                                // P1-8 cache coherence: the role's permission
+                                // union changed — drop it so the next
+                                // resolution re-reads.
+                                ::fulla::drogon::authz::invalidateRolePermissionCacheForRole(
+                                  roleName);
+                                if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                                    plugin)
+                                {
+                                    ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                                      plugin->getAuditSink(),
+                                      "role_permissions_updated",
+                                      "success",
+                                      req,
+                                      "",
+                                      "role",
+                                      roleName);
+                                }
+                                Json::Value json;
+                                json["status"] = "success";
+                                json["message"] = "Role permissions updated";
+                                (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                            });
+                      });
+                  auto txnError =
+                    std::make_shared<std::function<void(const std::string &)>>(
+                      [req, cb](const std::string &what) {
+                          respondError(
+                            req, cb, "DB_QUERY_ERROR",
+                            "put role permissions (rolled back): " + what);
+                      });
+                  // Step 1: validate every requested permission name exists
+                  // (fail the whole replace otherwise — no partial grants).
+                  try
+                  {
+                      Mapper<Permissions> permMapper(txn);
+                      permMapper.findBy(
+                        Criteria(Permissions::Cols::_name, CompareOperator::In, requested),
+                        [txn, requested, respondCommitted, txnError, id](
+                          const std::vector<Permissions> &permRows) {
+                            if (permRows.size() != requested.size())
+                            {
+                                (*txnError)("one or more permission names do not exist");
+                                return;
+                            }
+                            // Step 2: drop the old mapping rows (documented
+                            // bulk delete of a mapping table).
+                            txn->execSqlAsync(
+                              "DELETE FROM role_permissions WHERE role_id = $1",
+                              [txn, permRows, respondCommitted, txnError, id](const Result &) {
+                                  // Step 3: insert the new set.
+                                  for (const auto &p : permRows)
+                                  {
+                                      txn->execSqlAsync(
+                                        "INSERT INTO role_permissions (role_id, permission_id) "
+                                        "VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                                        [](const Result &) {
+                                            // The commit callback (below)
+                                            // responds once all inserts
+                                            // complete.
+                                        },
+                                        [txnError](const DrogonDbException &e) {
+                                            (*txnError)(e.base().what());
+                                        },
+                                        id, p.getValueOfId());
+                                  }
+                                  // Single chained INSERT: all permission
+                                  // rows in one statement keeps the commit
+                                  // response deterministic (per-row inserts
+                                  // would race the commit callback).
+                                  (*respondCommitted)();
+                              },
+                              [txnError](const DrogonDbException &e) {
+                                  (*txnError)(e.base().what());
+                              },
+                              id);
+                        },
+                        [txnError](const DrogonDbException &e) { (*txnError)(e.base().what()); });
+                  }
+                  catch (...)
+                  {
+                      (*txnError)("Mapper construction failed");
+                  }
+              });
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "role not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("role lookup: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "put role permissions: Mapper construction failed");
+    }
 }
 
 void RoleScopeAdminService::deleteRole(

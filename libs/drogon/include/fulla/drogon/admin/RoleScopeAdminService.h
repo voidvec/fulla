@@ -42,6 +42,22 @@ class RoleScopeAdminService
       const std::string &roleId
     );
 
+    // ------------------------------------------------------------------
+    // P1-8 (#285): role->permission administration (delegated
+    // administration surface). FULL-REPLACE semantics: the PUT body's
+    // permission-name list becomes the role's entire grant set.
+    // ------------------------------------------------------------------
+    static void getRolePermissions(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &roleId
+    );
+    static void putRolePermissions(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &roleId
+    );
+
     // Scopes
     static void listScopes(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
     static void createScope(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);

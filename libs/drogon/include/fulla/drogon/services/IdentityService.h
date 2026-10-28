@@ -9,7 +9,9 @@
 #include <fulla/oauth2/repository/IConsentRepository.h>
 #include <fulla/oauth2/model/UserRef.h>
 #include <memory>
+#include <shared_mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <functional>
 #include <optional>
@@ -96,6 +98,18 @@ class IdentityService : public std::enable_shared_from_this<IdentityService>
     );
 
     bool scopeRequiresAdminRole(const std::string &scope);
+
+    // ------------------------------------------------------------------
+    // P1-8 (#285) chain② data source: the DB-loaded admin-class set pushed
+    // by OAuth2Plugin's startup load (same source AuthorizationService
+    // consumes via setAdminScopes). Signature-preserving re-point; the
+    // compile-time default above answers before the first push / memory.
+    // ------------------------------------------------------------------
+    static void setAdminScopeClass(std::unordered_set<std::string> scopes);
+
+  private:
+    static std::unordered_set<std::string> &adminScopeClassSet();
+    static std::shared_mutex &adminScopeClassMutex();
 
   private:
     Repos repos_;

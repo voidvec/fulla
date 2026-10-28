@@ -4,6 +4,7 @@
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
+#include <fulla/drogon/authz/RolePermissionResolver.h>
 // Phase 1.5d (Task 39): the plugin's 3 identity-side members now hold the NEW
 // fulla::identity::* interfaces (Memory/Postgres impls were widened in
 // 1.5a-c to be a superset of the legacy oauth2::* shapes). The plugin
@@ -461,6 +462,15 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
         return auditSink_;
     }
 
+    /// P1-8 (#285): the shared role->permission resolver (AuthorizationFilter
+    /// gate-③ permission rules consume it). May return nullptr before
+    /// initAndStart() completes (callers guard / degrade conservatively).
+    std::shared_ptr<fulla::drogon::authz::RolePermissionResolver>
+    getRolePermissionResolver() const
+    {
+        return rolePermissionResolver_;
+    }
+
     std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
     {
         return metrics_;
@@ -520,6 +530,9 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     // slice). Constructed here so the Adapter class has a real production
     // instantiation point once that wiring happens.
     std::shared_ptr<fulla::drogon::adapters::StorageRoleProvider> roleProvider_;
+    // P1-8 (#285): shared role->permission resolver (chain-① predicate
+    // data source + gate-③ permission rules).
+    std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
     std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
     // M8 Task 40 decision b: Adapter-side observability ports, exposed via
     // getAuditSink()/getMetrics() for Drogon-layer consumers.

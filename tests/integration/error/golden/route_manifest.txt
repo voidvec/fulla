@@ -32,6 +32,7 @@ GET /api/admin/organizations
 GET /api/admin/organizations/{slug}
 GET /api/admin/organizations/{slug}/members
 GET /api/admin/roles
+GET /api/admin/roles/{roleId}/permissions
 GET /api/admin/scopes
 GET /api/admin/scopes/resources
 GET /api/admin/tokens
@@ -127,6 +128,7 @@ PUT /api/admin/clients/{clientId}
 PUT /api/admin/clients/{clientId}/scopes
 PUT /api/admin/email-templates/{key}/{locale}
 PUT /api/admin/roles/{roleId}
+PUT /api/admin/roles/{roleId}/permissions
 PUT /api/admin/scopes/{scopeId}
 PUT /api/admin/users/{userId}
 PUT /api/admin/users/{userId}/disable

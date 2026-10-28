@@ -1917,6 +1917,81 @@ paths:
       tags:
       - Admin
       - Roles
+  /api/admin/roles/{roleId}/permissions:
+    get:
+      description: 'P1-8 (#285): the role''s permission set (delegated
+        administration surface).'
+      operationId: get_api_admin_roles_{roleId}_permissions
+      parameters:
+      - description: Role ID
+        in: path
+        name: roleId
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+          description: Permission-name list
+        '404':
+          description: Role not found
+      security:
+      - bearerAuth: []
+      summary: List Role Permissions
+      tags:
+      - Admin
+      - Roles
+    put:
+      description: 'P1-8 (#285): FULL-REPLACE the role''s permission set.
+        Every listed name must exist in the permissions catalog; unknown
+        names fail the whole replace. Audited as role_permissions_updated;
+        the role-permission cache entry is invalidated on commit.'
+      operationId: put_api_admin_roles_{roleId}_permissions
+      parameters:
+      - description: Role ID
+        in: path
+        name: roleId
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - permissions
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Role permissions updated
+        '400':
+          description: Invalid body or unknown permission names
+        '404':
+          description: Role not found
+      security:
+      - bearerAuth: []
+      summary: Replace Role Permissions
+      tags:
+      - Admin
+      - Roles
   /api/admin/roles/{roleId}:
     delete:
       description: Delete a role. Built-in roles (admin, user) cannot be deleted.
