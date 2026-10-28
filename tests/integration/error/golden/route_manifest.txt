@@ -21,6 +21,8 @@ GET /api/admin/clients/{clientId}
 GET /api/admin/clients/{clientId}/scopes
 GET /api/admin/dashboard
 GET /api/admin/dashboard/stats
+GET /api/admin/email-templates
+GET /api/admin/email-templates/{key}/{locale}
 GET /api/admin/logs
 GET /api/admin/oidc/keys
 GET /api/admin/organizations
@@ -67,6 +69,7 @@ POST /api/admin/clients
 POST /api/admin/clients/{clientId}/reset-secret
 POST /api/admin/clients/{clientId}/resume
 POST /api/admin/clients/{clientId}/suspend
+POST /api/admin/email-templates/{key}/{locale}/test-send
 POST /api/admin/organizations
 POST /api/admin/organizations/{slug}/transfer-ownership
 POST /api/admin/roles
@@ -117,6 +120,7 @@ POST /oauth2/webauthn/authenticate/begin
 POST /oauth2/webauthn/authenticate/finish
 PUT /api/admin/clients/{clientId}
 PUT /api/admin/clients/{clientId}/scopes
+PUT /api/admin/email-templates/{key}/{locale}
 PUT /api/admin/roles/{roleId}
 PUT /api/admin/scopes/{scopeId}
 PUT /api/admin/users/{userId}

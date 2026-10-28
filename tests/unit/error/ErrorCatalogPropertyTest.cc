@@ -375,6 +375,22 @@ int httpStatusOverrideFor(const CatalogEntry &e)
     {
         return 403;
     }
+    // P1-2 (#278): email-template admin codes with explicit overrides
+    // (NOT_FOUND keeps the 404 resource precedent; RECIPIENT_DENIED is an
+    // authorization refusal -> 403; QUOTA_EXCEEDED follows the RATE_LIMITED
+    // 429 precedent).
+    if (e.code == "EMAIL_TEMPLATE_NOT_FOUND")
+    {
+        return 404;
+    }
+    if (e.code == "EMAIL_TEST_RECIPIENT_DENIED")
+    {
+        return 403;
+    }
+    if (e.code == "EMAIL_TEST_QUOTA_EXCEEDED")
+    {
+        return 429;
+    }
     return 0;
 }
 

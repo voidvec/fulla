@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.4.0
+// version: 1.5.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>
@@ -1127,6 +1127,41 @@ const std::string &clientId
 );
 };
 }
+=== libs/drogon/include/fulla/drogon/admin/EmailTemplateAdminService.h
+#pragma once
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <functional>
+#include <memory>
+#include <string>
+namespace fulla::drogon::admin
+{
+class EmailTemplateAdminService
+{
+public:
+using ResponseCallback =
+std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
+static void listTemplates(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
+static void getTemplate(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &key,
+const std::string &locale
+);
+static void upsertTemplate(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &key,
+const std::string &locale
+);
+static void testSend(
+const ::drogon::HttpRequestPtr &req,
+ResponseCallback cb,
+const std::string &key,
+const std::string &locale
+);
+};
+}
 === libs/drogon/include/fulla/drogon/admin/RoleScopeAdminService.h
 #pragma once
 #include <drogon/HttpRequest.h>
@@ -1751,6 +1786,57 @@ private:
 static void initApiDocsImpl();
 ::OAuth2Plugin *plugin_ = nullptr;
 ::OAuth2Plugin *resolvePlugin() const;
+};
+}
+=== libs/drogon/include/fulla/drogon/controllers/EmailTemplateAdminController.h
+#pragma once
+#include <drogon/HttpController.h>
+#include <string>
+namespace fulla::drogon::controllers
+{
+class EmailTemplateAdminController : public ::drogon::HttpController<EmailTemplateAdminController, false>
+{
+public:
+static void initApiDocs();
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(
+EmailTemplateAdminController::listTemplates, "/api/admin/email-templates", ::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+EmailTemplateAdminController::getTemplate, "/api/admin/email-templates/{key}/{locale}",
+::drogon::Get, "fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+EmailTemplateAdminController::upsertTemplate, "/api/admin/email-templates/{key}/{locale}",
+::drogon::Put, "fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+EmailTemplateAdminController::testSend,
+"/api/admin/email-templates/{key}/{locale}/test-send", ::drogon::Post,
+"fulla::drogon::filters::AuthorizationFilter");
+METHOD_LIST_END
+void listTemplates(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void getTemplate(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &key,
+const std::string &locale
+);
+void upsertTemplate(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &key,
+const std::string &locale
+);
+void testSend(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &key,
+const std::string &locale
+);
+private:
+static void initApiDocsImpl();
 };
 }
 === libs/drogon/include/fulla/drogon/controllers/EmailVerificationController.h
@@ -3391,6 +3477,61 @@ std::function<void(bool, std::shared_ptr<::drogon_model::fulla_db::Oauth2DeviceC
 );
 };
 }
+=== libs/drogon/include/fulla/drogon/services/EmailTemplateService.h
+#pragma once
+#include <drogon/HttpRequest.h>
+#include <functional>
+#include <map>
+#include <string>
+#include <vector>
+namespace fulla::drogon::services
+{
+class EmailTemplateService
+{
+public:
+struct RenderedEmail
+{
+std::string subject;
+std::string bodyHtml;
+std::string bodyText;
+};
+using RenderCallback = std::function<void(RenderedEmail)>;
+static constexpr const char *kKeyEmailVerification = "email_verification";
+static constexpr const char *kKeyPasswordReset = "password_reset";
+static constexpr const char *kKeyOrgInvitation = "org_invitation";
+static void render(
+const std::string &key,
+const std::string &locale,
+const std::map<std::string, std::string> &vars,
+RenderCallback &&cb
+);
+static void send(
+const std::string &key,
+const std::string &locale,
+const std::string &to,
+const std::map<std::string, std::string> &vars
+);
+static std::string renderTemplateString(
+const std::string &tpl,
+const std::map<std::string, std::string> &vars,
+bool escapeHtml
+);
+static std::string htmlEscape(const std::string &s);
+static std::string validateTemplateContent(
+const std::string &subject,
+const std::string &bodyHtml,
+const std::string &bodyText
+);
+static std::string validateTemplateContentWith(
+const std::string &subject,
+const std::string &bodyHtml,
+const std::string &bodyText,
+const std::vector<std::string> &allowedDomains
+);
+static std::string resolveLocale(const ::drogon::HttpRequestPtr &req);
+static std::vector<std::string> allowedLinkDomains();
+};
+}
 === libs/drogon/include/fulla/drogon/services/EmailVerificationService.h
 #pragma once
 #include <drogon/HttpRequest.h>
@@ -3412,6 +3553,9 @@ const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 static void notifyNewRegistration(const std::string &email);
 private:
 static void sendVerificationEmail(int internalUserId, const std::string &email);
+static void sendVerificationEmail(
+int internalUserId, const std::string &email, const std::string &locale
+);
 };
 }
 === libs/drogon/include/fulla/drogon/services/IdentityService.h
@@ -3589,6 +3733,7 @@ inline std::string hashClientSecretWithSalt(const std::string &clientSecret, con
 #pragma once
 #include <string>
 #include <functional>
+#include <memory>
 namespace fulla::drogon::utils
 {
 class IEmailService
@@ -3601,6 +3746,14 @@ const std::string &subject,
 const std::string &body,
 std::function<void(bool)> &&callback
 ) = 0;
+virtual void sendEmail(
+const std::string &to,
+const std::string &subject,
+const std::string &bodyText,
+const std::string &bodyHtml,
+std::function<void(bool)> &&callback
+)
+;
 };
 class ConsoleEmailService : public IEmailService
 {
@@ -3632,6 +3785,13 @@ const std::string &subject,
 const std::string &body,
 std::function<void(bool)> &&callback
 ) override;
+void sendEmail(
+const std::string &to,
+const std::string &subject,
+const std::string &bodyText,
+const std::string &bodyHtml,
+std::function<void(bool)> &&callback
+) override;
 static std::string buildMimeMessage(
 const std::string &to,
 const std::string &subject,
@@ -3639,10 +3799,20 @@ const std::string &body,
 const std::string &fromName,
 const std::string &fromAddress
 );
+static std::string buildMimeMessageMultipart(
+const std::string &to,
+const std::string &subject,
+const std::string &bodyText,
+const std::string &bodyHtml,
+const std::string &fromName,
+const std::string &fromAddress
+);
+static const char *multipartBoundary();
 private:
 Config config_;
 };
 IEmailService &getEmailService();
+void setEmailServiceForTesting(std::shared_ptr<IEmailService> overrideService);
 }
 === libs/drogon/include/fulla/drogon/utils/MfaBackupCodes.h
 #pragma once
@@ -7025,6 +7195,153 @@ const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
 bool dirtyFlag_[13]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/models/EmailTemplates.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class EmailTemplates
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _template_key;
+static const std::string _locale;
+static const std::string _subject;
+static const std::string _body_html;
+static const std::string _body_text;
+static const std::string _updated_at;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit EmailTemplates(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit EmailTemplates(const Json::Value &pJson) noexcept(false);
+EmailTemplates(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+EmailTemplates() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const std::string &getValueOfTemplateKey() const noexcept;
+const std::shared_ptr<std::string> &getTemplateKey() const noexcept;
+void setTemplateKey(const std::string &pTemplateKey) noexcept;
+void setTemplateKey(std::string &&pTemplateKey) noexcept;
+const std::string &getValueOfLocale() const noexcept;
+const std::shared_ptr<std::string> &getLocale() const noexcept;
+void setLocale(const std::string &pLocale) noexcept;
+void setLocale(std::string &&pLocale) noexcept;
+const std::string &getValueOfSubject() const noexcept;
+const std::shared_ptr<std::string> &getSubject() const noexcept;
+void setSubject(const std::string &pSubject) noexcept;
+void setSubject(std::string &&pSubject) noexcept;
+const std::string &getValueOfBodyHtml() const noexcept;
+const std::shared_ptr<std::string> &getBodyHtml() const noexcept;
+void setBodyHtml(const std::string &pBodyHtml) noexcept;
+void setBodyHtml(std::string &&pBodyHtml) noexcept;
+const std::string &getValueOfBodyText() const noexcept;
+const std::shared_ptr<std::string> &getBodyText() const noexcept;
+void setBodyText(const std::string &pBodyText) noexcept;
+void setBodyText(std::string &&pBodyText) noexcept;
+void setBodyTextToNull() noexcept;
+const ::trantor::Date &getValueOfUpdatedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getUpdatedAt() const noexcept;
+void setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+private:
+friend drogon::orm::Mapper<EmailTemplates>;
+friend drogon::orm::BaseBuilder<EmailTemplates, true, true>;
+friend drogon::orm::BaseBuilder<EmailTemplates, true, false>;
+friend drogon::orm::BaseBuilder<EmailTemplates, false, true>;
+friend drogon::orm::BaseBuilder<EmailTemplates, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<EmailTemplates>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<std::string> templateKey_;
+std::shared_ptr<std::string> locale_;
+std::shared_ptr<std::string> subject_;
+std::shared_ptr<std::string> bodyHtml_;
+std::shared_ptr<std::string> bodyText_;
+std::shared_ptr<::trantor::Date> updatedAt_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[7]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

@@ -74,6 +74,7 @@ static void flushGcovIfInstrumented()
 #include <fulla/drogon/controllers/ClientAdminController.h>
 #include <fulla/drogon/controllers/UserAdminController.h>
 #include <fulla/drogon/controllers/RoleScopeAdminController.h>
+#include <fulla/drogon/controllers/EmailTemplateAdminController.h>
 #include <fulla/drogon/controllers/TokenAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/controllers/AuthorizationEndpointController.h>
@@ -374,6 +375,10 @@ int main(int argc, char **argv)
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::RoleScopeAdminController>()
     );
+    // P1-2 (#278): email-template admin API (route-manifest golden covers it).
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::EmailTemplateAdminController>()
+    );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::TokenAdminController>()
     );
@@ -410,6 +415,7 @@ int main(int argc, char **argv)
     fulla::drogon::controllers::ClientAdminController::initApiDocs();
     fulla::drogon::controllers::TokenAdminController::initApiDocs();
     fulla::drogon::controllers::RoleScopeAdminController::initApiDocs();
+    fulla::drogon::controllers::EmailTemplateAdminController::initApiDocs();
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     fulla::drogon::controllers::AuthProvidersController::initApiDocs();

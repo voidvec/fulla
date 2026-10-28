@@ -65,9 +65,9 @@ struct RawEntry
 
 // Verbatim copy of oauth2::error::ErrorCatalog's table (numeric codes/messages
 // preserved unchanged); grows as new codes are ratified.
-const std::array<RawEntry, 34> &rawEntries()
+const std::array<RawEntry, 38> &rawEntries()
 {
-    static const std::array<RawEntry, 34> kEntries = {{
+    static const std::array<RawEntry, 38> kEntries = {{
       // NETWORK (1000-1099)
       {"NET_CONNECTION_FAILED",
        1001,
@@ -272,6 +272,33 @@ const std::array<RawEntry, 34> &rawEntries()
        "登录令牌提示无效",
        "end_session 的 id_token_hint 验签/过期/issuer/主体校验失败（AUTHENTICATION 类，HTTP 400）",
        400},
+
+      // VALIDATION (3000-3099) —— P1-2 (#278)：邮件模板管理。语义各不同，
+      // 显式覆盖：NOT_FOUND 404（资源不存在先例）、RECIPIENT_DENIED 403、
+      // QUOTA_EXCEEDED 429（先例：VALIDATION_RATE_LIMITED 显式 429）。
+      {"EMAIL_TEMPLATE_NOT_FOUND",
+       3017,
+       ErrorCategory::VALIDATION,
+       "邮件模板不存在",
+       "指定 key/locale 的邮件模板不存在（VALIDATION 类，HTTP 404）",
+       404},
+      {"EMAIL_TEMPLATE_CONTENT_REJECTED",
+       3018,
+       ErrorCategory::VALIDATION,
+       "邮件模板内容被拒绝",
+       "模板含禁用标签或外链域名不在允许列表（VALIDATION 类，HTTP 400）"},
+      {"EMAIL_TEST_RECIPIENT_DENIED",
+       3019,
+       ErrorCategory::VALIDATION,
+       "测试收件人不在白名单",
+       "test-send 收件人必须是管理员本人邮箱或 email.test_recipients 配置项（VALIDATION 类，HTTP 403）",
+       403},
+      {"EMAIL_TEST_QUOTA_EXCEEDED",
+       3020,
+       ErrorCategory::VALIDATION,
+       "测试发送配额已用尽",
+       "滚动 24 小时 test-send 配额已用尽（VALIDATION 类，HTTP 429）",
+       429},
     }};
     return kEntries;
 }

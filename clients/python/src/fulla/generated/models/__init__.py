@@ -25,6 +25,8 @@ from .error import Error
 from .error_envelope import ErrorEnvelope
 from .get_api_admin_dashboard_response_200 import GetApiAdminDashboardResponse200
 from .get_api_admin_dashboard_stats_response_200 import GetApiAdminDashboardStatsResponse200
+from .get_api_admin_email_templates_response_200 import GetApiAdminEmailTemplatesResponse200
+from .get_api_admin_email_templates_response_200_templates_item import GetApiAdminEmailTemplatesResponse200TemplatesItem
 from .get_api_admin_organizations_response_200 import GetApiAdminOrganizationsResponse200
 from .get_api_admin_roles_response_200 import GetApiAdminRolesResponse200
 from .get_api_admin_roles_response_200_roles_item import GetApiAdminRolesResponse200RolesItem
@@ -111,6 +113,7 @@ from .post_api_admin_clients_client_id_resume_body import PostApiAdminClientsCli
 from .post_api_admin_clients_client_id_resume_response_200 import PostApiAdminClientsClientIdResumeResponse200
 from .post_api_admin_clients_client_id_suspend_body import PostApiAdminClientsClientIdSuspendBody
 from .post_api_admin_clients_client_id_suspend_response_200 import PostApiAdminClientsClientIdSuspendResponse200
+from .post_api_admin_email_templates_key_locale_test_send_body import PostApiAdminEmailTemplatesKeyLocaleTestSendBody
 from .post_api_admin_organizations_body import PostApiAdminOrganizationsBody
 from .post_api_admin_organizations_response_200 import PostApiAdminOrganizationsResponse200
 from .post_api_admin_organizations_slug_transfer_ownership_body import (
@@ -201,6 +204,7 @@ from .post_oauth_2_register_body_client_type import PostOauth2RegisterBodyClient
 from .post_oauth_2_revoke_body import PostOauth2RevokeBody
 from .put_api_admin_clients_client_id_body import PutApiAdminClientsClientIdBody
 from .put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
+from .put_api_admin_email_templates_key_locale_body import PutApiAdminEmailTemplatesKeyLocaleBody
 from .put_api_admin_roles_role_id_body import PutApiAdminRolesRoleIdBody
 from .put_api_admin_scopes_scope_id_body import PutApiAdminScopesScopeIdBody
 from .put_api_admin_users_user_id_body import PutApiAdminUsersUserIdBody
@@ -239,6 +243,8 @@ __all__ = (
     "ErrorEnvelope",
     "GetApiAdminDashboardResponse200",
     "GetApiAdminDashboardStatsResponse200",
+    "GetApiAdminEmailTemplatesResponse200",
+    "GetApiAdminEmailTemplatesResponse200TemplatesItem",
     "GetApiAdminOrganizationsResponse200",
     "GetApiAdminRolesResponse200",
     "GetApiAdminRolesResponse200RolesItem",
@@ -299,6 +305,7 @@ __all__ = (
     "PostApiAdminClientsClientIdResumeResponse200",
     "PostApiAdminClientsClientIdSuspendBody",
     "PostApiAdminClientsClientIdSuspendResponse200",
+    "PostApiAdminEmailTemplatesKeyLocaleTestSendBody",
     "PostApiAdminOrganizationsBody",
     "PostApiAdminOrganizationsResponse200",
     "PostApiAdminOrganizationsSlugTransferOwnershipBody",
@@ -367,6 +374,7 @@ __all__ = (
     "PostOauth2RevokeBody",
     "PutApiAdminClientsClientIdBody",
     "PutApiAdminClientsClientIdScopesBody",
+    "PutApiAdminEmailTemplatesKeyLocaleBody",
     "PutApiAdminRolesRoleIdBody",
     "PutApiAdminScopesScopeIdBody",
     "PutApiAdminUsersUserIdBody",

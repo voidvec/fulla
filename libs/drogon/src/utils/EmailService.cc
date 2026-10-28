@@ -158,6 +158,127 @@ std::string SmtpEmailService::buildMimeMessage(
     return msg.str();
 }
 
+// P1-2: multipart/alternative assembly (RFC 2046 §5.1.4). The boundary is a
+// fixed marker: deterministic for the security tests, and save-time template
+// validation keeps admin-authored bodies from containing it in practice (the
+// tag blacklist plus the fact that no legitimate email markup needs it).
+const char *SmtpEmailService::multipartBoundary()
+{
+    return "=_fulla_alt_5f4d3b2c1e";
+}
+
+std::string SmtpEmailService::buildMimeMessageMultipart(
+  const std::string &to,
+  const std::string &subject,
+  const std::string &bodyText,
+  const std::string &bodyHtml,
+  const std::string &fromName,
+  const std::string &fromAddress
+)
+{
+    const std::string safeTo = sanitizeHeaderValue(to);
+    const std::string safeSubject = sanitizeHeaderValue(subject);
+    const std::string safeFromName = sanitizeHeaderValue(fromName);
+    const std::string safeFromAddr = sanitizeHeaderValue(fromAddress);
+    const std::string boundary = multipartBoundary();
+
+    std::ostringstream msg;
+    msg << "Date: " << rfc5322Date() << "\r\n"
+        << "From: " << safeFromName << " <" << safeFromAddr << ">\r\n"
+        << "To: <" << safeTo << ">\r\n"
+        << "Subject: " << safeSubject << "\r\n"
+        << "MIME-Version: 1.0\r\n"
+        << "Content-Type: multipart/alternative; boundary=\"" << boundary << "\"\r\n"
+        << "\r\n"  // header/body separator
+        << "This is a multi-part message in MIME format.\r\n"
+        << "--" << boundary << "\r\n"
+        << "Content-Type: text/plain; charset=UTF-8\r\n"
+        << "Content-Transfer-Encoding: 8bit\r\n"
+        << "\r\n"
+        << bodyText << "\r\n"
+        << "--" << boundary << "\r\n"
+        << "Content-Type: text/html; charset=UTF-8\r\n"
+        << "Content-Transfer-Encoding: 8bit\r\n"
+        << "\r\n"
+        << bodyHtml << "\r\n"
+        << "--" << boundary << "--\r\n";
+    return msg.str();
+}
+
+void SmtpEmailService::sendEmail(
+  const std::string &to,
+  const std::string &subject,
+  const std::string &bodyText,
+  const std::string &bodyHtml,
+  std::function<void(bool)> &&callback
+)
+{
+    if (bodyHtml.empty())
+    {
+        // No HTML part: legacy single-part path, byte-compatible output.
+        sendEmail(to, subject, bodyText, std::move(callback));
+        return;
+    }
+    auto config = config_;
+    auto cb = std::make_shared<std::function<void(bool)>>(std::move(callback));
+
+    std::thread([config, to, subject, bodyText, bodyHtml, cb]() {
+        const std::string recipient = sanitizeHeaderValue(to);
+        std::string payload =
+          buildMimeMessageMultipart(to, subject, bodyText, bodyHtml, config.fromName, config.username);
+
+        CURL *curl = curl_easy_init();
+        if (!curl)
+        {
+            LOG_ERROR << "SMTP: failed to initialize libcurl";
+            if (*cb)
+                (*cb)(false);
+            return;
+        }
+
+        UploadContext upload;
+        upload.payload = std::move(payload);
+
+        std::ostringstream url;
+        url << (config.useSsl ? "smtps://" : "smtp://") << config.host << ":" << config.port;
+
+        struct curl_slist *recipients = nullptr;
+        recipients = curl_slist_append(recipients, ("<" + recipient + ">").c_str());
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+        curl_easy_setopt(
+          curl, CURLOPT_USE_SSL, config.useSsl ? (long)CURLUSESSL_ALL : (long)CURLUSESSL_TRY
+        );
+        curl_easy_setopt(curl, CURLOPT_USERNAME, config.username.c_str());
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, config.password.c_str());
+        curl_easy_setopt(curl, CURLOPT_MAIL_FROM, ("<" + config.username + ">").c_str());
+        curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+        curl_easy_setopt(curl, CURLOPT_READFUNCTION, payloadReadCallback);
+        curl_easy_setopt(curl, CURLOPT_READDATA, &upload);
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        curl_slist_free_all(recipients);
+        curl_easy_cleanup(curl);
+
+        if (res == CURLE_OK)
+        {
+            LOG_INFO << "SMTP: Email sent to " << recipient;
+            if (*cb)
+                (*cb)(true);
+        }
+        else
+        {
+            LOG_ERROR << "SMTP: Failed to send to " << recipient << ": " << curl_easy_strerror(res);
+            if (*cb)
+                (*cb)(false);
+        }
+    }).detach();
+}
+
 void SmtpEmailService::sendEmail(
   const std::string &to,
   const std::string &subject,
@@ -236,8 +357,36 @@ void SmtpEmailService::sendEmail(
 // Global email service factory
 // ============================================================
 
+// P1-2 test seam: when non-null, getEmailService() returns this instance
+// instead of the env-driven singleton. Installed by integration tests
+// BEFORE any request traffic. Reads happen on server IO threads while the
+// test thread installs/resets, so access is mutex-guarded (C++17: no
+// atomic<shared_ptr>).
+namespace
+{
+std::mutex g_testOverrideMutex;
+std::shared_ptr<IEmailService> g_testOverride;
+}  // namespace
+
+void setEmailServiceForTesting(std::shared_ptr<IEmailService> overrideService)
+{
+    std::lock_guard<std::mutex> lock(g_testOverrideMutex);
+    g_testOverride = std::move(overrideService);
+}
+
 IEmailService &getEmailService()
 {
+    // Copy under the lock: keeps the override object alive for the duration
+    // of the caller's use even if a test resets it concurrently.
+    {
+        std::lock_guard<std::mutex> lock(g_testOverrideMutex);
+        if (g_testOverride)
+        {
+            auto pinned = g_testOverride;
+            return *pinned;
+        }
+    }
+
     static std::unique_ptr<IEmailService> instance;
     static std::once_flag initFlag;
 

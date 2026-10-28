@@ -59,7 +59,13 @@ class EmailVerificationService
     /// email_verification_tokens, and send the verification email.
     /// @param internalUserId The internal (integer) user id.
     /// @param email The recipient email address.
+    /// P1-2: the template variant renders the localized email_templates row
+    /// (fallback en -> built-in); the 2-arg overload keeps "en" for callers
+    /// without a request context.
     static void sendVerificationEmail(int internalUserId, const std::string &email);
+    static void sendVerificationEmail(
+      int internalUserId, const std::string &email, const std::string &locale
+    );
 };
 
 }  // namespace fulla::drogon::services

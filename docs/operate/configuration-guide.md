@@ -348,3 +348,56 @@ public key stored at registration time. Configuration:
 - Single-instance deployments: the subject-bound registration challenge
   store is in-process (same limitation class as the consent_csrf nonce).
   Multi-instance deployments need shared challenge storage (follow-up).
+
+## 12. Email Templates (P1-2, #278)
+
+The three production emails (email verification, password reset, org
+invitation) render from DB-backed, editable, localized templates
+(V040 `email_templates`: 3 keys × `en`/`zh-CN` seeds, each row carrying
+subject + HTML + plain-text). Sending stays env-driven (`FULLA_SMTP_*`
+variables select Console vs SMTP); templates add localization, editability
+and multipart/alternative HTML delivery on top.
+
+Admin API (admin role + `roles:read`/`roles:write` scopes):
+`GET /api/admin/email-templates`, `GET|PUT /api/admin/email-templates/{key}/{locale}`,
+`POST /api/admin/email-templates/{key}/{locale}/test-send`. Postgres only —
+memory deployments answer 404 (no template store; the engine falls back to
+compile-time built-ins for actual sends).
+
+Template variables use `{{name}}` placeholders; every substituted value is
+HTML-escaped by the engine (org names are unfiltered free text). Save-time
+content policy rejects `<script>/<iframe>/<form>/<object>/<embed>/<base>`
+tags, `javascript:`/`data:`/`vbscript:` URLs, and any outbound `http(s)`
+href outside the configured allowlist (see `allowed_link_domains` below)
+with `EMAIL_TEMPLATE_CONTENT_REJECTED` (400).
+
+Configuration (custom_config):
+
+```json
+"email": {
+    "allowed_link_domains": ["portal.example.com"],
+    "test_recipients": ["admin@example.com"],
+    "test_send_quota_per_day": 10,
+    "allow_org_logo": false
+}
+```
+
+- `allowed_link_domains` — hosts permitted in literal `http(s)` hrefs of
+  saved templates (exact or subdomain match; entries accept bare hosts or
+  `https://host/` spellings). Empty/absent = no external links allowed;
+  variable links (`{{verify_link}}`, `{{reset_link}}`) are engine-supplied
+  and unaffected.
+- `test_recipients` — extra addresses authorized for the admin test-send
+  endpoint, in addition to each admin's own account email.
+- `test_send_quota_per_day` — rolling-24h per-admin test-send quota
+  (default 10; counted from `email_test_sent` audit rows in the last 24
+  hours — deliberately NOT a calendar day).
+- `allow_org_logo` — placeholder for org-branding variables in invitation
+  templates; **remote org logos in email are a recipient-tracking privacy
+  surface and stay off by default**. No seeded template references org
+  logo variables.
+
+**Link trust anchor (D8 red line)**: verification and reset link domains
+derive ONLY from the global `frontend.url` key — org-controlled input is
+never interpolated into a security link, and verification/reset emails
+carry no org branding regardless of configuration.

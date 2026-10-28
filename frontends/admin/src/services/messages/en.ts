@@ -42,6 +42,11 @@ export const en: Record<string, string> = {
   VALIDATION_DEVICE_CODE_INVALID: 'The device code is invalid, expired, or already used',
   VALIDATION_RATE_LIMITED: 'Too many requests. Please try again later',
   VALIDATION_REDIRECT_URI_NOT_REGISTERED: 'The logout redirect URI is not registered',
+  // --- P1-2 (#278): email-template admin codes (admin console only) ---
+  EMAIL_TEMPLATE_NOT_FOUND: 'Email template not found',
+  EMAIL_TEMPLATE_CONTENT_REJECTED: 'Template rejected: forbidden tag or outbound link outside email.allowed_link_domains',
+  EMAIL_TEST_RECIPIENT_DENIED: 'Test recipient not whitelisted (your own address or email.test_recipients)',
+  EMAIL_TEST_QUOTA_EXCEEDED: 'Test-send quota reached. Please try again later',
   AUTH_MFA_CODE_INVALID: 'Incorrect verification code',
   AUTH_MFA_NOT_CONFIGURED: 'Two-factor authentication is not configured yet. Set it up first',
 

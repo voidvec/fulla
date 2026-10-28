@@ -5,6 +5,7 @@
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/drogon/services/EmailTemplateService.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/EmailService.h>
 #include <fulla/storage/postgres/AdvisoryLock.h>
@@ -977,26 +978,18 @@ void proceedWithInvitationInsert(
                                       // mail; in Console mode (no SMTP) it just
                                       // logs — the admin UI response still carries
                                       // the token for out-of-band delivery.
-                                      const std::string mailBody =
-                                        "You have been invited to join the organization \"" +
-                                        org.getValueOfName() +
-                                        "\" on Fulla.\n\n"
-                                        "Invitation token (valid for 72 hours, single use):\n  " +
-                                        rawToken +
-                                        "\n\n"
-                                        "Sign in to the portal, open My Organizations, and paste "
-                                        "the token under \"Accept an invitation\". If you did not "
-                                        "expect this invitation you can ignore this email.";
-                                      ::fulla::drogon::utils::getEmailService().sendEmail(
+                                      // P1-2 (#278): localized template send.
+                                      // org_name is unfiltered free text — the
+                                      // engine HTML-escapes every substituted
+                                      // value (XSS red line for HTML mail).
+                                      ::fulla::drogon::services::EmailTemplateService::send(
+                                        ::fulla::drogon::services::EmailTemplateService::
+                                          kKeyOrgInvitation,
+                                        ::fulla::drogon::services::EmailTemplateService::
+                                          resolveLocale(req),
                                         inserted.getValueOfEmail(),
-                                        "Fulla Organization Invitation",
-                                        mailBody,
-                                        [](bool ok) {
-                                            if (!ok)
-                                            {
-                                                LOG_WARN << "org invitation email delivery failed";
-                                            }
-                                        });
+                                        {{"org_name", org.getValueOfName()},
+                                         {"invite_token", rawToken}});
                                       Json::Value json;
                                       json["id"] = inserted.getValueOfId();
                                       json["email"] = inserted.getValueOfEmail();
