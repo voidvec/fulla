@@ -351,8 +351,10 @@ DROGON_TEST(Integration_P1_Rbac_NegativeLine_UserRoleGrantNoGateCollapse)
         // later test in the binary — restore the pristine shape (no
         // permission) and invalidate the cache entry.
         {
-            auto db = ::drogon::app().getDbClient();
-            auto f = db->execSqlAsyncFuture(
+            // distinct name: an outer `db` local exists (C4456 under the CI
+            // -Werror legs)
+            auto cleanupDb = ::drogon::app().getDbClient();
+            auto f = cleanupDb->execSqlAsyncFuture(
               "DELETE FROM role_permissions rp USING roles r, permissions p "
               "WHERE rp.role_id = r.id AND rp.permission_id = p.id "
               "AND r.name = 'user' AND p.name = 'users:read'");
