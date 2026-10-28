@@ -35,8 +35,7 @@ DROGON_TEST(Integration_Bootstrap_SecurityHeaders_LoginPageIsOauthBroker)
     if (csp.empty())
     {
         std::cout << "[SecurityHeaders] no CSP header on this wiring — "
-                     "skipping broker-profile assertions
-";
+                     "skipping broker-profile assertions\n";
         CHECK(true);
         return;
     }
