@@ -4,12 +4,16 @@
 #include <fulla/storage/postgres/models/Users.h>
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
 #include <fulla/storage/postgres/models/Oauth2AccessTokens.h>
+#include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/error/ErrorResponder.h>
+#include <fulla/drogon/plugin/OAuth2Plugin.h>
 
 #include <drogon/drogon.h>
 #include <trantor/utils/Date.h>
 
+#include <algorithm>
 #include <chrono>
+#include <sstream>
 
 namespace fulla::drogon::admin
 {
@@ -330,6 +334,261 @@ void AuditService::dashboard(ResponseCallback cb)
     json["message"] = "Welcome to Admin Dashboard";
     json["status"] = "success";
     (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+}
+
+// ---------------------------------------------------------------------------
+// P1-6 (#283): CSV export + formula-injection hardening
+// ---------------------------------------------------------------------------
+
+std::string AuditService::csvCell(const std::string &value)
+{
+    // OWASP CSV injection: spreadsheet editors evaluate cells that START with
+    // = + - @ (formulas) or a tab/CR (DDE-class payloads) — the audit trail
+    // carries fully user-controlled user_agent/ip/details, so every cell is
+    // prefixed before quoting. The apostrophe renders literally in editors
+    // and neutralizes the formula.
+    std::string cell = value;
+    if (!cell.empty())
+    {
+        const char c = cell[0];
+        if (c == '=' || c == '+' || c == '-' || c == '@' || c == '\t' || c == '\r')
+            cell.insert(cell.begin(), '\'');
+    }
+    // RFC 4180 quoting only when needed (keeps the common row compact).
+    bool needsQuotes = false;
+    for (char c : cell)
+    {
+        if (c == ',' || c == '"' || c == '\n' || c == '\r')
+        {
+            needsQuotes = true;
+            break;
+        }
+    }
+    if (!needsQuotes)
+        return cell;
+    std::string out;
+    out.reserve(cell.size() + 2);
+    out.push_back('"');
+    for (char c : cell)
+    {
+        if (c == '"')
+            out.push_back('"');
+        out.push_back(c);
+    }
+    out.push_back('"');
+    return out;
+}
+
+namespace
+{
+std::string auditRowToCsvLine(const AuditLogs &row)
+{
+    // Column order matches the export header (the full audit row surface).
+    std::ostringstream line;
+    line << row.getValueOfId() << ','
+         << AuditService::csvCell(row.getValueOfTimestamp().toDbString()) << ','
+         << AuditService::csvCell(row.getValueOfActorType()) << ','
+         << AuditService::csvCell(row.getValueOfActorId()) << ','
+         << AuditService::csvCell(row.getValueOfAction()) << ','
+         << AuditService::csvCell(row.getValueOfTargetType()) << ','
+         << AuditService::csvCell(row.getValueOfTargetId()) << ','
+         << AuditService::csvCell(row.getValueOfOutcome()) << ','
+         << AuditService::csvCell(row.getValueOfIp()) << ','
+         << AuditService::csvCell(row.getValueOfUserAgent()) << ','
+         << AuditService::csvCell(row.getValueOfRequestId()) << ','
+         << (row.getOrgId() == nullptr ? ""
+                                       : std::to_string(row.getValueOfOrgId()))
+         << ',' << AuditService::csvCell(row.getValueOfDetails()) << "\r\n";
+    return line.str();
+}
+}  // namespace
+
+void AuditService::exportLogs(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
+{
+    // Memory-mode guard: no audit store, no export (getDbClient() would
+    // ABORT in Debug builds — the M1 pitfall).
+    if (auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
+        p != nullptr && p->getStorageType() == "memory")
+    {
+        respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "audit export requires a database");
+        return;
+    }
+
+    // Filters mirror listLogs plus the export-specific controls.
+    std::string action = req->getParameter("action");
+    std::string outcome = req->getParameter("outcome");
+    std::string actorId = req->getParameter("actor_id");
+    std::string fromStr = req->getParameter("from");
+    std::string toStr = req->getParameter("to");
+    std::string allStr = req->getParameter("all");
+    std::string limitStr = req->getParameter("limit");
+
+    int64_t from = 0;
+    int64_t to = 0;
+    auto parseInt64 = [](const std::string &s, int64_t &out) {
+        try
+        {
+            std::size_t pos = 0;
+            long long v = std::stoll(s, &pos);
+            if (pos != s.size())
+                return false;
+            out = v;
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    };
+
+    const bool hasFrom = !fromStr.empty() && parseInt64(fromStr, from);
+    const bool hasTo = !toStr.empty() && parseInt64(toStr, to);
+    const bool all = (allStr == "true" || allStr == "1");
+
+    // Unbounded-export DoS guard: a window is mandatory unless the caller
+    // explicitly opts into the full table with all=true.
+    if (!all && !(hasFrom && hasTo))
+    {
+        respondError(
+          req,
+          cb,
+          "AUDIT_EXPORT_WINDOW_REQUIRED",
+          "export requires from/to (epoch seconds) or an explicit all=true");
+        return;
+    }
+    if (hasFrom && hasTo && from >= to)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "from must be strictly before to");
+        return;
+    }
+
+    // Row cap: config default, per-request limit may only lower it.
+    const int64_t configCap = [] {
+        auto config = ::drogon::app().getCustomConfig();
+        if (config.isMember("audit") && config["audit"].isMember("export_max_rows") &&
+            config["audit"]["export_max_rows"].isInt64())
+            return config["audit"]["export_max_rows"].asInt64();
+        return static_cast<int64_t>(500000);
+    }();
+    int64_t cap = configCap;
+    if (!limitStr.empty())
+    {
+        int64_t limit = 0;
+        if (!parseInt64(limitStr, limit) || limit < 1)
+        {
+            respondError(req, cb, "VALIDATION_INVALID_INPUT", "limit must be a positive integer");
+            return;
+        }
+        cap = (std::min)(limit, configCap);
+    }
+
+    Criteria filter;
+    if (!action.empty())
+        filter = filter && Criteria(AuditLogs::Cols::_action, CompareOperator::EQ, action);
+    if (!outcome.empty())
+        filter = filter && Criteria(AuditLogs::Cols::_outcome, CompareOperator::EQ, outcome);
+    if (!actorId.empty())
+        filter = filter && Criteria(AuditLogs::Cols::_actor_id, CompareOperator::EQ, actorId);
+    if (hasFrom)
+        filter = filter && Criteria(AuditLogs::Cols::_timestamp, CompareOperator::GE,
+                                    ::trantor::Date(from * 1000000));
+    if (hasTo)
+        filter = filter && Criteria(AuditLogs::Cols::_timestamp, CompareOperator::LE,
+                                    ::trantor::Date(to * 1000000));
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    // Count first: over-cap exports are rejected with a narrowing hint
+    // instead of streaming an unbounded payload.
+    try
+    {
+        Mapper<AuditLogs> countMapper(db);
+        countMapper.count(
+          filter,
+          [cb, req, filter, db, cap, from, to, all](const size_t total) {
+              if (static_cast<int64_t>(total) > cap)
+              {
+                  respondError(
+                    req,
+                    cb,
+                    "AUDIT_EXPORT_TOO_LARGE",
+                    "export of " + std::to_string(total) +
+                      " rows exceeds the cap of " + std::to_string(cap) +
+                      "; narrow the time window or lower `limit`");
+                  return;
+              }
+              try
+              {
+                  Mapper<AuditLogs> dataMapper(db);
+                  dataMapper.orderBy(AuditLogs::Cols::_timestamp, SortOrder::ASC)
+                    .findBy(
+                      filter,
+                      [cb, req, total, from, to, all](const std::vector<AuditLogs> &rows) {
+                          // Self-audit BEFORE the (potentially large) body is
+                          // streamed back.
+                          if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+                              plugin != nullptr)
+                          {
+                              Json::Value details;
+                              details["rows"] = static_cast<Json::UInt64>(total);
+                              details["windowed"] = !all;
+                              if (!all)
+                              {
+                                  details["from"] = static_cast<Json::Int64>(from);
+                                  details["to"] = static_cast<Json::Int64>(to);
+                              }
+                              ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                                plugin->getAuditSink(),
+                                "audit_exported",
+                                "success",
+                                req,
+                                "",
+                                "audit_log",
+                                "export",
+                                details);
+                          }
+
+                          std::ostringstream csv;
+                          csv << "id,timestamp,actor_type,actor_id,action,target_type,"
+                                 "target_id,outcome,ip,user_agent,request_id,org_id,details\r\n";
+                          for (const auto &row : rows)
+                              csv << auditRowToCsvLine(row);
+
+                          auto resp = ::drogon::HttpResponse::newHttpResponse();
+                          resp->setContentTypeString("text/csv; charset=utf-8");
+                          resp->addHeader(
+                            "Content-Disposition",
+                            all ? "attachment; filename=\"audit_logs_all.csv\""
+                                : "attachment; filename=\"audit_logs_" + std::to_string(from) +
+                                    "_" + std::to_string(to) + ".csv\"");
+                          resp->setBody(csv.str());
+                          (*cb)(resp);
+                      },
+                      [req, cb](const ::drogon::orm::DrogonDbException &e) {
+                          respondError(
+                            req,
+                            cb,
+                            "DB_QUERY_ERROR",
+                            std::string("export fetch failed: ") + e.base().what());
+                      });
+              }
+              catch (const std::exception &e)
+              {
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("export fetch failed: ") + e.what());
+              }
+          },
+          [req, cb](const ::drogon::orm::DrogonDbException &e) {
+              respondError(
+                req, cb, "DB_QUERY_ERROR", std::string("export count failed: ") + e.base().what());
+          });
+    }
+    catch (const std::exception &e)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", std::string("export count failed: ") + e.what());
+    }
 }
 
 }  // namespace fulla::drogon::admin

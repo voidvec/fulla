@@ -1074,8 +1074,10 @@ public:
 using ResponseCallback =
 std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
 static void listLogs(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
+static void exportLogs(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 static void getDashboardStats(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 static void dashboard(ResponseCallback cb);
+static std::string csvCell(const std::string &value);
 };
 }
 === libs/drogon/include/fulla/drogon/admin/ClientManagementService.h
@@ -1447,6 +1449,12 @@ AuditController::listLogs,
 "fulla::drogon::filters::AuthorizationFilter"
 );
 ADD_METHOD_TO(
+AuditController::exportLogs,
+"/api/admin/logs/export",
+::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter"
+);
+ADD_METHOD_TO(
 AuditController::getDashboardStats,
 "/api/admin/dashboard/stats",
 ::drogon::Get,
@@ -1454,6 +1462,10 @@ AuditController::getDashboardStats,
 );
 METHOD_LIST_END
 void listLogs(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+);
+void exportLogs(
 const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
@@ -3154,6 +3166,8 @@ static Json::Value generateSchema();
 #include <fulla/oauth2/repository/ITokenRepository.h>
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 namespace fulla::drogon
 {
 class OAuth2CleanupService : public std::enable_shared_from_this<OAuth2CleanupService>
@@ -3169,6 +3183,12 @@ bool postgresStorage = false
 void start(double intervalSeconds);
 void stop();
 void maintainAuditPartitions(std::function<void()> &&completion = nullptr);
+void maintainAuditRetention();
+static std::vector<std::string> retentionDropCandidates(
+const std::vector<std::string> &partitionNames,
+int retentionMonths,
+int64_t nowSeconds
+);
 private:
 std::shared_ptr<::fulla::oauth2::repository::IGrantRepository> grantRepo_;
 std::shared_ptr<::fulla::oauth2::repository::ITokenRepository> tokenRepo_;

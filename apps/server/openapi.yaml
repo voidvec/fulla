@@ -1420,6 +1420,85 @@ paths:
       tags:
       - Admin
       - Logs
+  /api/admin/logs/export:
+    get:
+      description: 'P1-6 (#283): CSV export of the audit trail. Same filters as the
+        list endpoint (action/outcome/actor_id) plus a mandatory time window (from/to,
+        epoch seconds) unless an explicit all=true is given; row cap (audit.export_max_rows,
+        default 500k; the per-request `limit` may only lower it) — over-cap answers
+        400 AUDIT_EXPORT_TOO_LARGE. Cells are formula-injection hardened (leading
+        = + - @ tab CR get a '''' prefix). Audited as audit_exported. Memory deployments
+        answer 404.'
+      operationId: get_api_admin_logs_export
+      parameters:
+      - description: Filter by action
+        in: query
+        name: action
+        required: false
+        schema:
+          type: string
+      - description: Filter by outcome
+        in: query
+        name: outcome
+        required: false
+        schema:
+          type: string
+      - description: Filter by actor id
+        in: query
+        name: actor_id
+        required: false
+        schema:
+          type: string
+      - description: Window start (unix epoch seconds); required unless all=true
+        in: query
+        name: from
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: Window end (unix epoch seconds); required unless all=true
+        in: query
+        name: to
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: 'Explicit full-table opt-in (window requirement waived; the row
+        cap still applies)'
+        in: query
+        name: all
+        required: false
+        schema:
+          type: string
+          enum:
+          - "true"
+          - "1"
+      - description: Max rows to export (may only lower audit.export_max_rows)
+        in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: CSV file (attachment)
+        '400':
+          description: 'Missing window (AUDIT_EXPORT_WINDOW_REQUIRED) or over-cap
+            (AUDIT_EXPORT_TOO_LARGE)'
+        '404':
+          description: Memory mode (no audit store)
+      security:
+      - bearerAuth: []
+      summary: Export Audit Logs (CSV)
+      tags:
+      - Admin
+      - Logs
   /api/admin/oidc/keys:
     get:
       description: 'Live signing-keystore state (#110): every loaded kid with its

@@ -24,6 +24,7 @@ GET /api/admin/dashboard/stats
 GET /api/admin/email-templates
 GET /api/admin/email-templates/{key}/{locale}
 GET /api/admin/logs
+GET /api/admin/logs/export
 GET /api/admin/oidc/keys
 GET /api/admin/organizations
 GET /api/admin/organizations/{slug}

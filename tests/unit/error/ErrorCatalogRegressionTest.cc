@@ -69,9 +69,10 @@ DROGON_TEST(Unit_P0_ErrorCatalog_Regression_ExistingNumericCodesUnchanged)
     // AUTH_PASSWORD_CHANGE_REQUIRED (403, forced first-login password
     // change gate). P1-2 (#278) adds the four email-template admin codes
     // (3017-3020: NOT_FOUND 404 / CONTENT_REJECTED 400 / RECIPIENT_DENIED
-    // 403 / QUOTA_EXCEEDED 429).
+    // 403 / QUOTA_EXCEEDED 429). P1-6 (#283) adds the two audit-export
+    // guard codes (3021-3022, both 400).
     CHECK(
-      ErrorCatalog::allEntries().size() == kExpected.size() + 2 + 9 + 1 + 1 + 2 + 1 + 2 + 2 + 4);
+      ErrorCatalog::allEntries().size() == kExpected.size() + 2 + 9 + 1 + 1 + 2 + 1 + 2 + 2 + 4 + 2);
     // #144: AUTHENTICATION segment, next free numeric 4008, default 401.
     const CatalogEntry *mfaGateEntry = ErrorCatalog::find("AUTH_MFA_REQUIRED");
     REQUIRE(mfaGateEntry != nullptr);

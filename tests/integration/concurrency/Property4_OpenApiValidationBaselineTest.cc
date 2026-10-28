@@ -133,6 +133,7 @@ const std::string &expectedFingerprint()
       "GET /api/admin/email-templates\n"
       "GET /api/admin/email-templates/{key}/{locale}\n"
       "GET /api/admin/logs\n"
+      "GET /api/admin/logs/export\n"
       "GET /api/admin/oidc/keys\n"
       "GET /api/admin/organizations\n"
       "GET /api/admin/organizations/{slug}\n"

@@ -1,5 +1,9 @@
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <drogon/drogon.h>
+#include <trantor/utils/Date.h>
+
+#include <ctime>
+#include <utility>
 
 namespace fulla::drogon
 {
@@ -201,6 +205,11 @@ void OAuth2CleanupService::doPurge()
     // (inside the distributed lock when one exists -- ensure_audit_partitions
     // is idempotent but not concurrency-safe between instances).
     maintainAuditPartitions();
+    // P1-6 (#283): retention drops happen on the same locked cycle. Safe to
+    // interleave with partition creation -- retention only ever targets
+    // months strictly before the retention window, creation only ever
+    // touches current/future months.
+    maintainAuditRetention();
 }
 
 void OAuth2CleanupService::maintainAuditPartitions(std::function<void()> &&completion)
@@ -235,6 +244,133 @@ void OAuth2CleanupService::maintainAuditPartitions(std::function<void()> &&compl
           (*sharedCompletion)();
       }
     );
+}
+
+// ---------------------------------------------------------------------------
+// P1-6 (#283): audit retention
+// ---------------------------------------------------------------------------
+
+namespace
+{
+// Parse "audit_logs_pYYYY_MM" -> (yyyy, mm). False for anything else
+// (DEFAULT, foreign names, malformed).
+bool parsePartitionMonth(const std::string &name, int &yyyy, int &mm)
+{
+    const std::string prefix = "audit_logs_p";
+    if (name.size() != prefix.size() + 4 + 1 + 2)
+        return false;
+    if (name.compare(0, prefix.size(), prefix) != 0)
+        return false;
+    if (name[prefix.size() + 4] != '_')
+        return false;
+    for (std::size_t i = prefix.size(); i < name.size(); ++i)
+    {
+        if (i == prefix.size() + 4)
+            continue;  // the '_' separator, checked above
+        if (name[i] < '0' || name[i] > '9')
+            return false;
+    }
+    yyyy = std::stoi(name.substr(prefix.size(), 4));
+    mm = std::stoi(name.substr(prefix.size() + 5, 2));
+    return mm >= 1 && mm <= 12 && yyyy >= 1970;
+}
+
+// (yyyy, mm) of `nowSeconds` shifted back by `months` (UTC, month-tuple
+// arithmetic only -- no day-level precision needed for a whole-month rule).
+std::pair<int, int> cutoffMonth(int64_t nowSeconds, int months)
+{
+    std::time_t t = static_cast<std::time_t>(nowSeconds);
+    std::tm tmUtc{};
+#ifdef _WIN32
+    gmtime_s(&tmUtc, &t);
+#else
+    gmtime_r(&t, &tmUtc);
+#endif
+    int totalMonths = (tmUtc.tm_year + 1900) * 12 + tmUtc.tm_mon - months;
+    return {totalMonths / 12, totalMonths % 12};
+}
+}  // namespace
+
+std::vector<std::string> OAuth2CleanupService::retentionDropCandidates(
+  const std::vector<std::string> &partitionNames,
+  int retentionMonths,
+  int64_t nowSeconds
+)
+{
+    std::vector<std::string> drop;
+    if (retentionMonths <= 0)
+        return drop;
+    const auto cutoff = cutoffMonth(nowSeconds, retentionMonths);
+    const int cutoffTuple = cutoff.first * 12 + cutoff.second;
+    for (const auto &name : partitionNames)
+    {
+        int yyyy = 0;
+        int mm = 0;
+        if (!parsePartitionMonth(name, yyyy, mm))
+            continue;  // DEFAULT / foreign / malformed: never touched
+        if (yyyy * 12 + (mm - 1) < cutoffTuple)
+            drop.push_back(name);
+    }
+    return drop;
+}
+
+void OAuth2CleanupService::maintainAuditRetention()
+{
+    // Same no-DB guard as maintainAuditPartitions: resolving a DbClient in
+    // memory mode is a process-terminating assert.
+    if (!postgresStorage_ || !auditDbClient_)
+        return;
+
+    // audit.retention_months (custom_config): 0/unset = keep forever.
+    int retentionMonths = 0;
+    {
+        auto config = ::drogon::app().getCustomConfig();
+        if (config.isMember("audit") && config["audit"].isMember("retention_months") &&
+            config["audit"]["retention_months"].isInt())
+            retentionMonths = config["audit"]["retention_months"].asInt();
+    }
+    if (retentionMonths <= 0)
+        return;
+
+    std::weak_ptr<OAuth2CleanupService> weakSelf = weak_from_this();
+
+    // Raw-SQL exemption ① (db-operations.md): DDL-by-proxy — catalog
+    // inspection (pg_inherits) has no Mapper expression, and the subsequent
+    // DROP TABLE is DDL. Candidate names are re-validated against the
+    // strict audit_logs_pYYYY_MM pattern before interpolation, so no
+    // identifier injection is possible.
+    auditDbClient_->execSqlAsync(
+      "SELECT c.relname AS name FROM pg_inherits i "
+      "JOIN pg_class c ON c.oid = i.inhrelid "
+      "WHERE i.inhparent = 'audit_logs'::regclass",
+      [weakSelf, retentionMonths](const ::drogon::orm::Result &result) {
+          auto self = weakSelf.lock();
+          if (!self)
+              return;
+          std::vector<std::string> names;
+          names.reserve(result.size());
+          for (const auto &row : result)
+              names.push_back(row["name"].as<std::string>());
+          const int64_t now = ::trantor::Date::now().secondsSinceEpoch();
+          for (const auto &name : retentionDropCandidates(names, retentionMonths, now))
+          {
+              LOG_INFO << "audit retention: dropping partition " << name << " (older than "
+                       << retentionMonths << " month(s))";
+              self->auditDbClient_->execSqlAsync(
+                "DROP TABLE IF EXISTS " + name,
+                [name](const ::drogon::orm::Result &) {
+                    LOG_INFO << "audit retention: dropped " << name;
+                },
+                [name](const ::drogon::orm::DrogonDbException &e) {
+                    LOG_ERROR << "audit retention: failed to drop " << name
+                              << " (next cycle retries): " << e.base().what();
+                });
+          }
+      },
+      [](const ::drogon::orm::DrogonDbException &e) {
+          LOG_ERROR << "audit retention: partition catalog query failed (next cycle retries): "
+                    << e.base().what();
+      });
 }
 
 }  // namespace fulla::drogon

@@ -57,6 +57,15 @@ void AuditController::initApiDocsImpl()
       adminEp("/api/admin/logs", "GET", "List Audit Logs",
               "Get a paginated list of system audit logs.", {"Admin", "Logs"}, {"audit:read"}));
     openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/logs/export", "GET", "Export Audit Logs (CSV)",
+              "P1-6 (#283): CSV export of the audit trail. Same filters as the list endpoint "
+              "plus a mandatory time window (from/to, epoch seconds) unless an explicit "
+              "all=true is given; row cap (audit.export_max_rows, default 500k; `limit` may "
+              "only lower it) — over-cap answers 400 AUDIT_EXPORT_TOO_LARGE. Cells are "
+              "formula-injection hardened (leading = + - @ tab CR get a ' prefix). Audited "
+              "as audit_exported. Memory deployments answer 404.",
+              {"Admin", "Logs"}, {"audit:read"}));
+    openapi::OpenApiGenerator::addEndpoint(
       adminEp("/api/admin/dashboard/stats", "GET", "Get Dashboard Stats",
               "Get dashboard statistics including user count, client count, active tokens, and "
               "failure metrics.",
@@ -73,6 +82,16 @@ void AuditController::listLogs(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     AuditSvc::listLogs(req, sharedCb);
+}
+
+void AuditController::exportLogs(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    AuditSvc::exportLogs(req, sharedCb);
 }
 
 void AuditController::getDashboardStats(

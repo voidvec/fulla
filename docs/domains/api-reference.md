@@ -364,6 +364,8 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `EMAIL_TEMPLATE_CONTENT_REJECTED` | 3018 | VALIDATION | 400 | 邮件模板内容被拒绝 |
 | `EMAIL_TEST_RECIPIENT_DENIED` | 3019 | VALIDATION | 403 | 测试收件人不在白名单 |
 | `EMAIL_TEST_QUOTA_EXCEEDED` | 3020 | VALIDATION | 429 | 测试发送配额已用尽 |
+| `AUDIT_EXPORT_WINDOW_REQUIRED` | 3021 | VALIDATION | 400 | 导出必须限定时间窗 |
+| `AUDIT_EXPORT_TOO_LARGE` | 3022 | VALIDATION | 400 | 导出行数超过上限 |
 | `AUTH_INVALID_CREDENTIALS` | 4001 | AUTHENTICATION | 401 | 用户名或密码错误 |
 | `AUTH_TOKEN_EXPIRED` | 4002 | AUTHENTICATION | 401 | 登录已过期 |
 | `AUTH_TOKEN_INVALID` | 4003 | AUTHENTICATION | 401 | 登录凭证无效 |
