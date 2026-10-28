@@ -56,6 +56,11 @@ export const zhCN: Record<string, string> = {
   // --- P1-6 (#283): audit export guard codes ---
   AUDIT_EXPORT_WINDOW_REQUIRED: '导出审计日志必须限定时间范围（from/to）或显式选择全量导出',
   AUDIT_EXPORT_TOO_LARGE: '导出行数超过上限，请收窄时间范围后重试',
+  // --- P1-3 (#280): claims mapping + custom attributes ---
+  CLAIM_MAPPING_RESERVED_CLAIM: '映射的 claim 名为保留字，不可覆盖标准声明',
+  CLAIM_MAPPING_INVALID_SOURCE: '映射源路径不在白名单（仅 custom_attributes.<key> 或 user.display_name）',
+  CLAIM_MAPPING_FORBIDDEN_SCOPE: '触发 scope 不允许（openid 为必带 scope，禁止挂映射）',
+  CUSTOM_ATTRIBUTES_INVALID: '自定义属性不合法（对象、深度≤2、≤8KB、键名小写字母开头）',
   AUTH_MFA_CODE_INVALID: '验证码不正确',
   AUTH_MFA_NOT_CONFIGURED: '尚未设置双重验证，请先完成设置',
 

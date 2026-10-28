@@ -839,6 +839,152 @@ paths:
       summary: OpenID Connect Discovery
       tags:
       - OpenID Connect
+  /api/admin/claim-mappings:
+    get:
+      description: 'P1-3 (#280): all claim mappings (id_token/userinfo claim
+        publication).'
+      operationId: get_api_admin_claim_mappings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+                  mappings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        scope_name:
+                          type: string
+                        claim_name:
+                          type: string
+                        source_path:
+                          type: string
+                        include_in:
+                          type: string
+                        enabled:
+                          type: boolean
+          description: Mapping list
+      security:
+      - bearerAuth: []
+      summary: List Claim Mappings
+      tags:
+      - Admin
+      - Scopes
+    post:
+      description: 'P1-3 (#280): map a source (custom_attributes.<key> or
+        user.display_name) to a published claim under a trigger scope. Red
+        lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM);
+        scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE);
+        source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).'
+      operationId: post_api_admin_claim_mappings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - scope_name
+              - claim_name
+              - source_path
+              properties:
+                scope_name:
+                  type: string
+                claim_name:
+                  type: string
+                source_path:
+                  type: string
+                include_in:
+                  type: string
+                  enum:
+                  - id_token
+                  - userinfo
+                  - both
+                  default: both
+      responses:
+        '201':
+          description: Mapping created
+        '400':
+          description: Red-line rejection or invalid shape
+      security:
+      - bearerAuth: []
+      summary: Create Claim Mapping
+      tags:
+      - Admin
+      - Scopes
+  /api/admin/claim-mappings/{mappingId}:
+    put:
+      description: 'P1-3 (#280): update a mapping (full body).'
+      operationId: put_api_admin_claim_mappings_{mappingId}
+      parameters:
+      - description: Mapping ID
+        in: path
+        name: mappingId
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - scope_name
+              - claim_name
+              - source_path
+              properties:
+                scope_name:
+                  type: string
+                claim_name:
+                  type: string
+                source_path:
+                  type: string
+                include_in:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Mapping updated
+        '404':
+          description: Mapping not found
+      security:
+      - bearerAuth: []
+      summary: Update Claim Mapping
+      tags:
+      - Admin
+      - Scopes
+    delete:
+      description: 'P1-3 (#280): delete a mapping.'
+      operationId: delete_api_admin_claim_mappings_{mappingId}
+      parameters:
+      - description: Mapping ID
+        in: path
+        name: mappingId
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Mapping deleted
+        '404':
+          description: Mapping not found
+      security:
+      - bearerAuth: []
+      summary: Delete Claim Mapping
+      tags:
+      - Admin
+      - Scopes
   /api/admin/clients:
     get:
       description: Get a paginated list of registered OAuth2 clients.
@@ -4967,6 +5113,50 @@ paths:
       summary: Delete WebAuthn Credential
       tags:
       - WebAuthn
+  /api/me/profile/custom-attributes:
+    get:
+      description: 'P1-3 (#280): the caller''s custom-attributes document
+        (claims-mapping source data). Memory deployments answer 404.'
+      operationId: get_api_me_profile_custom_attributes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  custom_attributes:
+                    type: object
+          description: The attribute document
+      security:
+      - bearerAuth: []
+      summary: Get Custom Attributes
+      tags:
+      - Me
+    put:
+      description: 'P1-3 (#280): FULL-REPLACE the custom-attributes document.
+        Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys
+        ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected
+        (CUSTOM_ATTRIBUTES_INVALID).'
+      operationId: put_api_me_profile_custom_attributes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Document updated
+        '400':
+          description: CUSTOM_ATTRIBUTES_INVALID
+      security:
+      - bearerAuth: []
+      summary: Replace Custom Attributes
+      tags:
+      - Me
   /api/me/webauthn/register/begin:
     post:
       requestBody:

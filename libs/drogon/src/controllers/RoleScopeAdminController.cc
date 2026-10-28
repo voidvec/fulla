@@ -90,6 +90,25 @@ void RoleScopeAdminController::initApiDocsImpl()
       adminEp("/api/admin/roles/{roleId}", "DELETE", "Delete Role",
               "Delete a role. Built-in roles (admin, user) cannot be deleted.", {"Admin", "Roles"},
               {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/claim-mappings", "GET", "List Claim Mappings",
+              "P1-3 (#280): all claim mappings (id_token/userinfo claim publication).",
+              {"Admin", "Scopes"}, {"roles:read"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/claim-mappings", "POST", "Create Claim Mapping",
+              "P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) "
+              "to a published claim under a trigger scope. Red lines: claim_name may "
+              "not be reserved; scope_name may not be openid (CLAIM_MAPPING_* codes).",
+              {"Admin", "Scopes"}, {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/claim-mappings/{mappingId}", "PUT", "Update Claim Mapping",
+              "P1-3 (#280): update a mapping (full body).",
+              {"Admin", "Scopes"}, {"roles:write"}));
+    openapi::OpenApiGenerator::addEndpoint(
+      adminEp("/api/admin/claim-mappings/{mappingId}", "DELETE", "Delete Claim Mapping",
+              "P1-3 (#280): delete a mapping.",
+              {"Admin", "Scopes"}, {"roles:write"}));
+
     // #43 discovery endpoint.
     openapi::OpenApiGenerator::addEndpoint(
       adminEp("/api/admin/scopes/resources", "GET", "Scope-Resource Matrix",
@@ -162,6 +181,53 @@ void RoleScopeAdminController::putRolePermissions(
     auto sharedCb =
       std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
     RoleScopeService::putRolePermissions(req, sharedCb, roleId);
+}
+
+
+// ---------------------------------------------------------------------------
+// P1-3 (#280): claim-mapping CRUD adapters.
+// ---------------------------------------------------------------------------
+
+void RoleScopeAdminController::listClaimMappings(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::listClaimMappings(req, sharedCb);
+}
+
+void RoleScopeAdminController::createClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::createClaimMapping(req, sharedCb);
+}
+
+void RoleScopeAdminController::updateClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &mappingId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::updateClaimMapping(req, sharedCb, mappingId);
+}
+
+void RoleScopeAdminController::deleteClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &mappingId
+)
+{
+    auto sharedCb =
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(std::move(callback));
+    RoleScopeService::deleteClaimMapping(req, sharedCb, mappingId);
 }
 
 void RoleScopeAdminController::listScopes(

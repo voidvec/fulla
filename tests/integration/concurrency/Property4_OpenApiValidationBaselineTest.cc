@@ -39,6 +39,7 @@
 #include <drogon/HttpRequest.h>
 #include <json/json.h>
 
+#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -107,6 +108,7 @@ const std::string &expectedFingerprint()
     // /oauth2/logout, /oauth2/end_session GET+POST, /health/{live,ready},
     // /.well-known/oauth-authorization-server).
     static const std::string kFingerprint =
+      "DELETE /api/admin/claim-mappings/{mappingId}\n"
       "DELETE /api/admin/clients/{clientId}\n"
       "DELETE /api/admin/organizations/{slug}\n"
       "DELETE /api/admin/organizations/{slug}/members/{userId}\n"
@@ -127,6 +129,7 @@ const std::string &expectedFingerprint()
       "GET /.well-known/jwks.json\n"
       "GET /.well-known/oauth-authorization-server\n"
       "GET /.well-known/openid-configuration\n"
+      "GET /api/admin/claim-mappings\n"
       "GET /api/admin/clients\n"
       "GET /api/admin/clients/{clientId}\n"
       "GET /api/admin/clients/{clientId}/scopes\n"
@@ -157,6 +160,7 @@ const std::string &expectedFingerprint()
       "GET /api/me/organizations/{slug}/consents\n"
       "GET /api/me/organizations/{slug}/invitations\n"
       "GET /api/me/organizations/{slug}/members\n"
+      "GET /api/me/profile/custom-attributes\n"
       "GET /api/me/social/links\n"
       "GET /api/me/webauthn/credentials\n"
       "GET /api/verify-email\n"
@@ -173,6 +177,7 @@ const std::string &expectedFingerprint()
       "PATCH /api/admin/organizations/{slug}\n"
       "PATCH /api/me/applications/{clientId}\n"
       "PATCH /api/me/profile\n"
+      "POST /api/admin/claim-mappings\n"
       "POST /api/admin/clients\n"
       "POST /api/admin/clients/{clientId}/reset-secret\n"
       "POST /api/admin/clients/{clientId}/resume\n"
@@ -226,6 +231,7 @@ const std::string &expectedFingerprint()
       "POST /oauth2/token\n"
       "POST /oauth2/webauthn/authenticate/begin\n"
       "POST /oauth2/webauthn/authenticate/finish\n"
+      "PUT /api/admin/claim-mappings/{mappingId}\n"
       "PUT /api/admin/clients/{clientId}\n"
       "PUT /api/admin/clients/{clientId}/scopes\n"
       "PUT /api/admin/email-templates/{key}/{locale}\n"
@@ -235,7 +241,8 @@ const std::string &expectedFingerprint()
       "PUT /api/admin/users/{userId}\n"
       "PUT /api/admin/users/{userId}/disable\n"
       "PUT /api/admin/users/{userId}/roles\n"
-      "PUT /api/me/password\n";
+      "PUT /api/me/password\n"
+      "PUT /api/me/profile/custom-attributes\n";
     return kFingerprint;
 }
 

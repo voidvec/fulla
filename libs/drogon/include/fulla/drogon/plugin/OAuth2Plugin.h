@@ -3,6 +3,7 @@
 #include <drogon/plugins/Plugin.h>
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
+#include <fulla/common/ports/IClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
 // Phase 1.5d (Task 39): the plugin's 3 identity-side members now hold the NEW
@@ -471,6 +472,37 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
         return rolePermissionResolver_;
     }
 
+    /// P1-3 (#280): the claims-mapping provider backing userinfo's mapped
+    /// claims (TokenService holds its own copy injected at wiring time).
+    /// May return nullptr (memory mode / pre-init) — callers degrade to
+    /// the pre-P1-3 response.
+    std::shared_ptr<fulla::common::ports::IClaimMappingsProvider>
+    getClaimMappingsProvider() const
+    {
+        return claimMappingsProvider_;
+    }
+
+    /// P1-3 (#280): resolve the user-profile JSON ({display_name?,
+    /// custom_attributes}) for claim publication, keyed by the token
+    /// subject. Invokes cb with nullopt on any failure.
+    void resolveUserProfileForClaims(
+      const std::string &subject,
+      std::function<void(std::optional<std::string>)> &&cb
+    );
+
+    /// P1-3 (#280): the cached enabled-mapping claim names for
+    /// claims_supported (refreshed at startup and on admin mapping
+    /// writes via refreshMappedClaimNames()).
+    const std::vector<std::string> &getMappedClaimNames() const
+    {
+        return mappedClaimNames_;
+    }
+
+    /// P1-3 (#280): re-read the enabled mappings and update the cached
+    /// claim-name list (fire-and-forget; the next discovery read sees
+    /// the new set).
+    void refreshMappedClaimNames();
+
     std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
     {
         return metrics_;
@@ -533,6 +565,10 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     // P1-8 (#285): shared role->permission resolver (chain-① predicate
     // data source + gate-③ permission rules).
     std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
+    // P1-3 (#285... #280): claims-mapping provider (shared with TokenService).
+    std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+    // P1-3 (#280): cached enabled-mapping claim names (claims_supported).
+    std::vector<std::string> mappedClaimNames_;
     std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
     // M8 Task 40 decision b: Adapter-side observability ports, exposed via
     // getAuditSink()/getMetrics() for Drogon-layer consumers.

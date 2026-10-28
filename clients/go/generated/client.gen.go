@@ -182,6 +182,27 @@ func (e TokenRequestGrantType) Valid() bool {
 	}
 }
 
+// Defines values for PostApiAdminClaimMappingsJSONBodyIncludeIn.
+const (
+	Both     PostApiAdminClaimMappingsJSONBodyIncludeIn = "both"
+	IdToken  PostApiAdminClaimMappingsJSONBodyIncludeIn = "id_token"
+	Userinfo PostApiAdminClaimMappingsJSONBodyIncludeIn = "userinfo"
+)
+
+// Valid indicates whether the value is a known member of the PostApiAdminClaimMappingsJSONBodyIncludeIn enum.
+func (e PostApiAdminClaimMappingsJSONBodyIncludeIn) Valid() bool {
+	switch e {
+	case Both:
+		return true
+	case IdToken:
+		return true
+	case Userinfo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostApiAdminClientsJSONBodyClientType.
 const (
 	PostApiAdminClientsJSONBodyClientTypeCONFIDENTIAL PostApiAdminClientsJSONBodyClientType = "CONFIDENTIAL"
@@ -886,6 +907,26 @@ type WebAuthnRegistrationCredential struct {
 	} `json:"response"`
 }
 
+// PostApiAdminClaimMappingsJSONBody defines parameters for PostApiAdminClaimMappings.
+type PostApiAdminClaimMappingsJSONBody struct {
+	ClaimName  string                                      `json:"claim_name"`
+	IncludeIn  *PostApiAdminClaimMappingsJSONBodyIncludeIn `json:"include_in,omitempty"`
+	ScopeName  string                                      `json:"scope_name"`
+	SourcePath string                                      `json:"source_path"`
+}
+
+// PostApiAdminClaimMappingsJSONBodyIncludeIn defines parameters for PostApiAdminClaimMappings.
+type PostApiAdminClaimMappingsJSONBodyIncludeIn string
+
+// PutApiAdminClaimMappingsMappingIdJSONBody defines parameters for PutApiAdminClaimMappingsMappingId.
+type PutApiAdminClaimMappingsMappingIdJSONBody struct {
+	ClaimName  string  `json:"claim_name"`
+	Enabled    *bool   `json:"enabled,omitempty"`
+	IncludeIn  *string `json:"include_in,omitempty"`
+	ScopeName  string  `json:"scope_name"`
+	SourcePath string  `json:"source_path"`
+}
+
 // PostApiAdminClientsJSONBody defines parameters for PostApiAdminClients.
 type PostApiAdminClientsJSONBody struct {
 	AllowedGrantTypes *string `json:"allowed_grant_types,omitempty"`
@@ -1237,6 +1278,9 @@ type PatchApiMeProfileJSONBody struct {
 	DisplayName *string `json:"display_name,omitempty"`
 }
 
+// PutApiMeProfileCustomAttributesJSONBody defines parameters for PutApiMeProfileCustomAttributes.
+type PutApiMeProfileCustomAttributesJSONBody = map[string]interface{}
+
 // DeleteApiMeSocialLinksProviderParamsProvider defines parameters for DeleteApiMeSocialLinksProvider.
 type DeleteApiMeSocialLinksProviderParamsProvider string
 
@@ -1501,6 +1545,12 @@ type PostOauth2RevokeFormdataBody struct {
 	TokenTypeHint *string `form:"token_type_hint,omitempty" json:"token_type_hint,omitempty"`
 }
 
+// PostApiAdminClaimMappingsJSONRequestBody defines body for PostApiAdminClaimMappings for application/json ContentType.
+type PostApiAdminClaimMappingsJSONRequestBody PostApiAdminClaimMappingsJSONBody
+
+// PutApiAdminClaimMappingsMappingIdJSONRequestBody defines body for PutApiAdminClaimMappingsMappingId for application/json ContentType.
+type PutApiAdminClaimMappingsMappingIdJSONRequestBody PutApiAdminClaimMappingsMappingIdJSONBody
+
 // PostApiAdminClientsJSONRequestBody defines body for PostApiAdminClients for application/json ContentType.
 type PostApiAdminClientsJSONRequestBody PostApiAdminClientsJSONBody
 
@@ -1629,6 +1679,9 @@ type PutApiMePasswordJSONRequestBody = PutApiMePasswordJSONBody
 
 // PatchApiMeProfileJSONRequestBody defines body for PatchApiMeProfile for application/json ContentType.
 type PatchApiMeProfileJSONRequestBody PatchApiMeProfileJSONBody
+
+// PutApiMeProfileCustomAttributesJSONRequestBody defines body for PutApiMeProfileCustomAttributes for application/json ContentType.
+type PutApiMeProfileCustomAttributesJSONRequestBody = PutApiMeProfileCustomAttributesJSONBody
 
 // PostApiMeSocialLinksProviderJSONRequestBody defines body for PostApiMeSocialLinksProvider for application/json ContentType.
 type PostApiMeSocialLinksProviderJSONRequestBody PostApiMeSocialLinksProviderJSONBody
@@ -1881,6 +1934,56 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /.well-known/openid-configuration (the `GetWellKnownOpenidConfiguration` operationId).
 	GetWellKnownOpenidConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminClaimMappings List Claim Mappings
+	//
+	// P1-3 (#280): all claim mappings (id_token/userinfo claim publication).
+	//
+	// Corresponds with GET /api/admin/claim-mappings (the `GetApiAdminClaimMappings` operationId).
+	GetApiAdminClaimMappings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminClaimMappingsWithBody Create Claim Mapping
+	//
+	// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+	PostApiAdminClaimMappingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminClaimMappings Create Claim Mapping
+	//
+	// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+	PostApiAdminClaimMappings(ctx context.Context, body PostApiAdminClaimMappingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiAdminClaimMappingsMappingId Delete Claim Mapping
+	//
+	// P1-3 (#280): delete a mapping.
+	//
+	// Corresponds with DELETE /api/admin/claim-mappings/{mappingId} (the `DeleteApiAdminClaimMappingsMappingId` operationId).
+	DeleteApiAdminClaimMappingsMappingId(ctx context.Context, mappingId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminClaimMappingsMappingIdWithBody Update Claim Mapping
+	//
+	// P1-3 (#280): update a mapping (full body).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+	PutApiAdminClaimMappingsMappingIdWithBody(ctx context.Context, mappingId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminClaimMappingsMappingId Update Claim Mapping
+	//
+	// P1-3 (#280): update a mapping (full body).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+	PutApiAdminClaimMappingsMappingId(ctx context.Context, mappingId int, body PutApiAdminClaimMappingsMappingIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApiAdminClients List OAuth2 Clients
 	//
@@ -2962,6 +3065,31 @@ type ClientInterface interface {
 	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
 	PatchApiMeProfile(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetApiMeProfileCustomAttributes Get Custom Attributes
+	//
+	// P1-3 (#280): the caller's custom-attributes document (claims-mapping source data). Memory deployments answer 404.
+	//
+	// Corresponds with GET /api/me/profile/custom-attributes (the `GetApiMeProfileCustomAttributes` operationId).
+	GetApiMeProfileCustomAttributes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiMeProfileCustomAttributesWithBody Replace Custom Attributes
+	//
+	// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+	PutApiMeProfileCustomAttributesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiMeProfileCustomAttributes Replace Custom Attributes
+	//
+	// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+	PutApiMeProfileCustomAttributes(ctx context.Context, body PutApiMeProfileCustomAttributesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiMeSocialLinks List Linked Social Accounts
 	//
 	// List the social provider identities (github/google/wechat) linked to the current user. The seeded password-subject mapping (provider=local) is not a social identity and is excluded. Requires the `profile` scope.
@@ -3512,6 +3640,116 @@ func (c *Client) GetWellKnownOauthAuthorizationServer(ctx context.Context, reqEd
 // Corresponds with GET /.well-known/openid-configuration (the `GetWellKnownOpenidConfiguration` operationId).
 func (c *Client) GetWellKnownOpenidConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetWellKnownOpenidConfigurationRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminClaimMappings List Claim Mappings
+//
+// P1-3 (#280): all claim mappings (id_token/userinfo claim publication).
+//
+// Corresponds with GET /api/admin/claim-mappings (the `GetApiAdminClaimMappings` operationId).
+func (c *Client) GetApiAdminClaimMappings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminClaimMappingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminClaimMappingsWithBody Create Claim Mapping
+//
+// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+func (c *Client) PostApiAdminClaimMappingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClaimMappingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminClaimMappings Create Claim Mapping
+//
+// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+func (c *Client) PostApiAdminClaimMappings(ctx context.Context, body PostApiAdminClaimMappingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminClaimMappingsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiAdminClaimMappingsMappingId Delete Claim Mapping
+//
+// P1-3 (#280): delete a mapping.
+//
+// Corresponds with DELETE /api/admin/claim-mappings/{mappingId} (the `DeleteApiAdminClaimMappingsMappingId` operationId).
+func (c *Client) DeleteApiAdminClaimMappingsMappingId(ctx context.Context, mappingId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiAdminClaimMappingsMappingIdRequest(c.Server, mappingId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminClaimMappingsMappingIdWithBody Update Claim Mapping
+//
+// P1-3 (#280): update a mapping (full body).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+func (c *Client) PutApiAdminClaimMappingsMappingIdWithBody(ctx context.Context, mappingId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminClaimMappingsMappingIdRequestWithBody(c.Server, mappingId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminClaimMappingsMappingId Update Claim Mapping
+//
+// P1-3 (#280): update a mapping (full body).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+func (c *Client) PutApiAdminClaimMappingsMappingId(ctx context.Context, mappingId int, body PutApiAdminClaimMappingsMappingIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminClaimMappingsMappingIdRequest(c.Server, mappingId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5902,6 +6140,61 @@ func (c *Client) PatchApiMeProfile(ctx context.Context, body PatchApiMeProfileJS
 	return c.Client.Do(req)
 }
 
+// GetApiMeProfileCustomAttributes Get Custom Attributes
+//
+// P1-3 (#280): the caller's custom-attributes document (claims-mapping source data). Memory deployments answer 404.
+//
+// Corresponds with GET /api/me/profile/custom-attributes (the `GetApiMeProfileCustomAttributes` operationId).
+func (c *Client) GetApiMeProfileCustomAttributes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiMeProfileCustomAttributesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiMeProfileCustomAttributesWithBody Replace Custom Attributes
+//
+// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+func (c *Client) PutApiMeProfileCustomAttributesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiMeProfileCustomAttributesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiMeProfileCustomAttributes Replace Custom Attributes
+//
+// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+func (c *Client) PutApiMeProfileCustomAttributes(ctx context.Context, body PutApiMeProfileCustomAttributesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiMeProfileCustomAttributesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiMeSocialLinks List Linked Social Accounts
 //
 // List the social provider identities (github/google/wechat) linked to the current user. The seeded password-subject mapping (provider=local) is not a social identity and is excluded. Requires the `profile` scope.
@@ -7087,6 +7380,154 @@ func NewGetWellKnownOpenidConfigurationRequest(server string) (*http.Request, er
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetApiAdminClaimMappingsRequest constructs an http.Request for the GetApiAdminClaimMappings method
+func NewGetApiAdminClaimMappingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/claim-mappings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiAdminClaimMappingsRequest calls the generic PostApiAdminClaimMappings builder with application/json body
+func NewPostApiAdminClaimMappingsRequest(server string, body PostApiAdminClaimMappingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminClaimMappingsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiAdminClaimMappingsRequestWithBody constructs an http.Request for the PostApiAdminClaimMappings method, with any body, and a specified content type
+func NewPostApiAdminClaimMappingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/claim-mappings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteApiAdminClaimMappingsMappingIdRequest constructs an http.Request for the DeleteApiAdminClaimMappingsMappingId method
+func NewDeleteApiAdminClaimMappingsMappingIdRequest(server string, mappingId int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "mappingId", mappingId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/claim-mappings/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiAdminClaimMappingsMappingIdRequest calls the generic PutApiAdminClaimMappingsMappingId builder with application/json body
+func NewPutApiAdminClaimMappingsMappingIdRequest(server string, mappingId int, body PutApiAdminClaimMappingsMappingIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminClaimMappingsMappingIdRequestWithBody(server, mappingId, "application/json", bodyReader)
+}
+
+// NewPutApiAdminClaimMappingsMappingIdRequestWithBody constructs an http.Request for the PutApiAdminClaimMappingsMappingId method, with any body, and a specified content type
+func NewPutApiAdminClaimMappingsMappingIdRequestWithBody(server string, mappingId int, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "mappingId", mappingId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/claim-mappings/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10644,6 +11085,73 @@ func NewPatchApiMeProfileRequestWithBody(server string, contentType string, body
 	return req, nil
 }
 
+// NewGetApiMeProfileCustomAttributesRequest constructs an http.Request for the GetApiMeProfileCustomAttributes method
+func NewGetApiMeProfileCustomAttributesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/profile/custom-attributes")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiMeProfileCustomAttributesRequest calls the generic PutApiMeProfileCustomAttributes builder with application/json body
+func NewPutApiMeProfileCustomAttributesRequest(server string, body PutApiMeProfileCustomAttributesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiMeProfileCustomAttributesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPutApiMeProfileCustomAttributesRequestWithBody constructs an http.Request for the PutApiMeProfileCustomAttributes method, with any body, and a specified content type
+func NewPutApiMeProfileCustomAttributesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/me/profile/custom-attributes")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetApiMeSocialLinksRequest constructs an http.Request for the GetApiMeSocialLinks method
 func NewGetApiMeSocialLinksRequest(server string) (*http.Request, error) {
 	var err error
@@ -12545,6 +13053,60 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /.well-known/openid-configuration (the `GetWellKnownOpenidConfiguration` operationId).
 	GetWellKnownOpenidConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetWellKnownOpenidConfigurationResponse, error)
 
+	// GetApiAdminClaimMappingsWithResponse List Claim Mappings
+	//
+	// P1-3 (#280): all claim mappings (id_token/userinfo claim publication).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/claim-mappings (the `GetApiAdminClaimMappings` operationId).
+	GetApiAdminClaimMappingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminClaimMappingsResponse, error)
+
+	// PostApiAdminClaimMappingsWithBodyWithResponse Create Claim Mapping
+	//
+	// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+	PostApiAdminClaimMappingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClaimMappingsResponse, error)
+
+	// PostApiAdminClaimMappingsWithResponse Create Claim Mapping
+	//
+	// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+	PostApiAdminClaimMappingsWithResponse(ctx context.Context, body PostApiAdminClaimMappingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClaimMappingsResponse, error)
+
+	// DeleteApiAdminClaimMappingsMappingIdWithResponse Delete Claim Mapping
+	//
+	// P1-3 (#280): delete a mapping.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/admin/claim-mappings/{mappingId} (the `DeleteApiAdminClaimMappingsMappingId` operationId).
+	DeleteApiAdminClaimMappingsMappingIdWithResponse(ctx context.Context, mappingId int, reqEditors ...RequestEditorFn) (*DeleteApiAdminClaimMappingsMappingIdResponse, error)
+
+	// PutApiAdminClaimMappingsMappingIdWithBodyWithResponse Update Claim Mapping
+	//
+	// P1-3 (#280): update a mapping (full body).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+	PutApiAdminClaimMappingsMappingIdWithBodyWithResponse(ctx context.Context, mappingId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminClaimMappingsMappingIdResponse, error)
+
+	// PutApiAdminClaimMappingsMappingIdWithResponse Update Claim Mapping
+	//
+	// P1-3 (#280): update a mapping (full body).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+	PutApiAdminClaimMappingsMappingIdWithResponse(ctx context.Context, mappingId int, body PutApiAdminClaimMappingsMappingIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminClaimMappingsMappingIdResponse, error)
+
 	// GetApiAdminClientsWithResponse List OAuth2 Clients
 	//
 	// Get a paginated list of registered OAuth2 clients.
@@ -13715,6 +14277,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /api/me/profile (the `PatchApiMeProfile` operationId).
 	PatchApiMeProfileWithResponse(ctx context.Context, body PatchApiMeProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiMeProfileResponse, error)
 
+	// GetApiMeProfileCustomAttributesWithResponse Get Custom Attributes
+	//
+	// P1-3 (#280): the caller's custom-attributes document (claims-mapping source data). Memory deployments answer 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/me/profile/custom-attributes (the `GetApiMeProfileCustomAttributes` operationId).
+	GetApiMeProfileCustomAttributesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeProfileCustomAttributesResponse, error)
+
+	// PutApiMeProfileCustomAttributesWithBodyWithResponse Replace Custom Attributes
+	//
+	// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+	PutApiMeProfileCustomAttributesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiMeProfileCustomAttributesResponse, error)
+
+	// PutApiMeProfileCustomAttributesWithResponse Replace Custom Attributes
+	//
+	// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+	PutApiMeProfileCustomAttributesWithResponse(ctx context.Context, body PutApiMeProfileCustomAttributesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiMeProfileCustomAttributesResponse, error)
+
 	// GetApiMeSocialLinksWithResponse List Linked Social Accounts
 	//
 	// List the social provider identities (github/google/wechat) linked to the current user. The seeded password-subject mapping (provider=local) is not a social identity and is excluded. Requires the `profile` scope.
@@ -14373,6 +14962,171 @@ func (r GetWellKnownOpenidConfigurationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetWellKnownOpenidConfigurationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminClaimMappingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Mappings *[]struct {
+			ClaimName  *string `json:"claim_name,omitempty"`
+			Enabled    *bool   `json:"enabled,omitempty"`
+			Id         *int    `json:"id,omitempty"`
+			IncludeIn  *string `json:"include_in,omitempty"`
+			ScopeName  *string `json:"scope_name,omitempty"`
+			SourcePath *string `json:"source_path,omitempty"`
+		} `json:"mappings,omitempty"`
+		Status *string `json:"status,omitempty"`
+		Total  *int    `json:"total,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminClaimMappingsResponse) GetJSON200() *struct {
+	Mappings *[]struct {
+		ClaimName  *string `json:"claim_name,omitempty"`
+		Enabled    *bool   `json:"enabled,omitempty"`
+		Id         *int    `json:"id,omitempty"`
+		IncludeIn  *string `json:"include_in,omitempty"`
+		ScopeName  *string `json:"scope_name,omitempty"`
+		SourcePath *string `json:"source_path,omitempty"`
+	} `json:"mappings,omitempty"`
+	Status *string `json:"status,omitempty"`
+	Total  *int    `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminClaimMappingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminClaimMappingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminClaimMappingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminClaimMappingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAdminClaimMappingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminClaimMappingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminClaimMappingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminClaimMappingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminClaimMappingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiAdminClaimMappingsMappingIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiAdminClaimMappingsMappingIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiAdminClaimMappingsMappingIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiAdminClaimMappingsMappingIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiAdminClaimMappingsMappingIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutApiAdminClaimMappingsMappingIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PutApiAdminClaimMappingsMappingIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiAdminClaimMappingsMappingIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiAdminClaimMappingsMappingIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutApiAdminClaimMappingsMappingIdResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18946,6 +19700,87 @@ func (r PatchApiMeProfileResponse) ContentType() string {
 	return ""
 }
 
+type GetApiMeProfileCustomAttributesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		CustomAttributes *map[string]interface{} `json:"custom_attributes,omitempty"`
+		Status           *string                 `json:"status,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiMeProfileCustomAttributesResponse) GetJSON200() *struct {
+	CustomAttributes *map[string]interface{} `json:"custom_attributes,omitempty"`
+	Status           *string                 `json:"status,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiMeProfileCustomAttributesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiMeProfileCustomAttributesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiMeProfileCustomAttributesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiMeProfileCustomAttributesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutApiMeProfileCustomAttributesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PutApiMeProfileCustomAttributesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiMeProfileCustomAttributesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiMeProfileCustomAttributesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutApiMeProfileCustomAttributesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetApiMeSocialLinksResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20885,6 +21720,96 @@ func (c *ClientWithResponses) GetWellKnownOpenidConfigurationWithResponse(ctx co
 		return nil, err
 	}
 	return ParseGetWellKnownOpenidConfigurationResponse(rsp)
+}
+
+// GetApiAdminClaimMappingsWithResponse List Claim Mappings
+//
+// P1-3 (#280): all claim mappings (id_token/userinfo claim publication).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/claim-mappings (the `GetApiAdminClaimMappings` operationId).
+func (c *ClientWithResponses) GetApiAdminClaimMappingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminClaimMappingsResponse, error) {
+	rsp, err := c.GetApiAdminClaimMappings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminClaimMappingsResponse(rsp)
+}
+
+// PostApiAdminClaimMappingsWithBodyWithResponse Create Claim Mapping
+//
+// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+func (c *ClientWithResponses) PostApiAdminClaimMappingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminClaimMappingsResponse, error) {
+	rsp, err := c.PostApiAdminClaimMappingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClaimMappingsResponse(rsp)
+}
+
+// PostApiAdminClaimMappingsWithResponse Create Claim Mapping
+//
+// P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name must not be reserved (CLAIM_MAPPING_RESERVED_CLAIM); scope_name must not be openid (CLAIM_MAPPING_FORBIDDEN_SCOPE); source_path must be whitelisted (CLAIM_MAPPING_INVALID_SOURCE).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/claim-mappings (the `PostApiAdminClaimMappings` operationId).
+func (c *ClientWithResponses) PostApiAdminClaimMappingsWithResponse(ctx context.Context, body PostApiAdminClaimMappingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminClaimMappingsResponse, error) {
+	rsp, err := c.PostApiAdminClaimMappings(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminClaimMappingsResponse(rsp)
+}
+
+// DeleteApiAdminClaimMappingsMappingIdWithResponse Delete Claim Mapping
+//
+// P1-3 (#280): delete a mapping.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/admin/claim-mappings/{mappingId} (the `DeleteApiAdminClaimMappingsMappingId` operationId).
+func (c *ClientWithResponses) DeleteApiAdminClaimMappingsMappingIdWithResponse(ctx context.Context, mappingId int, reqEditors ...RequestEditorFn) (*DeleteApiAdminClaimMappingsMappingIdResponse, error) {
+	rsp, err := c.DeleteApiAdminClaimMappingsMappingId(ctx, mappingId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiAdminClaimMappingsMappingIdResponse(rsp)
+}
+
+// PutApiAdminClaimMappingsMappingIdWithBodyWithResponse Update Claim Mapping
+//
+// P1-3 (#280): update a mapping (full body).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+func (c *ClientWithResponses) PutApiAdminClaimMappingsMappingIdWithBodyWithResponse(ctx context.Context, mappingId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminClaimMappingsMappingIdResponse, error) {
+	rsp, err := c.PutApiAdminClaimMappingsMappingIdWithBody(ctx, mappingId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminClaimMappingsMappingIdResponse(rsp)
+}
+
+// PutApiAdminClaimMappingsMappingIdWithResponse Update Claim Mapping
+//
+// P1-3 (#280): update a mapping (full body).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/claim-mappings/{mappingId} (the `PutApiAdminClaimMappingsMappingId` operationId).
+func (c *ClientWithResponses) PutApiAdminClaimMappingsMappingIdWithResponse(ctx context.Context, mappingId int, body PutApiAdminClaimMappingsMappingIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminClaimMappingsMappingIdResponse, error) {
+	rsp, err := c.PutApiAdminClaimMappingsMappingId(ctx, mappingId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminClaimMappingsMappingIdResponse(rsp)
 }
 
 // GetApiAdminClientsWithResponse List OAuth2 Clients
@@ -22837,6 +23762,51 @@ func (c *ClientWithResponses) PatchApiMeProfileWithResponse(ctx context.Context,
 	return ParsePatchApiMeProfileResponse(rsp)
 }
 
+// GetApiMeProfileCustomAttributesWithResponse Get Custom Attributes
+//
+// P1-3 (#280): the caller's custom-attributes document (claims-mapping source data). Memory deployments answer 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/me/profile/custom-attributes (the `GetApiMeProfileCustomAttributes` operationId).
+func (c *ClientWithResponses) GetApiMeProfileCustomAttributesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiMeProfileCustomAttributesResponse, error) {
+	rsp, err := c.GetApiMeProfileCustomAttributes(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiMeProfileCustomAttributesResponse(rsp)
+}
+
+// PutApiMeProfileCustomAttributesWithBodyWithResponse Replace Custom Attributes
+//
+// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+func (c *ClientWithResponses) PutApiMeProfileCustomAttributesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiMeProfileCustomAttributesResponse, error) {
+	rsp, err := c.PutApiMeProfileCustomAttributesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiMeProfileCustomAttributesResponse(rsp)
+}
+
+// PutApiMeProfileCustomAttributesWithResponse Replace Custom Attributes
+//
+// P1-3 (#280): FULL-REPLACE the custom-attributes document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/me/profile/custom-attributes (the `PutApiMeProfileCustomAttributes` operationId).
+func (c *ClientWithResponses) PutApiMeProfileCustomAttributesWithResponse(ctx context.Context, body PutApiMeProfileCustomAttributesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiMeProfileCustomAttributesResponse, error) {
+	rsp, err := c.PutApiMeProfileCustomAttributes(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiMeProfileCustomAttributesResponse(rsp)
+}
+
 // GetApiMeSocialLinksWithResponse List Linked Social Accounts
 //
 // List the social provider identities (github/google/wechat) linked to the current user. The seeded password-subject mapping (provider=local) is not a social identity and is excluded. Requires the `profile` scope.
@@ -23810,6 +24780,91 @@ func ParseGetWellKnownOpenidConfigurationResponse(rsp *http.Response) (*GetWellK
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminClaimMappingsResponse parses an HTTP response from a GetApiAdminClaimMappingsWithResponse call
+func ParseGetApiAdminClaimMappingsResponse(rsp *http.Response) (*GetApiAdminClaimMappingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminClaimMappingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Mappings *[]struct {
+				ClaimName  *string `json:"claim_name,omitempty"`
+				Enabled    *bool   `json:"enabled,omitempty"`
+				Id         *int    `json:"id,omitempty"`
+				IncludeIn  *string `json:"include_in,omitempty"`
+				ScopeName  *string `json:"scope_name,omitempty"`
+				SourcePath *string `json:"source_path,omitempty"`
+			} `json:"mappings,omitempty"`
+			Status *string `json:"status,omitempty"`
+			Total  *int    `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAdminClaimMappingsResponse parses an HTTP response from a PostApiAdminClaimMappingsWithResponse call
+func ParsePostApiAdminClaimMappingsResponse(rsp *http.Response) (*PostApiAdminClaimMappingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminClaimMappingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiAdminClaimMappingsMappingIdResponse parses an HTTP response from a DeleteApiAdminClaimMappingsMappingIdWithResponse call
+func ParseDeleteApiAdminClaimMappingsMappingIdResponse(rsp *http.Response) (*DeleteApiAdminClaimMappingsMappingIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiAdminClaimMappingsMappingIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePutApiAdminClaimMappingsMappingIdResponse parses an HTTP response from a PutApiAdminClaimMappingsMappingIdWithResponse call
+func ParsePutApiAdminClaimMappingsMappingIdResponse(rsp *http.Response) (*PutApiAdminClaimMappingsMappingIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiAdminClaimMappingsMappingIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
@@ -26742,6 +27797,51 @@ func ParsePatchApiMeProfileResponse(rsp *http.Response) (*PatchApiMeProfileRespo
 		}
 		response.JSON404 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetApiMeProfileCustomAttributesResponse parses an HTTP response from a GetApiMeProfileCustomAttributesWithResponse call
+func ParseGetApiMeProfileCustomAttributesResponse(rsp *http.Response) (*GetApiMeProfileCustomAttributesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiMeProfileCustomAttributesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			CustomAttributes *map[string]interface{} `json:"custom_attributes,omitempty"`
+			Status           *string                 `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutApiMeProfileCustomAttributesResponse parses an HTTP response from a PutApiMeProfileCustomAttributesWithResponse call
+func ParsePutApiMeProfileCustomAttributesResponse(rsp *http.Response) (*PutApiMeProfileCustomAttributesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiMeProfileCustomAttributesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil

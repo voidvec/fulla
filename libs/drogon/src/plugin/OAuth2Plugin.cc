@@ -3,6 +3,8 @@
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <fulla/drogon/adapters/DrogonLogger.h>
 #include <fulla/drogon/adapters/StorageOrgConsentResolver.h>
+#include <algorithm>
+#include <fulla/drogon/adapters/StorageClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/adapters/StorageOrgContextResolver.h>
 #include <fulla/drogon/adapters/OpenSslCryptoProvider.h>
@@ -274,6 +276,37 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
         tokenService_->setOrgContextResolver(
           std::make_shared<fulla::drogon::adapters::StorageOrgContextResolver>(orgCtxDb)
         );
+    }
+    // P1-3 (#280): claims-mapping publication. The claim_mappings table
+    // and the user profile JSON are Postgres concerns regardless of the
+    // oauth2 storage type (same single-Postgres-home rule as the M1
+    // org-context resolver above); memory mode wires nothing and the
+    // TokenService keeps the pre-P1-3 claim set byte-for-byte.
+    if (storageType_ != "memory")
+    {
+        ::drogon::orm::DbClientPtr claimsDb;
+        try
+        {
+            claimsDb = ::drogon::app().getDbClient();
+        }
+        catch (...)
+        {
+            claimsDb = nullptr;
+        }
+        if (claimsDb)
+        {
+            claimMappingsProvider_ =
+              std::make_shared<fulla::drogon::adapters::StorageClaimMappingsProvider>(
+                claimsDb);
+            tokenService_->setClaimMappingsProvider(claimMappingsProvider_);
+            tokenService_->setUserProfileResolver(
+              [claimsDb](const std::string &subject,
+                         std::function<void(std::optional<std::string>)> &&cb) {
+                  fulla::drogon::adapters::resolveUserProfileJson(
+                    claimsDb, subject, std::move(cb));
+              });
+            refreshMappedClaimNames();
+        }
     }
     // v1.4.0 M2 (design §2.2, R-M2-1): the org-consent half of the
     // authorize-time consent UNION. Same storage-type guard and the same
@@ -1223,6 +1256,53 @@ void OAuth2Plugin::saveTokenPair(
     LOG_ERROR << "saveTokenPair: no token repository configured";
     if (callback)
         callback(false);
+}
+
+void OAuth2Plugin::refreshMappedClaimNames()
+{
+    // P1-3 (#280): cache refresh for claims_supported. Fire-and-forget;
+    // failures keep the previous set (discovery then under-reports,
+    // which is the honest direction for a cache).
+    if (!claimMappingsProvider_)
+        return;
+    claimMappingsProvider_->getEnabledMappings(
+      [this](std::vector<fulla::common::ports::ClaimMappingEntry> mappings) {
+          std::vector<std::string> names;
+          names.reserve(mappings.size());
+          for (const auto &m : mappings)
+              names.push_back(m.claimName);
+          std::sort(names.begin(), names.end());
+          names.erase(std::unique(names.begin(), names.end()), names.end());
+          mappedClaimNames_ = std::move(names);
+      });
+}
+
+void OAuth2Plugin::resolveUserProfileForClaims(
+  const std::string &subject,
+  std::function<void(std::optional<std::string>)> &&cb
+)
+{
+    // P1-3 (#280): userinfo's mapped-claims hop. Memory mode / pre-init
+    // resolves nothing (absence, the org_ctx failure model).
+    if (storageType_ == "memory" || !claimMappingsProvider_)
+    {
+        cb(std::nullopt);
+        return;
+    }
+    ::drogon::orm::DbClientPtr db;
+    try
+    {
+        db = ::drogon::app().getDbClient();
+    }
+    catch (...)
+    {
+    }
+    if (!db)
+    {
+        cb(std::nullopt);
+        return;
+    }
+    fulla::drogon::adapters::resolveUserProfileJson(db, subject, std::move(cb));
 }
 
 void OAuth2Plugin::getUserInfo(

@@ -23,6 +23,8 @@ from .delete_api_me_social_links_provider_provider import DeleteApiMeSocialLinks
 from .device_authorization_response import DeviceAuthorizationResponse
 from .error import Error
 from .error_envelope import ErrorEnvelope
+from .get_api_admin_claim_mappings_response_200 import GetApiAdminClaimMappingsResponse200
+from .get_api_admin_claim_mappings_response_200_mappings_item import GetApiAdminClaimMappingsResponse200MappingsItem
 from .get_api_admin_dashboard_response_200 import GetApiAdminDashboardResponse200
 from .get_api_admin_dashboard_stats_response_200 import GetApiAdminDashboardStatsResponse200
 from .get_api_admin_email_templates_response_200 import GetApiAdminEmailTemplatesResponse200
@@ -89,6 +91,10 @@ from .get_api_me_organizations_slug_members_response_200_members_item import (
 from .get_api_me_organizations_slug_members_response_200_members_item_role import (
     GetApiMeOrganizationsSlugMembersResponse200MembersItemRole,
 )
+from .get_api_me_profile_custom_attributes_response_200 import GetApiMeProfileCustomAttributesResponse200
+from .get_api_me_profile_custom_attributes_response_200_custom_attributes import (
+    GetApiMeProfileCustomAttributesResponse200CustomAttributes,
+)
 from .get_oauth_2_authorize_context_response_200 import GetOauth2AuthorizeContextResponse200
 from .get_oauth_2_authorize_context_response_200_org_type_0 import GetOauth2AuthorizeContextResponse200OrgType0
 from .get_oauth_2_consent_context_response_200 import GetOauth2ConsentContextResponse200
@@ -117,6 +123,8 @@ from .patch_api_me_applications_client_id_body import PatchApiMeApplicationsClie
 from .patch_api_me_applications_client_id_response_200 import PatchApiMeApplicationsClientIdResponse200
 from .patch_api_me_profile_body import PatchApiMeProfileBody
 from .patch_api_me_profile_response_200 import PatchApiMeProfileResponse200
+from .post_api_admin_claim_mappings_body import PostApiAdminClaimMappingsBody
+from .post_api_admin_claim_mappings_body_include_in import PostApiAdminClaimMappingsBodyIncludeIn
 from .post_api_admin_clients_body import PostApiAdminClientsBody
 from .post_api_admin_clients_body_client_type import PostApiAdminClientsBodyClientType
 from .post_api_admin_clients_client_id_reset_secret_body import PostApiAdminClientsClientIdResetSecretBody
@@ -213,6 +221,7 @@ from .post_oauth_2_password_change_body import PostOauth2PasswordChangeBody
 from .post_oauth_2_register_body import PostOauth2RegisterBody
 from .post_oauth_2_register_body_client_type import PostOauth2RegisterBodyClientType
 from .post_oauth_2_revoke_body import PostOauth2RevokeBody
+from .put_api_admin_claim_mappings_mapping_id_body import PutApiAdminClaimMappingsMappingIdBody
 from .put_api_admin_clients_client_id_body import PutApiAdminClientsClientIdBody
 from .put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
 from .put_api_admin_email_templates_key_locale_body import PutApiAdminEmailTemplatesKeyLocaleBody
@@ -223,6 +232,7 @@ from .put_api_admin_users_user_id_body import PutApiAdminUsersUserIdBody
 from .put_api_admin_users_user_id_disable_body import PutApiAdminUsersUserIdDisableBody
 from .put_api_admin_users_user_id_roles_body import PutApiAdminUsersUserIdRolesBody
 from .put_api_me_password_body import PutApiMePasswordBody
+from .put_api_me_profile_custom_attributes_body import PutApiMeProfileCustomAttributesBody
 from .social_link_entry import SocialLinkEntry
 from .social_link_entry_provider import SocialLinkEntryProvider
 from .social_link_result import SocialLinkResult
@@ -253,6 +263,8 @@ __all__ = (
     "DeviceAuthorizationResponse",
     "Error",
     "ErrorEnvelope",
+    "GetApiAdminClaimMappingsResponse200",
+    "GetApiAdminClaimMappingsResponse200MappingsItem",
     "GetApiAdminDashboardResponse200",
     "GetApiAdminDashboardStatsResponse200",
     "GetApiAdminEmailTemplatesResponse200",
@@ -291,6 +303,8 @@ __all__ = (
     "GetApiMeOrganizationsSlugMembersResponse200",
     "GetApiMeOrganizationsSlugMembersResponse200MembersItem",
     "GetApiMeOrganizationsSlugMembersResponse200MembersItemRole",
+    "GetApiMeProfileCustomAttributesResponse200",
+    "GetApiMeProfileCustomAttributesResponse200CustomAttributes",
     "GetOauth2AuthorizeContextResponse200",
     "GetOauth2AuthorizeContextResponse200OrgType0",
     "GetOauth2ConsentContextResponse200",
@@ -317,6 +331,8 @@ __all__ = (
     "PatchApiMeApplicationsClientIdResponse200",
     "PatchApiMeProfileBody",
     "PatchApiMeProfileResponse200",
+    "PostApiAdminClaimMappingsBody",
+    "PostApiAdminClaimMappingsBodyIncludeIn",
     "PostApiAdminClientsBody",
     "PostApiAdminClientsBodyClientType",
     "PostApiAdminClientsClientIdResetSecretBody",
@@ -391,6 +407,7 @@ __all__ = (
     "PostOauth2RegisterBody",
     "PostOauth2RegisterBodyClientType",
     "PostOauth2RevokeBody",
+    "PutApiAdminClaimMappingsMappingIdBody",
     "PutApiAdminClientsClientIdBody",
     "PutApiAdminClientsClientIdScopesBody",
     "PutApiAdminEmailTemplatesKeyLocaleBody",
@@ -401,6 +418,7 @@ __all__ = (
     "PutApiAdminUsersUserIdDisableBody",
     "PutApiAdminUsersUserIdRolesBody",
     "PutApiMePasswordBody",
+    "PutApiMeProfileCustomAttributesBody",
     "SocialLinkEntry",
     "SocialLinkEntryProvider",
     "SocialLinkResult",

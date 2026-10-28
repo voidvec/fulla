@@ -2,6 +2,8 @@
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
+#include <fulla/drogon/utils/ClaimMappingValidator.h>
+#include <fulla/storage/postgres/models/ClaimMappings.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/models/Permissions.h>
 #include <fulla/storage/postgres/models/RolePermissions.h>
@@ -78,7 +80,33 @@ Json::Value scopeRowToJson(const Oauth2Scopes &row)
     scope["requires_admin_role"] = row.getValueOfRequiresAdminRole();
     return scope;
 }
+
+// P1-3 (#280): claim-mapping audit + the discovery cache refresh.
+void auditClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  const char *action,
+  const std::string &targetId
+)
+{
+    auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+    if (!plugin)
+        return;
+    std::string actorId;
+    try
+    {
+        actorId = req->getAttributes()->get<std::string>("userId");
+    }
+    catch (...)
+    {
+    }
+    ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+      plugin->getAuditSink(), action, "success", req, actorId, "claim_mapping", targetId,
+      Json::Value());
+    // claims_supported reflects enabled mappings — refresh the cache.
+    plugin->refreshMappedClaimNames();
+}
 }  // namespace
+
 
 void RoleScopeAdminService::listRoles(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
 {
@@ -619,6 +647,283 @@ void RoleScopeAdminService::deleteRole(
           );
       }
     );
+}
+
+
+// ---------------------------------------------------------------------------
+// P1-3 (#280): claim-mapping CRUD.
+// ---------------------------------------------------------------------------
+
+void RoleScopeAdminService::listClaimMappings(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb
+)
+{
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+    try
+    {
+        Mapper<ClaimMappings> mapper(db);
+        mapper.findBy(
+          Criteria(ClaimMappings::Cols::_id, CompareOperator::GT, 0),
+          [cb](const std::vector<ClaimMappings> &rows) {
+              Json::Value json;
+              json["status"] = "success";
+              Json::Value arr(Json::arrayValue);
+              for (const auto &row : rows)
+              {
+                  Json::Value m;
+                  m["id"] = row.getValueOfId();
+                  m["scope_name"] = row.getValueOfScopeName();
+                  m["claim_name"] = row.getValueOfClaimName();
+                  m["source_path"] = row.getValueOfSourcePath();
+                  m["include_in"] = row.getValueOfIncludeIn();
+                  m["enabled"] = row.getValueOfEnabled();
+                  arr.append(m);
+              }
+              json["mappings"] = arr;
+              json["total"] = static_cast<Json::Int64>(rows.size());
+              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(req, cb, "DB_QUERY_ERROR",
+                           std::string("list claim mappings: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "list claim mappings: Mapper construction failed");
+    }
+}
+
+namespace
+{
+// Shared parse+validate for create/update bodies; returns "" on success.
+std::string parseClaimMappingBody(
+  const ::drogon::HttpRequestPtr &req,
+  const RoleScopeAdminService::ResponseCallback &cb,
+  std::shared_ptr<Json::Value> &jsonBody,
+  std::string &scopeName,
+  std::string &claimName,
+  std::string &sourcePath,
+  std::string &includeIn
+)
+{
+    jsonBody = req->getJsonObject();
+    if (!jsonBody)
+        return "JSON body required";
+    scopeName = (*jsonBody).get("scope_name", "").asString();
+    claimName = (*jsonBody).get("claim_name", "").asString();
+    sourcePath = (*jsonBody).get("source_path", "").asString();
+    includeIn = (*jsonBody).get("include_in", "both").asString();
+
+    // The three security red lines route to their dedicated codes so the
+    // admin UI can explain each; everything else is generic VALIDATION.
+    if (scopeName == "openid")
+    {
+        respondError(req, cb, "CLAIM_MAPPING_FORBIDDEN_SCOPE",
+                     "scope_name 'openid' is forbidden (always granted)");
+        return "";
+    }
+    const std::string full =
+      ::fulla::drogon::utils::validateClaimMapping(scopeName, claimName, sourcePath, includeIn);
+    if (full.find("reserved") != std::string::npos)
+    {
+        respondError(req, cb, "CLAIM_MAPPING_RESERVED_CLAIM", full);
+        return "";
+    }
+    if (full.find("source_path") != std::string::npos)
+    {
+        respondError(req, cb, "CLAIM_MAPPING_INVALID_SOURCE", full);
+        return "";
+    }
+    if (!full.empty())
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", full);
+        return "";
+    }
+    return "ok";
+}
+}  // namespace
+
+void RoleScopeAdminService::createClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb
+)
+{
+    std::shared_ptr<Json::Value> jsonBody;
+    std::string scopeName, claimName, sourcePath, includeIn;
+    const std::string gate = parseClaimMappingBody(req, cb, jsonBody, scopeName, claimName, sourcePath, includeIn);
+    if (gate.empty())
+        return;  // error already responded
+    if (gate != "ok")
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", gate);
+        return;
+    }
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+    try
+    {
+        ClaimMappings row;
+        row.setScopeName(scopeName);
+        row.setClaimName(claimName);
+        row.setSourcePath(sourcePath);
+        row.setIncludeIn(includeIn);
+        row.setEnabled(true);
+        Mapper<ClaimMappings> mapper(db);
+        mapper.insert(
+          row,
+          [req, cb](const ClaimMappings &inserted) {
+              auditClaimMapping(req, "claim_mapping_created",
+                                std::to_string(inserted.getValueOfId()));
+              Json::Value json;
+              json["status"] = "success";
+              json["id"] = inserted.getValueOfId();
+              json["message"] = "Claim mapping created";
+              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+              resp->setStatusCode(::drogon::k201Created);
+              (*cb)(resp);
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                           std::string("create claim mapping (duplicate?): ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "create claim mapping: Mapper construction failed");
+    }
+}
+
+void RoleScopeAdminService::updateClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &mappingId
+)
+{
+    int32_t id = 0;
+    try
+    {
+        id = std::stoi(mappingId);
+    }
+    catch (...)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "mappingId must be an integer");
+        return;
+    }
+    std::shared_ptr<Json::Value> jsonBody;
+    std::string scopeName, claimName, sourcePath, includeIn;
+    const std::string gate = parseClaimMappingBody(req, cb, jsonBody, scopeName, claimName, sourcePath, includeIn);
+    if (gate.empty())
+        return;
+    if (gate != "ok")
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", gate);
+        return;
+    }
+    const bool enabled = (*jsonBody).get("enabled", true).asBool();
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+    try
+    {
+        Mapper<ClaimMappings> mapper(db);
+        mapper.findOne(
+          Criteria(ClaimMappings::Cols::_id, CompareOperator::EQ, id),
+          [req, cb, db, id, scopeName, claimName, sourcePath, includeIn, enabled](
+            ClaimMappings row) mutable {
+              row.setScopeName(scopeName);
+              row.setClaimName(claimName);
+              row.setSourcePath(sourcePath);
+              row.setIncludeIn(includeIn);
+              row.setEnabled(enabled);
+              try
+              {
+                  Mapper<ClaimMappings> updateMapper(db);
+                  updateMapper.update(
+                    row,
+                    [req, cb, id](const std::size_t) {
+                        auditClaimMapping(req, "claim_mapping_updated", std::to_string(id));
+                        Json::Value json;
+                        json["status"] = "success";
+                        json["message"] = "Claim mapping updated";
+                        (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(req, cb, "DB_QUERY_ERROR",
+                                     std::string("update claim mapping: ") + e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR",
+                               "update claim mapping: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "claim mapping not found");
+              else
+                  respondError(req, cb, "DB_QUERY_ERROR",
+                               std::string("claim mapping lookup: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "update claim mapping: Mapper construction failed");
+    }
+}
+
+void RoleScopeAdminService::deleteClaimMapping(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &mappingId
+)
+{
+    int32_t id = 0;
+    try
+    {
+        id = std::stoi(mappingId);
+    }
+    catch (...)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "mappingId must be an integer");
+        return;
+    }
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+    try
+    {
+        Mapper<ClaimMappings> mapper(db);
+        mapper.deleteBy(
+          Criteria(ClaimMappings::Cols::_id, CompareOperator::EQ, id),
+          [req, cb, id](const std::size_t removed) {
+              if (removed == 0)
+              {
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "claim mapping not found");
+                  return;
+              }
+              auditClaimMapping(req, "claim_mapping_deleted", std::to_string(id));
+              Json::Value json;
+              json["status"] = "success";
+              json["message"] = "Claim mapping deleted";
+              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(req, cb, "DB_QUERY_ERROR",
+                           std::string("delete claim mapping: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "delete claim mapping: Mapper construction failed");
+    }
 }
 
 void RoleScopeAdminService::listScopes(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)

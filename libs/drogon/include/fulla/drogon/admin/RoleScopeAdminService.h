@@ -58,6 +58,31 @@ class RoleScopeAdminService
       const std::string &roleId
     );
 
+    // ------------------------------------------------------------------
+    // P1-3 (#280): claim-mapping CRUD (roles:write + audit
+    // claim_mapping_*). Write-time red lines enforced by
+    // ClaimMappingValidator (reserved-claim blacklist / source whitelist /
+    // scope=openid ban).
+    // ------------------------------------------------------------------
+    static void listClaimMappings(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb
+    );
+    static void createClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb
+    );
+    static void updateClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &mappingId
+    );
+    static void deleteClaimMapping(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &mappingId
+    );
+
     // Scopes
     static void listScopes(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
     static void createScope(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);

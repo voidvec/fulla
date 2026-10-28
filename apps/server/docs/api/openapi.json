@@ -170,6 +170,116 @@
         ]
       }
     },
+    "/api/admin/claim-mappings" : 
+    {
+      "get" : 
+      {
+        "description" : "P1-3 (#280): all claim mappings (id_token/userinfo claim publication).",
+        "operationId" : "get_api_admin_claim-mappings",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Claim Mappings",
+        "tags" : 
+        [
+          "Admin",
+          "Scopes"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "P1-3 (#280): map a source (custom_attributes.<key> or user.display_name) to a published claim under a trigger scope. Red lines: claim_name may not be reserved; scope_name may not be openid (CLAIM_MAPPING_* codes).",
+        "operationId" : "post_api_admin_claim-mappings",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Create Claim Mapping",
+        "tags" : 
+        [
+          "Admin",
+          "Scopes"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/claim-mappings/{mappingId}" : 
+    {
+      "delete" : 
+      {
+        "description" : "P1-3 (#280): delete a mapping.",
+        "operationId" : "delete_api_admin_claim-mappings_{mappingId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Delete Claim Mapping",
+        "tags" : 
+        [
+          "Admin",
+          "Scopes"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "put" : 
+      {
+        "description" : "P1-3 (#280): update a mapping (full body).",
+        "operationId" : "put_api_admin_claim-mappings_{mappingId}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Update Claim Mapping",
+        "tags" : 
+        [
+          "Admin",
+          "Scopes"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/clients" : 
     {
       "get" : 
@@ -2486,6 +2596,51 @@
           }
         ],
         "summary" : "Update User Profile",
+        "tags" : 
+        [
+          "User Profile"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      }
+    },
+    "/api/me/profile/custom-attributes" : 
+    {
+      "get" : 
+      {
+        "description" : "P1-3 (#280): the caller's custom-attributes document (claims-mapping source data). Memory deployments answer 404.",
+        "operationId" : "get_api_me_profile_custom-attributes",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Get Custom Attributes",
+        "tags" : 
+        [
+          "User Profile"
+        ],
+        "x-required-scopes" : 
+        [
+          "profile"
+        ]
+      },
+      "put" : 
+      {
+        "description" : "P1-3 (#280): FULL-REPLACE the document. Validation: JSON object, depth <= 2, serialized <= 8 KiB, keys ^[a-z][a-z0-9_]{0,63}$, prototype-pollution keys rejected (CUSTOM_ATTRIBUTES_INVALID).",
+        "operationId" : "put_api_me_profile_custom-attributes",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Replace Custom Attributes",
         "tags" : 
         [
           "User Profile"

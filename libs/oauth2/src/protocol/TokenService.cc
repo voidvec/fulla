@@ -144,6 +144,118 @@ void TokenService::resolveOrgContextForClaims(
     orgContextResolver_->resolveOrgContext(subject, *orgId, std::move(cb));
 }
 
+
+namespace
+{
+// P1-3 (#280): scalar source-path resolution, mirroring
+// fulla::drogon::utils::resolveClaimSourceValue (Domain cannot depend on
+// the drogon layer; the two implementations share unit-test coverage).
+bool resolveClaimSourceValueImpl(
+  const std::string &sourcePath,
+  const std::string &userJson,
+  std::string &outValue
+)
+{
+    outValue.clear();
+    Json::CharReaderBuilder rb;
+    Json::Value root;
+    std::istringstream in(userJson);
+    std::string errs;
+    if (!Json::parseFromStream(rb, in, &root, &errs) || !root.isObject())
+        return false;
+    Json::Value node;
+    if (sourcePath == "user.display_name")
+    {
+        node = root["display_name"];
+    }
+    else
+    {
+        static const std::string kPrefix = "custom_attributes.";
+        if (sourcePath.rfind(kPrefix, 0) != 0)
+            return false;
+        std::string key = sourcePath.substr(kPrefix.size());
+        const Json::Value &attrs = root["custom_attributes"];
+        if (!attrs.isObject() || !attrs.isMember(key))
+            return false;
+        node = attrs[key];
+    }
+    if (node.isString())
+    {
+        outValue = node.asString();
+        return !outValue.empty();
+    }
+    if (node.isIntegral())
+    {
+        outValue = std::to_string(node.asInt64());
+        return true;
+    }
+    if (node.isNumeric())
+    {
+        outValue = std::to_string(node.asDouble());
+        return true;
+    }
+    if (node.isBool())
+    {
+        outValue = node.asBool() ? "true" : "false";
+        return true;
+    }
+    return false;
+}
+}  // namespace
+
+void TokenService::resolveMappedClaims(
+  const std::string &subject,
+  const std::string &scope,
+  const char *target,
+  std::function<void(Json::Value)> &&cb
+)
+{
+    Json::Value empty(Json::objectValue);
+    if (!claimMappingsProvider_ || !userProfileResolver_)
+    {
+        cb(std::move(empty));
+        return;
+    }
+    auto sharedCb = std::make_shared<std::function<void(Json::Value)>>(std::move(cb));
+    claimMappingsProvider_->getEnabledMappings(
+      [self = shared_from_this(), subject, scope, target, sharedCb](
+        std::vector<fulla::common::ports::ClaimMappingEntry> mappings) mutable {
+          // Keep only the mappings whose trigger scope the token carries
+          // and whose include_in covers the target surface.
+          std::vector<fulla::common::ports::ClaimMappingEntry> active;
+          for (auto &m : mappings)
+          {
+            if (m.includeIn != "both" && m.includeIn != target)
+                continue;
+            if (!scopeContains(scope, m.scopeName))
+                continue;
+            active.push_back(std::move(m));
+          }
+          if (active.empty())
+          {
+              (*sharedCb)(Json::Value(Json::objectValue));
+              return;
+          }
+          self->userProfileResolver_(
+            subject,
+            [self, active = std::move(active), sharedCb](std::optional<std::string> profileJson) {
+                Json::Value claims(Json::objectValue);
+                if (profileJson.has_value())
+                {
+                    for (const auto &m : active)
+                    {
+                        std::string value;
+                        // Scalar resolution only (objects/arrays never
+                        // publish); absent source = claim omitted.
+                        if (resolveClaimSourceValueImpl(m.sourcePath, *profileJson, value))
+                            claims[m.claimName] = value;
+                    }
+                }
+                (*sharedCb)(std::move(claims));
+            });
+      });
+}
+
 void TokenService::audit(
   const std::string &action,
   const std::string &outcome,
@@ -487,11 +599,31 @@ void TokenService::exchangeCodeForToken(
                                     idTokenClaims["org_ctx"] = orgCtxClaim;
                                 }
 
-                                std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
-                                if (!idToken.empty())
-                                {
-                                    json["id_token"] = idToken;
-                                }
+                                // P1-3 (#280): mapped claims merge after
+                                // the standard set; the write-time
+                                // reserved-word blacklist guarantees no
+                                // collision. Refresh re-evaluates (disable
+                                // drops the claim on the next rotation —
+                                // the org_ctx O7 semantics).
+                                self->resolveMappedClaims(
+                                  authCode.userId,
+                                  authCode.scope,
+                                  "id_token",
+                                  [self, json, callback, idTokenClaims,
+                                   actorId = authCode.userId](
+                                    Json::Value mappedClaims) mutable {
+                                      for (const auto &k : mappedClaims.getMemberNames())
+                                          idTokenClaims[k] = mappedClaims[k];
+                                      std::string idToken =
+                                        self->jwkManager_->signJwt(idTokenClaims);
+                                      if (!idToken.empty())
+                                      {
+                                          json["id_token"] = idToken;
+                                      }
+                                      self->audit("token_issued", "success", actorId, "token", "");
+                                      callback(json);
+                                  });
+                                return;
                             }
 
                             self->audit("token_issued", "success", authCode.userId, "token", "");
@@ -679,9 +811,25 @@ void TokenService::refreshAccessToken(
                         orgCtxClaim["roles"] = orgRoles;
                         idTokenClaims["org_ctx"] = orgCtxClaim;
                     }
-                    std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
-                    if (!idToken.empty())
-                        json["id_token"] = idToken;
+                    // P1-3 (#280): refresh RE-EVALUATES the mappings —
+                    // a mapping disabled since the original grant drops
+                    // its claim from this rotation-issued id_token (the
+                    // org_ctx O7 semantics), and a newly enabled one
+                    // appears.
+                    self->resolveMappedClaims(
+                      storedRt->userId,
+                      storedRt->scope,
+                      "id_token",
+                      [self, json, callback, idTokenClaims,
+                       actorId = storedRt->userId](Json::Value mappedClaims) mutable {
+                          for (const auto &k : mappedClaims.getMemberNames())
+                              idTokenClaims[k] = mappedClaims[k];
+                          std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
+                          if (!idToken.empty())
+                              json["id_token"] = idToken;
+                          callback(json);
+                      });
+                    return;
                 }
                 callback(json);
             }

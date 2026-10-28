@@ -9,6 +9,27 @@ For the versioning policy (when to cut, what to bump, why), see
 [Versioning & Release](docs/contribute/versioning-and-release.md).
 Changelog entries are written in English (see CONTRIBUTING).
 
+## [Unreleased]
+
+### ⚠️ Breaking
+
+- **userinfo: the legacy `username` key is removed.** userinfo still emits
+  the standard `preferred_username` claim; the non-standard `username`
+  dual-emission (kept for one release as pre-announced in 1.5.0) is gone.
+  Relying parties reading `username` from userinfo must switch to
+  `preferred_username`.
+
+### Added
+
+- Custom attributes + claims mapping (P1-3, #280): `users.custom_attributes`
+  (self-service `GET/PUT /api/me/profile/custom-attributes`, depth ≤ 2,
+  ≤ 8 KiB, strict key grammar) and the `claim_mappings` table with admin CRUD
+  (`/api/admin/claim-mappings`; reserved-claim blacklist, source whitelist
+  `custom_attributes.<key>`/`user.display_name`, `openid` trigger forbidden).
+  Mapped claims publish on id_token (code + refresh paths, re-evaluated at
+  rotation) and userinfo, gated on the mapping's trigger scope;
+  `claims_supported` advertises enabled mapping claims.
+
 ## [1.5.0] - 2026-10-15
 
 The correctness & trust release: the 2026-10 IAM gap analysis drove a P0 sprint
