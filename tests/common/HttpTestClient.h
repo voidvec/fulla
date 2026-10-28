@@ -466,7 +466,7 @@ inline std::optional<Json::Value> loginAsUserTokens(
             {
                 try
                 {
-                    auto db = app().getDbClient();
+                    auto db = ::drogon::app().getDbClient();
                     auto f = db->execSqlAsyncFuture(
                       "UPDATE users SET failed_login_count = 0, locked_until = NULL "
                       "WHERE username = 'admin'");
