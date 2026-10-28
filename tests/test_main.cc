@@ -257,6 +257,25 @@ std::string loadConfigWithEnv(const std::string &configPath)
         }
     }
 
+    // Widen the login failure rate-limit window for the TEST server. The
+    // production max_failures=30/60s is brute-force protection; in the full
+    // 598-test binary the cumulative intentional-failure logins (lockout /
+    // forced-password-change / bad-credential cases) plus a handful of
+    // slow-build (ASan/gcov) request timeouts land right at the edge, and
+    // whichever admin-login comes next fails nondeterministically — the
+    // "login rate-limit suite-order jitter" documented since P1-4. The
+    // limiter's end-to-end wiring stays covered: OidcBatch3's 429 case
+    // loops past this widened threshold on a dedicated synthetic client.
+    if (
+      root.isMember("custom_config") && root["custom_config"].isObject() &&
+      root["custom_config"].isMember("auth") &&
+      root["custom_config"]["auth"].isMember("rate_limit") &&
+      root["custom_config"]["auth"]["rate_limit"].isObject()
+    )
+    {
+        root["custom_config"]["auth"]["rate_limit"]["max_failures"] = 100;
+    }
+
     // Disable daemonizing and relaunch features in tests, because fork() breaks
     // the std::promise cross-thread sync
     if (root.isMember("app") && root["app"].isObject())

@@ -137,8 +137,10 @@ DROGON_TEST(Integration_P1_OidcBatch3_TokenEndpoint_RateLimitsAfterFailureThresh
 
     int throttledCount = 0;
     int rejectedCount = 0;
-    // 35 > 30 (default max_failures) -- the tail of this loop MUST trip 429.
-    for (int i = 0; i < 35; ++i)
+    // 105 > 100 (test-main widens the production max_failures=30 to 100 for
+    // the whole suite — see test_main.cc) -- the tail of this loop MUST trip
+    // 429 on this dedicated synthetic-client bucket.
+    for (int i = 0; i < 105; ++i)
     {
         // F-018: a request with a syntactically-valid but unknown client_id
         // is the canonical "failed auth attempt" the limiter counts -- the
