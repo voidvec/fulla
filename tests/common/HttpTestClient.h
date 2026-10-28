@@ -447,6 +447,39 @@ inline std::optional<Json::Value> loginAsUserTokens(
     if (!serverReachable())
         return std::nullopt;
 
+    // Shared-fixture self-healing for the seeded admin: any test that makes
+    // the server record failed logins against 'admin' (intentional bad-
+    // password cases, lockout probes) leaves failed_login_count/locked_until
+    // behind, and whichever admin login comes next at the progressive-
+    // lockout thresholds fails — the rotating "loginAsAdmin empty" jitter.
+    // Reset the counters before logging in, throttled to once per 5s so the
+    // suite pays ~one UPDATE per window, not one per call.
+    if (username == "admin")
+    {
+        static std::chrono::steady_clock::time_point lastReset{};
+        auto now = std::chrono::steady_clock::now();
+        static std::mutex resetMutex;
+        if (now - lastReset > std::chrono::seconds(5))
+        {
+            std::lock_guard<std::mutex> lock(resetMutex);
+            if (now - lastReset > std::chrono::seconds(5))
+            {
+                try
+                {
+                    auto db = app().getDbClient();
+                    auto f = db->execSqlAsyncFuture(
+                      "UPDATE users SET failed_login_count = 0, locked_until = NULL "
+                      "WHERE username = 'admin'");
+                    f.get();
+                    lastReset = now;
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+    }
+
     // F-011: PKCE is mandatory (auth.require_pkce_for_public defaults true),
     // so this recipe always runs the S256 flow. generateSecureToken(32)
     // yields a 43-char base64url string -- a valid RFC 7636 §4.1 verifier
@@ -467,13 +500,22 @@ inline std::optional<Json::Value> loginAsUserTokens(
       "&code_challenge_method=S256";
     auto loginResp = sendPostForm("/oauth2/login?json=true", loginForm);
     if (!loginResp || loginResp->getStatusCode() != ::drogon::k200OK)
+    {
+        std::cout << "[loginAsUserTokens] login step failed for '" << username << "': "
+                  << (loginResp ? std::to_string(loginResp->getStatusCode()) : std::string("null-resp"))
+                  << " body=" << (loginResp ? loginResp->getBody().substr(0, 200) : std::string("-"))
+                  << std::endl;
         return std::nullopt;
+    }
     Json::Value loginJson;
     if (!parseJsonBody(loginResp, loginJson))
         return std::nullopt;
     // MFA-enabled users return mfa_required=true instead of a code.
     if (loginJson.isMember("mfa_required") && loginJson["mfa_required"].asBool())
+    {
+        std::cout << "[loginAsUserTokens] '" << username << "' unexpectedly MFA-gated" << std::endl;
         return std::nullopt;
+    }
     const std::string code = loginJson.get("code", "").asString();
     if (code.empty())
         return std::nullopt;
@@ -489,7 +531,13 @@ inline std::optional<Json::Value> loginAsUserTokens(
       "&code_verifier=" + codeVerifier;
     auto tokenResp = sendPostForm("/oauth2/token", tokenForm);
     if (!tokenResp || tokenResp->getStatusCode() != ::drogon::k200OK)
+    {
+        std::cout << "[loginAsUserTokens] token step failed for '" << username << "': "
+                  << (tokenResp ? std::to_string(tokenResp->getStatusCode()) : std::string("null-resp"))
+                  << " body=" << (tokenResp ? tokenResp->getBody().substr(0, 200) : std::string("-"))
+                  << std::endl;
         return std::nullopt;
+    }
     Json::Value tokenJson;
     if (!parseJsonBody(tokenResp, tokenJson))
         return std::nullopt;
