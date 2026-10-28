@@ -221,6 +221,37 @@ inline ::drogon::HttpResponsePtr sendPostForm(
     }
 }
 
+// P1-4 (#281): form POST with a raw Authorization header value (e.g.
+// "Basic <b64>" for client_secret_basic flows the bearer-shaped helpers
+// cannot express).
+inline ::drogon::HttpResponsePtr sendPostFormWithAuth(
+  const std::string &pathAndQuery,
+  const std::string &formBody,
+  const std::string &authorizationHeader,
+  double timeout = 30.0)
+{
+    try
+    {
+        auto client =
+          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto req = ::drogon::HttpRequest::newHttpRequest();
+        req->setMethod(::drogon::Post);
+        req->setPath(pathAndQuery);
+        req->setContentTypeCode(::drogon::CT_APPLICATION_X_FORM);
+        req->setBody(formBody);
+        req->addHeader("Authorization", authorizationHeader);
+        auto [result, resp] = client->sendRequest(req, timeout);
+        if (result != ::drogon::ReqResult::Ok || resp == nullptr)
+            return nullptr;
+        return resp;
+    }
+    catch (const std::exception &e)
+    {
+        LOG_WARN << "sendPostFormWithAuth(" << pathAndQuery << ") failed: " << e.what();
+        return nullptr;
+    }
+}
+
 inline ::drogon::HttpResponsePtr sendPostJson(
   const std::string &path,
   const Json::Value &json,

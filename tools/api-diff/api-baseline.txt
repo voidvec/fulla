@@ -10081,6 +10081,7 @@ static const std::string _issuer_override;
 static const std::string _created_at;
 static const std::string _updated_at;
 static const std::string _require_mfa;
+static const std::string _deleted_at;
 };
 static const int primaryKeyNumber;
 static const std::string tableName;
@@ -10145,6 +10146,10 @@ void setUpdatedAtToNull() noexcept;
 const bool &getValueOfRequireMfa() const noexcept;
 const std::shared_ptr<bool> &getRequireMfa() const noexcept;
 void setRequireMfa(const bool &pRequireMfa) noexcept;
+const ::trantor::Date &getValueOfDeletedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getDeletedAt() const noexcept;
+void setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept;
+void setDeletedAtToNull() noexcept;
 static size_t getColumnNumber() noexcept ;
 static const std::string &getColumnName(size_t index) noexcept(false);
 Json::Value toJson() const;
@@ -10173,6 +10178,7 @@ std::shared_ptr<std::string> issuerOverride_;
 std::shared_ptr<::trantor::Date> createdAt_;
 std::shared_ptr<::trantor::Date> updatedAt_;
 std::shared_ptr<bool> requireMfa_;
+std::shared_ptr<::trantor::Date> deletedAt_;
 struct MetaData
 {
 const std::string colName_;
@@ -10184,7 +10190,7 @@ const bool isPrimaryKey_;
 const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
-bool dirtyFlag_[9]={ false };
+bool dirtyFlag_[10]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

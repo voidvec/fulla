@@ -167,7 +167,13 @@ void findOrgBySlug(
     {
         Mapper<OrgModel> mapper(db);
         mapper.findOne(
-          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug),
+          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug) &&
+            // P1-4 (#281): soft-deleted orgs are gone for EVERY member-flow
+            // caller of this resolver — including the invitation and
+            // succession ACCEPT paths (the "double-check" of the delete
+            // cascade: a pending invite accepted post-delete must fail, not
+            // resurrect membership).
+            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
           [cb, req, onFound = std::move(onFound)](const OrgModel &org) {
               onFound(true, org);
           },
@@ -232,6 +238,20 @@ void proceedWithInvitationInsert(
   const ResolvedUser &caller
 );
 
+// P1-4 (#281) createOrg tail helper: insert the org row + owner membership;
+// the 201 fires from the COMMIT callback (#219 — an inline response races
+// the commit).
+void insertOrgRow(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrgMemberService::ResponseCallback &cb,
+  const std::shared_ptr<::drogon::orm::Transaction> &txn,
+  const std::string &slug,
+  const std::string &name,
+  const std::string &logoUri,
+  const std::string &primaryColor,
+  const ResolvedUser &caller
+);
+
 void audit(
   const ::drogon::HttpRequestPtr &req,
   const char *action,
@@ -249,6 +269,85 @@ void audit(
           plugin->getAuditSink(), action, "success", req, "", "organization", targetId,
           Json::Value(), orgId
         );
+    }
+}
+
+// P1-4 (#281) createOrg tail: org row + owner membership, COMMIT-gated 201.
+void insertOrgRow(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrgMemberService::ResponseCallback &cb,
+  const std::shared_ptr<::drogon::orm::Transaction> &txn,
+  const std::string &slug,
+  const std::string &name,
+  const std::string &logoUri,
+  const std::string &primaryColor,
+  const ResolvedUser &caller
+)
+{
+    using OrgModel = ::drogon_model::fulla_db::Organizations;
+    using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
+    OrgModel row;
+    row.setSlug(slug);
+    row.setName(name);
+    row.setLogoUri(logoUri);
+    row.setPrimaryColor(primaryColor);
+    try
+    {
+        Mapper<OrgModel>(txn).insert(
+          row,
+          [req, cb, txn, slug, caller](const OrgModel &inserted) {
+              const int32_t orgId = inserted.getValueOfId();
+              MemberModel member;
+              member.setOrganizationId(orgId);
+              member.setUserId(caller.id);
+              member.setRole("owner");
+              try
+              {
+                  Mapper<MemberModel>(txn).insert(
+                    member,
+                    [req, cb, txn, slug, orgId](const MemberModel &) {
+                        // #219: the 201 fires from the COMMIT callback (an
+                        // inline response races the commit; an immediate
+                        // follow-up read could miss the new org).
+                        txn->setCommitCallback(
+                          [req, cb, slug, orgId](bool committed) {
+                              if (!committed)
+                              {
+                                  respondError(
+                                    req, cb, "DB_QUERY_ERROR", "create org: commit failed");
+                                  return;
+                              }
+                              audit(req, "organization_created", slug, std::to_string(orgId));
+                              Json::Value json;
+                              json["slug"] = slug;
+                              json["role"] = "owner";
+                              json["message"] = "Organization created";
+                              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
+                              resp->setStatusCode(::drogon::k201Created);
+                              (*cb)(resp);
+                          });
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(
+                          req, cb, "DB_QUERY_ERROR",
+                          std::string("create org: owner membership insert failed: ") +
+                            e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(
+                req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                std::string("create org: slug already exists or DB error: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
     }
 }
 
@@ -368,70 +467,35 @@ void OrgMemberService::createOrg(const ::drogon::HttpRequestPtr &req, ResponseCa
                           );
                           return;
                       }
-                      OrgModel row;
-                      row.setSlug(slug);
-                      row.setName(name);
-                      row.setLogoUri(logoUri);
-                      row.setPrimaryColor(primaryColor);
-                      try
+                      // P1-4 (#281): tombstone pre-check — a soft-deleted org
+                      // holds the slug as 'slug#del-<id>' (placeholder), so
+                      // the plain unique constraint no longer fires. Reusing
+                      // a deleted org's slug is same-name impersonation
+                      // (audit rows still reference the old id); reject it.
                       {
-                          Mapper<OrgModel>(txn).insert(
-                            row,
-                            [req, cb, txn, slug, caller](const OrgModel &inserted) {
-                                const int32_t orgId = inserted.getValueOfId();
-                                MemberModel member;
-                                member.setOrganizationId(orgId);
-                                member.setUserId(caller.id);
-                                member.setRole("owner");
-                                try
+                          Mapper<OrgModel> tombstoneMapper(txn);
+                          tombstoneMapper.findBy(
+                            Criteria(OrgModel::Cols::_slug, CompareOperator::Like,
+                                     slug + "#del-%"),
+                            [req, cb, txn, slug, name, logoUri, primaryColor, caller](
+                              const std::vector<OrgModel> &tombs) {
+                                if (!tombs.empty())
                                 {
-                                    Mapper<MemberModel>(txn).insert(
-                                      member,
-                                      [req, cb, txn, slug, orgId](const MemberModel &) {
-                                          // #219: the 201 fires from the COMMIT
-                                          // callback (an inline response races
-                                          // the commit; an immediate follow-up
-                                          // read could miss the new org).
-                                          txn->setCommitCallback(
-                                            [req, cb, slug, orgId](bool committed) {
-                                                if (!committed)
-                                                {
-                                                    respondError(
-                                                      req, cb, "DB_QUERY_ERROR",
-                                                      "create org: commit failed");
-                                                    return;
-                                                }
-                                                audit(req, "organization_created", slug,
-                                                      std::to_string(orgId));
-                                                Json::Value json;
-                                                json["slug"] = slug;
-                                                json["role"] = "owner";
-                                                json["message"] = "Organization created";
-                                                auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
-                                                resp->setStatusCode(::drogon::k201Created);
-                                                (*cb)(resp);
-                                            });
-                                      },
-                                      [req, cb](const DrogonDbException &e) {
-                                          respondError(req, cb, "DB_QUERY_ERROR",
-                                            std::string("create org: owner membership insert failed: ") + e.base().what());
-                                      }
-                                    );
+                                    respondError(
+                                      req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                      "create org: this slug was used by a deleted organization "
+                                      "and cannot be re-registered");
+                                    return;
                                 }
-                                catch (...)
-                                {
-                                    respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
-                                }
+                                insertOrgRow(req, cb, txn, slug, name, logoUri, primaryColor,
+                                             caller);
                             },
                             [req, cb](const DrogonDbException &e) {
-                                respondError(req, cb, "VALIDATION_RESOURCE_CONFLICT",
-                                  std::string("create org: slug already exists or DB error: ") + e.base().what());
-                            }
-                          );
-                      }
-                      catch (...)
-                      {
-                          respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+                                respondError(
+                                  req, cb, "DB_QUERY_ERROR",
+                                  std::string("create org: tombstone check failed: ") +
+                                    e.base().what());
+                            });
                       }
                     },
                     [req, cb](const DrogonDbException &e) {
@@ -514,7 +578,11 @@ void OrgMemberService::listMyOrgs(const ::drogon::HttpRequestPtr &req, ResponseC
                     try
                     {
                         Mapper<OrgModel>(db).findBy(
-                          Criteria(OrgModel::Cols::_id, CompareOperator::In, orgIds),
+                          Criteria(OrgModel::Cols::_id, CompareOperator::In, orgIds) &&
+                            // P1-4: deleted orgs drop out of My Organizations
+                            // (their memberships are gone anyway — this is
+                            // the race-window backstop).
+                            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
                           [req, cb, db, roleByOrg, caller](const std::vector<OrgModel> &orgs) {
                               // v1.4.0 M3 (R-M3-3 visibility): owner/admin
                               // entries carry the org's pending succession

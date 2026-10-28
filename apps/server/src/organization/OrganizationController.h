@@ -41,6 +41,31 @@ class OrganizationController : public ::drogon::HttpController<OrganizationContr
       ::drogon::Get,
       "fulla::drogon::filters::AuthorizationFilter"
     );
+    // P1-4 (#281): edit + soft delete + member management.
+    ADD_METHOD_TO(
+      OrganizationController::updateOrg,
+      "/api/admin/organizations/{slug}",
+      ::drogon::Patch,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      OrganizationController::deleteOrg,
+      "/api/admin/organizations/{slug}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      OrganizationController::listMembers,
+      "/api/admin/organizations/{slug}/members",
+      ::drogon::Get,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
+    ADD_METHOD_TO(
+      OrganizationController::removeMember,
+      "/api/admin/organizations/{slug}/members/{userId}",
+      ::drogon::Delete,
+      "fulla::drogon::filters::AuthorizationFilter"
+    );
     // #221 admin override: reassign an org's owner seat (minimal slice; the
     // self-service nominate-and-accept workflow is v1.4.0 scope).
     ADD_METHOD_TO(
@@ -63,6 +88,29 @@ class OrganizationController : public ::drogon::HttpController<OrganizationContr
       const ::drogon::HttpRequestPtr &req,
       std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
       const std::string &slug
+    );
+
+    // P1-4 (#281)
+    void updateOrg(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+    void deleteOrg(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+    void listMembers(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug
+    );
+    void removeMember(
+      const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &slug,
+      const std::string &userId
     );
 
     void transferOwnership(

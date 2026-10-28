@@ -108,6 +108,8 @@ const std::string &expectedFingerprint()
     // /.well-known/oauth-authorization-server).
     static const std::string kFingerprint =
       "DELETE /api/admin/clients/{clientId}\n"
+      "DELETE /api/admin/organizations/{slug}\n"
+      "DELETE /api/admin/organizations/{slug}/members/{userId}\n"
       "DELETE /api/admin/roles/{roleId}\n"
       "DELETE /api/admin/scopes/{scopeId}\n"
       "DELETE /api/admin/tokens/{tokenPrefix}\n"
@@ -137,6 +139,7 @@ const std::string &expectedFingerprint()
       "GET /api/admin/oidc/keys\n"
       "GET /api/admin/organizations\n"
       "GET /api/admin/organizations/{slug}\n"
+      "GET /api/admin/organizations/{slug}/members\n"
       "GET /api/admin/roles\n"
       "GET /api/admin/scopes\n"
       "GET /api/admin/scopes/resources\n"
@@ -166,6 +169,7 @@ const std::string &expectedFingerprint()
       "GET /oauth2/consent/context\n"
       "GET /oauth2/end_session\n"
       "GET /oauth2/userinfo\n"
+      "PATCH /api/admin/organizations/{slug}\n"
       "PATCH /api/me/applications/{clientId}\n"
       "PATCH /api/me/profile\n"
       "POST /api/admin/clients\n"

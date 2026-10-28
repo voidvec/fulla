@@ -38,6 +38,47 @@ class OrganizationService
       const std::string &slug
     );
 
+    /// PATCH /api/admin/organizations/{slug} — P1-4 (#281): edit
+    /// name/logo_uri/primary_color (slug immutable — external reference
+    /// anchor). Reuses the P1-1 brand validators. Audited org_updated.
+    static void updateOrg(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug
+    );
+
+    /// DELETE /api/admin/organizations/{slug} — P1-4 (#281): soft delete
+    /// with the CLOSED cascade (one advisory-locked transaction): deleted_at
+    /// + slug placeholder rewrite (slug || '#del-' || id — no slug reuse),
+    /// pending invitations and succession nominations voided (physical
+    /// delete — FK CASCADE never fires on soft delete, and a 72h accept
+    /// would resurrect membership), org consents revoked_at, owned clients
+    /// suspended (blocks new client credentials auth), memberships
+    /// detached. Accept paths re-verify org-not-deleted via the
+    /// findOrgBySlug filter. Audited org_deleted.
+    static void deleteOrg(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug
+    );
+
+    /// GET /api/admin/organizations/{slug}/members — P1-4 (#281).
+    static void listMembers(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug
+    );
+
+    /// DELETE /api/admin/organizations/{slug}/members/{userId} — P1-4
+    /// (#281): admin removal (the owner seat must be vacated via
+    /// transfer-ownership first; removing the last owner is rejected).
+    static void removeMember(
+      const ::drogon::HttpRequestPtr &req,
+      ResponseCallback cb,
+      const std::string &slug,
+      const std::string &userId
+    );
+
     /// POST /api/admin/organizations/{slug}/transfer-ownership — #221 admin
     /// override: reassign the org's single owner seat to a live user (system
     /// admin surface; the self-service nominate-and-accept workflow is

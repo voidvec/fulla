@@ -53,6 +53,7 @@ class Organizations
         static const std::string _created_at;
         static const std::string _updated_at;
         static const std::string _require_mfa;
+        static const std::string _deleted_at;
     };
 
     static const int primaryKeyNumber;
@@ -186,8 +187,17 @@ class Organizations
     ///Set the value of the column require_mfa
     void setRequireMfa(const bool &pRequireMfa) noexcept;
 
+    /**  For column deleted_at  */
+    ///Get the value of the column deleted_at, returns the default value if the column is null
+    const ::trantor::Date &getValueOfDeletedAt() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<::trantor::Date> &getDeletedAt() const noexcept;
+    ///Set the value of the column deleted_at
+    void setDeletedAt(const ::trantor::Date &pDeletedAt) noexcept;
+    void setDeletedAtToNull() noexcept;
 
-    static size_t getColumnNumber() noexcept {  return 9;  }
+
+    static size_t getColumnNumber() noexcept {  return 10;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -218,6 +228,7 @@ class Organizations
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
     std::shared_ptr<bool> requireMfa_;
+    std::shared_ptr<::trantor::Date> deletedAt_;
     struct MetaData
     {
         const std::string colName_;
@@ -229,7 +240,7 @@ class Organizations
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[9]={ false };
+    bool dirtyFlag_[10]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -291,6 +302,11 @@ class Organizations
         if(!dirtyFlag_[8])
         {
             needSelection=true;
+        }
+        if(dirtyFlag_[9])
+        {
+            sql += "deleted_at,";
+            ++parametersCount;
         }
         needSelection=true;
         if(parametersCount > 0)
@@ -356,6 +372,11 @@ class Organizations
         else
         {
             sql +="default,";
+        }
+        if(dirtyFlag_[9])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
         }
         if(parametersCount > 0)
         {

@@ -311,7 +311,10 @@ void OrgSuccessionRepository::findPendingWithOrgForNominee(
               {
                   Mapper<Organizations> orgMapper(self->dbClient_);
                   orgMapper.findBy(
-                    Criteria(Organizations::Cols::_id, CompareOperator::In, orgIds),
+                    Criteria(Organizations::Cols::_id, CompareOperator::In, orgIds) &&
+                      // P1-4: nominations of a soft-deleted org drop the
+                      // banner row (the listing never resurrects it).
+                      Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
                     [sharedCb, rows](const std::vector<Organizations> &orgs) {
                         std::vector<NomineeNomination> out;
                         out.reserve(rows.size());

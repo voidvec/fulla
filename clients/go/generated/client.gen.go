@@ -979,6 +979,16 @@ type PostApiAdminOrganizationsJSONBody struct {
 	Slug           string  `json:"slug"`
 }
 
+// PatchApiAdminOrganizationsSlugJSONBody defines parameters for PatchApiAdminOrganizationsSlug.
+type PatchApiAdminOrganizationsSlugJSONBody struct {
+	// LogoUri https-only (loopback exempt); empty clears.
+	LogoUri *string `json:"logo_uri,omitempty"`
+	Name    *string `json:"name,omitempty"`
+
+	// PrimaryColor Empty clears.
+	PrimaryColor *string `json:"primary_color,omitempty"`
+}
+
 // PostApiAdminOrganizationsSlugTransferOwnershipJSONBody defines parameters for PostApiAdminOrganizationsSlugTransferOwnership.
 type PostApiAdminOrganizationsSlugTransferOwnershipJSONBody struct {
 	// UserId ID of the live user who becomes the new owner
@@ -1512,6 +1522,9 @@ type PostApiAdminEmailTemplatesKeyLocaleTestSendJSONRequestBody PostApiAdminEmai
 
 // PostApiAdminOrganizationsJSONRequestBody defines body for PostApiAdminOrganizations for application/json ContentType.
 type PostApiAdminOrganizationsJSONRequestBody PostApiAdminOrganizationsJSONBody
+
+// PatchApiAdminOrganizationsSlugJSONRequestBody defines body for PatchApiAdminOrganizationsSlug for application/json ContentType.
+type PatchApiAdminOrganizationsSlugJSONRequestBody PatchApiAdminOrganizationsSlugJSONBody
 
 // PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody defines body for PostApiAdminOrganizationsSlugTransferOwnership for application/json ContentType.
 type PostApiAdminOrganizationsSlugTransferOwnershipJSONRequestBody PostApiAdminOrganizationsSlugTransferOwnershipJSONBody
@@ -2107,12 +2120,51 @@ type ClientInterface interface {
 	// Corresponds with POST /api/admin/organizations (the `PostApiAdminOrganizations` operationId).
 	PostApiAdminOrganizations(ctx context.Context, body PostApiAdminOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteApiAdminOrganizationsSlug Delete Organization
+	//
+	// P1-4 (#281): soft delete with a CLOSED cascade (one transaction): slug rewritten to a #del-<id> placeholder (no slug reuse), pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their outstanding tokens introspect inactive), memberships detached. Audited as org_deleted.
+	//
+	// Corresponds with DELETE /api/admin/organizations/{slug} (the `DeleteApiAdminOrganizationsSlug` operationId).
+	DeleteApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiAdminOrganizationsSlug Get Organization
 	//
 	// Get a single organization by its slug.
 	//
 	// Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 	GetApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchApiAdminOrganizationsSlugWithBody Update Organization
+	//
+	// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+	PatchApiAdminOrganizationsSlugWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchApiAdminOrganizationsSlug Update Organization
+	//
+	// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+	PatchApiAdminOrganizationsSlug(ctx context.Context, slug string, body PatchApiAdminOrganizationsSlugJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminOrganizationsSlugMembers List Organization Members
+	//
+	// P1-4 (#281): read-only member roster (user_id, username, role, joined_at).
+	//
+	// Corresponds with GET /api/admin/organizations/{slug}/members (the `GetApiAdminOrganizationsSlugMembers` operationId).
+	GetApiAdminOrganizationsSlugMembers(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiAdminOrganizationsSlugMembersUserId Remove Organization Member
+	//
+	// P1-4 (#281): remove a membership. Removing the last owner is rejected (409) — transfer ownership first. Audited as org_member_removed.
+	//
+	// Corresponds with DELETE /api/admin/organizations/{slug}/members/{userId} (the `DeleteApiAdminOrganizationsSlugMembersUserId` operationId).
+	DeleteApiAdminOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminOrganizationsSlugTransferOwnershipWithBody Transfer Organization Ownership
 	//
@@ -3983,6 +4035,23 @@ func (c *Client) PostApiAdminOrganizations(ctx context.Context, body PostApiAdmi
 	return c.Client.Do(req)
 }
 
+// DeleteApiAdminOrganizationsSlug Delete Organization
+//
+// P1-4 (#281): soft delete with a CLOSED cascade (one transaction): slug rewritten to a #del-<id> placeholder (no slug reuse), pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their outstanding tokens introspect inactive), memberships detached. Audited as org_deleted.
+//
+// Corresponds with DELETE /api/admin/organizations/{slug} (the `DeleteApiAdminOrganizationsSlug` operationId).
+func (c *Client) DeleteApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiAdminOrganizationsSlugRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiAdminOrganizationsSlug Get Organization
 //
 // Get a single organization by its slug.
@@ -3990,6 +4059,78 @@ func (c *Client) PostApiAdminOrganizations(ctx context.Context, body PostApiAdmi
 // Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 func (c *Client) GetApiAdminOrganizationsSlug(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetApiAdminOrganizationsSlugRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchApiAdminOrganizationsSlugWithBody Update Organization
+//
+// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+func (c *Client) PatchApiAdminOrganizationsSlugWithBody(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiAdminOrganizationsSlugRequestWithBody(c.Server, slug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchApiAdminOrganizationsSlug Update Organization
+//
+// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+func (c *Client) PatchApiAdminOrganizationsSlug(ctx context.Context, slug string, body PatchApiAdminOrganizationsSlugJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchApiAdminOrganizationsSlugRequest(c.Server, slug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminOrganizationsSlugMembers List Organization Members
+//
+// P1-4 (#281): read-only member roster (user_id, username, role, joined_at).
+//
+// Corresponds with GET /api/admin/organizations/{slug}/members (the `GetApiAdminOrganizationsSlugMembers` operationId).
+func (c *Client) GetApiAdminOrganizationsSlugMembers(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminOrganizationsSlugMembersRequest(c.Server, slug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiAdminOrganizationsSlugMembersUserId Remove Organization Member
+//
+// P1-4 (#281): remove a membership. Removing the last owner is rejected (409) — transfer ownership first. Audited as org_member_removed.
+//
+// Corresponds with DELETE /api/admin/organizations/{slug}/members/{userId} (the `DeleteApiAdminOrganizationsSlugMembersUserId` operationId).
+func (c *Client) DeleteApiAdminOrganizationsSlugMembersUserId(ctx context.Context, slug string, userId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiAdminOrganizationsSlugMembersUserIdRequest(c.Server, slug, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -7743,6 +7884,40 @@ func NewPostApiAdminOrganizationsRequestWithBody(server string, contentType stri
 	return req, nil
 }
 
+// NewDeleteApiAdminOrganizationsSlugRequest constructs an http.Request for the DeleteApiAdminOrganizationsSlug method
+func NewDeleteApiAdminOrganizationsSlugRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/organizations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetApiAdminOrganizationsSlugRequest constructs an http.Request for the GetApiAdminOrganizationsSlug method
 func NewGetApiAdminOrganizationsSlugRequest(server string, slug string) (*http.Request, error) {
 	var err error
@@ -7770,6 +7945,128 @@ func NewGetApiAdminOrganizationsSlugRequest(server string, slug string) (*http.R
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchApiAdminOrganizationsSlugRequest calls the generic PatchApiAdminOrganizationsSlug builder with application/json body
+func NewPatchApiAdminOrganizationsSlugRequest(server string, slug string, body PatchApiAdminOrganizationsSlugJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchApiAdminOrganizationsSlugRequestWithBody(server, slug, "application/json", bodyReader)
+}
+
+// NewPatchApiAdminOrganizationsSlugRequestWithBody constructs an http.Request for the PatchApiAdminOrganizationsSlug method, with any body, and a specified content type
+func NewPatchApiAdminOrganizationsSlugRequestWithBody(server string, slug string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/organizations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetApiAdminOrganizationsSlugMembersRequest constructs an http.Request for the GetApiAdminOrganizationsSlugMembers method
+func NewGetApiAdminOrganizationsSlugMembersRequest(server string, slug string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/organizations/%s/members", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteApiAdminOrganizationsSlugMembersUserIdRequest constructs an http.Request for the DeleteApiAdminOrganizationsSlugMembersUserId method
+func NewDeleteApiAdminOrganizationsSlugMembersUserIdRequest(server string, slug string, userId int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "slug", slug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "userId", userId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/organizations/%s/members/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12349,6 +12646,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/admin/organizations (the `PostApiAdminOrganizations` operationId).
 	PostApiAdminOrganizationsWithResponse(ctx context.Context, body PostApiAdminOrganizationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminOrganizationsResponse, error)
 
+	// DeleteApiAdminOrganizationsSlugWithResponse Delete Organization
+	//
+	// P1-4 (#281): soft delete with a CLOSED cascade (one transaction): slug rewritten to a #del-<id> placeholder (no slug reuse), pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their outstanding tokens introspect inactive), memberships detached. Audited as org_deleted.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/admin/organizations/{slug} (the `DeleteApiAdminOrganizationsSlug` operationId).
+	DeleteApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*DeleteApiAdminOrganizationsSlugResponse, error)
+
 	// GetApiAdminOrganizationsSlugWithResponse Get Organization
 	//
 	// Get a single organization by its slug.
@@ -12357,6 +12663,42 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/admin/organizations/{slug} (the `GetApiAdminOrganizationsSlug` operationId).
 	GetApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiAdminOrganizationsSlugResponse, error)
+
+	// PatchApiAdminOrganizationsSlugWithBodyWithResponse Update Organization
+	//
+	// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+	PatchApiAdminOrganizationsSlugWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiAdminOrganizationsSlugResponse, error)
+
+	// PatchApiAdminOrganizationsSlugWithResponse Update Organization
+	//
+	// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+	PatchApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, body PatchApiAdminOrganizationsSlugJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiAdminOrganizationsSlugResponse, error)
+
+	// GetApiAdminOrganizationsSlugMembersWithResponse List Organization Members
+	//
+	// P1-4 (#281): read-only member roster (user_id, username, role, joined_at).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/organizations/{slug}/members (the `GetApiAdminOrganizationsSlugMembers` operationId).
+	GetApiAdminOrganizationsSlugMembersWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiAdminOrganizationsSlugMembersResponse, error)
+
+	// DeleteApiAdminOrganizationsSlugMembersUserIdWithResponse Remove Organization Member
+	//
+	// P1-4 (#281): remove a membership. Removing the last owner is rejected (409) — transfer ownership first. Audited as org_member_removed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/admin/organizations/{slug}/members/{userId} (the `DeleteApiAdminOrganizationsSlugMembersUserId` operationId).
+	DeleteApiAdminOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId int, reqEditors ...RequestEditorFn) (*DeleteApiAdminOrganizationsSlugMembersUserIdResponse, error)
 
 	// PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse Transfer Organization Ownership
 	//
@@ -14715,6 +15057,40 @@ func (r PostApiAdminOrganizationsResponse) ContentType() string {
 	return ""
 }
 
+type DeleteApiAdminOrganizationsSlugResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiAdminOrganizationsSlugResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiAdminOrganizationsSlugResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiAdminOrganizationsSlugResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiAdminOrganizationsSlugResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetApiAdminOrganizationsSlugResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14750,6 +15126,133 @@ func (r GetApiAdminOrganizationsSlugResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetApiAdminOrganizationsSlugResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchApiAdminOrganizationsSlugResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchApiAdminOrganizationsSlugResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchApiAdminOrganizationsSlugResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchApiAdminOrganizationsSlugResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchApiAdminOrganizationsSlugResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminOrganizationsSlugMembersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Members *[]struct {
+			JoinedAt *string `json:"joined_at,omitempty"`
+			Role     *string `json:"role,omitempty"`
+			UserId   *int    `json:"user_id,omitempty"`
+			Username *string `json:"username,omitempty"`
+		} `json:"members,omitempty"`
+		Status *string `json:"status,omitempty"`
+		Total  *int    `json:"total,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminOrganizationsSlugMembersResponse) GetJSON200() *struct {
+	Members *[]struct {
+		JoinedAt *string `json:"joined_at,omitempty"`
+		Role     *string `json:"role,omitempty"`
+		UserId   *int    `json:"user_id,omitempty"`
+		Username *string `json:"username,omitempty"`
+	} `json:"members,omitempty"`
+	Status *string `json:"status,omitempty"`
+	Total  *int    `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminOrganizationsSlugMembersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminOrganizationsSlugMembersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminOrganizationsSlugMembersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminOrganizationsSlugMembersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiAdminOrganizationsSlugMembersUserIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiAdminOrganizationsSlugMembersUserIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiAdminOrganizationsSlugMembersUserIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiAdminOrganizationsSlugMembersUserIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiAdminOrganizationsSlugMembersUserIdResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20555,6 +21058,21 @@ func (c *ClientWithResponses) PostApiAdminOrganizationsWithResponse(ctx context.
 	return ParsePostApiAdminOrganizationsResponse(rsp)
 }
 
+// DeleteApiAdminOrganizationsSlugWithResponse Delete Organization
+//
+// P1-4 (#281): soft delete with a CLOSED cascade (one transaction): slug rewritten to a #del-<id> placeholder (no slug reuse), pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their outstanding tokens introspect inactive), memberships detached. Audited as org_deleted.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/admin/organizations/{slug} (the `DeleteApiAdminOrganizationsSlug` operationId).
+func (c *ClientWithResponses) DeleteApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*DeleteApiAdminOrganizationsSlugResponse, error) {
+	rsp, err := c.DeleteApiAdminOrganizationsSlug(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiAdminOrganizationsSlugResponse(rsp)
+}
+
 // GetApiAdminOrganizationsSlugWithResponse Get Organization
 //
 // Get a single organization by its slug.
@@ -20568,6 +21086,66 @@ func (c *ClientWithResponses) GetApiAdminOrganizationsSlugWithResponse(ctx conte
 		return nil, err
 	}
 	return ParseGetApiAdminOrganizationsSlugResponse(rsp)
+}
+
+// PatchApiAdminOrganizationsSlugWithBodyWithResponse Update Organization
+//
+// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+func (c *ClientWithResponses) PatchApiAdminOrganizationsSlugWithBodyWithResponse(ctx context.Context, slug string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchApiAdminOrganizationsSlugResponse, error) {
+	rsp, err := c.PatchApiAdminOrganizationsSlugWithBody(ctx, slug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiAdminOrganizationsSlugResponse(rsp)
+}
+
+// PatchApiAdminOrganizationsSlugWithResponse Update Organization
+//
+// P1-4 (#281): edit name/logo_uri/primary_color (slug is immutable — external reference anchor). Brand fields validated with the P1-1 rules (https-only logo + loopback exemption; color ^#[0-9a-fA-F]{3,6}$). Audited as org_updated.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/admin/organizations/{slug} (the `PatchApiAdminOrganizationsSlug` operationId).
+func (c *ClientWithResponses) PatchApiAdminOrganizationsSlugWithResponse(ctx context.Context, slug string, body PatchApiAdminOrganizationsSlugJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchApiAdminOrganizationsSlugResponse, error) {
+	rsp, err := c.PatchApiAdminOrganizationsSlug(ctx, slug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchApiAdminOrganizationsSlugResponse(rsp)
+}
+
+// GetApiAdminOrganizationsSlugMembersWithResponse List Organization Members
+//
+// P1-4 (#281): read-only member roster (user_id, username, role, joined_at).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/organizations/{slug}/members (the `GetApiAdminOrganizationsSlugMembers` operationId).
+func (c *ClientWithResponses) GetApiAdminOrganizationsSlugMembersWithResponse(ctx context.Context, slug string, reqEditors ...RequestEditorFn) (*GetApiAdminOrganizationsSlugMembersResponse, error) {
+	rsp, err := c.GetApiAdminOrganizationsSlugMembers(ctx, slug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminOrganizationsSlugMembersResponse(rsp)
+}
+
+// DeleteApiAdminOrganizationsSlugMembersUserIdWithResponse Remove Organization Member
+//
+// P1-4 (#281): remove a membership. Removing the last owner is rejected (409) — transfer ownership first. Audited as org_member_removed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/admin/organizations/{slug}/members/{userId} (the `DeleteApiAdminOrganizationsSlugMembersUserId` operationId).
+func (c *ClientWithResponses) DeleteApiAdminOrganizationsSlugMembersUserIdWithResponse(ctx context.Context, slug string, userId int, reqEditors ...RequestEditorFn) (*DeleteApiAdminOrganizationsSlugMembersUserIdResponse, error) {
+	rsp, err := c.DeleteApiAdminOrganizationsSlugMembersUserId(ctx, slug, userId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiAdminOrganizationsSlugMembersUserIdResponse(rsp)
 }
 
 // PostApiAdminOrganizationsSlugTransferOwnershipWithBodyWithResponse Transfer Organization Ownership
@@ -23413,6 +23991,22 @@ func ParsePostApiAdminOrganizationsResponse(rsp *http.Response) (*PostApiAdminOr
 	return response, nil
 }
 
+// ParseDeleteApiAdminOrganizationsSlugResponse parses an HTTP response from a DeleteApiAdminOrganizationsSlugWithResponse call
+func ParseDeleteApiAdminOrganizationsSlugResponse(rsp *http.Response) (*DeleteApiAdminOrganizationsSlugResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiAdminOrganizationsSlugResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParseGetApiAdminOrganizationsSlugResponse parses an HTTP response from a GetApiAdminOrganizationsSlugWithResponse call
 func ParseGetApiAdminOrganizationsSlugResponse(rsp *http.Response) (*GetApiAdminOrganizationsSlugResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23440,6 +24034,76 @@ func ParseGetApiAdminOrganizationsSlugResponse(rsp *http.Response) (*GetApiAdmin
 	case rsp.StatusCode == 404:
 		break // No content-type
 
+	}
+
+	return response, nil
+}
+
+// ParsePatchApiAdminOrganizationsSlugResponse parses an HTTP response from a PatchApiAdminOrganizationsSlugWithResponse call
+func ParsePatchApiAdminOrganizationsSlugResponse(rsp *http.Response) (*PatchApiAdminOrganizationsSlugResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchApiAdminOrganizationsSlugResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminOrganizationsSlugMembersResponse parses an HTTP response from a GetApiAdminOrganizationsSlugMembersWithResponse call
+func ParseGetApiAdminOrganizationsSlugMembersResponse(rsp *http.Response) (*GetApiAdminOrganizationsSlugMembersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminOrganizationsSlugMembersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Members *[]struct {
+				JoinedAt *string `json:"joined_at,omitempty"`
+				Role     *string `json:"role,omitempty"`
+				UserId   *int    `json:"user_id,omitempty"`
+				Username *string `json:"username,omitempty"`
+			} `json:"members,omitempty"`
+			Status *string `json:"status,omitempty"`
+			Total  *int    `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiAdminOrganizationsSlugMembersUserIdResponse parses an HTTP response from a DeleteApiAdminOrganizationsSlugMembersUserIdWithResponse call
+func ParseDeleteApiAdminOrganizationsSlugMembersUserIdResponse(rsp *http.Response) (*DeleteApiAdminOrganizationsSlugMembersUserIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiAdminOrganizationsSlugMembersUserIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil

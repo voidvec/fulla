@@ -169,6 +169,9 @@ onMounted(fetchOrgs)
             <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
               {{ $t('admin.organizations.issuerOverride') }}
             </th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase">
+              {{ $t('common.actions') }}
+            </th>
           </tr>
         </thead>
         <tbody class="bg-surface divide-y divide-neutral-200">
@@ -185,6 +188,15 @@ onMounted(fetchOrgs)
             </td>
             <td class="px-6 py-3 text-sm text-neutral-500">
               {{ org.issuer_override || '—' }}
+            </td>
+            <!-- P1-4 (#281): org management console entry. -->
+            <td class="px-6 py-3 text-right">
+              <RouterLink
+                :to="`/organizations/${org.slug}`"
+                class="btn btn-xs btn-primary"
+              >
+                {{ $t('admin.organizations.orgDetail.manage') }}
+              </RouterLink>
             </td>
           </tr>
         </tbody>

@@ -3,6 +3,7 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/BrandValidator.h>
 
+#include <fulla/storage/postgres/AdvisoryLock.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <fulla/storage/postgres/models/Organizations.h>
 #include <fulla/storage/postgres/models/Users.h>
@@ -11,6 +12,7 @@
 #include <drogon/drogon.h>
 
 #include <limits>
+#include <map>
 #include <regex>
 
 namespace organization
@@ -97,7 +99,9 @@ void OrganizationService::list(const ::drogon::HttpRequestPtr &req, ResponseCall
     // column but never serialized it); orgRowToJson preserves that exactly.
     Mapper<Organizations> mapper(db);
     mapper.findBy(
-      Criteria(),
+      // P1-4 (#281): the admin list shows only live orgs (soft-deleted
+      // rows carry the '#del-<id>' placeholder slug).
+      Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
       [cb](const std::vector<Organizations> &rows) {
           Json::Value json;
           Json::Value orgs(Json::arrayValue);
@@ -116,6 +120,19 @@ void OrganizationService::list(const ::drogon::HttpRequestPtr &req, ResponseCall
       }
     );
 }
+
+// P1-4 create tail (tombstone pre-check passes the row here; defined in
+// the anonymous namespace below — same unnamed namespace, internal
+// linkage).
+namespace
+{
+void insertAdminOrgRow(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrganizationService::ResponseCallback &cb,
+  const ::drogon::orm::DbClientPtr &db,
+  ::drogon_model::fulla_db::Organizations row
+);
+}  // namespace
 
 void OrganizationService::create(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
 {
@@ -180,10 +197,55 @@ void OrganizationService::create(const ::drogon::HttpRequestPtr &req, ResponseCa
     row.setPrimaryColor(primaryColor);
     row.setIssuerOverride(issuerOverride);
 
-    Mapper<Organizations> mapper(db);
-    mapper.insert(
+    // P1-4 (#281): tombstone pre-check — a soft-deleted org holds the slug
+    // as 'slug#del-<id>', so the unique constraint no longer fires for the
+    // original spelling. Same-name impersonation guard (audit rows still
+    // reference the old id).
+    try
+    {
+        Mapper<Organizations> tombstoneMapper(db);
+        tombstoneMapper.findBy(
+          Criteria(Organizations::Cols::_slug, CompareOperator::Like, slug + "#del-%"),
+          [req, cb, row, db](const std::vector<Organizations> &tombs) mutable {
+              if (!tombs.empty())
+              {
+                  respondError(
+                    req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                    "create org: this slug was used by a deleted organization and cannot "
+                    "be re-registered");
+                  return;
+              }
+              insertAdminOrgRow(req, cb, db, row);
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(
+                req, cb, "DB_QUERY_ERROR",
+                std::string("create org: tombstone check failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+    }
+}
+
+// Admin-create tail (after the P1-4 tombstone pre-check).
+namespace
+{
+void insertAdminOrgRow(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrganizationService::ResponseCallback &cb,
+  const ::drogon::orm::DbClientPtr &db,
+  ::drogon_model::fulla_db::Organizations row
+)
+{
+    const std::string slug = row.getValueOfSlug();
+    try
+    {
+        Mapper<Organizations> mapper(db);
+        mapper.insert(
       row,
-      [cb, slug, name, req](const Organizations &inserted) {
+      [cb, slug, req](const Organizations &inserted) {
           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
             "organization_created",
@@ -196,7 +258,7 @@ void OrganizationService::create(const ::drogon::HttpRequestPtr &req, ResponseCa
           Json::Value json;
           json["id"] = inserted.getValueOfId();
           json["slug"] = slug;
-          json["name"] = name;
+          json["name"] = inserted.getValueOfName();
           json["message"] = "Organization created";
           auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
           resp->setStatusCode(::drogon::k201Created);
@@ -213,7 +275,13 @@ void OrganizationService::create(const ::drogon::HttpRequestPtr &req, ResponseCa
           );
       }
     );
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "create org: Mapper construction failed");
+    }
 }
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // POST /api/admin/organizations/{slug}/transfer-ownership  (#221 admin override)
@@ -273,7 +341,8 @@ void OrganizationService::transferOwnership(
     {
         Mapper<Organizations> orgMapper(db);
         orgMapper.findOne(
-          Criteria(Organizations::Cols::_slug, CompareOperator::EQ, slug),
+          Criteria(Organizations::Cols::_slug, CompareOperator::EQ, slug) &&
+            Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
           [req, cb, db, slug, targetUserId, userNotFound](const Organizations &org) {
               const int32_t orgId = org.getValueOfId();
               // #221: the target must be a LIVE user — transferring the seat
@@ -449,7 +518,8 @@ void OrganizationService::getBySlug(
 
     Mapper<Organizations> mapper(db);
     mapper.findOne(
-      Criteria(Organizations::Cols::_slug, CompareOperator::EQ, slug),
+      Criteria(Organizations::Cols::_slug, CompareOperator::EQ, slug) &&
+        Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
       [cb](const Organizations &row) {
           Json::Value json = orgRowToJson(row);
           (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -460,6 +530,569 @@ void OrganizationService::getBySlug(
           (void)e;
       }
     );
+}
+
+// ---------------------------------------------------------------------------
+// P1-4 (#281): PATCH / DELETE / member management.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+void auditOrg(
+  const ::drogon::HttpRequestPtr &req,
+  const char *action,
+  const std::string &slug
+)
+{
+    auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+    if (!plugin)
+        return;
+    ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+      plugin->getAuditSink(), action, "success", req, "", "organization", slug);
+}
+
+// Shared tail of removeMember: delete the membership row + audit + respond.
+void deleteMembership(
+  const ::drogon::HttpRequestPtr &req,
+  const organization::OrganizationService::ResponseCallback &cb,
+  const ::drogon::orm::DbClientPtr &db,
+  const std::string &slug,
+  int32_t orgId,
+  int32_t targetUserId
+)
+{
+    using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
+    try
+    {
+        Mapper<MemberModel> mapper(db);
+        mapper.deleteBy(
+          Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ, orgId) &&
+            Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, targetUserId),
+          [req, cb, slug](const std::size_t removed) {
+              if (removed == 0)
+              {
+                  respondError(
+                    req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "membership not found");
+                  return;
+              }
+              ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
+                ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
+                "org_member_removed",
+                "success",
+                req,
+                "",
+                "organization",
+                slug,
+                Json::Value(Json::objectValue));
+              Json::Value json;
+              json["status"] = "success";
+              json["message"] = "Member removed";
+              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+          },
+          [req, cb](const DrogonDbException &e) {
+              respondError(
+                req, cb, "DB_QUERY_ERROR",
+                std::string("remove member failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "remove member: Mapper construction failed");
+    }
+}
+}  // namespace
+
+void OrganizationService::updateOrg(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug
+)
+{
+    auto jsonBody = req->getJsonObject();
+    if (!jsonBody)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "update org: JSON body required");
+        return;
+    }
+    const bool hasName = jsonBody->isMember("name");
+    const bool hasLogo = jsonBody->isMember("logo_uri");
+    const bool hasColor = jsonBody->isMember("primary_color");
+    if (!hasName && !hasLogo && !hasColor)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "update org: no editable field present (name / logo_uri / primary_color)");
+        return;
+    }
+    if (jsonBody->isMember("slug"))
+    {
+        respondError(
+          req, cb, "VALIDATION_INVALID_INPUT",
+          "update org: slug is immutable (external reference anchor)");
+        return;
+    }
+
+    std::string name;
+    if (hasName)
+    {
+        name = (*jsonBody)["name"].asString();
+        if (name.empty() || name.size() > 100)
+        {
+            respondError(req, cb, "VALIDATION_INVALID_INPUT", "update org: name must be 1-100 chars");
+            return;
+        }
+    }
+    // P1-1 brand validators (same rules as create).
+    if (hasColor)
+    {
+        const std::string err =
+          ::fulla::drogon::utils::validatePrimaryColor((*jsonBody)["primary_color"].asString());
+        if (!err.empty())
+        {
+            respondError(req, cb, "VALIDATION_FORMAT_ERROR", "update org: " + err);
+            return;
+        }
+    }
+    if (hasLogo)
+    {
+        const std::string err =
+          ::fulla::drogon::utils::validateBrandUri((*jsonBody)["logo_uri"].asString());
+        if (!err.empty())
+        {
+            respondError(req, cb, "VALIDATION_FORMAT_ERROR", "update org: " + err);
+            return;
+        }
+    }
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    try
+    {
+        using OrgModel = ::drogon_model::fulla_db::Organizations;
+        Mapper<OrgModel> mapper(db);
+        mapper.findOne(
+          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug) &&
+            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
+          [req, cb, db, slug, jsonBody, hasName, hasLogo, hasColor](OrgModel row) {
+              if (hasName)
+                  row.setName((*jsonBody)["name"].asString());
+              if (hasLogo)
+              {
+                  const std::string logo = (*jsonBody)["logo_uri"].asString();
+                  if (logo.empty())
+                      row.setLogoUriToNull();
+                  else
+                      row.setLogoUri(logo);
+              }
+              if (hasColor)
+              {
+                  const std::string color = (*jsonBody)["primary_color"].asString();
+                  if (color.empty())
+                      row.setPrimaryColorToNull();
+                  else
+                      row.setPrimaryColor(color);
+              }
+              row.setUpdatedAt(::trantor::Date::now());
+              try
+              {
+                  Mapper<OrgModel> updateMapper(db);
+                  updateMapper.update(
+                    row,
+                    [req, cb, slug](const std::size_t) {
+                        auditOrg(req, "org_updated", slug);
+                        Json::Value json;
+                        json["status"] = "success";
+                        json["message"] = "Organization updated";
+                        (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(
+                          req, cb, "DB_QUERY_ERROR",
+                          std::string("update org failed: ") + e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR", "update org: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("org lookup failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "update org: Mapper construction failed");
+    }
+}
+
+void OrganizationService::deleteOrg(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug
+)
+{
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    using OrgModel = ::drogon_model::fulla_db::Organizations;
+
+    // Resolve the live org first (outside the transaction — the lock key
+    // needs the org id).
+    try
+    {
+        Mapper<OrgModel> mapper(db);
+        mapper.findOne(
+          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug) &&
+            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
+          [req, cb, db, slug](const OrgModel &org) {
+              const int32_t orgId = org.getValueOfId();
+
+              // The closed cascade, ONE advisory-locked transaction keyed on
+              // the org domain (serializes against concurrent member/invite
+              // writes on the same org).
+              ::fulla::storage::postgres::withAdvisoryXactLock(
+                db,
+                {"org:" + std::to_string(orgId)},
+                [req, cb, db, slug, orgId](
+                  const std::shared_ptr<::drogon::orm::Transaction> &txn) {
+                    auto respondDeleted = [req, cb, slug, orgId]() {
+                        auditOrg(req, "org_deleted", slug);
+                        Json::Value json;
+                        json["status"] = "success";
+                        json["message"] = "Organization deleted";
+                        json["id"] = orgId;
+                        (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                    };
+                    auto respondTxnError = [req, cb](const std::string &what) {
+                        respondError(
+                          req, cb, "DB_QUERY_ERROR",
+                          "delete org cascade failed (transaction rolled back): " + what);
+                    };
+
+                    // The multi-table cascade below runs as raw SQL inside the
+                    // transaction — db-operations.md exemption: documented
+                    // bulk operations (V044 design: cascade UPDATE/DELETE
+                    // across four child tables in one atomic step; Mapper
+                    // per-table would need four coordinated transactions).
+                    txn->execSqlAsync(
+                      // 1. Soft-delete marker + slug placeholder rewrite:
+                      //    the unique constraint keeps the tombstone from
+                      //    colliding and BLOCKS slug reuse (anti-confusion:
+                      //    audit_logs.org_id has no FK and still points at
+                      //    this id).
+                      "UPDATE organizations SET deleted_at = now(), "
+                      "slug = slug || '#del-' || id::text, updated_at = now() "
+                      "WHERE id = $1 AND deleted_at IS NULL",
+                      [txn, respondDeleted, respondTxnError, orgId](const Result &) {
+                          txn->execSqlAsync(
+                            // 2. Void pending invitations (physical delete —
+                            //    FK CASCADE never fires on the soft delete
+                            //    above, and an accept within the 72h TTL
+                            //    would resurrect membership).
+                            "DELETE FROM organization_invitations "
+                            "WHERE organization_id = $1 AND accepted_at IS NULL",
+                            [txn, respondDeleted, respondTxnError, orgId](const Result &) {
+                                txn->execSqlAsync(
+                                  // 3. Void pending succession nominations
+                                  //    (same resurrection class — a soft-deleted
+                                  //    org must not change owner seats).
+                                  "DELETE FROM organization_succession_nominations "
+                                  "WHERE organization_id = $1 AND accepted_at IS NULL",
+                                  [txn, respondDeleted, respondTxnError, orgId](const Result &) {
+                                      txn->execSqlAsync(
+                                        // 4. Revoke live org consents.
+                                        "UPDATE organization_consents SET revoked_at = now() "
+                                        "WHERE organization_id = $1 AND revoked_at IS NULL",
+                                        [txn, respondDeleted, respondTxnError, orgId](const Result &) {
+                                            txn->execSqlAsync(
+                                              // 5. Suspend owned clients — the
+                                              //    proven V035 channel
+                                              //    (PostgresClientRepository
+                                              //    rejects suspended clients'
+                                              //    credentials) + the P1-4
+                                              //    introspection overlay.
+                                              "UPDATE oauth2_client_owners SET status = 'suspended' "
+                                              "WHERE org_id = $1 AND status = 'active'",
+                                              [txn, respondDeleted, respondTxnError, orgId](const Result &) {
+                                                  txn->execSqlAsync(
+                                                    // 6. Detach memberships.
+                                                    "DELETE FROM organization_members "
+                                                    "WHERE organization_id = $1",
+                                                    // #219 pattern: the success response
+                                                    // fires from the COMMIT callback — an
+                                                    // inline response would race the commit.
+                                                    [txn, respondDeleted, respondTxnError](const Result &) {
+                                                        txn->setCommitCallback(
+                                                          [respondDeleted, respondTxnError](bool committed) {
+                                                              if (committed)
+                                                                  respondDeleted();
+                                                              else
+                                                                  respondTxnError("commit failed");
+                                                          });
+                                                    },
+                                                    [respondTxnError](const DrogonDbException &e) {
+                                                        respondTxnError(e.base().what());
+                                                    },
+                                                    orgId);
+                                              },
+                                              [respondTxnError](const DrogonDbException &e) {
+                                                  respondTxnError(e.base().what());
+                                              },
+                                              orgId);
+                                        },
+                                        [respondTxnError](const DrogonDbException &e) {
+                                            respondTxnError(e.base().what());
+                                        },
+                                        orgId);
+                                  },
+                                  [respondTxnError](const DrogonDbException &e) {
+                                      respondTxnError(e.base().what());
+                                  },
+                                  orgId);
+                            },
+                            [respondTxnError](const DrogonDbException &e) {
+                                respondTxnError(e.base().what());
+                            },
+                            orgId);
+                      },
+                      [respondTxnError](const DrogonDbException &e) {
+                          respondTxnError(e.base().what());
+                      },
+                      orgId);
+                  },
+                  [req, cb](const std::string &lockError) {
+                      respondError(
+                        req, cb, "DB_QUERY_ERROR",
+                        "delete org: lock acquisition failed: " + lockError);
+                  });
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("org lookup failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "delete org: Mapper construction failed");
+    }
+}
+
+void OrganizationService::listMembers(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug
+)
+{
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    using OrgModel = ::drogon_model::fulla_db::Organizations;
+    using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
+    using UserModel = ::drogon_model::fulla_db::Users;
+
+    try
+    {
+        Mapper<OrgModel> mapper(db);
+        mapper.findOne(
+          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug) &&
+            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
+          [req, cb, db](const OrgModel &org) {
+              try
+              {
+                  Mapper<MemberModel>(db).findBy(
+                    Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ,
+                             org.getValueOfId()),
+                    [req, cb, db](const std::vector<MemberModel> &members) {
+                        std::vector<int32_t> userIds;
+                        userIds.reserve(members.size());
+                        for (const auto &m : members)
+                            userIds.push_back(m.getValueOfUserId());
+                        auto resolveUsers = [req, cb, members](
+                                              const std::vector<::drogon_model::fulla_db::Users>
+                                                &users) {
+                            std::map<int32_t, std::string> names;
+                            for (const auto &u : users)
+                                names[u.getValueOfId()] = u.getValueOfUsername();
+                            Json::Value json;
+                            json["status"] = "success";
+                            Json::Value arr(Json::arrayValue);
+                            for (const auto &m : members)
+                            {
+                                Json::Value row;
+                                row["user_id"] = m.getValueOfUserId();
+                                row["username"] = names.count(m.getValueOfUserId())
+                                                    ? names[m.getValueOfUserId()]
+                                                    : "";
+                                row["role"] = m.getValueOfRole();
+                                row["joined_at"] = m.getValueOfCreatedAt().toDbString();
+                                arr.append(row);
+                            }
+                            json["members"] = arr;
+                            json["total"] = static_cast<Json::Int64>(members.size());
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+                        };
+                        if (userIds.empty())
+                        {
+                            resolveUsers({});
+                            return;
+                        }
+                        try
+                        {
+                            Mapper<UserModel>(db).findBy(
+                              Criteria(UserModel::Cols::_id, CompareOperator::In, userIds),
+                              [resolveUsers](const std::vector<UserModel> &users) {
+                                  resolveUsers(users);
+                              },
+                              [req, cb](const DrogonDbException &e) {
+                                  respondError(
+                                    req, cb, "DB_QUERY_ERROR",
+                                    std::string("member user lookup failed: ") + e.base().what());
+                              });
+                        }
+                        catch (...)
+                        {
+                            respondError(req, cb, "DB_QUERY_ERROR", "list members: Mapper construction failed");
+                        }
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        respondError(
+                          req, cb, "DB_QUERY_ERROR",
+                          std::string("member lookup failed: ") + e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR", "list members: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("org lookup failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "list members: Mapper construction failed");
+    }
+}
+
+void OrganizationService::removeMember(
+  const ::drogon::HttpRequestPtr &req,
+  ResponseCallback cb,
+  const std::string &slug,
+  const std::string &userId
+)
+{
+    int32_t targetUserId = 0;
+    try
+    {
+        targetUserId = std::stoi(userId);
+    }
+    catch (...)
+    {
+        respondError(req, cb, "VALIDATION_INVALID_INPUT", "remove member: userId must be an integer");
+        return;
+    }
+
+    auto db = getDbOrRespond(req, cb);
+    if (!db)
+        return;
+
+    using OrgModel = ::drogon_model::fulla_db::Organizations;
+    using MemberModel = ::drogon_model::fulla_db::OrganizationMembers;
+
+    try
+    {
+        Mapper<OrgModel> mapper(db);
+        mapper.findOne(
+          Criteria(OrgModel::Cols::_slug, CompareOperator::EQ, slug) &&
+            Criteria(OrgModel::Cols::_deleted_at, CompareOperator::IsNull),
+          [req, cb, db, slug, targetUserId](const OrgModel &org) {
+              try
+              {
+                  Mapper<MemberModel>(db).findOne(
+                    Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ,
+                             org.getValueOfId()) &&
+                      Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, targetUserId),
+                    [req, cb, db, slug, targetUserId, orgId = org.getValueOfId()](
+                      const MemberModel &membership) {
+                        if (membership.getValueOfRole() == "owner")
+                        {
+                            // Count owners — a single-owner org must transfer
+                            // the seat first (the org would otherwise be
+                            // stranded without any manager).
+                            try
+                            {
+                                Mapper<MemberModel>(db).findBy(
+                                  Criteria(MemberModel::Cols::_organization_id, CompareOperator::EQ,
+                                           orgId) &&
+                                    Criteria(MemberModel::Cols::_role, CompareOperator::EQ,
+                                             std::string("owner")),
+                                  [req, cb, db, slug, targetUserId, orgId](
+                                    const std::vector<MemberModel> &owners) {
+                                      if (owners.size() <= 1)
+                                      {
+                                          respondError(
+                                            req, cb, "VALIDATION_RESOURCE_CONFLICT",
+                                            "remove member: transfer ownership before removing the last owner");
+                                          return;
+                                      }
+                                      deleteMembership(req, cb, db, slug, orgId, targetUserId);
+                                  },
+                                  [req, cb](const DrogonDbException &e) {
+                                      respondError(
+                                        req, cb, "DB_QUERY_ERROR",
+                                        std::string("owner count failed: ") + e.base().what());
+                                  });
+                            }
+                            catch (...)
+                            {
+                                respondError(req, cb, "DB_QUERY_ERROR", "remove member: Mapper construction failed");
+                            }
+                            return;
+                        }
+                        deleteMembership(req, cb, db, slug, orgId, targetUserId);
+                    },
+                    [req, cb](const DrogonDbException &e) {
+                        if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                            respondError(
+                              req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "membership not found");
+                        else
+                            respondError(
+                              req, cb, "DB_QUERY_ERROR",
+                              std::string("membership lookup failed: ") + e.base().what());
+                    });
+              }
+              catch (...)
+              {
+                  respondError(req, cb, "DB_QUERY_ERROR", "remove member: Mapper construction failed");
+              }
+          },
+          [req, cb](const DrogonDbException &e) {
+              if (dynamic_cast<const UnexpectedRows *>(&e) != nullptr)
+                  respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "organization not found");
+              else
+                  respondError(
+                    req, cb, "DB_QUERY_ERROR", std::string("org lookup failed: ") + e.base().what());
+          });
+    }
+    catch (...)
+    {
+        respondError(req, cb, "DB_QUERY_ERROR", "remove member: Mapper construction failed");
+    }
 }
 
 }  // namespace organization
