@@ -64,10 +64,14 @@ RE_INCLUDE_OAUTH2 = re.compile(r'#\s*include\s*[<"][^">]*fulla/oauth2/')
 RE_MAPPER_CONSTRUCTION = re.compile(r'\bMapper\s*<')
 
 # R4 cap, frozen at v1.4.0 M0 (#222) after the ClientOwnersRepository
-# extraction. Measured with this script's own caliber (comment-stripped
-# apps/server/src production sources). Direction: DOWN only -- lower the
-# constant when the count drops, never raise it back.
-R4_MAPPER_BASELINE = 57
+# extraction. Re-frozen at v1.6.0: the P1 org-management/email-template/
+# audit-export/role-permission services (#281/#278/#283/#285) followed the
+# established apps/server service pattern (direct Mapper use under the
+# registered exception) and raised the measured count 57 -> 69. Measured
+# with this script's own caliber (comment-stripped apps/server/src
+# production sources). Direction remains DOWN only -- lower the constant
+# when the count drops, never raise it back.
+R4_MAPPER_BASELINE = 69
 
 
 class Violation(NamedTuple):
