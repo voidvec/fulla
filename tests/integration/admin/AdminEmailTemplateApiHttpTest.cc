@@ -283,6 +283,19 @@ DROGON_TEST(Integration_P1_AdminEmailTemplate_TestSend_SpyCapturesEditedContent)
     auto token = loginAsAdmin();
     REQUIRE(token.has_value());
 
+    // Quota hygiene: the rolling-24h quota counts email_test_sent audit
+    // rows for THIS admin; repeated suite runs against one persistent DB
+    // accumulate them (they are test artifacts — test-send only ever fires
+    // from this suite). Clear them so the happy path below cannot trip the
+    // 429 branch through no fault of its own.
+    {
+        auto db = ::drogon::app().getDbClient();
+        auto f = db->execSqlAsyncFuture(
+          "DELETE FROM audit_logs WHERE action = 'email_test_sent' AND "
+          "actor_id = (SELECT public_sub::text FROM users WHERE username = 'admin')");
+        f.get();
+    }
+
     const std::string path = "/api/admin/email-templates/org_invitation/en";
 
     // Edit first (subject marker unique to this run).

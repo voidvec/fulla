@@ -87,9 +87,9 @@ def sync_detailed(
 ) -> Response[ErrorEnvelope | PatchApiMeApplicationsClientIdResponse200]:
     """Update Application
 
-     Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application
-    (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are
-    left unchanged.
+     Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered
+    application (personal apps are managed by the creator, org apps by org owner/admin members). Absent
+    keys are left unchanged.
 
     Args:
         client_id (str):
@@ -123,9 +123,9 @@ def sync(
 ) -> ErrorEnvelope | PatchApiMeApplicationsClientIdResponse200 | None:
     """Update Application
 
-     Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application
-    (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are
-    left unchanged.
+     Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered
+    application (personal apps are managed by the creator, org apps by org owner/admin members). Absent
+    keys are left unchanged.
 
     Args:
         client_id (str):
@@ -154,9 +154,9 @@ async def asyncio_detailed(
 ) -> Response[ErrorEnvelope | PatchApiMeApplicationsClientIdResponse200]:
     """Update Application
 
-     Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application
-    (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are
-    left unchanged.
+     Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered
+    application (personal apps are managed by the creator, org apps by org owner/admin members). Absent
+    keys are left unchanged.
 
     Args:
         client_id (str):
@@ -188,9 +188,9 @@ async def asyncio(
 ) -> ErrorEnvelope | PatchApiMeApplicationsClientIdResponse200 | None:
     """Update Application
 
-     Update name / redirect_uris / allowed_grant_types / scopes of a self-registered application
-    (personal apps are managed by the creator, org apps by org owner/admin members). Absent keys are
-    left unchanged.
+     Update name / redirect_uris / allowed_grant_types / scopes / logo_uri of a self-registered
+    application (personal apps are managed by the creator, org apps by org owner/admin members). Absent
+    keys are left unchanged.
 
     Args:
         client_id (str):

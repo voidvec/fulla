@@ -19,12 +19,15 @@ class PatchApiMeApplicationsClientIdBody:
         redirect_uris (list[str] | Unset):
         allowed_grant_types (list[str] | Unset):
         scopes (list[str] | Unset):
+        logo_uri (str | Unset): P1-1 (#279): application brand image (https-only, loopback hosts exempt). An empty
+            string clears it.
     """
 
     name: str | Unset = UNSET
     redirect_uris: list[str] | Unset = UNSET
     allowed_grant_types: list[str] | Unset = UNSET
     scopes: list[str] | Unset = UNSET
+    logo_uri: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +45,8 @@ class PatchApiMeApplicationsClientIdBody:
         if not isinstance(self.scopes, Unset):
             scopes = self.scopes
 
+        logo_uri = self.logo_uri
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({})
@@ -53,6 +58,8 @@ class PatchApiMeApplicationsClientIdBody:
             field_dict["allowed_grant_types"] = allowed_grant_types
         if scopes is not UNSET:
             field_dict["scopes"] = scopes
+        if logo_uri is not UNSET:
+            field_dict["logo_uri"] = logo_uri
 
         return field_dict
 
@@ -67,11 +74,14 @@ class PatchApiMeApplicationsClientIdBody:
 
         scopes = cast(list[str], d.pop("scopes", UNSET))
 
+        logo_uri = d.pop("logo_uri", UNSET)
+
         patch_api_me_applications_client_id_body = cls(
             name=name,
             redirect_uris=redirect_uris,
             allowed_grant_types=allowed_grant_types,
             scopes=scopes,
+            logo_uri=logo_uri,
         )
 
         patch_api_me_applications_client_id_body.additional_properties = d

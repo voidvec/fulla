@@ -67,13 +67,16 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     client_id: str,
 ) -> Response[Any | GetOauth2AuthorizeContextResponse200]:
-    """Authorize Context (client display name)
+    """Authorize Context (client display name + branding)
 
      Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for
     active clients, so the user sees WHICH application is asking for credentials before typing a
     password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name:
-    <client_id>}. Carries only the display name — client_id is not a secret (it appears in every
-    authorize redirect).
+    <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-
+    only at write time) and, for org-owned applications, the owning organization's brand block
+    {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen
+    pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize
+    redirect).
 
     Args:
         client_id (str):
@@ -102,13 +105,16 @@ def sync(
     client: AuthenticatedClient | Client,
     client_id: str,
 ) -> Any | GetOauth2AuthorizeContextResponse200 | None:
-    """Authorize Context (client display name)
+    """Authorize Context (client display name + branding)
 
      Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for
     active clients, so the user sees WHICH application is asking for credentials before typing a
     password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name:
-    <client_id>}. Carries only the display name — client_id is not a secret (it appears in every
-    authorize redirect).
+    <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-
+    only at write time) and, for org-owned applications, the owning organization's brand block
+    {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen
+    pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize
+    redirect).
 
     Args:
         client_id (str):
@@ -132,13 +138,16 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     client_id: str,
 ) -> Response[Any | GetOauth2AuthorizeContextResponse200]:
-    """Authorize Context (client display name)
+    """Authorize Context (client display name + branding)
 
      Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for
     active clients, so the user sees WHICH application is asking for credentials before typing a
     password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name:
-    <client_id>}. Carries only the display name — client_id is not a secret (it appears in every
-    authorize redirect).
+    <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-
+    only at write time) and, for org-owned applications, the owning organization's brand block
+    {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen
+    pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize
+    redirect).
 
     Args:
         client_id (str):
@@ -165,13 +174,16 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     client_id: str,
 ) -> Any | GetOauth2AuthorizeContextResponse200 | None:
-    """Authorize Context (client display name)
+    """Authorize Context (client display name + branding)
 
      Public application-name discovery for the login/consent screens (P0-6): answers {client_name} for
     active clients, so the user sees WHICH application is asking for credentials before typing a
     password. Unknown or soft-deleted clients answer 404; every other failure degrades to {client_name:
-    <client_id>}. Carries only the display name — client_id is not a secret (it appears in every
-    authorize redirect).
+    <client_id>}. P1-1 (#279) extends the payload additively with the client's logo_uri (V041, https-
+    only at write time) and, for org-owned applications, the owning organization's brand block
+    {org_name, logo_uri?, primary_color?}. Branding is display-only and untrusted — the consent screen
+    pairs it with the owner attribution label. client_id is not a secret (it appears in every authorize
+    redirect).
 
     Args:
         client_id (str):

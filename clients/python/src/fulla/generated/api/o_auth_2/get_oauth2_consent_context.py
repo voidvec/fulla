@@ -16,6 +16,8 @@ def _get_kwargs(
     redirect_uri: str,
     state: str | Unset = UNSET,
     user_id: str,
+    scope: str | Unset = UNSET,
+    locale: str | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
@@ -29,6 +31,10 @@ def _get_kwargs(
     params["state"] = state
 
     params["user_id"] = user_id
+
+    params["scope"] = scope
+
+    params["locale"] = locale
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -86,6 +92,8 @@ def sync_detailed(
     redirect_uri: str,
     state: str | Unset = UNSET,
     user_id: str,
+    scope: str | Unset = UNSET,
+    locale: str | Unset = UNSET,
 ) -> Response[Any | GetOauth2ConsentContextResponse200]:
     """Consent screen context (owner attribution + org banner)
 
@@ -103,6 +111,8 @@ def sync_detailed(
         redirect_uri (str):
         state (str | Unset):
         user_id (str):
+        scope (str | Unset):
+        locale (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -118,6 +128,8 @@ def sync_detailed(
         redirect_uri=redirect_uri,
         state=state,
         user_id=user_id,
+        scope=scope,
+        locale=locale,
     )
 
     response = client.get_httpx_client().request(
@@ -135,6 +147,8 @@ def sync(
     redirect_uri: str,
     state: str | Unset = UNSET,
     user_id: str,
+    scope: str | Unset = UNSET,
+    locale: str | Unset = UNSET,
 ) -> Any | GetOauth2ConsentContextResponse200 | None:
     """Consent screen context (owner attribution + org banner)
 
@@ -152,6 +166,8 @@ def sync(
         redirect_uri (str):
         state (str | Unset):
         user_id (str):
+        scope (str | Unset):
+        locale (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -168,6 +184,8 @@ def sync(
         redirect_uri=redirect_uri,
         state=state,
         user_id=user_id,
+        scope=scope,
+        locale=locale,
     ).parsed
 
 
@@ -179,6 +197,8 @@ async def asyncio_detailed(
     redirect_uri: str,
     state: str | Unset = UNSET,
     user_id: str,
+    scope: str | Unset = UNSET,
+    locale: str | Unset = UNSET,
 ) -> Response[Any | GetOauth2ConsentContextResponse200]:
     """Consent screen context (owner attribution + org banner)
 
@@ -196,6 +216,8 @@ async def asyncio_detailed(
         redirect_uri (str):
         state (str | Unset):
         user_id (str):
+        scope (str | Unset):
+        locale (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -211,6 +233,8 @@ async def asyncio_detailed(
         redirect_uri=redirect_uri,
         state=state,
         user_id=user_id,
+        scope=scope,
+        locale=locale,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -226,6 +250,8 @@ async def asyncio(
     redirect_uri: str,
     state: str | Unset = UNSET,
     user_id: str,
+    scope: str | Unset = UNSET,
+    locale: str | Unset = UNSET,
 ) -> Any | GetOauth2ConsentContextResponse200 | None:
     """Consent screen context (owner attribution + org banner)
 
@@ -243,6 +269,8 @@ async def asyncio(
         redirect_uri (str):
         state (str | Unset):
         user_id (str):
+        scope (str | Unset):
+        locale (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -260,5 +288,7 @@ async def asyncio(
             redirect_uri=redirect_uri,
             state=state,
             user_id=user_id,
+            scope=scope,
+            locale=locale,
         )
     ).parsed
