@@ -583,25 +583,17 @@ int main(int argc, char **argv)
         std::_Exit(0);
     }
 
-    // For failed tests, attempt normal teardown to get more diagnostic info
-    std::cout << "Attempting graceful teardown for failed test..." << std::endl;
-    try
-    {
-        auto loop = drogon::app().getLoop();
-        if (loop && loop->isRunning())
-        {
-            loop->queueInLoop([=]() { drogon::app().quit(); });
-        }
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "Exception during teardown: " << e.what() << std::endl;
-    }
-
-    if (thr.joinable())
-    {
-        thr.join();
-    }
+    // Failed tests exit the SAME fast way. The "graceful teardown for
+    // diagnostics" below (loop quit + thread join) is precisely the code
+    // path that segfaults on gcov/Debug builds — one flaky assertion then
+    // cascaded into SEGFAULT-on-exit, double-reporting the run (observed on
+    // the coverage CI leg: 61706/61707 assertions green, exit SEGFAULT).
+    // The failure details were already printed by the test framework above;
+    // teardown adds none. Flush the gcov counters, keep the exit code.
+    std::cout << "Tests failed; fast exit (teardown join segfaults instrumented builds)..."
+              << std::endl;
+    flushGcovIfInstrumented();
+    std::_Exit(status != 0 ? 1 : 0);
 
     return status;
 }
