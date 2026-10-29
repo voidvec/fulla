@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Client SDK regeneration + drift gate for clients/python and clients/go.
+"""Client SDK regeneration + drift gate for clients/python, clients/go and clients/ts.
 
 Regenerates the committed generated code under clients/ from the single
 OpenAPI source of truth (apps/server/openapi.yaml) and, with --check,
 compares the fresh output against what is committed (design:
 docs/productization-evolution/in-progress/client-sdk-facility-design.md
-sections D9 + 11.5).
+sections D9 + 11.5; TS client added by P1-5 #282).
 
 Generators are pinned (upgrades go through a dedicated PR so the resulting
 whole-tree diff stays reviewable):
@@ -16,10 +16,17 @@ whole-tree diff stays reviewable):
                                     also writes project-level files next to the
                                     package which are deliberately NOT copied)
   oapi-codegen v2.8.0            -> clients/go/generated/client.gen.go
+  @hey-api/openapi-ts 0.99.0     -> clients/ts/src/generated/
+                                    (invoked via the local node_modules install
+                                    in clients/ts -- `npm install` there first;
+                                    emitted import extensions follow
+                                    clients/ts/tsconfig.json, so that file is
+                                    part of the determinism contract)
 
 Also asserts the version linkage clients/python/pyproject.toml ==
-cmake/Version.cmake so a forgotten bump can never publish a wrong PyPI
-version (release.yml's sdk-python job runs --version-only as a backstop).
+clients/ts/package.json == cmake/Version.cmake so a forgotten bump can
+never publish a wrong PyPI/npm version (release.yml's sdk-python job runs
+--version-only as a backstop).
 
 Exit codes:
   0  regeneration done / no drift / versions in sync
@@ -28,16 +35,18 @@ Exit codes:
 
 Usage:
   regen_clients.py [--repo ROOT] [--check] [--python-only] [--go-only]
-                   [--version-only] [--selftest]
+                   [--ts-only] [--version-only] [--selftest]
 
 Local network note: the Go generator downloads modules on first use; on
 networks where proxy.golang.org is unreachable set GOPROXY to a mirror
-(e.g. https://goproxy.cn,direct). CI runners are unaffected.
+(e.g. https://goproxy.cn,direct). CI runners are unaffected. The TS
+generator needs no network once `npm install` has run in clients/ts.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -61,10 +70,14 @@ PY_PACKAGE_NAME = "fulla"  # must match PY_GEN_CONFIG package_name_override
 GO_CLIENT_DIR = Path("clients/go")
 GO_GENERATED = GO_CLIENT_DIR / "generated"
 GO_PACKAGE = "generated"
+TS_CLIENT_DIR = Path("clients/ts")
+TS_GENERATED = TS_CLIENT_DIR / "src" / "generated"
+TS_PACKAGE = TS_CLIENT_DIR / "package.json"
 
 OPENAPI_PYTHON_CLIENT_VERSION = "0.29.0"
 OAPI_CODEGEN_MODULE = "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
 OAPI_CODEGEN_VERSION = "v2.8.0"
+HEY_API_VERSION = "0.99.0"
 
 # Compared content is newline-normalized: the generators write LF, while a
 # Windows checkout with core.autocrlf=true materializes CRLF. That conversion
@@ -98,19 +111,37 @@ def _pyproject_version(repo: Path) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _ts_package_version(repo: Path) -> Optional[str]:
+    # First "version" key wins; clients/ts/package.json keeps it near the
+    # top, above devDependencies, so an accidental second occurrence there
+    # cannot shadow it.
+    text = (repo / TS_PACKAGE).read_text(encoding="utf-8")
+    m = re.search(r'"version"\s*:\s*"([^"]+)"', text)
+    return m.group(1) if m else None
+
+
 def check_version_sync(repo: Path) -> bool:
     cmake = _cmake_version(repo)
     pyproject = _pyproject_version(repo)
-    if cmake is None or pyproject is None:
-        print(f"{TAG}[err] could not parse versions (cmake={cmake} pyproject={pyproject!r})")
+    ts_package = _ts_package_version(repo)
+    if cmake is None or pyproject is None or ts_package is None:
+        print(
+            f"{TAG}[err] could not parse versions (cmake={cmake} pyproject={pyproject!r} ts={ts_package!r})"
+        )
         return False
     expected = ".".join(str(c) for c in cmake)
+    ok = True
     if pyproject != expected:
         print(f"{TAG}[drift] version mismatch: pyproject={pyproject} != cmake/Version.cmake={expected}")
         print(f"{TAG}        bump clients/python/pyproject.toml together with cmake/Version.cmake")
-        return False
-    print(f"{TAG}[ok] version sync: pyproject == cmake == {expected}")
-    return True
+        ok = False
+    if ts_package != expected:
+        print(f"{TAG}[drift] version mismatch: clients/ts/package.json={ts_package} != cmake/Version.cmake={expected}")
+        print(f"{TAG}        bump clients/ts/package.json together with cmake/Version.cmake")
+        ok = False
+    if ok:
+        print(f"{TAG}[ok] version sync: pyproject == ts package.json == cmake == {expected}")
+    return ok
 
 
 def _collect_files(root: Path) -> List[Path]:
@@ -273,6 +304,74 @@ def regenerate_go(repo: Path, check: bool) -> int:
     return 0
 
 
+def _check_ts_generator(repo: Path) -> Optional[str]:
+    """Returns an error string when the pinned local TS generator is unusable."""
+    node = shutil.which("node")
+    if node is None:
+        return "node (>= 18.17) is required for the TS generator and not on PATH"
+    entry = repo / TS_CLIENT_DIR / "node_modules" / "@hey-api" / "openapi-ts" / "dist" / "run.mjs"
+    if not entry.is_file():
+        return "clients/ts/node_modules is missing the pinned generator; run `npm install` in clients/ts"
+    manifest = repo / TS_CLIENT_DIR / "node_modules" / "@hey-api" / "openapi-ts" / "package.json"
+    try:
+        installed = json.loads(manifest.read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError):
+        installed = None
+    if installed != HEY_API_VERSION:
+        return (
+            f"@hey-api/openapi-ts {installed} != pinned {HEY_API_VERSION}; "
+            f"run `npm install` in clients/ts"
+        )
+    return None
+
+
+def regenerate_ts(repo: Path, check: bool) -> int:
+    version_error = _check_ts_generator(repo)
+    if version_error:
+        return _die_env(version_error)
+    if not (repo / OPENAPI_YAML).exists():
+        return _die_env(f"missing {repo / OPENAPI_YAML}")
+    node = shutil.which("node")
+    entry = repo / TS_CLIENT_DIR / "node_modules" / "@hey-api" / "openapi-ts" / "dist" / "run.mjs"
+    with tempfile.TemporaryDirectory(prefix="af-regen-ts-") as tmp:
+        out_dir = Path(tmp) / "gen"
+        # Argument-vector invocation only (no shell); every path comes from
+        # repo constants. Emitted import extensions follow clients/ts/
+        # tsconfig.json (discovered from the generator's install location),
+        # so the committed tsconfig is part of the drift contract.
+        proc = subprocess.run(
+            [node, str(entry), "-i", str(OPENAPI_YAML), "-o", str(out_dir)],
+            cwd=str(repo),
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+        if proc.returncode != 0 or not out_dir.is_dir():
+            print(proc.stdout)
+            print(proc.stderr, file=sys.stderr)
+            return _die_env("@hey-api/openapi-ts generate failed")
+
+        if check:
+            drift = _compare_trees(out_dir, repo / TS_GENERATED, "ts")
+            if drift:
+                for line in drift[:20]:
+                    print(f"{TAG}[drift] {line}")
+                if len(drift) > 20:
+                    print(f"{TAG}[drift] ... and {len(drift) - 20} more")
+                print(f"{TAG} regenerate with: cd clients/ts && npm run generate (or tools/clients/regen_clients.py)")
+                return 1
+            count = len(_collect_files(repo / TS_GENERATED))
+            print(f"{TAG}[ok] ts: committed generated tree matches spec ({count} files)")
+            return 0
+
+        target = repo / TS_GENERATED
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(out_dir, target)
+        print(f"{TAG}[ok] ts: regenerated {len(_collect_files(target))} files into {TS_GENERATED}")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Selftest (fixture-driven, no network, no generators)
 # ---------------------------------------------------------------------------
@@ -318,8 +417,11 @@ def _selftest() -> int:
     if _pyproject_version(repo) is None:
         print("[clients-regen][err] selftest: pyproject version parse failed")
         ok = False
+    if _ts_package_version(repo) is None:
+        print("[clients-regen][err] selftest: ts package.json version parse failed")
+        ok = False
 
-    # 3) version-sync gate faults on mismatch (fixture pyproject)
+    # 3) version-sync gate faults on mismatch (fixture pyproject + package.json)
     with tempfile.TemporaryDirectory(prefix="af-selftest-ver-") as tmp:
         root = Path(tmp)
         (root / "cmake").mkdir()
@@ -331,10 +433,18 @@ def _selftest() -> int:
         client_py = root / "clients" / "python"
         client_py.mkdir(parents=True)
         (client_py / "pyproject.toml").write_text('[project]\nversion = "0.0.1"\n')
+        client_ts = root / "clients" / "ts"
+        client_ts.mkdir(parents=True)
+        (client_ts / "package.json").write_text('{"name":"fulla-oauth2","version":"0.0.1"}\n')
         if check_version_sync(root):
             print("[clients-regen][err] selftest: version mismatch not caught")
             ok = False
+        # Fixing only pyproject still fails on the stale ts package.json.
         (client_py / "pyproject.toml").write_text('[project]\nversion = "1.2.0"\n')
+        if check_version_sync(root):
+            print("[clients-regen][err] selftest: ts-only version mismatch not caught")
+            ok = False
+        (client_ts / "package.json").write_text('{"name":"fulla-oauth2","version":"1.2.0"}\n')
         if not check_version_sync(root):
             print("[clients-regen][err] selftest: version sync false negative")
             ok = False
@@ -364,7 +474,8 @@ def _main() -> int:
     parser.add_argument("--check", action="store_true", help="compare fresh generation against the committed tree; exit 1 on drift")
     parser.add_argument("--python-only", action="store_true")
     parser.add_argument("--go-only", action="store_true")
-    parser.add_argument("--version-only", action="store_true", help="only run the pyproject <-> cmake version linkage check")
+    parser.add_argument("--ts-only", action="store_true")
+    parser.add_argument("--version-only", action="store_true", help="only run the pyproject/package.json <-> cmake version linkage check")
     parser.add_argument("--selftest", action="store_true")
     args = parser.parse_args()
 
@@ -372,8 +483,9 @@ def _main() -> int:
         return _selftest()
 
     repo = args.repo.resolve()
-    if args.python_only and args.go_only:
-        return _die_env("--python-only and --go-only are mutually exclusive")
+    only_flags = [flag for flag in (args.python_only, args.go_only, args.ts_only) if flag]
+    if len(only_flags) > 1:
+        return _die_env("--python-only, --go-only and --ts-only are mutually exclusive")
 
     if not check_version_sync(repo):
         return 1
@@ -381,10 +493,12 @@ def _main() -> int:
         return 0
 
     results = []
-    if not args.go_only:
+    if not args.go_only and not args.ts_only:
         results.append(("python", regenerate_python(repo, args.check)))
-    if not args.python_only:
+    if not args.python_only and not args.ts_only:
         results.append(("go", regenerate_go(repo, args.check)))
+    if not args.python_only and not args.go_only:
+        results.append(("ts", regenerate_ts(repo, args.check)))
     for name, code in results:
         if code == 2:
             return 2

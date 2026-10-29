@@ -48,6 +48,14 @@ if not exist "%PRESET_DIR%" (
     exit /b 1
 )
 
+REM ctest spawns builds too: SdkSmoke.FullStack compiles the
+REM full-stack-host example, whose CSP view custom command invokes
+REM drogon_ctl by bare name (PATH-resolved at build time). build.bat's
+REM PATH prepend does not cross script boundaries, so resolve it here
+REM as well.
+call "%SCRIPT_DIR%ensure_drogon_ctl.bat"
+if errorlevel 1 exit /b 1
+
 REM Phase 5 restructure: tests build under <preset>/tests (was
 REM OAuth2Server/test); their runtime config is a flat config.json there
 REM (tests/CMakeLists POST_BUILD), NOT the source-tree config/ subpath.

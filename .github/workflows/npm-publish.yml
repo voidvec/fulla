@@ -1,0 +1,74 @@
+name: npm publish (fulla-oauth2)
+
+# P1-5 #282 / decision D7: the fulla-oauth2 npm package publishes via MANUAL
+# workflow_dispatch only. NPM_TOKEN is provided before the v1.6.0 tag; until
+# then this job exists so the publish path (build -> pack -> publish) stays
+# exercised and reviewed, but never blocks a release and never runs on push.
+# The package name is reserved early on npmjs.com to prevent squatting.
+#
+# When the token lands: add the NPM_TOKEN secret (granular, publish-only for
+# the fulla-oauth2 package) and dispatch from master after the version bump
+# PR merges. Version linkage (package.json == cmake) is enforced by the
+# clients-sdk workflow's --version-only gate and re-checked here.
+
+on:
+  workflow_dispatch:
+
+env:
+  # Mapped once so step-level `if` can branch on secret presence (the
+  # secrets context itself is not usable in step `if` on all runner
+  # versions; env always is).
+  HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+
+concurrency:
+  group: npm-publish-fulla-oauth2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, verify, publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: clients/ts
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: clients/ts/package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - name: Install pinned generator (devDependency)
+        run: npm ci
+
+      - name: Version linkage (package.json == pyproject == cmake)
+        working-directory: .
+        run: python tools/clients/regen_clients.py --version-only
+
+      - name: Generated-tree drift gate
+        working-directory: .
+        run: python tools/clients/regen_clients.py --check --ts-only
+
+      - name: Build + unit tests (tsc emit + vitest red lines)
+        run: npm run check
+
+      - name: Pack (inspect the tarball that would ship)
+        run: npm pack
+
+      - name: Publish (no-op with a notice until NPM_TOKEN exists — D7)
+        if: ${{ env.HAS_NPM_TOKEN == 'true' }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Notice when NPM_TOKEN is absent (expected pre-v1.6.0)
+        if: ${{ env.HAS_NPM_TOKEN != 'true' }}
+        run: |
+          echo "::notice::NPM_TOKEN is not configured — verified build+pack only, publish skipped (decision D7)."

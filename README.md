@@ -295,7 +295,7 @@ target_link_libraries(my-engine PRIVATE fulla::oauth2 fulla::storage::memory)
 
 > v1.x promises **source-level SemVer** for the public headers (`include/fulla/**`), enforced by an api-diff gate in CI — no binary ABI guarantee. Resolve third-party dependencies with the repository's `conanfile.py` + `conan.lock`. Details: [SDK Integration Guide](docs/sdk/sdk-integration-guide.md) · [SDK Runtime Contract](docs/sdk/sdk-runtime-contract.md); reference consumers: [`examples/full-stack-host`](examples/full-stack-host), [`examples/third-party-host`](examples/third-party-host) (both CI-verified).
 
-### Path D — Client SDKs (Python / Go)
+### Path D — Client SDKs (Python / Go / TypeScript)
 
 Non-C++ services talk to Fulla over its HTTP API with generated, typed clients plus a handwritten auth layer (token lifecycle is never templated):
 
@@ -311,7 +311,19 @@ client = m2m_client("http://localhost:5555", "backend-svc", "…", scopes=["toke
 client, _ := af.NewM2MClient(ctx, "http://localhost:5555", "backend-svc", "…", []string{"tokens:read"})
 ```
 
-Both are generated from the single-source OpenAPI spec (`apps/server/openapi.yaml`) with a CI freshness gate. See [`clients/python`](clients/python) and [`clients/go`](clients/go). Package registry publishing (PyPI / Go module proxy) starts with the first tagged release shipping them.
+```ts
+// TypeScript/JavaScript (npm fulla-oauth2) — PKCE auth-code flow, rotating
+// refresh, M2M, plus the generated typed endpoints. Zero runtime deps.
+import { AuthorizationCodeFlow, PkcePair, randomToken } from 'fulla-oauth2';
+
+const flow = new AuthorizationCodeFlow('http://localhost:5555', 'fulla-portal', {
+  redirectUri: 'http://localhost:8080/callback', scopes: ['openid', 'profile'],
+});
+const pkce = await PkcePair.generate();
+// redirect to: flow.buildAuthorizeUrl({ state: randomToken(), nonce: randomToken(), pkce })
+```
+
+All three are generated from the single-source OpenAPI spec (`apps/server/openapi.yaml`) with a CI freshness gate. See [`clients/python`](clients/python), [`clients/go`](clients/go) and [`clients/ts`](clients/ts); a runnable web-app integration (login → callback → session → protected API → logout) lives in [`examples/nextjs-demo`](examples/nextjs-demo). Package registry publishing (PyPI / Go module proxy / npm) starts with the first tagged release shipping them.
 
 ### Default Credentials
 

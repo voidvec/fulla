@@ -1,9 +1,12 @@
 # RP Interop Smoke (P0-9) — the v1.5.0 P0 exit gate.
 #
-# Three standard RP libraries (openid-client / authlib / go-oidc) drive the
-# authorization-code + PKCE -> token -> userinfo -> refresh -> end-session
-# chain in strict mode against a real fulla stack. Deliberately NOT on the
-# per-PR hot path (runtime): runs on master / release branches and on demand.
+# Four drivers now: three standard RP libraries (openid-client / authlib /
+# go-oidc) drive the authorization-code + PKCE -> token -> userinfo ->
+# refresh -> end-session chain in strict mode against a real fulla stack,
+# plus the P1-5 nextjs-demo Playwright smoke which drives a REAL BROWSER
+# through the first-party fulla-oauth2 SDK (a different recipe from the
+# three json-mode drivers). Deliberately NOT on the per-PR hot path
+# (runtime): runs on master / release branches and on demand.
 # See tests/interop/README.md.
 
 name: interop
@@ -130,6 +133,38 @@ jobs:
         # that drifted (2026-10: "cannot find main module" on fresh runners).
         working-directory: tests/interop/go
         run: go run .
+
+      - name: Demo driver (fulla-oauth2 SDK via real browser, P1-5)
+        # Fourth driver: unlike the json-mode RP libraries above, this
+        # drives a real browser through examples/nextjs-demo — landing ->
+        # fulla login form -> callback (state+PKCE verified) -> profile
+        # (userinfo) -> protected API -> RP-initiated logout.
+        working-directory: examples/nextjs-demo
+        env:
+          FULLA_BASE_URL: http://localhost:5555
+          FULLA_CLIENT_ID: fulla-portal
+          FULLA_REDIRECT_URI: http://localhost:8080/callback
+          FULLA_POST_LOGOUT_URI: http://localhost:8080/callback
+          DEMO_BASE_URL: http://localhost:8080
+        run: |
+          # The demo consumes fulla-oauth2 via file:../../clients/ts — build
+          # its dist/ exactly like an npm consumer would receive.
+          (cd ../../clients/ts && npm ci && npm run build)
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          nohup npx next start -p 8080 > /tmp/nextjs-demo.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:8080/ >/dev/null || {
+            echo "::error::nextjs-demo failed to boot"
+            tail -n 50 /tmp/nextjs-demo.log
+            exit 1
+          }
+          npx playwright test
+          pkill -f "next start" 2>/dev/null || true
 
       - name: Server log on failure
         if: failure()

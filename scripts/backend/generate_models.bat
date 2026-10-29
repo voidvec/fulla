@@ -4,12 +4,10 @@ setlocal
 call "%~dp0\env_common.bat"
 if errorlevel 1 exit /b 1
 
-REM Check for drogon_ctl
-where drogon_ctl >nul 2>&1
-if errorlevel 1 (
-    echo [Error] drogon_ctl not found in PATH.
-    exit /b 1
-)
+REM drogon_ctl generates the ORM models; resolve it from PATH or the
+REM Conan cache (shared helper, see ensure_drogon_ctl.bat).
+call "%~dp0ensure_drogon_ctl.bat"
+if errorlevel 1 exit /b 1
 
 set PROJECT_DIR=%~dp0..\..
 REM ORM models live in libs/storage-postgres (M2b Task 18; paths.env rebased

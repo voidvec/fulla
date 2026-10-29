@@ -81,24 +81,18 @@ inline double fullaTestHttpTimeout()
     return cached;
 }
 
-// ONE shared HttpClient for every request in the binary. The previous
-// newHttpClient-per-request pattern created tens of thousands of connection
-// objects (each with its own loop timers/close callbacks) on the SAME loop
-// the in-process server runs on; occasionally that loop fell behind and a
-// fresh connection's handshake did not complete within the timeout — twice,
-// retry included — surfacing as the rotating null-resp failures on every
-// build type (Release included: 61744/61745 on the linux leg). drogon's
-// HttpClient pools connections internally and is safe for concurrent
-// sendRequest calls, so one instance serves the whole suite.
+// Client factory hook: all request builders obtain their HttpClient here
+// (one place to change the connection strategy). See the note inside for
+// why it stays per-request.
 inline ::drogon::HttpClientPtr sharedTestHttpClient()
 {
-    // Deliberately leaked (never destructed): tearing an HttpClient down
-    // after the framework loop is gone is exactly the crash family the
-    // fast-exit avoids; other consumers of this header (e.g. SdkSmoke)
-    // return from main normally.
-    static const auto *client = new ::drogon::HttpClientPtr(
-      ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop()));
-    return *client;
+    // REVERTED to per-request clients (v1.6.0): sharing ONE HttpClient
+    // serialized the whole suite's traffic onto a single keep-alive pipeline
+    // and slowed the 61k-assertion run ~5x — Release legs started timing
+    // out. The occasional null-response that motivated the shared client is
+    // absorbed by the transport retry in sendWithRetry() plus the
+    // whole-login retry in loginAsUserTokens() instead.
+    return ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
 }
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_

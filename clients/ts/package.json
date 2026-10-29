@@ -1,0 +1,49 @@
+{
+  "name": "fulla-oauth2",
+  "version": "1.5.0",
+  "description": "TypeScript/JavaScript SDK for Fulla: generated typed API surface plus handwritten authorization-code (PKCE S256) and client-credentials flows. Zero runtime dependencies.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "keywords": [
+    "oauth2",
+    "openid-connect",
+    "oidc",
+    "pkce",
+    "fulla",
+    "sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidvec/fulla.git",
+    "directory": "clients/ts"
+  },
+  "scripts": {
+    "generate": "openapi-ts -i ../../apps/server/openapi.yaml -o src/generated",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "check": "npm run build && npm run test"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "~5.9.3",
+    "vitest": "4.1.12"
+  }
+}

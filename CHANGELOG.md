@@ -19,6 +19,20 @@ Changelog entries are written in English (see CONTRIBUTING).
   Relying parties reading `username` from userinfo must switch to
   `preferred_username`.
 
+### Fixed
+
+- **Browser RP logins were silently broken by the login page's CSP**
+  (`form-action 'self'`): modern Chrome/Edge enforce `form-action` across the
+  redirect that follows a form POST, so the 302 to the relying party's
+  redirect_uri after a successful login was cancelled (`ERR_ABORTED`) for
+  every browser-based RP. Found by the new nextjs-demo browser e2e — the
+  json-mode interop drivers structurally cannot see it. The login page now
+  carries an OAuth-broker profile,
+  `form-action 'self' https: http://localhost:* http://127.0.0.1:*` (any
+  https redirect target; loopback origins for dev RPs; plain-http
+  exfiltration stays blocked), locked by
+  `Integration_Bootstrap_SecurityHeaders_LoginPageIsOauthBroker`.
+
 ### Added
 
 - Custom attributes + claims mapping (P1-3, #280): `users.custom_attributes`
@@ -29,6 +43,30 @@ Changelog entries are written in English (see CONTRIBUTING).
   Mapped claims publish on id_token (code + refresh paths, re-evaluated at
   rotation) and userinfo, gated on the mapping's trigger scope;
   `claims_supported` advertises enabled mapping claims.
+- TypeScript/JavaScript SDK `fulla-oauth2` (clients/ts, P1-5 #282): a
+  generated typed surface from the single OpenAPI spec (pinned
+  `@hey-api/openapi-ts` 0.99.0; the emitted fetch client is self-contained —
+  zero runtime dependencies) plus a handwritten auth layer (client-sdk D5):
+  authorization-code flow with PKCE S256 + state/nonce
+  (`completeAuthorizationFlow` rejects state mismatches and error callbacks
+  before any network call), rotating refresh, and a client-credentials M2M
+  client (proactive refresh under clock skew, serialized refreshes, exactly
+  one 401-triggered retry). vitest red lines lock the RFC 7636 test vector,
+  the byte-exact redirect_uri round-trip, confidential-client Basic auth
+  (F-017), and refresh-replay/401-loop semantics. `tools/clients/
+  regen_clients.py --ts-only` and the clients-sdk workflow drift-gate the
+  generated tree; `clients/ts/package.json` joins the pyproject==cmake
+  version linkage. npm publishing runs via a manual-dispatch workflow
+  (decision D7: NPM_TOKEN lands before the v1.6.0 tag; until then build and
+  pack are verified and publish is skipped with a notice).
+- **nextjs-demo** (`examples/nextjs-demo`): App Router reference web app —
+  login → callback (state+PKCE verified server-side) → httpOnly-cookie
+  session → userinfo → protected API (`/api/me`) → RP-initiated logout —
+  consuming the SDK exactly as an npm consumer would (`file:` dependency
+  against the built dist; public client, so zero secrets in the repo). Its
+  Playwright smoke joins interop.yml as the FOURTH driver: unlike the three
+  json-mode RP libraries it drives a real browser through the whole chain
+  (cookies, redirects, the real login form).
 
 ## [1.5.0] - 2026-10-15
 

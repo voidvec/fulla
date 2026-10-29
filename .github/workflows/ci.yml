@@ -128,7 +128,10 @@ jobs:
             test_exe: fulla-tests
             test_db_host: "127.0.0.1"
             test_redis_host: "127.0.0.1"
-            timeout_minutes: 30
+            # 60 like the other legs: the P1-era tree compiles ~27min on its
+            # own and the 30min ceiling started cancelling the job mid-build
+            # (conclusion=cancelled, no failed step, orphaned cc1plus).
+            timeout_minutes: 60
             log_artifact_name: linux-test-logs
           - platform: windows
             runs_on: windows-2022

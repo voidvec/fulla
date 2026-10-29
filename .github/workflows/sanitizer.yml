@@ -139,7 +139,10 @@ jobs:
           # CI Redis has no password; override the dev config's passwd
           # (mirrors _build-test.yml's FULLA_REDIS_PASSWORD="").
           FULLA_REDIS_PASSWORD: ""
-        run: ctest -C Debug --output-on-failure --timeout 300
+        # 900 like the coverage leg: the instrumented OAuth2Tests binary plus
+        # a login-retry sequence can exceed the old 300s ceiling, and ctest
+        # then reported the whole suite as (Timeout).
+        run: ctest -C Debug --output-on-failure --timeout 900
 
       - name: Upload sanitizer logs on failure
         if: failure()
@@ -236,7 +239,10 @@ jobs:
           # CI Redis has no password; override the dev config's passwd
           # (mirrors _build-test.yml's FULLA_REDIS_PASSWORD="").
           FULLA_REDIS_PASSWORD: ""
-        run: ctest -C Debug --output-on-failure --timeout 300
+        # 900 like the coverage leg: the instrumented OAuth2Tests binary plus
+        # a login-retry sequence can exceed the old 300s ceiling, and ctest
+        # then reported the whole suite as (Timeout).
+        run: ctest -C Debug --output-on-failure --timeout 900
 
       - name: Upload TSan logs on failure
         if: failure()
