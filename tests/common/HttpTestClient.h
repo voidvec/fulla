@@ -445,7 +445,7 @@ inline bool statusIs(const ::drogon::HttpResponsePtr &resp, ::drogon::HttpStatus
 // ---------------------------------------------------------------------------
 // Generalized login (see definition below): password login as an arbitrary
 // user; returns the full token JSON (access_token, refresh_token, ...).
-inline std::optional<Json::Value> loginAsUserTokens(
+inline std::optional<Json::Value> loginAsUserTokensOnce(
   const std::string &username,
   const std::string &password,
   const std::string &scope
@@ -463,7 +463,28 @@ inline std::optional<std::string> loginAsAdminWithScope(const std::string &scope
 // arbitrary seeded/created user via the same authorization-code + PKCE
 // recipe as the admin login. Returns the FULL token JSON (access_token,
 // refresh_token, ...) so revocation tests can keep the refresh token.
+//
+// One whole-flow retry with backoff: at the full-suite scale a login
+// occasionally loses ONCE (transport, transient server busy-ness — every
+// observed failure was green in isolation and rotated across tests). A
+// re-login mints a fresh code/verifier pair, so retrying is idempotent-safe;
+// a deterministically broken login still fails twice.
 inline std::optional<Json::Value> loginAsUserTokens(
+  const std::string &username,
+  const std::string &password,
+  const std::string &scope
+)
+{
+    auto result = loginAsUserTokensOnce(username, password, scope);
+    if (result.has_value())
+        return result;
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::cout << "[loginAsUserTokens] retrying whole login for '" << username << "'"
+              << std::endl;
+    return loginAsUserTokensOnce(username, password, scope);
+}
+
+inline std::optional<Json::Value> loginAsUserTokensOnce(
   const std::string &username,
   const std::string &password,
   const std::string &scope

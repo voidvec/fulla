@@ -131,7 +131,10 @@ jobs:
           # test failures (see the [loginAsUserTokens] diagnostics and the
           # fullaTestHttpTimeout() note in HttpTestClient.h).
           FULLA_TEST_HTTP_TIMEOUT: "180"
-        run: ctest -C Debug --output-on-failure --timeout 300
+        # 900s: with the 180s per-request timeout (plus one retry) a single
+        # slow gcov-instrumented request can hold a test past the old 300s
+        # ceiling — ctest then killed the whole OAuth2Tests run (Timeout).
+        run: ctest -C Debug --output-on-failure --timeout 900
 
       - name: Generate gcov JSON reports
         # Coverage.cmake only adds the instrumentation flags; the *.gcov.json.gz
