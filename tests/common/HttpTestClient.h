@@ -81,15 +81,9 @@ inline double fullaTestHttpTimeout()
     return cached;
 }
 
-// ONE shared HttpClient for every request in the binary. The previous
-// newHttpClient-per-request pattern created tens of thousands of connection
-// objects (each with its own loop timers/close callbacks) on the SAME loop
-// the in-process server runs on; occasionally that loop fell behind and a
-// fresh connection's handshake did not complete within the timeout — twice,
-// retry included — surfacing as the rotating null-resp failures on every
-// build type (Release included: 61744/61745 on the linux leg). drogon's
-// HttpClient pools connections internally and is safe for concurrent
-// sendRequest calls, so one instance serves the whole suite.
+// Client factory hook: all request builders obtain their HttpClient here
+// (one place to change the connection strategy). See the note inside for
+// why it stays per-request.
 inline ::drogon::HttpClientPtr sharedTestHttpClient()
 {
     // REVERTED to per-request clients (v1.6.0): sharing ONE HttpClient
