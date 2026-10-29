@@ -17,7 +17,7 @@
 
 using fulla::test::http::serverReachable;
 
-DROGON_TEST(Integration_Bootstrap_SecurityHeaders_LoginPageIsOauthBroker)
+DROGON_TEST(Integration_P1_Bootstrap_SecurityHeaders_LoginPageIsOauthBroker)
 {
     if (!serverReachable())
     {
