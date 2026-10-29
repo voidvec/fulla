@@ -81,6 +81,26 @@ inline double fullaTestHttpTimeout()
     return cached;
 }
 
+// ONE shared HttpClient for every request in the binary. The previous
+// newHttpClient-per-request pattern created tens of thousands of connection
+// objects (each with its own loop timers/close callbacks) on the SAME loop
+// the in-process server runs on; occasionally that loop fell behind and a
+// fresh connection's handshake did not complete within the timeout — twice,
+// retry included — surfacing as the rotating null-resp failures on every
+// build type (Release included: 61744/61745 on the linux leg). drogon's
+// HttpClient pools connections internally and is safe for concurrent
+// sendRequest calls, so one instance serves the whole suite.
+inline ::drogon::HttpClientPtr sharedTestHttpClient()
+{
+    // Deliberately leaked (never destructed): tearing an HttpClient down
+    // after the framework loop is gone is exactly the crash family the
+    // fast-exit avoids; other consumers of this header (e.g. SdkSmoke)
+    // return from main normally.
+    static const auto *client = new ::drogon::HttpClientPtr(
+      ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop()));
+    return *client;
+}
+
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
 // client.sql) and its registered redirect URI. The 2-step admin login recipe
 // (login -> token -> bearer) uses these for both legs.
@@ -105,8 +125,7 @@ inline bool serverReachable()
     {
         try
         {
-            auto client = ::drogon::HttpClient::newHttpClient(
-              kTestBaseUrl, ::drogon::app().getLoop());
+            auto client = sharedTestHttpClient();
             auto req = ::drogon::HttpRequest::newHttpRequest();
             req->setMethod(::drogon::Get);
             req->setPath("/health/live");  // always-200 liveness probe
@@ -179,8 +198,7 @@ inline ::drogon::HttpResponsePtr sendGet(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Get);
         req->setPath(path);
@@ -205,8 +223,7 @@ inline ::drogon::HttpResponsePtr sendDelete(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Delete);
         req->setPath(path);
@@ -238,8 +255,7 @@ inline ::drogon::HttpResponsePtr sendPostForm(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(pathAndQuery);
@@ -270,8 +286,7 @@ inline ::drogon::HttpResponsePtr sendPostFormWithAuth(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(pathAndQuery);
@@ -298,8 +313,7 @@ inline ::drogon::HttpResponsePtr sendPostJson(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(path);
@@ -328,8 +342,7 @@ inline ::drogon::HttpResponsePtr sendPutJson(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Put);
         req->setPath(path);
@@ -359,8 +372,7 @@ inline ::drogon::HttpResponsePtr sendPatchJson(
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Patch);
         req->setPath(path);
