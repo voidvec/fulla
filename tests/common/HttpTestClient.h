@@ -45,6 +45,7 @@
 #include <json/json.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,6 +66,20 @@ namespace fulla::test::http
 // integration test files (the 8080 variant was stale -- config.json listens
 // on 5555 -- and silently caused several tests to skip via serverReachable()).
 constexpr const char *kTestBaseUrl = "http://127.0.0.1:5555";
+
+// Default per-request timeout, overridable via FULLA_TEST_HTTP_TIMEOUT for
+// instrumented builds: the gcov/coverage leg's server runs 10-20x slower
+// than Release and, under the full 598-test client load, occasionally takes
+// past 30s to answer a login — surfacing as random null responses (see the
+// [loginAsUserTokens] diagnostics). Coverage sets 180.
+inline double fullaTestHttpTimeout()
+{
+    static const double cached = [] {
+        const char *env = std::getenv("FULLA_TEST_HTTP_TIMEOUT");
+        return env ? std::atof(env) : 30.0;
+    }();
+    return cached;
+}
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
 // client.sql) and its registered redirect URI. The 2-step admin login recipe
@@ -160,7 +175,7 @@ inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
 inline ::drogon::HttpResponsePtr sendGet(
   const std::string &path,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -186,7 +201,7 @@ inline ::drogon::HttpResponsePtr sendGet(
 inline ::drogon::HttpResponsePtr sendDelete(
   const std::string &path,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -219,7 +234,7 @@ inline ::drogon::HttpResponsePtr sendPostForm(
   const std::string &pathAndQuery,
   const std::string &formBody,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -251,7 +266,7 @@ inline ::drogon::HttpResponsePtr sendPostFormWithAuth(
   const std::string &pathAndQuery,
   const std::string &formBody,
   const std::string &authorizationHeader,
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -279,7 +294,7 @@ inline ::drogon::HttpResponsePtr sendPostJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -309,7 +324,7 @@ inline ::drogon::HttpResponsePtr sendPutJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
@@ -340,7 +355,7 @@ inline ::drogon::HttpResponsePtr sendPatchJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {

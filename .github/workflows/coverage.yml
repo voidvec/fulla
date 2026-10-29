@@ -125,6 +125,12 @@ jobs:
           # the test binary doesn't AUTH against a passwordless server
           # (mirrors _build-test.yml's FULLA_REDIS_PASSWORD="").
           FULLA_REDIS_PASSWORD: ""
+          # gcov instrumentation makes the in-process server 10-20x slower
+          # than Release; under the full-suite client load a login can take
+          # past the default 30s and the null responses look like random
+          # test failures (see the [loginAsUserTokens] diagnostics and the
+          # fullaTestHttpTimeout() note in HttpTestClient.h).
+          FULLA_TEST_HTTP_TIMEOUT: "180"
         run: ctest -C Debug --output-on-failure --timeout 300
 
       - name: Generate gcov JSON reports
