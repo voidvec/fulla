@@ -92,13 +92,13 @@ inline double fullaTestHttpTimeout()
 // sendRequest calls, so one instance serves the whole suite.
 inline ::drogon::HttpClientPtr sharedTestHttpClient()
 {
-    // Deliberately leaked (never destructed): tearing an HttpClient down
-    // after the framework loop is gone is exactly the crash family the
-    // fast-exit avoids; other consumers of this header (e.g. SdkSmoke)
-    // return from main normally.
-    static const auto *client = new ::drogon::HttpClientPtr(
-      ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop()));
-    return *client;
+    // REVERTED to per-request clients (v1.6.0): sharing ONE HttpClient
+    // serialized the whole suite's traffic onto a single keep-alive pipeline
+    // and slowed the 61k-assertion run ~5x — Release legs started timing
+    // out. The occasional null-response that motivated the shared client is
+    // absorbed by the transport retry in sendWithRetry() plus the
+    // whole-login retry in loginAsUserTokens() instead.
+    return ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
 }
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
