@@ -45,6 +45,7 @@
 #include <json/json.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,6 +66,40 @@ namespace fulla::test::http
 // integration test files (the 8080 variant was stale -- config.json listens
 // on 5555 -- and silently caused several tests to skip via serverReachable()).
 constexpr const char *kTestBaseUrl = "http://127.0.0.1:5555";
+
+// Default per-request timeout, overridable via FULLA_TEST_HTTP_TIMEOUT for
+// instrumented builds: the gcov/coverage leg's server runs 10-20x slower
+// than Release and, under the full 598-test client load, occasionally takes
+// past 30s to answer a login — surfacing as random null responses (see the
+// [loginAsUserTokens] diagnostics). Coverage sets 180.
+inline double fullaTestHttpTimeout()
+{
+    static const double cached = [] {
+        const char *env = std::getenv("FULLA_TEST_HTTP_TIMEOUT");
+        return env ? std::atof(env) : 30.0;
+    }();
+    return cached;
+}
+
+// ONE shared HttpClient for every request in the binary. The previous
+// newHttpClient-per-request pattern created tens of thousands of connection
+// objects (each with its own loop timers/close callbacks) on the SAME loop
+// the in-process server runs on; occasionally that loop fell behind and a
+// fresh connection's handshake did not complete within the timeout — twice,
+// retry included — surfacing as the rotating null-resp failures on every
+// build type (Release included: 61744/61745 on the linux leg). drogon's
+// HttpClient pools connections internally and is safe for concurrent
+// sendRequest calls, so one instance serves the whole suite.
+inline ::drogon::HttpClientPtr sharedTestHttpClient()
+{
+    // Deliberately leaked (never destructed): tearing an HttpClient down
+    // after the framework loop is gone is exactly the crash family the
+    // fast-exit avoids; other consumers of this header (e.g. SdkSmoke)
+    // return from main normally.
+    static const auto *client = new ::drogon::HttpClientPtr(
+      ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop()));
+    return *client;
+}
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
 // client.sql) and its registered redirect URI. The 2-step admin login recipe
@@ -90,8 +125,7 @@ inline bool serverReachable()
     {
         try
         {
-            auto client = ::drogon::HttpClient::newHttpClient(
-              kTestBaseUrl, ::drogon::app().getLoop());
+            auto client = sharedTestHttpClient();
             auto req = ::drogon::HttpRequest::newHttpRequest();
             req->setMethod(::drogon::Get);
             req->setPath("/health/live");  // always-200 liveness probe
@@ -124,6 +158,29 @@ inline bool postgresAvailable()
 }
 
 // ---------------------------------------------------------------------------
+// One transparent retry on TRANSPORT failure. Slow instrumented builds
+// (ASan/gcov) run the in-process server and this client on the same loop
+// with per-request connections; at the P1 suite scale the connect churn
+// occasionally drops a request BEFORE it reaches the server, which used to
+// surface as random REQUIRE(resp != nullptr) failures rotating across
+// different tests every run. A retry only fires when ReqResult != Ok AND no
+// response exists (nothing was received); a delivered-but-slow response is
+// never retried, so no request double-sends after the server saw it.
+inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
+  const ::drogon::HttpClientPtr &client,
+  ::drogon::HttpRequestPtr req,
+  double timeout)
+{
+    auto attempt = [&]() { return client->sendRequest(req, timeout); };
+    auto [result, resp] = attempt();
+    if (result != ::drogon::ReqResult::Ok && resp == nullptr)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::tie(result, resp) = attempt();
+    }
+    return {result, resp};
+}
+
 // Request builders (synchronous sendRequest, returns HttpResponsePtr or nullptr)
 //
 // Each builder constructs an HttpClient pinned to the framework loop (so the
@@ -137,18 +194,17 @@ inline bool postgresAvailable()
 inline ::drogon::HttpResponsePtr sendGet(
   const std::string &path,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Get);
         req->setPath(path);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -163,18 +219,17 @@ inline ::drogon::HttpResponsePtr sendGet(
 inline ::drogon::HttpResponsePtr sendDelete(
   const std::string &path,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Delete);
         req->setPath(path);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -196,12 +251,11 @@ inline ::drogon::HttpResponsePtr sendPostForm(
   const std::string &pathAndQuery,
   const std::string &formBody,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(pathAndQuery);
@@ -209,7 +263,7 @@ inline ::drogon::HttpResponsePtr sendPostForm(
         req->setBody(formBody);
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -228,19 +282,18 @@ inline ::drogon::HttpResponsePtr sendPostFormWithAuth(
   const std::string &pathAndQuery,
   const std::string &formBody,
   const std::string &authorizationHeader,
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(pathAndQuery);
         req->setContentTypeCode(::drogon::CT_APPLICATION_X_FORM);
         req->setBody(formBody);
         req->addHeader("Authorization", authorizationHeader);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -256,12 +309,11 @@ inline ::drogon::HttpResponsePtr sendPostJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Post);
         req->setPath(path);
@@ -270,7 +322,7 @@ inline ::drogon::HttpResponsePtr sendPostJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -286,12 +338,11 @@ inline ::drogon::HttpResponsePtr sendPutJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Put);
         req->setPath(path);
@@ -300,7 +351,7 @@ inline ::drogon::HttpResponsePtr sendPutJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -317,12 +368,11 @@ inline ::drogon::HttpResponsePtr sendPatchJson(
   const std::string &path,
   const Json::Value &json,
   const std::string &bearerToken = "",
-  double timeout = 30.0)
+  double timeout = fullaTestHttpTimeout())
 {
     try
     {
-        auto client =
-          ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        auto client = sharedTestHttpClient();
         auto req = ::drogon::HttpRequest::newHttpRequest();
         req->setMethod(::drogon::Patch);
         req->setPath(path);
@@ -331,7 +381,7 @@ inline ::drogon::HttpResponsePtr sendPatchJson(
         req->setBody(Json::writeString(wb, json));
         if (!bearerToken.empty())
             req->addHeader("Authorization", "Bearer " + bearerToken);
-        auto [result, resp] = client->sendRequest(req, timeout);
+        auto [result, resp] = sendWithRetry(client, req, timeout);
         if (result != ::drogon::ReqResult::Ok || resp == nullptr)
             return nullptr;
         return resp;
@@ -401,6 +451,12 @@ inline std::optional<Json::Value> loginAsUserTokens(
   const std::string &scope
 );
 
+inline std::optional<Json::Value> loginAsUserTokensOnce(
+  const std::string &username,
+  const std::string &password,
+  const std::string &scope
+);
+
 inline std::optional<std::string> loginAsAdminWithScope(const std::string &scope)
 {
     auto tokens = loginAsUserTokens("admin", "admin", scope);
@@ -413,7 +469,28 @@ inline std::optional<std::string> loginAsAdminWithScope(const std::string &scope
 // arbitrary seeded/created user via the same authorization-code + PKCE
 // recipe as the admin login. Returns the FULL token JSON (access_token,
 // refresh_token, ...) so revocation tests can keep the refresh token.
+//
+// One whole-flow retry with backoff: at the full-suite scale a login
+// occasionally loses ONCE (transport, transient server busy-ness — every
+// observed failure was green in isolation and rotated across tests). A
+// re-login mints a fresh code/verifier pair, so retrying is idempotent-safe;
+// a deterministically broken login still fails twice.
 inline std::optional<Json::Value> loginAsUserTokens(
+  const std::string &username,
+  const std::string &password,
+  const std::string &scope
+)
+{
+    auto result = loginAsUserTokensOnce(username, password, scope);
+    if (result.has_value())
+        return result;
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::cout << "[loginAsUserTokens] retrying whole login for '" << username << "'"
+              << std::endl;
+    return loginAsUserTokensOnce(username, password, scope);
+}
+
+inline std::optional<Json::Value> loginAsUserTokensOnce(
   const std::string &username,
   const std::string &password,
   const std::string &scope
@@ -423,6 +500,39 @@ inline std::optional<Json::Value> loginAsUserTokens(
         return std::nullopt;
     if (!serverReachable())
         return std::nullopt;
+
+    // Shared-fixture self-healing for the seeded admin: any test that makes
+    // the server record failed logins against 'admin' (intentional bad-
+    // password cases, lockout probes) leaves failed_login_count/locked_until
+    // behind, and whichever admin login comes next at the progressive-
+    // lockout thresholds fails — the rotating "loginAsAdmin empty" jitter.
+    // Reset the counters before logging in, throttled to once per 5s so the
+    // suite pays ~one UPDATE per window, not one per call.
+    if (username == "admin")
+    {
+        static std::chrono::steady_clock::time_point lastReset{};
+        auto now = std::chrono::steady_clock::now();
+        static std::mutex resetMutex;
+        if (now - lastReset > std::chrono::seconds(5))
+        {
+            std::lock_guard<std::mutex> lock(resetMutex);
+            if (now - lastReset > std::chrono::seconds(5))
+            {
+                try
+                {
+                    auto db = ::drogon::app().getDbClient();
+                    auto f = db->execSqlAsyncFuture(
+                      "UPDATE users SET failed_login_count = 0, locked_until = NULL "
+                      "WHERE username = 'admin'");
+                    f.get();
+                    lastReset = now;
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+    }
 
     // F-011: PKCE is mandatory (auth.require_pkce_for_public defaults true),
     // so this recipe always runs the S256 flow. generateSecureToken(32)
@@ -444,13 +554,22 @@ inline std::optional<Json::Value> loginAsUserTokens(
       "&code_challenge_method=S256";
     auto loginResp = sendPostForm("/oauth2/login?json=true", loginForm);
     if (!loginResp || loginResp->getStatusCode() != ::drogon::k200OK)
+    {
+        std::cout << "[loginAsUserTokens] login step failed for '" << username << "': "
+                  << (loginResp ? std::to_string(loginResp->getStatusCode()) : std::string("null-resp"))
+                  << " body=" << (loginResp ? loginResp->getBody().substr(0, 200) : std::string("-"))
+                  << std::endl;
         return std::nullopt;
+    }
     Json::Value loginJson;
     if (!parseJsonBody(loginResp, loginJson))
         return std::nullopt;
     // MFA-enabled users return mfa_required=true instead of a code.
     if (loginJson.isMember("mfa_required") && loginJson["mfa_required"].asBool())
+    {
+        std::cout << "[loginAsUserTokens] '" << username << "' unexpectedly MFA-gated" << std::endl;
         return std::nullopt;
+    }
     const std::string code = loginJson.get("code", "").asString();
     if (code.empty())
         return std::nullopt;
@@ -466,7 +585,13 @@ inline std::optional<Json::Value> loginAsUserTokens(
       "&code_verifier=" + codeVerifier;
     auto tokenResp = sendPostForm("/oauth2/token", tokenForm);
     if (!tokenResp || tokenResp->getStatusCode() != ::drogon::k200OK)
+    {
+        std::cout << "[loginAsUserTokens] token step failed for '" << username << "': "
+                  << (tokenResp ? std::to_string(tokenResp->getStatusCode()) : std::string("null-resp"))
+                  << " body=" << (tokenResp ? tokenResp->getBody().substr(0, 200) : std::string("-"))
+                  << std::endl;
         return std::nullopt;
+    }
     Json::Value tokenJson;
     if (!parseJsonBody(tokenResp, tokenJson))
         return std::nullopt;

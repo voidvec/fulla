@@ -128,7 +128,11 @@ jobs:
           python tests/interop/python/rp_smoke.py
 
       - name: Go driver (go-oidc + x/oauth2)
-        run: go run ./tests/interop/go
+        # Run from INSIDE the nested module: resolving the package path from
+        # the module-less repo root depended on runner toolchain behavior
+        # that drifted (2026-10: "cannot find main module" on fresh runners).
+        working-directory: tests/interop/go
+        run: go run .
 
       - name: Demo driver (fulla-oauth2 SDK via real browser, P1-5)
         # Fourth driver: unlike the json-mode RP libraries above, this
