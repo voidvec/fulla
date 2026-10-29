@@ -305,7 +305,11 @@ jobs:
 
       - name: Test
         working-directory: ${{ github.workspace }}/${{ inputs.preset_dir }}
-        run: ctest -C "$BUILD_TYPE" --output-on-failure --timeout 120
+        # 120s per test was written for small tests; OAuth2Tests is the
+        # whole 61k-assertion binary (minutes on its own) and a single
+        # slow/login-retry sequence could push it past the ceiling — ctest
+        # then reported the entire suite as (Timeout).
+        run: ctest -C "$BUILD_TYPE" --output-on-failure --timeout 1200
 
       # --- Error-Standardization release-readiness gate (Requirement 12.7) ---
       # Explicit, attributable gate over the error-code/message-standardization

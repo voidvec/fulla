@@ -257,6 +257,25 @@ std::string loadConfigWithEnv(const std::string &configPath)
         }
     }
 
+    // Widen the login failure rate-limit window for the TEST server. The
+    // production max_failures=30/60s is brute-force protection; in the full
+    // 598-test binary the cumulative intentional-failure logins (lockout /
+    // forced-password-change / bad-credential cases) plus a handful of
+    // slow-build (ASan/gcov) request timeouts land right at the edge, and
+    // whichever admin-login comes next fails nondeterministically — the
+    // "login rate-limit suite-order jitter" documented since P1-4. The
+    // limiter's end-to-end wiring stays covered: OidcBatch3's 429 case
+    // loops past this widened threshold on a dedicated synthetic client.
+    if (
+      root.isMember("custom_config") && root["custom_config"].isObject() &&
+      root["custom_config"].isMember("auth") &&
+      root["custom_config"]["auth"].isMember("rate_limit") &&
+      root["custom_config"]["auth"]["rate_limit"].isObject()
+    )
+    {
+        root["custom_config"]["auth"]["rate_limit"]["max_failures"] = 100;
+    }
+
     // Disable daemonizing and relaunch features in tests, because fork() breaks
     // the std::promise cross-thread sync
     if (root.isMember("app") && root["app"].isObject())
@@ -564,25 +583,17 @@ int main(int argc, char **argv)
         std::_Exit(0);
     }
 
-    // For failed tests, attempt normal teardown to get more diagnostic info
-    std::cout << "Attempting graceful teardown for failed test..." << std::endl;
-    try
-    {
-        auto loop = drogon::app().getLoop();
-        if (loop && loop->isRunning())
-        {
-            loop->queueInLoop([=]() { drogon::app().quit(); });
-        }
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "Exception during teardown: " << e.what() << std::endl;
-    }
-
-    if (thr.joinable())
-    {
-        thr.join();
-    }
+    // Failed tests exit the SAME fast way. The "graceful teardown for
+    // diagnostics" below (loop quit + thread join) is precisely the code
+    // path that segfaults on gcov/Debug builds — one flaky assertion then
+    // cascaded into SEGFAULT-on-exit, double-reporting the run (observed on
+    // the coverage CI leg: 61706/61707 assertions green, exit SEGFAULT).
+    // The failure details were already printed by the test framework above;
+    // teardown adds none. Flush the gcov counters, keep the exit code.
+    std::cout << "Tests failed; fast exit (teardown join segfaults instrumented builds)..."
+              << std::endl;
+    flushGcovIfInstrumented();
+    std::_Exit(status != 0 ? 1 : 0);
 
     return status;
 }

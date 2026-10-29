@@ -555,6 +555,27 @@ export async function setupAuthenticatedMocks(page: Page) {
     }
   })
 
+  // P1-8 (#285): role permission sets — the RolesPage editor reads/writes
+  // them alongside the role description; without this route the save flow
+  // 404s and the success toast never appears (caught by roles.spec on
+  // master after the stack landed).
+  await page.route('**/api/admin/roles/*/permissions', async (route) => {
+    const method = route.request().method()
+    if (method === 'GET' || method === 'PUT') {
+      const body =
+        method === 'GET'
+          ? { permissions: ['users:read'] }
+          : { status: 'success', permissions: ['users:read'] }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      })
+    } else {
+      await route.continue()
+    }
+  })
+
   // Dashboard stats
   await page.route('**/api/admin/dashboard/stats', async (route) => {
     await route.fulfill({

@@ -120,10 +120,11 @@ DROGON_TEST(Integration_P1_OidcBatch3_AdminToken_StillReachesProtectedRoutes)
 // same (ip, client_id), the next attempt is throttled with 429 + Retry-After.
 //
 // Uses a synthetic client_id so its failure bucket is isolated from every
-// other test (the bucket key is (ip, client_id)). Sends 35 failing requests
+// other test (the bucket key is (ip, client_id)). Sends 105 failing requests
 // (invalid_client -- the synthetic client does not exist) and asserts that
-// at least one 429 is returned. The first ~30 are 401 (the genuine
-// invalid-client rejection); the 31st onward trip the limiter.
+// at least one 429 is returned. The first ~100 are 401 (the genuine
+// invalid-client rejection; test_main widens the suite's threshold to
+// max_failures=100); the 101st onward trip the limiter.
 // ---------------------------------------------------------------------------
 DROGON_TEST(Integration_P1_OidcBatch3_TokenEndpoint_RateLimitsAfterFailureThreshold)
 {
@@ -137,8 +138,10 @@ DROGON_TEST(Integration_P1_OidcBatch3_TokenEndpoint_RateLimitsAfterFailureThresh
 
     int throttledCount = 0;
     int rejectedCount = 0;
-    // 35 > 30 (default max_failures) -- the tail of this loop MUST trip 429.
-    for (int i = 0; i < 35; ++i)
+    // 105 > 100 (test-main widens the production max_failures=30 to 100 for
+    // the whole suite — see test_main.cc) -- the tail of this loop MUST trip
+    // 429 on this dedicated synthetic-client bucket.
+    for (int i = 0; i < 105; ++i)
     {
         // F-018: a request with a syntactically-valid but unknown client_id
         // is the canonical "failed auth attempt" the limiter counts -- the
