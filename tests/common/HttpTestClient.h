@@ -445,6 +445,12 @@ inline bool statusIs(const ::drogon::HttpResponsePtr &resp, ::drogon::HttpStatus
 // ---------------------------------------------------------------------------
 // Generalized login (see definition below): password login as an arbitrary
 // user; returns the full token JSON (access_token, refresh_token, ...).
+inline std::optional<Json::Value> loginAsUserTokens(
+  const std::string &username,
+  const std::string &password,
+  const std::string &scope
+);
+
 inline std::optional<Json::Value> loginAsUserTokensOnce(
   const std::string &username,
   const std::string &password,
