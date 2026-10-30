@@ -1521,7 +1521,7 @@ type PostOauth2RegisterJSONBody struct {
 	ClientType *PostOauth2RegisterJSONBodyClientType `json:"client_type,omitempty"`
 	GrantTypes *[]string                             `json:"grant_types,omitempty"`
 
-	// PostLogoutRedirectUris P0-7b: dedicated post-logout redirect registrations (comma-joined at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris (pre-v1.5.0 behavior).
+	// PostLogoutRedirectUris P0-7b: dedicated post-logout redirect registrations (comma-joined at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris (pre-v1.6.0 behavior).
 	PostLogoutRedirectUris  *[]string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            *[]string `json:"redirect_uris,omitempty"`
 	TokenEndpointAuthMethod *string   `json:"token_endpoint_auth_method,omitempty"`

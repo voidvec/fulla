@@ -23,7 +23,7 @@ class PostOauth2RegisterBody:
         grant_types (list[str] | Unset):
         post_logout_redirect_uris (list[str] | Unset): P0-7b: dedicated post-logout redirect registrations (comma-joined
             at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris
-            (pre-v1.5.0 behavior).
+            (pre-v1.6.0 behavior).
     """
 
     client_name: str | Unset = UNSET

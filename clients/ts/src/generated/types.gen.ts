@@ -5167,7 +5167,7 @@ export type PostOauth2RegisterData = {
         redirect_uris?: Array<string>;
         grant_types?: Array<string>;
         /**
-         * P0-7b: dedicated post-logout redirect registrations (comma-joined at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris (pre-v1.5.0 behavior).
+         * P0-7b: dedicated post-logout redirect registrations (comma-joined at rest). Empty/unset: end_session validates post_logout_redirect_uri against the login redirect_uris (pre-v1.6.0 behavior).
          */
         post_logout_redirect_uris?: Array<string>;
     };

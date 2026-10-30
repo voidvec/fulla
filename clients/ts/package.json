@@ -1,6 +1,6 @@
 {
   "name": "fulla-oauth2",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "TypeScript/JavaScript SDK for Fulla: generated typed API surface plus handwritten authorization-code (PKCE S256) and client-credentials flows. Zero runtime dependencies.",
   "license": "AGPL-3.0-only",
   "type": "module",
