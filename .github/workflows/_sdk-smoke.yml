@@ -20,7 +20,9 @@ env:
 jobs:
   sdk-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 60 like the Build&Test legs: the v1.6.0 tree compiles past 30 minutes
+    # on its own (the job was cancelled mid-build, no failed step).
+    timeout-minutes: 60
 
     defaults:
       run:
