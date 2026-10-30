@@ -32,6 +32,88 @@ const createForm = ref({
 })
 const creating = ref(false)
 
+// P1-7 (#284): RFC 7591 dynamic registration form. Distinct surface from the
+// admin-API create modal on purpose — it exercises the standard endpoint
+// (POST /oauth2/register, admin-gated) exactly as an integrator would. NO
+// logo_uri field: the DCR body does not process it (admin-edit and portal
+// surfaces own that write path — P1-1).
+const showDcrModal = ref(false)
+const registering = ref(false)
+const DCR_FORM_DEFAULTS = () => ({
+  client_name: '',
+  client_type: 'CONFIDENTIAL',
+  token_endpoint_auth_method: 'client_secret_basic',
+  redirect_uris: '',
+  grant_types: ['authorization_code'] as string[],
+  post_logout_redirect_uris: '',
+})
+const dcrForm = ref(DCR_FORM_DEFAULTS())
+
+// RFC 7591 grant vocabulary only — no device code (the endpoint rejects it).
+const DCR_GRANT_TYPES = computed(() =>
+  AVAILABLE_GRANT_TYPES.value.filter(
+    (gt) => gt.value !== 'urn:ietf:params:oauth:grant-type:device_code',
+  ),
+)
+
+const DCR_AUTH_METHODS = computed(() => [
+  { value: 'client_secret_basic', label: t('admin.applications.dcrAuthBasic') },
+  { value: 'client_secret_post', label: t('admin.applications.dcrAuthPost') },
+  { value: 'none', label: t('admin.applications.dcrAuthNone') },
+])
+
+function onDcrTypeChange() {
+  // F-017: PUBLIC clients have no secret — the server only accepts 'none'.
+  if (dcrForm.value.client_type === 'PUBLIC') {
+    dcrForm.value.token_endpoint_auth_method = 'none'
+  } else if (dcrForm.value.token_endpoint_auth_method === 'none') {
+    dcrForm.value.token_endpoint_auth_method = 'client_secret_basic'
+  }
+}
+
+function splitUriList(value: string): string[] {
+  return value
+    .split(',')
+    .map((uri) => uri.trim())
+    .filter(Boolean)
+}
+
+async function registerViaDcr() {
+  if (dcrForm.value.grant_types.length === 0) {
+    showError(t('admin.applications.selectGrantType'))
+    return
+  }
+  if (dcrForm.value.client_type === 'CONFIDENTIAL' && splitUriList(dcrForm.value.redirect_uris).length === 0) {
+    showError(t('admin.applications.dcrRedirectRequired'))
+    return
+  }
+  registering.value = true
+  try {
+    const resp = await axios.post(
+      '/oauth2/register',
+      {
+        client_name: dcrForm.value.client_name,
+        client_type: dcrForm.value.client_type,
+        token_endpoint_auth_method: dcrForm.value.token_endpoint_auth_method,
+        redirect_uris: splitUriList(dcrForm.value.redirect_uris),
+        grant_types: dcrForm.value.grant_types,
+        post_logout_redirect_uris: splitUriList(dcrForm.value.post_logout_redirect_uris),
+      },
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+    // Same display-once semantics as the portal's My Applications.
+    newClientSecret.value = resp.data.client_secret || ''
+    showDcrModal.value = false
+    showSecretModal.value = true
+    dcrForm.value = DCR_FORM_DEFAULTS()
+    await fetchClients()
+  } catch (e: unknown) {
+    showError(normalizeError(e))
+  } finally {
+    registering.value = false
+  }
+}
+
 // Grant-type checkboxes: labels/descriptions follow the active locale.
 const AVAILABLE_GRANT_TYPES = computed(() => [
   { value: 'authorization_code', label: t('admin.applications.grantTypeOptions.authorizationCode.label'), description: t('admin.applications.grantTypeOptions.authorizationCode.description') },
@@ -158,12 +240,20 @@ onMounted(fetchClients)
       <h2 class="text-2xl font-bold text-neutral-900">
         {{ $t('admin.applications.title') }}
       </h2>
-      <button
-        class="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 text-sm font-medium"
-        @click="showCreateModal = true"
-      >
-        {{ $t('admin.applications.create') }}
-      </button>
+      <div class="flex gap-2">
+        <button
+          class="px-4 py-2 border border-brand-600 text-brand-600 rounded-md hover:bg-brand-50 text-sm font-medium"
+          @click="showDcrModal = true"
+        >
+          {{ $t('admin.applications.dcrRegister') }}
+        </button>
+        <button
+          class="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 text-sm font-medium"
+          @click="showCreateModal = true"
+        >
+          {{ $t('admin.applications.create') }}
+        </button>
+      </div>
     </div>
 
     <div
@@ -377,6 +467,125 @@ onMounted(fetchClients)
               class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ creating ? $t('common.creating') : $t('common.create') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- RFC 7591 Dynamic Registration Modal (P1-7 #284) -->
+    <div
+      v-if="showDcrModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+    >
+      <div class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h3 class="text-lg font-semibold mb-1">
+          {{ $t('admin.applications.dcrTitle') }}
+        </h3>
+        <p class="text-xs text-neutral-500 mb-4">
+          {{ $t('admin.applications.dcrHint') }}
+        </p>
+        <form
+          class="space-y-4"
+          @submit.prevent="registerViaDcr"
+        >
+          <div>
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.applications.nameLabel') }}</label>
+            <input
+              v-model="dcrForm.client_name"
+              required
+              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              :placeholder="$t('admin.applications.namePlaceholder')"
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('common.type') }}</label>
+            <select
+              v-model="dcrForm.client_type"
+              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              @change="onDcrTypeChange"
+            >
+              <option value="CONFIDENTIAL">
+                {{ $t('admin.applications.confidential') }}
+              </option>
+              <option value="PUBLIC">
+                {{ $t('admin.applications.public') }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.applications.authMethodLabel') }}</label>
+            <select
+              v-model="dcrForm.token_endpoint_auth_method"
+              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              :disabled="dcrForm.client_type === 'PUBLIC'"
+            >
+              <option
+                v-for="m in DCR_AUTH_METHODS"
+                :key="m.value"
+                :value="m.value"
+              >
+                {{ m.label }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-neutral-500">
+              {{ $t('admin.applications.dcrAuthMethodHint') }}
+            </p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.applications.redirectUrisComma') }}</label>
+            <input
+              v-model="dcrForm.redirect_uris"
+              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              placeholder="https://myapp.com/callback"
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.applications.dcrPostLogoutLabel') }}</label>
+            <input
+              v-model="dcrForm.post_logout_redirect_uris"
+              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
+              placeholder="https://myapp.com/"
+            >
+            <p class="mt-1 text-xs text-neutral-500">
+              {{ $t('admin.applications.dcrPostLogoutHint') }}
+            </p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-2">{{ $t('admin.applications.grantTypes') }}</label>
+            <div class="space-y-2">
+              <label
+                v-for="gt in DCR_GRANT_TYPES"
+                :key="gt.value"
+                class="flex items-start gap-2 cursor-pointer"
+              >
+                <input
+                  v-model="dcrForm.grant_types"
+                  type="checkbox"
+                  :value="gt.value"
+                  class="mt-0.5 h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+                >
+                <div>
+                  <span class="text-sm font-medium text-neutral-700">{{ gt.label }}</span>
+                  <p class="text-xs text-neutral-500">{{ gt.description }}</p>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="flex justify-end space-x-3 pt-2">
+            <button
+              type="button"
+              class="px-4 py-2 border border-neutral-300 rounded-md text-sm"
+              @click="showDcrModal = false"
+            >
+              {{ $t('common.cancel') }}
+            </button>
+            <button
+              type="submit"
+              :disabled="registering"
+              class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50"
+            >
+              {{ registering ? $t('admin.applications.dcrRegistering') : $t('admin.applications.dcrSubmit') }}
             </button>
           </div>
         </form>

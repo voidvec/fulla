@@ -4,6 +4,7 @@
 #include <fulla/drogon/adapters/DrogonLogger.h>
 #include <fulla/drogon/adapters/StorageOrgConsentResolver.h>
 #include <algorithm>
+#include <fulla/drogon/adapters/CachedClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/adapters/StorageOrgContextResolver.h>
@@ -295,9 +296,18 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
         }
         if (claimsDb)
         {
-            claimMappingsProvider_ =
-              std::make_shared<fulla::drogon::adapters::StorageClaimMappingsProvider>(
-                claimsDb);
+            // P1-5 benchmark follow-up: wrap the storage provider in the
+            // process-local cache — without it every userinfo/refresh/code
+            // issuance re-queried claim_mappings (userinfo scenario -18%
+            // QPS in the v1.6.0 five-scenario gate). Write paths call
+            // refreshMappedClaimNames() which also invalidates this cache,
+            // so CRUD stays immediately visible; TTL only bounds staleness
+            // for out-of-process writes.
+            claimMappingsCache_ =
+              std::make_shared<fulla::drogon::adapters::CachedClaimMappingsProvider>(
+                std::make_shared<fulla::drogon::adapters::StorageClaimMappingsProvider>(
+                  claimsDb));
+            claimMappingsProvider_ = claimMappingsCache_;
             tokenService_->setClaimMappingsProvider(claimMappingsProvider_);
             tokenService_->setUserProfileResolver(
               [claimsDb](const std::string &subject,
@@ -1263,6 +1273,13 @@ void OAuth2Plugin::refreshMappedClaimNames()
     // P1-3 (#280): cache refresh for claims_supported. Fire-and-forget;
     // failures keep the previous set (discovery then under-reports,
     // which is the honest direction for a cache).
+    //
+    // P1-5 benchmark follow-up: the write paths call this after every
+    // claim-mapping CRUD, so it is also the invalidation point for the
+    // process-local entries cache — invalidate FIRST, otherwise the
+    // lookup below just re-reads the stale slot.
+    if (claimMappingsCache_)
+        claimMappingsCache_->invalidate();
     if (!claimMappingsProvider_)
         return;
     claimMappingsProvider_->getEnabledMappings(
@@ -1275,6 +1292,79 @@ void OAuth2Plugin::refreshMappedClaimNames()
           names.erase(std::unique(names.begin(), names.end()), names.end());
           mappedClaimNames_ = std::move(names);
       });
+}
+
+void OAuth2Plugin::lookupOwnerStatus(
+  const std::string &clientId,
+  std::function<void(std::optional<std::string>)> &&cb
+)
+{
+    namespace chrono = std::chrono;
+    // Hot path first: lock, copy the cached answer out, unlock, then
+    // invoke — no allocation before the lock, single lookup.
+    std::optional<std::optional<std::string>> hit;
+    {
+        std::lock_guard<std::mutex> lock(ownerStatusMutex_);
+        auto it = ownerStatusCache_.find(clientId);
+        if (it != ownerStatusCache_.end() &&
+            chrono::steady_clock::now() < it->second.second)
+        {
+            hit = it->second.first;
+        }
+    }
+    if (hit.has_value())
+    {
+        cb(std::move(*hit));
+        return;
+    }
+    auto sharedCb = std::make_shared<std::function<void(std::optional<std::string>)>>(std::move(cb));
+    ::drogon::orm::DbClientPtr db;
+    try
+    {
+        db = ::drogon::app().getDbClient();
+    }
+    catch (...)
+    {
+        db = nullptr;
+    }
+    if (!db)
+    {
+        // No DB reachable: fail open (the overlay only ever DEACTIVATES on a
+        // positive suspended verdict, matching the pre-cache semantics).
+        (*sharedCb)(std::nullopt);
+        return;
+    }
+    try
+    {
+        ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
+        ownersRepo.findOwnerRow(
+          clientId,
+          [this, clientId, sharedCb](
+            const ::fulla::storage::postgres::OwnerRowLookup &lookup) {
+              std::optional<std::string> status;
+              if (lookup.status == ::fulla::storage::postgres::LookupStatus::Found)
+                  status = lookup.row.getValueOfStatus();
+              {
+                  std::lock_guard<std::mutex> lock(ownerStatusMutex_);
+                  ownerStatusCache_[clientId] = {
+                    status, // 60s TTL: the write paths invalidate precisely (suspend/resume,
+                  // org soft-delete cascade); the TTL only bounds cross-
+                  // process staleness.
+                  std::chrono::steady_clock::now() + std::chrono::seconds(60)};
+              }
+              (*sharedCb)(status);
+          });
+    }
+    catch (...)
+    {
+        (*sharedCb)(std::nullopt);
+    }
+}
+
+void OAuth2Plugin::invalidateOwnerStatusCache()
+{
+    std::lock_guard<std::mutex> lock(ownerStatusMutex_);
+    ownerStatusCache_.clear();
 }
 
 void OAuth2Plugin::resolveUserProfileForClaims(

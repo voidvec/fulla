@@ -831,7 +831,16 @@ void OrganizationService::deleteOrg(
                                                         txn->setCommitCallback(
                                                           [respondDeleted, respondTxnError](bool committed) {
                                                               if (committed)
+                                                              {
+                                                                  // P1-5 benchmark follow-up:
+                                                                  // owners rows flipped to suspended
+                                                                  // inside this txn — drop the
+                                                                  // introspection overlay cache now
+                                                                  // that the change is durable.
+                                                                  if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>())
+                                                                      plugin->invalidateOwnerStatusCache();
                                                                   respondDeleted();
+                                                              }
                                                               else
                                                                   respondTxnError("commit failed");
                                                           });

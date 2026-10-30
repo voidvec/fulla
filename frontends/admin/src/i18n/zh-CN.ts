@@ -174,6 +174,21 @@ export default {
       deleteConfirm: '确定删除客户端“{name}”？此操作无法撤销。',
       resetSecretConfirm: '确定重置“{name}”的密钥？旧密钥将立即失效。',
       selectGrantType: '请至少选择一种授权类型',
+      dcrRegister: '注册（RFC 7591）',
+      dcrTitle: '注册应用（RFC 7591）',
+      dcrHint:
+        '通过 POST /oauth2/register 的动态客户端注册（仅管理员可用）。与文档中的 API 调用行为完全一致。',
+      dcrAuthBasic: 'client_secret_basic（HTTP Basic）',
+      dcrAuthPost: 'client_secret_post（请求体）',
+      dcrAuthNone: 'none（PUBLIC 客户端）',
+      dcrAuthMethodHint:
+        'PUBLIC 客户端锁定为 none（无密钥）；CONFIDENTIAL 客户端默认 client_secret_basic。',
+      dcrPostLogoutLabel: '登出回调地址（可选，逗号分隔）',
+      dcrPostLogoutHint:
+        '专用登出目标。非空时对 end_session 权威生效；留空则回退到登录回调列表。',
+      dcrRedirectRequired: '机密客户端必须登记至少一个回调地址',
+      dcrSubmit: '注册',
+      dcrRegistering: '注册中…',
       nameLabel: '名称',
       namePlaceholder: '我的应用',
       confidential: '机密（服务端）',

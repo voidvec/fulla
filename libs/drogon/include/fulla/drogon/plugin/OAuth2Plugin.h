@@ -4,6 +4,7 @@
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
 #include <fulla/common/ports/IClaimMappingsProvider.h>
+#include <fulla/drogon/adapters/CachedClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
 // Phase 1.5d (Task 39): the plugin's 3 identity-side members now hold the NEW
@@ -30,6 +31,9 @@
 #include <optional>
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include <mutex>
+#include <chrono>
 #include <functional>
 
 // M3 Task 24 slice 2 (fulla-sdk-refactor, PROGRESS.md "Task 24 切分
@@ -503,6 +507,19 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     /// the new set).
     void refreshMappedClaimNames();
 
+    // P1-5 benchmark follow-up (five-scenario gate): process-local cache for
+    // the introspection org-overlay. Every /oauth2/introspect used to query
+    // oauth2_client_owners directly (-17% QPS); this cache answers from
+    // memory with a 3s TTL and precise invalidation from the two owner-row
+    // write paths (open-platform suspend/resume, org soft-delete cascade).
+    // A cached "no owner row" is the hot path for admin-seeded clients.
+    /// cb receives: nullopt = no owner row; otherwise the owners.status value.
+    void lookupOwnerStatus(
+      const std::string &clientId,
+      std::function<void(std::optional<std::string>)> &&cb
+    );
+    void invalidateOwnerStatusCache();
+
     std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
     {
         return metrics_;
@@ -567,8 +584,16 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
     // P1-3 (#285... #280): claims-mapping provider (shared with TokenService).
     std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+    // P1-5 benchmark follow-up: concrete cache handle for write-path
+    // invalidation (see refreshMappedClaimNames).
+    std::shared_ptr<class fulla::drogon::adapters::CachedClaimMappingsProvider> claimMappingsCache_;
     // P1-3 (#280): cached enabled-mapping claim names (claims_supported).
     std::vector<std::string> mappedClaimNames_;
+    std::mutex ownerStatusMutex_;
+    std::unordered_map<
+      std::string,
+      std::pair<std::optional<std::string>, std::chrono::steady_clock::time_point>>
+      ownerStatusCache_;
     std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
     // M8 Task 40 decision b: Adapter-side observability ports, exposed via
     // getAuditSink()/getMetrics() for Drogon-layer consumers.

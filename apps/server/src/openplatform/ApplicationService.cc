@@ -1796,6 +1796,11 @@ void ApplicationService::setStatus(
                 updated,
                 [req, cb, clientId, suspended, db](const std::size_t) {
                     ::fulla::drogon::ClientCacheInvalidator::instance().invalidate(clientId);
+                    // P1-5 benchmark follow-up: the owners.status row changed —
+                    // drop the introspection overlay cache so the new status is
+                    // visible immediately (the 3s TTL only bounds cross-path drift).
+                    if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>())
+                        plugin->invalidateOwnerStatusCache();
                     audit(req, suspended ? "client_suspended" : "client_resumed", clientId);
                     if (suspended)
                     {

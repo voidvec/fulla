@@ -245,6 +245,34 @@ export async function setupAuthenticatedMocks(page: Page) {
     }
   })
 
+  // RFC 7591 dynamic client registration (P1-7 #284) — mirrors the real
+  // 201 response shape (client_id/client_secret/client_id_issued_at/...).
+  // The credential slot carries a mock PLACEHOLDER from env, never a real
+  // secret (same convention as the admin-clients mock below).
+  await page.route('**/oauth2/register', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      const name = typeof body['client_name'] === 'string' ? body['client_name'] : 'DCR App'
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          client_id: 'dcr-client-' + Date.now(),
+          client_secret: process.env.E2E_MOCK_DCR_CS ?? 'e2e-mock-value-dcr',
+          client_name: name,
+          client_id_issued_at: Math.floor(Date.now() / 1000),
+          client_secret_expires_at: 0,
+          redirect_uris: body['redirect_uris'] ?? [],
+          grant_types: body['grant_types'] ?? ['authorization_code'],
+          token_endpoint_auth_method: body['token_endpoint_auth_method'] ?? 'client_secret_basic',
+          post_logout_redirect_uris: body['post_logout_redirect_uris'] ?? [],
+        }),
+      })
+    } else {
+      await route.continue()
+    }
+  })
+
   // Admin clients
   await page.route('**/api/admin/clients', async (route) => {
     if (route.request().method() === 'GET') {

@@ -177,6 +177,21 @@ export default {
       resetSecretConfirm:
         'Reset secret for "{name}"? The old secret will be immediately invalidated.',
       selectGrantType: 'Please select at least one grant type',
+      dcrRegister: 'Register (RFC 7591)',
+      dcrTitle: 'Register Application (RFC 7591)',
+      dcrHint:
+        'Dynamic client registration via POST /oauth2/register (admin-gated). Behaves exactly like the documented API call.',
+      dcrAuthBasic: 'client_secret_basic (HTTP Basic)',
+      dcrAuthPost: 'client_secret_post (request body)',
+      dcrAuthNone: 'none (PUBLIC client)',
+      dcrAuthMethodHint:
+        'Locked to "none" for PUBLIC clients (they have no secret). CONFIDENTIAL clients default to client_secret_basic.',
+      dcrPostLogoutLabel: 'Post-logout Redirect URIs (optional, comma-separated)',
+      dcrPostLogoutHint:
+        'Dedicated logout targets. Non-empty is authoritative for end_session; empty falls back to the login redirect list.',
+      dcrRedirectRequired: 'Confidential clients must register at least one redirect URI',
+      dcrSubmit: 'Register',
+      dcrRegistering: 'Registering…',
       nameLabel: 'Name',
       namePlaceholder: 'My App',
       confidential: 'Confidential (Server-side)',
