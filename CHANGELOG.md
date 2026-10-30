@@ -11,6 +11,20 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ## [Unreleased]
 
+<!-- new entries go here -->
+
+## [1.6.0] - 2026-10-30
+
+The P1 platform release: eight packages from the 2026-10 improvement
+roadmap — email templates, audit export, branding, org management
+completion, RBAC permission enforcement (ADR-0014), claims mapping,
+the TypeScript SDK + Next.js demo (with a browser-mode interop driver
+that caught a login-CSP bug breaking every browser RP login), and
+RFC 7591 registration surfaced end to end. The pre-release
+five-scenario benchmark gate ran same-machine against v1.5.0, found two
+hot-path regressions and fixed them in-release (userinfo/introspect at
+97-112% of v1.5.0). Four migrations (V041-V044, additive).
+
 ### ⚠️ Breaking
 
 - **userinfo: the legacy `username` key is removed.** userinfo still emits

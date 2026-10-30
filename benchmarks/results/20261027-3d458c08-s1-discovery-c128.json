@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "scenario": "s1-discovery",
+  "concurrency": 128,
+  "threads": 8,
+  "duration_s": 30,
+  "qps": 36805.55,
+  "latency_us": {
+    "p50": 3150.0,
+    "p75": 4550.0,
+    "p90": 7200.0,
+    "p99": 1180000.0
+  },
+  "total_requests": 1196511,
+  "error_rate": 3.510205923723225e-05,
+  "error_count": 42,
+  "socket_errors": {
+    "connect": 0,
+    "read": 42,
+    "write": 0,
+    "timeout": 0
+  },
+  "non_2xx_responses": null,
+  "driver": {
+    "cpu_pct": 6.8,
+    "limited": false
+  },
+  "env": {
+    "date": "2026-10-27T07:34:16+00:00",
+    "git_sha": "3d458c08",
+    "git_branch": "feat/p1-7-dcr-docs-ui",
+    "product": "fulla",
+    "product_version": "",
+    "target_image": "",
+    "target_config": "config.bench.json",
+    "target_spec": "",
+    "driver_spec": "",
+    "network": "localhost-cross-container",
+    "wrk_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer"
+  }
+}
