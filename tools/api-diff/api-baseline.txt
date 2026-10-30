@@ -838,6 +838,37 @@ std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 int tokenTtlSeconds_;
 };
 }
+=== libs/drogon/include/fulla/drogon/adapters/CachedClaimMappingsProvider.h
+#pragma once
+#include <fulla/common/ports/IClaimMappingsProvider.h>
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <vector>
+namespace fulla::drogon::adapters
+{
+class CachedClaimMappingsProvider : public fulla::common::ports::IClaimMappingsProvider
+{
+public:
+CachedClaimMappingsProvider(
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> inner,
+std::chrono::steady_clock::duration ttl = std::chrono::seconds(60)
+)
+: inner_(std::move(inner)), ttl_(ttl)
+;
+void getEnabledMappings(MappingsCallback &&cb) override
+;
+void invalidate()
+;
+private:
+std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> inner_;
+const std::chrono::steady_clock::duration ttl_;
+std::mutex mutex_;
+std::optional<std::vector<fulla::common::ports::ClaimMappingEntry>> cache_;
+std::chrono::steady_clock::time_point cachedAt_{};
+};
+}
 === libs/drogon/include/fulla/drogon/adapters/DrogonAuditSink.h
 #pragma once
 #include <fulla/common/observability/AuditEvent.h>
@@ -3431,6 +3462,7 @@ void doPurge();
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
 #include <fulla/common/ports/IClaimMappingsProvider.h>
+#include <fulla/drogon/adapters/CachedClaimMappingsProvider.h>
 #include <fulla/drogon/adapters/StorageRoleProvider.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
 #include <fulla/identity/IRoleRepository.h>
@@ -3452,6 +3484,9 @@ void doPurge();
 #include <optional>
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include <mutex>
+#include <chrono>
 #include <functional>
 class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
 {
@@ -3624,6 +3659,11 @@ std::function<void(std::optional<std::string>)> &&cb
 const std::vector<std::string> &getMappedClaimNames() const
 ;
 void refreshMappedClaimNames();
+void lookupOwnerStatus(
+const std::string &clientId,
+std::function<void(std::optional<std::string>)> &&cb
+);
+void invalidateOwnerStatusCache();
 std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
 ;
 std::shared_ptr<fulla::oauth2::protocol::AuthorizationService>
@@ -3650,7 +3690,13 @@ std::shared_ptr<fulla::identity::IdentityService> identityService_;
 std::shared_ptr<fulla::drogon::adapters::StorageRoleProvider> roleProvider_;
 std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionResolver_;
 std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
+std::shared_ptr<class fulla::drogon::adapters::CachedClaimMappingsProvider> claimMappingsCache_;
 std::vector<std::string> mappedClaimNames_;
+std::mutex ownerStatusMutex_;
+std::unordered_map<
+std::string,
+std::pair<std::optional<std::string>, std::chrono::steady_clock::time_point>>
+ownerStatusCache_;
 std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
 std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::IMetrics> metrics_;

@@ -21,9 +21,14 @@ import { join, resolve } from 'node:path'
 // catalogs for both, and two nav entries (PR #218). Re-measured 2026-09-18
 // after the review fixes (admin governance UI + orgs page; CI-build numbers
 // — the local build measured ~9KB lower).
+// Re-baselined 2026-10-30 for v1.6.0 P1-7 (#284): the RFC 7591 registration
+// modal (client-type + auth-method selects, post-logout input, RFC-7591
+// grant checkboxes) plus its bilingual i18n catalog added ~2.4KB raw to the
+// admin bundle (439.3KB measured vs the 438.2KB cap). admin.total base
+// 398.4KB -> 400.4KB.
 const BUDGETS = {
   user: { total: 385441, main: 146739 },
-  admin: { total: 407951, main: 146452 },
+  admin: { total: 410049, main: 146452 },
 }
 const HEADROOM = 1.1
 
