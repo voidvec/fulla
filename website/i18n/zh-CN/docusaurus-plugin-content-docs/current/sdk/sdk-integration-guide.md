@@ -6,9 +6,13 @@
 本文只讲"怎么拿、怎么接"。发布流水线为
 `.github/workflows/release.yml`（严格 SemVer tag `vX.Y.Z` 触发）。
 
-> 非 C++ 消费者：官方维护的 **Python**（PyPI [`fulla-oauth2`](https://pypi.org/project/fulla-oauth2/)）与
-> **Go**（`github.com/voidvec/fulla/clients/go`）HTTP 客户端开箱即用，
+> 非 C++ 消费者：官方维护的 **Python**（PyPI [`fulla-oauth2`](https://pypi.org/project/fulla-oauth2/)）、
+> **Go**（`github.com/voidvec/fulla/clients/go`）与 **TypeScript/JavaScript**（npm
+> [`fulla-oauth2`](https://www.npmjs.com/package/fulla-oauth2)，v1.6.0 起）HTTP 客户端开箱即用，
 > 见 [clients/](https://github.com/voidvec/fulla/tree/master/clients)。
+> 可运行的浏览器应用集成示例见
+> [`examples/nextjs-demo`](https://github.com/voidvec/fulla/tree/master/examples/nextjs-demo)
+> （登录 → 回调 → 会话 → 受保护 API → 登出，30 分钟内跑通）。
 
 ---
 
