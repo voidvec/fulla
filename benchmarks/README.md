@@ -21,6 +21,7 @@ Its purpose is to turn the load-bearing performance claims in the
 | **Scenarios (M3)** | **S5 refresh_token** (rotation, one-shot RT pool) + **S6 userinfo** (bearer filter + user lookup) |
 | **M3 additions** | Resource observation (`--observe`: docker-stats + /metrics scraping), cold-start measurement |
 | **Phase 0.5 (delivered)** | Same-environment competitor comparison (Keycloak / Ory Hydra / Zitadel) — see [competitors/README.md](competitors/README.md) and [results/COMPARISON.md](competitors/results/COMPARISON.md) |
+| **Release gate (v1.6.0)** | Five-scenario regression gate vs the prior release (same-machine back-to-back arms + repeat arms + same-window control). The v1.6.0 run lives in `results/20261027-3d458c08-*.json`: it caught two one-extra-DB-roundtrip regressions (S6 userinfo -18%, S3 introspect -17%, both fixed in-release) and re-measured at parity (S6 97-112%, S3 103% same-window). Method note: compare against a same-day arm of the previous tag, never against cross-day baselines (±9% host drift) |
 
 ### Scenario summary
 
