@@ -46,6 +46,9 @@ static void flushGcovIfInstrumented()
 #endif
 #include "../src/bootstrap/ControllerRegistration.h"
 #include "../src/bootstrap/IdentityAssembly.h"
+// #299: capture the effective db_clients[0] conninfo for DbDiagnostics.h's
+// out-of-pool snapshot client.
+#include "DbDiagnostics.h"
 #include <fulla/drogon/controllers/HealthController.h>
 #include <fulla/drogon/controllers/AuthProvidersController.h>
 #ifdef WITH_SOCIAL
@@ -213,6 +216,66 @@ std::string loadConfigWithEnv(const std::string &configPath)
             // This allows CI to disable password authentication
             root["db_clients"][0]["passwd"] = env;
         }
+
+        // #299 fail-fast: the TEST server's DB connections must never wait
+        // forever. Production defaults are `lock_timeout=0` (infinite lock
+        // queue) and drogon-side `timeout: -1` (an unbounded-TIME client-side
+        // sqlCmdBuffer_ queue -- a query that never gets a pool connection
+        // never errors at all, which is exactly the null-resp signature).
+        // The runtime config written here is only consumed by this test
+        // binary; the dev/prod config on disk is untouched.
+        //
+        // - lock_timeout=3s: a DDL/lock pileup fails within 3s with 55P03
+        //   naming the lock, instead of stacking silently behind the already
+        //   configured statement_timeout=5s.
+        // - idle_in_transaction_session_timeout=60s: an abandoned transaction
+        //   (leftover async work from an earlier test) is killed server-side
+        //   after 60s instead of holding its locks and pool connection
+        //   forever.
+        // - drogon timeout=30: any single SQL op -- INCLUDING pool-queue
+        //   waits, which statement_timeout cannot see -- errors after 30s
+        //   with TimeoutError, producing a 500 the test can print instead of
+        //   hanging the request past every HTTP retry.
+        auto &db0 = root["db_clients"][0];
+        auto &connectOptions = db0["connect_options"];
+        if (!connectOptions.isObject())
+        {
+            connectOptions = Json::Value(Json::objectValue);
+        }
+        connectOptions["lock_timeout"] = "3s";
+        connectOptions["idle_in_transaction_session_timeout"] = "60s";
+        db0["timeout"] = 30.0;
+
+        // Capture the effective conninfo for DbDiagnostics.h's out-of-pool
+        // snapshot client (used at the exact null-resp moment; it must not
+        // borrow the pool under suspicion). Mirrors drogon's
+        // DbClientManager::buildConnStr shape: keyword=value pairs with every
+        // value taken from the effective (env-overridden) config above.
+        std::string diagConnInfo;
+        const std::pair<const char *, std::string> connParts[] = {
+            {"host", db0.get("host", "127.0.0.1").asString()},
+            {"port", std::to_string(db0.get("port", 5432).asUInt())},
+            {"dbname", db0.get("dbname", "fulla_db").asString()},
+            {"user", db0.get("user", "fulla_user").asString()},
+            {"passwd", db0.get("passwd", "").asString()},
+        };
+        for (const auto &part : connParts)
+        {
+            if (part.second.empty())
+                continue;
+            if (!diagConnInfo.empty())
+                diagConnInfo += " ";
+            // JSON key "passwd" -> libpq conninfo keyword "password"
+            // (libpq rejects unknown keywords such as "passwd").
+            diagConnInfo += (std::string(part.first) == "passwd" ? "password" : part.first);
+            diagConnInfo += "=";
+            diagConnInfo += part.second;
+        }
+        fulla::test::diag::pgConnInfoStorage() = diagConnInfo;
+        std::cout << "#299 fail-fast DB settings injected: lock_timeout=3s, "
+                     "idle_in_transaction_session_timeout=60s, drogon "
+                     "sql-timeout=30s (test runtime config only)"
+                  << std::endl;
     }
 
     // Override Redis Settings (only if not memory storage and redis_clients
@@ -526,6 +589,34 @@ int main(int argc, char **argv)
     int status = test::run(argc, argv);
     std::cout << "test::run() completed with status: " << status << std::endl;
     std::cout.flush();
+
+    // #300 env-gated graceful teardown: the default paths below fast-exit
+    // (std::_Exit) because the graceful quit+join segfaults instrumented
+    // builds. Setting FULLA_TEST_GRACEFUL_TEARDOWN=1 takes the graceful path
+    // ON PURPOSE (quit queued exactly once + thread join + normal return, so
+    // static destructors also run) so an ASan/Debug build can capture the
+    // use-after-free stack behind that segfault. Not for routine CI use.
+    if (std::getenv("FULLA_TEST_GRACEFUL_TEARDOWN") != nullptr)
+    {
+        std::cout << "FULLA_TEST_GRACEFUL_TEARDOWN set: taking the graceful "
+                     "quit+join path (issue #300 diagnosis)."
+                  << std::endl;
+        std::cout.flush();
+        if (!runtimeConfigPath.empty() && std::filesystem::exists(runtimeConfigPath))
+        {
+            std::error_code ec;
+            std::filesystem::remove(runtimeConfigPath, ec);
+        }
+        auto *loop = drogon::app().loop();
+        loop->queueInLoop([]() { drogon::app().quit(); });
+        thr.join();
+        std::cout << "Graceful teardown finished (loop quit returned, thread "
+                     "joined); returning for static destructors."
+                  << std::endl;
+        std::cout.flush();
+        flushGcovIfInstrumented();
+        return status;
+    }
 
     // 5. Cleanup
     // Use _Exit() to avoid SegFault during Drogon teardown

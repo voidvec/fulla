@@ -42,6 +42,10 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 
+// #299 diagnostics: out-of-pool pg_stat_activity snapshot + steady-clock
+// timestamps for the login failure prints (DbDiagnostics.h header rationale).
+#include "DbDiagnostics.h"
+
 #include <json/json.h>
 
 #include <chrono>
@@ -171,6 +175,18 @@ inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
         std::tie(result, resp) = attempt();
+        // #299: BOTH transport attempts dead with no response. This is the
+        // exact "null-resp" signature; snapshot the server-side DB state
+        // while the wedge is live (out-of-pool connection, see
+        // DbDiagnostics.h) so CI turns the mystery into evidence.
+        if (result != ::drogon::ReqResult::Ok && resp == nullptr)
+        {
+            std::cout << "[sendWithRetry] double-null on " << req->getPath()
+                      << " (t+" << ::fulla::test::diag::uptimeMs() << "ms)"
+                      << std::endl;
+            ::fulla::test::diag::dumpPgDiagnostics(
+              "sendWithRetry double-null on " + req->getPath());
+        }
     }
     return {result, resp};
 }
@@ -549,7 +565,8 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     auto loginResp = sendPostForm("/oauth2/login?json=true", loginForm);
     if (!loginResp || loginResp->getStatusCode() != ::drogon::k200OK)
     {
-        std::cout << "[loginAsUserTokens] login step failed for '" << username << "': "
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step failed for '" << username << "': "
                   << (loginResp ? std::to_string(loginResp->getStatusCode()) : std::string("null-resp"))
                   << " body=" << (loginResp ? loginResp->getBody().substr(0, 200) : std::string("-"))
                   << std::endl;
@@ -557,7 +574,16 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     Json::Value loginJson;
     if (!parseJsonBody(loginResp, loginJson))
+    {
+        // #299: the CI tail cluster showed tokenB REQUIRE failures with NO
+        // step-failure print -- a 200 whose body did not parse. Make every
+        // silent nullopt path loud (status + body prefix) so the next run
+        // tells us which path bites.
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step 200-but-unparseable for '" << username
+                  << "' body=" << loginResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     // MFA-enabled users return mfa_required=true instead of a code.
     if (loginJson.isMember("mfa_required") && loginJson["mfa_required"].asBool())
     {
@@ -566,7 +592,12 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     const std::string code = loginJson.get("code", "").asString();
     if (code.empty())
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step 200-but-no-code for '" << username
+                  << "' body=" << loginResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
 
     // Step 2: token exchange.
     const std::string tokenForm =
@@ -580,7 +611,8 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     auto tokenResp = sendPostForm("/oauth2/token", tokenForm);
     if (!tokenResp || tokenResp->getStatusCode() != ::drogon::k200OK)
     {
-        std::cout << "[loginAsUserTokens] token step failed for '" << username << "': "
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step failed for '" << username << "': "
                   << (tokenResp ? std::to_string(tokenResp->getStatusCode()) : std::string("null-resp"))
                   << " body=" << (tokenResp ? tokenResp->getBody().substr(0, 200) : std::string("-"))
                   << std::endl;
@@ -588,9 +620,19 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     Json::Value tokenJson;
     if (!parseJsonBody(tokenResp, tokenJson))
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step 200-but-unparseable for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     if (tokenJson.get("access_token", "").asString().empty())
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step 200-but-no-access_token for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     return tokenJson;
 }
 
