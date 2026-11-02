@@ -48,6 +48,8 @@
 
 #include <json/json.h>
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <memory>
@@ -86,17 +88,30 @@ inline double fullaTestHttpTimeout()
 }
 
 // Client factory hook: all request builders obtain their HttpClient here
-// (one place to change the connection strategy). See the note inside for
-// why it stays per-request.
+// (one place to change the connection strategy).
+//
+// #299 root-cause-driven strategy: a SMALL ROUND-ROBIN POOL of persistent
+// keep-alive clients. The v1.6.0 per-request strategy opened ~1800 fresh
+// loopback connections per suite run; the captured wedge evidence (PR #302)
+// shows the server sporadically accepts a connection and never services it
+// (4 CLOSE-WAIT + idle-in-epoll loops + zero kernel drops; the owning client
+// then burns 2 x 30s HTTP timeouts = the ~61s "null-resp" outage). A single
+// shared client was tried before and serialized the suite ~5x; a pool keeps
+// concurrency while shrinking the fresh-accept surface ~200x. Reused
+// keep-alive connections also stop the TIME_WAIT churn (~1800/run).
 inline ::drogon::HttpClientPtr sharedTestHttpClient()
 {
-    // REVERTED to per-request clients (v1.6.0): sharing ONE HttpClient
-    // serialized the whole suite's traffic onto a single keep-alive pipeline
-    // and slowed the 61k-assertion run ~5x — Release legs started timing
-    // out. The occasional null-response that motivated the shared client is
-    // absorbed by the transport retry in sendWithRetry() plus the
-    // whole-login retry in loginAsUserTokens() instead.
-    return ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+    constexpr int kPoolSize = 8;
+    static std::array<::drogon::HttpClientPtr, kPoolSize> pool = [] {
+        std::array<::drogon::HttpClientPtr, kPoolSize> init{};
+        for (auto &c : init)
+        {
+            c = ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        }
+        return init;
+    }();
+    static std::atomic<size_t> nextIdx{0};
+    return pool[nextIdx.fetch_add(1, std::memory_order_relaxed) % kPoolSize];
 }
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
