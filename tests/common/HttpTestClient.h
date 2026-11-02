@@ -99,19 +99,58 @@ inline double fullaTestHttpTimeout()
 // shared client was tried before and serialized the suite ~5x; a pool keeps
 // concurrency while shrinking the fresh-accept surface ~200x. Reused
 // keep-alive connections also stop the TIME_WAIT churn (~1800/run).
-inline ::drogon::HttpClientPtr sharedTestHttpClient()
+namespace detail
 {
-    constexpr int kPoolSize = 8;
-    static std::array<::drogon::HttpClientPtr, kPoolSize> pool = [] {
-        std::array<::drogon::HttpClientPtr, kPoolSize> init{};
+// The round-robin keep-alive pool backing sharedTestHttpClient(). Namespace
+// scope (not function-local) so discardTestHttpClient() can swap slots.
+inline constexpr int kClientPoolSize = 8;
+inline std::array<::drogon::HttpClientPtr, kClientPoolSize> &clientPool()
+{
+    static std::array<::drogon::HttpClientPtr, kClientPoolSize> pool = [] {
+        std::array<::drogon::HttpClientPtr, kClientPoolSize> init{};
         for (auto &c : init)
         {
             c = ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
         }
         return init;
     }();
-    static std::atomic<size_t> nextIdx{0};
-    return pool[nextIdx.fetch_add(1, std::memory_order_relaxed) % kPoolSize];
+    return pool;
+}
+inline std::atomic<size_t> &clientPoolIndex()
+{
+    static std::atomic<size_t> idx{0};
+    return idx;
+}
+}  // namespace detail
+
+inline ::drogon::HttpClientPtr sharedTestHttpClient()
+{
+    return detail::clientPool()[detail::clientPoolIndex().fetch_add(1, std::memory_order_relaxed) %
+                                detail::kClientPoolSize];
+}
+
+// #299 companion to the pool above: drogon's HttpClient TIMEOUT path fires
+// ReqResult::Timeout but does NOT discard its connection (only the connect-
+// error path resets tcpClientPtr_). If a pooled connection goes dark (the
+// server-side never-serviced accept captured in the wedge evidence), every
+// later request on that client would burn a full HTTP timeout. Call this
+// after any transport-level failure: the slot is swapped for a fresh client
+// and destroying the old one closes its socket for good.
+inline void discardTestHttpClient(const ::drogon::HttpClientPtr &client)
+{
+    if (!client)
+        return;
+    auto &pool = detail::clientPool();
+    for (auto &slot : pool)
+    {
+        if (slot == client)
+        {
+            slot = ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+            LOG_WARN << "[client-pool] discarded a client after transport failure "
+                        "(slot swapped for a fresh keep-alive connection)";
+            return;
+        }
+    }
 }
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
@@ -184,21 +223,28 @@ inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
   ::drogon::HttpRequestPtr req,
   double timeout)
 {
-    auto attempt = [&]() { return client->sendRequest(req, timeout); };
-    auto [result, resp] = attempt();
+    auto [result, resp] = client->sendRequest(req, timeout);
     if (result != ::drogon::ReqResult::Ok && resp == nullptr)
     {
+        // #299: transport-level failure with no response. Discard the pooled
+        // client FIRST — drogon's timeout path keeps a possibly-dark
+        // connection, and retrying on it would burn another full HTTP
+        // timeout on the same dead socket. The retry goes over a fresh
+        // keep-alive connection from the pool.
+        discardTestHttpClient(client);
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        std::tie(result, resp) = attempt();
-        // #299: BOTH transport attempts dead with no response. This is the
-        // exact "null-resp" signature; snapshot the server-side DB state
-        // while the wedge is live (out-of-pool connection, see
-        // DbDiagnostics.h) so CI turns the mystery into evidence.
+        ::drogon::HttpClientPtr retryClient = sharedTestHttpClient();
+        std::tie(result, resp) = retryClient->sendRequest(req, timeout);
+        // BOTH transport attempts dead with no response: the exact
+        // "null-resp" signature. Snapshot the server-side DB state while
+        // the wedge is live (out-of-pool connection, see DbDiagnostics.h)
+        // so CI turns the mystery into evidence.
         if (result != ::drogon::ReqResult::Ok && resp == nullptr)
         {
             std::cout << "[sendWithRetry] double-null on " << req->getPath()
                       << " (t+" << ::fulla::test::diag::uptimeMs() << "ms)"
                       << std::endl;
+            discardTestHttpClient(retryClient);
             ::fulla::test::diag::dumpPgDiagnostics(
               "sendWithRetry double-null on " + req->getPath());
         }
