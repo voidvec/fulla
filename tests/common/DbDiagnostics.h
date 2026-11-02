@@ -42,7 +42,7 @@ namespace fulla::test::diag
 // the v1.6.0-era failures unreadable (drogon's async logger and std::cout
 // interleave non-chronologically across threads; the tail cluster of a failed
 // run stamps ~everything with the same wall-clock second).
-inline long uptimeMs()
+inline long long uptimeMs()
 {
     static const auto start = std::chrono::steady_clock::now();
     return std::chrono::duration_cast<std::chrono::milliseconds>(
