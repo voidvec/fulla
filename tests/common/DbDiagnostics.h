@@ -32,6 +32,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace fulla::test::diag
@@ -86,21 +87,22 @@ inline ::drogon::orm::DbClientPtr diagnosticPgClient()
     return client;
 }
 
-// Run one query on the diagnostic client with a hard 5s wait. Returns empty
-// rows on timeout/error (after logging) -- see file header for why this must
-// never throw or hang.
-inline ::drogon::orm::Result queryWithDeadline(const std::string &sql)
+// Run one query on the diagnostic client with a hard 5s wait. Returns an
+// empty optional on timeout/error (after logging) -- see file header for why
+// this must never throw or hang. (drogon's Result has no default ctor, hence
+// optional rather than an empty Result.)
+inline std::optional<::drogon::orm::Result> queryWithDeadline(const std::string &sql)
 {
     auto client = diagnosticPgClient();
     if (!client)
-        return {};
+        return std::nullopt;
     auto future = client->execSqlAsyncFuture(sql);
     if (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
     {
         std::cout << "[dbdiag] query timed out after 5s (pool/DB wedged past "
                      "even the out-of-pool probe): "
                   << sql.substr(0, 80) << std::endl;
-        return {};
+        return std::nullopt;
     }
     try
     {
@@ -109,7 +111,7 @@ inline ::drogon::orm::Result queryWithDeadline(const std::string &sql)
     catch (const std::exception &e)
     {
         std::cout << "[dbdiag] query failed: " << e.what() << std::endl;
-        return {};
+        return std::nullopt;
     }
 }
 
@@ -149,17 +151,25 @@ inline void dumpPgDiagnostics(const std::string &where)
       "FROM pg_stat_activity "
       "WHERE datname = current_database() AND pid <> pg_backend_pid() "
       "ORDER BY query_start NULLS LAST");
-    std::cout << "[dbdiag] pg_stat_activity: " << rows.size()
-              << " connection(s)" << std::endl;
-    for (const auto &r : rows)
+    if (rows)
     {
-        std::cout << "[dbdiag]   pid=" << detail::col(r, "pid")
-                  << " state=" << detail::col(r, "state")
-                  << " wait=" << detail::col(r, "wait_type") << "/"
-                  << detail::col(r, "wait_event")
-                  << " xact_age=" << detail::col(r, "xact_age_s")
-                  << "s query_age=" << detail::col(r, "query_age_s")
-                  << "s :: " << detail::col(r, "query") << std::endl;
+        std::cout << "[dbdiag] pg_stat_activity: " << rows->size()
+                  << " connection(s)" << std::endl;
+        for (const auto &r : *rows)
+        {
+            std::cout << "[dbdiag]   pid=" << detail::col(r, "pid")
+                      << " state=" << detail::col(r, "state")
+                      << " wait=" << detail::col(r, "wait_type") << "/"
+                      << detail::col(r, "wait_event")
+                      << " xact_age=" << detail::col(r, "xact_age_s")
+                      << "s query_age=" << detail::col(r, "query_age_s")
+                      << "s :: " << detail::col(r, "query") << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "[dbdiag] pg_stat_activity: snapshot unavailable"
+                  << std::endl;
     }
 
     // 2) Who is blocking whom (the head of any lock queue).
@@ -169,10 +179,10 @@ inline void dumpPgDiagnostics(const std::string &where)
       "left(coalesce(query, ''), 120) AS query "
       "FROM pg_stat_activity "
       "WHERE cardinality(pg_blocking_pids(pid)) > 0");
-    if (!rows.empty())
+    if (rows && !rows->empty())
     {
         std::cout << "[dbdiag] BLOCKED statements:" << std::endl;
-        for (const auto &r : rows)
+        for (const auto &r : *rows)
         {
             std::cout << "[dbdiag]   pid=" << detail::col(r, "pid")
                       << " blocked_by=" << detail::col(r, "blocked_by")
@@ -190,10 +200,10 @@ inline void dumpPgDiagnostics(const std::string &where)
     rows = detail::queryWithDeadline(
       "SELECT pid, locktype, coalesce(relation::regclass::text, '-') AS rel, "
       "mode, granted FROM pg_locks WHERE NOT granted");
-    if (!rows.empty())
+    if (rows && !rows->empty())
     {
         std::cout << "[dbdiag] UNGRANTED locks:" << std::endl;
-        for (const auto &r : rows)
+        for (const auto &r : *rows)
         {
             std::cout << "[dbdiag]   pid=" << detail::col(r, "pid")
                       << " " << detail::col(r, "locktype") << " "

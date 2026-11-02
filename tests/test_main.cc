@@ -607,7 +607,7 @@ int main(int argc, char **argv)
             std::error_code ec;
             std::filesystem::remove(runtimeConfigPath, ec);
         }
-        auto *loop = drogon::app().loop();
+        auto *loop = drogon::app().getLoop();
         loop->queueInLoop([]() { drogon::app().quit(); });
         thr.join();
         std::cout << "Graceful teardown finished (loop quit returned, thread "
