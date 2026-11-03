@@ -42,8 +42,14 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 
+// #299 diagnostics: out-of-pool pg_stat_activity snapshot + steady-clock
+// timestamps for the login failure prints (DbDiagnostics.h header rationale).
+#include "DbDiagnostics.h"
+
 #include <json/json.h>
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <memory>
@@ -82,17 +88,69 @@ inline double fullaTestHttpTimeout()
 }
 
 // Client factory hook: all request builders obtain their HttpClient here
-// (one place to change the connection strategy). See the note inside for
-// why it stays per-request.
+// (one place to change the connection strategy).
+//
+// #299 root-cause-driven strategy: a SMALL ROUND-ROBIN POOL of persistent
+// keep-alive clients. The v1.6.0 per-request strategy opened ~1800 fresh
+// loopback connections per suite run; the captured wedge evidence (PR #302)
+// shows the server sporadically accepts a connection and never services it
+// (4 CLOSE-WAIT + idle-in-epoll loops + zero kernel drops; the owning client
+// then burns 2 x 30s HTTP timeouts = the ~61s "null-resp" outage). A single
+// shared client was tried before and serialized the suite ~5x; a pool keeps
+// concurrency while shrinking the fresh-accept surface ~200x. Reused
+// keep-alive connections also stop the TIME_WAIT churn (~1800/run).
+namespace detail
+{
+// The round-robin keep-alive pool backing sharedTestHttpClient(). Namespace
+// scope (not function-local) so discardTestHttpClient() can swap slots.
+inline constexpr int kClientPoolSize = 8;
+inline std::array<::drogon::HttpClientPtr, kClientPoolSize> &clientPool()
+{
+    static std::array<::drogon::HttpClientPtr, kClientPoolSize> pool = [] {
+        std::array<::drogon::HttpClientPtr, kClientPoolSize> init{};
+        for (auto &c : init)
+        {
+            c = ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+        }
+        return init;
+    }();
+    return pool;
+}
+inline std::atomic<size_t> &clientPoolIndex()
+{
+    static std::atomic<size_t> idx{0};
+    return idx;
+}
+}  // namespace detail
+
 inline ::drogon::HttpClientPtr sharedTestHttpClient()
 {
-    // REVERTED to per-request clients (v1.6.0): sharing ONE HttpClient
-    // serialized the whole suite's traffic onto a single keep-alive pipeline
-    // and slowed the 61k-assertion run ~5x — Release legs started timing
-    // out. The occasional null-response that motivated the shared client is
-    // absorbed by the transport retry in sendWithRetry() plus the
-    // whole-login retry in loginAsUserTokens() instead.
-    return ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+    return detail::clientPool()[detail::clientPoolIndex().fetch_add(1, std::memory_order_relaxed) %
+                                detail::kClientPoolSize];
+}
+
+// #299 companion to the pool above: drogon's HttpClient TIMEOUT path fires
+// ReqResult::Timeout but does NOT discard its connection (only the connect-
+// error path resets tcpClientPtr_). If a pooled connection goes dark (the
+// server-side never-serviced accept captured in the wedge evidence), every
+// later request on that client would burn a full HTTP timeout. Call this
+// after any transport-level failure: the slot is swapped for a fresh client
+// and destroying the old one closes its socket for good.
+inline void discardTestHttpClient(const ::drogon::HttpClientPtr &client)
+{
+    if (!client)
+        return;
+    auto &pool = detail::clientPool();
+    for (auto &slot : pool)
+    {
+        if (slot == client)
+        {
+            slot = ::drogon::HttpClient::newHttpClient(kTestBaseUrl, ::drogon::app().getLoop());
+            LOG_WARN << "[client-pool] discarded a client after transport failure "
+                        "(slot swapped for a fresh keep-alive connection)";
+            return;
+        }
+    }
 }
 
 // Admin Console OAuth2 client (seeded by apps/server/seed/dev_admin_console_
@@ -165,12 +223,31 @@ inline std::pair<::drogon::ReqResult, ::drogon::HttpResponsePtr> sendWithRetry(
   ::drogon::HttpRequestPtr req,
   double timeout)
 {
-    auto attempt = [&]() { return client->sendRequest(req, timeout); };
-    auto [result, resp] = attempt();
+    auto [result, resp] = client->sendRequest(req, timeout);
     if (result != ::drogon::ReqResult::Ok && resp == nullptr)
     {
+        // #299: transport-level failure with no response. Discard the pooled
+        // client FIRST — drogon's timeout path keeps a possibly-dark
+        // connection, and retrying on it would burn another full HTTP
+        // timeout on the same dead socket. The retry goes over a fresh
+        // keep-alive connection from the pool.
+        discardTestHttpClient(client);
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        std::tie(result, resp) = attempt();
+        ::drogon::HttpClientPtr retryClient = sharedTestHttpClient();
+        std::tie(result, resp) = retryClient->sendRequest(req, timeout);
+        // BOTH transport attempts dead with no response: the exact
+        // "null-resp" signature. Snapshot the server-side DB state while
+        // the wedge is live (out-of-pool connection, see DbDiagnostics.h)
+        // so CI turns the mystery into evidence.
+        if (result != ::drogon::ReqResult::Ok && resp == nullptr)
+        {
+            std::cout << "[sendWithRetry] double-null on " << req->getPath()
+                      << " (t+" << ::fulla::test::diag::uptimeMs() << "ms)"
+                      << std::endl;
+            discardTestHttpClient(retryClient);
+            ::fulla::test::diag::dumpPgDiagnostics(
+              "sendWithRetry double-null on " + req->getPath());
+        }
     }
     return {result, resp};
 }
@@ -549,7 +626,8 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     auto loginResp = sendPostForm("/oauth2/login?json=true", loginForm);
     if (!loginResp || loginResp->getStatusCode() != ::drogon::k200OK)
     {
-        std::cout << "[loginAsUserTokens] login step failed for '" << username << "': "
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step failed for '" << username << "': "
                   << (loginResp ? std::to_string(loginResp->getStatusCode()) : std::string("null-resp"))
                   << " body=" << (loginResp ? loginResp->getBody().substr(0, 200) : std::string("-"))
                   << std::endl;
@@ -557,7 +635,16 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     Json::Value loginJson;
     if (!parseJsonBody(loginResp, loginJson))
+    {
+        // #299: the CI tail cluster showed tokenB REQUIRE failures with NO
+        // step-failure print -- a 200 whose body did not parse. Make every
+        // silent nullopt path loud (status + body prefix) so the next run
+        // tells us which path bites.
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step 200-but-unparseable for '" << username
+                  << "' body=" << loginResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     // MFA-enabled users return mfa_required=true instead of a code.
     if (loginJson.isMember("mfa_required") && loginJson["mfa_required"].asBool())
     {
@@ -566,7 +653,12 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     const std::string code = loginJson.get("code", "").asString();
     if (code.empty())
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) login step 200-but-no-code for '" << username
+                  << "' body=" << loginResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
 
     // Step 2: token exchange.
     const std::string tokenForm =
@@ -580,7 +672,8 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     auto tokenResp = sendPostForm("/oauth2/token", tokenForm);
     if (!tokenResp || tokenResp->getStatusCode() != ::drogon::k200OK)
     {
-        std::cout << "[loginAsUserTokens] token step failed for '" << username << "': "
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step failed for '" << username << "': "
                   << (tokenResp ? std::to_string(tokenResp->getStatusCode()) : std::string("null-resp"))
                   << " body=" << (tokenResp ? tokenResp->getBody().substr(0, 200) : std::string("-"))
                   << std::endl;
@@ -588,9 +681,19 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
     }
     Json::Value tokenJson;
     if (!parseJsonBody(tokenResp, tokenJson))
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step 200-but-unparseable for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     if (tokenJson.get("access_token", "").asString().empty())
+    {
+        std::cout << "[loginAsUserTokens] (t+" << ::fulla::test::diag::uptimeMs()
+                  << "ms) token step 200-but-no-access_token for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200) << std::endl;
         return std::nullopt;
+    }
     return tokenJson;
 }
 

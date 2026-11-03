@@ -111,7 +111,16 @@ std::optional<std::string> loginTokenVerbose(const std::string &username,
     }
     Json::Value loginJson;
     if (!parseJsonBody(loginResp, loginJson))
+    {
+        // #299: the v1.6.0 CI tail showed tokenB REQUIRE failures with NO
+        // step print at all -- a 200 whose body did not parse. Loud on every
+        // silent path now (same t+ms timeline as HttpTestClient's prints).
+        LOG_ERROR << "[login step1] (t+"
+                  << ::fulla::test::diag::uptimeMs()
+                  << "ms) 200-but-unparseable for '" << username
+                  << "' body=" << loginResp->getBody().substr(0, 200);
         return std::nullopt;
+    }
     const std::string code = loginJson.get("code", "").asString();
     if (code.empty())
     {
@@ -120,9 +129,9 @@ std::optional<std::string> loginTokenVerbose(const std::string &username,
         return std::nullopt;
     }
     const std::string tokenForm =
-      "grant_type=authorization_code&code=" + code +
-      "&redirect_uri=http://localhost:5174/admin/callback"
-      "&client_id=fulla-admin-console&client_secret=&code_verifier=" + codeVerifier;
+        "grant_type=authorization_code&code=" + code +
+        "&redirect_uri=http://localhost:5174/admin/callback"
+        "&client_id=fulla-admin-console&client_secret=&code_verifier=" + codeVerifier;
     auto tokenResp = fulla::test::http::sendPostForm("/oauth2/token", tokenForm);
     if (tokenResp == nullptr || tokenResp->getStatusCode() != ::drogon::k200OK)
     {
@@ -131,10 +140,22 @@ std::optional<std::string> loginTokenVerbose(const std::string &username,
     }
     Json::Value tokenJson;
     if (!parseJsonBody(tokenResp, tokenJson))
+    {
+        LOG_ERROR << "[login step2] (t+"
+                  << ::fulla::test::diag::uptimeMs()
+                  << "ms) 200-but-unparseable for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200);
         return std::nullopt;
+    }
     const std::string access = tokenJson.get("access_token", "").asString();
     if (access.empty())
+    {
+        LOG_ERROR << "[login step2] (t+"
+                  << ::fulla::test::diag::uptimeMs()
+                  << "ms) 200-but-no-access_token for '" << username
+                  << "' body=" << tokenResp->getBody().substr(0, 200);
         return std::nullopt;
+    }
     return access;
 }
 
