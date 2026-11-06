@@ -40,6 +40,7 @@ const sidebars = {
         'domains/oidc-guide',
         'domains/social-login',
         'domains/rbac-guide',
+        'domains/claims-mapping',
       ],
     },
     {

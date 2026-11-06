@@ -104,12 +104,17 @@ userinfo endpoint with the corresponding `profile` / `email` scopes (see §5).
 | Scope | Returned Claims |
 |-------|---------------|
 | `openid` | `sub` (required scope; enables OIDC) |
-| `profile` | `name`, `preferred_username` — via the userinfo endpoint (the legacy `username` key is also emitted until v1.6.0) |
+| `profile` | `name`, `preferred_username` — via the userinfo endpoint (the legacy non-standard `username` key was removed in v1.6.0) |
 | `email` | `email`, `email_verified` — via the userinfo endpoint |
 | `org` | `org_ctx` (`{org_id, org_name, roles[]}`) — in the id_token and userinfo; only when the authorization carried a valid organization context (v1.4.0) |
 
 Resource scopes (`users:read`, `clients:write`, `audit:read`, …) are
 admin-gated API scopes; see the [RBAC guide](rbac-guide.md).
+
+Per-user **custom claims** (v1.6.0): an admin can map a user's
+`custom_attributes.<key>` (or `display_name`) to a published claim gated on
+any trigger scope — advertised in `claims_supported`. See
+[Custom Claims (Claims Mapping)](claims-mapping.md).
 
 ## 6. Integration Examples
 

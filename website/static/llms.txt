@@ -17,6 +17,7 @@ Evaluate docs:
 
 Domains docs:
 - [OAuth2 API Reference](https://fulla.dev/docs/domains/api-reference): This service provides authentication and authorization based on the OAuth 2.0 standard (RFC 6749).
+- [Custom Claims (Claims Mapping)](https://fulla.dev/docs/domains/claims-mapping): Since **v1.6.0** (P1-3, #280) fulla can publish **per-user custom claims** into
 - [Multi-Tenancy (Organizations)](https://fulla.dev/docs/domains/multi-tenancy): fulla's multi-tenancy today is an **organizational layer**: organizations
 - [OpenID Connect (OIDC) Integration Guide](https://fulla.dev/docs/domains/oidc-guide): This guide describes how to integrate this OAuth2 service into your application as an OIDC Provider.
 - [RBAC Access Control System (Role-Based Access Control)](https://fulla.dev/docs/domains/rbac-guide): This document details the design and usage of the system's role-based access control (RBAC).

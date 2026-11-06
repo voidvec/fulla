@@ -21,7 +21,8 @@ translation mirrors it at `website/i18n/zh-CN/` and is served at
 **HTTP API (any language)**: [API Reference](domains/api-reference.md) (authoritative contract:
 [openapi.yaml](https://github.com/voidvec/fulla/blob/master/apps/server/openapi.yaml)) ·
 [OIDC Integration](domains/oidc-guide.md) · [Social Login](domains/social-login.md) ·
-[RBAC & Access Control](domains/rbac-guide.md)
+[RBAC & Access Control](domains/rbac-guide.md) ·
+[Custom Claims (Claims Mapping)](domains/claims-mapping.md)
 
 ## Deep dives
 
