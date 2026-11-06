@@ -615,7 +615,17 @@ This document describes the system's security threat model and the corresponding
 | **Replay Attack** | An attacker intercepts an auth code and attempts to redeem it before or after the legitimate client. | **Atomic Consume** + **One-Time Use Enforcement**. | [Data Consistency](data-persistence) |
 | **Credential Leakage** | A database breach leaks client secrets. | **SHA256 Salted Hash**. The database stores only hashes, never plaintext. | [Data Persistence](data-persistence) |
 | **Token Theft** | An access token is intercepted. | **Short-lived Token** (1 hour) + **Refresh Token Rotation**. | This document |
-| **CSRF** | An attacker tricks a user into an unintended authorization. | Mandatory validation of the **state** parameter (recommended for clients to implement). | [API Reference](../domains/api-reference.md) |
+| **CSRF** | An attacker tricks a user into an unintended authorization. | OAuth clients must validate the returned **state**. Third-party login currently has a separate limitation (see below). | [API Reference](../domains/api-reference.md) |
+
+### Current third-party login limitation
+
+The GitHub/Google/WeChat login discovery flow currently emits authorize URLs
+without a browser-bound state. Do not interpret the OAuth-client state guidance
+above as protection for these extension endpoints. Track the hardening work in
+[issue #249](https://github.com/voidvec/fulla/issues/249); deployments requiring
+login-CSRF protection should disable these providers until the bound-state
+flow is implemented and verified. Account linking uses a separate one-time
+state flow.
 
 ## 2. Token Lifecycle Management
 
@@ -639,7 +649,7 @@ This document describes the system's security threat model and the corresponding
 ### 3.1 Client Secrets
 
 - **Storage**: `sha256(secret + salt)`
-- **Transport**: Only over HTTPS, in the POST body.
+- **Transport**: Only over HTTPS, using the client's configured authentication method (HTTP Basic or a POST-body secret where supported).
 
 ### 3.2 Configuration Files
 
@@ -671,11 +681,22 @@ All tokens (access tokens, refresh tokens) are stored in the database **as SHA-2
 
 ### 6.2 Legacy Password Migration
 
-The system supports gradual migration from the legacy single-iteration SHA-256 hashing to PBKDF2:
+Legacy SHA-256 hashes are **rejected by default**, even when the password is
+correct. All shipped configurations, and a missing `auth.allow_legacy_hash`,
+close the migration window. This policy rejection does not increment account
+lockout counters; clients receive the generic authentication failure.
 
-1. On login, the system detects the password hash format
-2. If it is the legacy format (SHA-256), the hash is automatically upgraded to PBKDF2 after successful verification
-3. The migration is transparent to users; no password reset is required
+Use the existing email or administrator-triggered password-reset flow to write
+a PBKDF2 hash. Changing the old password through a path that rejects legacy
+verification does not migrate the account. Bootstrap reuses an existing admin
+row; setting `FULLA_BOOTSTRAP_ADMIN_PASSWORD` does not reset that row.
+
+An operator may explicitly reopen `auth.allow_legacy_hash` for a temporary,
+identity-login-only migration window: successful legacy verification then
+attempts a PBKDF2 rehash. The Drogon `PasswordHasher` helper always rejects
+legacy hashes. Do not assume the window applies to every password-check path,
+and verify that no legacy rows remain before closing it.
+See [Legacy Password-Hash Migration](../operate/configuration-guide.md).
 
 ## 7. Refresh Token Rotation and Family Tracking
 
@@ -710,6 +731,17 @@ sequenceDiagram
     S->>S: 级联撤销 family 下所有 Token
     U--xA: 下次请求失败，需重新登录
 ```
+
+## WebAuthn Verification Scope
+
+WebAuthn is implemented with CBOR attestation parsing, COSE ES256 keys and
+cryptographic assertion verification. Registration supports `fmt="none"`
+with an empty attestation statement; it does not verify manufacturer
+attestation chains. Both registration and authentication require user presence
+and user verification, an allowed origin and the configured RP ID. Challenges
+are checked and assertion counters use a conditional update where applicable.
+The retired unverified completion methods fail closed. Authenticators outside
+this supported surface are rejected.
 
 ## 8. Subject Privacy
 
@@ -752,9 +784,13 @@ responses are returned via the error envelope `VALIDATION_RATE_LIMITED` (429).
 Secret Hygiene CI gate); all `.env*` files ignored; frontend production builds contain no
 embedded credentials.
 
-**Key rotation**: JWKS currently uses a single static `kid` (F-029 is a follow-up operations
-task; the rotation procedure is not automated); rotating DB/SMTP/social credentials = change
-env vars + rolling restart.
+**Key rotation**: `oidc.signing_keystore_dir` loads multiple RSA keys at startup;
+each `<kid>.pem` is published in JWKS and `active_kid` selects the signing key.
+This is init-once configuration, so changes require a restart. Publish the new
+key on every replica before switching signing, and retain the old key until all
+JWTs signed with it have expired, including clock skew and relying-party cache
+windows. See the [rotation procedure](../operate/configuration-guide.md).
+Rotate DB/SMTP/social credentials through environment configuration and a rolling restart.
 
 **Incident response**: suspected leak → immediately rotate the affected credentials → if
 historical commits are involved, rewrite them with `git filter-repo` (not the deprecated
@@ -2501,9 +2537,19 @@ Reference consumers (continuously verified by the repository CI):
 
 ## 4. Plugin Registration and whole-archive (H1/F1/H5 Framing)
 
-- The plugin itself is currently linked into the host as an **OBJECT library**: the object files are linked in directly, one by one, so self-registration symbols cannot be stripped — **whole-archive is not needed today**.
-- In the published SDK package, `fulla::drogon` is a regular static library, but plugin registration goes through `config.json` `plugins[].name = "OAuth2Plugin"` reflection plus an explicit `registerAllControllers()` (see full-stack-host's main.cc); likewise, it does not rely on the linker retaining unreferenced symbols. If a consumer builds a wrapper that **depends on static-initialization self-registration**, they must wrap the corresponding library with `-Wl,--whole-archive` themselves.
-- For the class-name / config-schema stability guarantees, see Contract §6.
+`fulla::drogon` is a STATIC library containing the plugin, controllers and
+adapters. The old separate OBJECT target is no longer the linking model.
+
+Follow `examples/full-stack-host/`: compile the product bootstrap sources,
+call `registerAllControllers()`, and wire plugin dependencies at startup.
+The config entry `plugins[].name = "OAuth2Plugin"` selects the reflected
+class after linking; a string in JSON cannot retain an otherwise unreferenced
+static-library object. Wrappers relying only on static self-registration
+must force the required objects into the executable, using whole-archive or
+the platform's equivalent, and run a registration smoke test.
+
+See [SDK Runtime Contract](sdk-runtime-contract.md#6-plugin-registration-and-configuration-contract-host-integration)
+for configuration compatibility guarantees.
 
 ## 5. Using the Images
 
@@ -2539,9 +2585,11 @@ sha256sum -c fulla-sdk-<ver>-linux-x86_64.tar.gz.sha256
 
 ## Quickstart: Embedding fulla into Your Own Drogon Host
 
-Only two steps beyond `find_package` (for the package import, see Section 3 above):
+Use `examples/full-stack-host/` for bootstrap and view compilation (package imports
+are described in Section 3). The following fragments show configuration and
+filter integration after that host registration is in place:
 
-**1. Activate the plugin in the host's `config.json`** (protocol routes and Filters are registered automatically):
+**1. Activate the plugin in the host's `config.json`** (register product controllers through the host bootstrap before starting Drogon):
 
 ```json
 {
@@ -2568,7 +2616,11 @@ ADD_METHOD_TO(UserApi::getProfile, "/api/me", drogon::Get,
 METHOD_LIST_END
 ```
 
-Note: once `fulla::drogon` is linked, Controllers/Filters are registered automatically at Drogon startup — do not invoke the initialization macros manually; the PostgreSQL storage requires running `apps/server/migrations/` first (or setting `FULLA_AUTO_MIGRATE=true`).
+Note: controllers with `AutoCreation=false` require explicit registration before
+Drogon starts, as shown in `examples/full-stack-host/`; linking the static library
+alone is insufficient. Do not invoke registration macros manually. PostgreSQL
+storage requires running `apps/server/migrations/` first (or setting
+`FULLA_AUTO_MIGRATE=true`).
 
 > This section was merged in from the retired plugin-integration.md (docs governance A2).
 
@@ -2614,16 +2666,30 @@ This document is the single source of truth for external commitments; wherever S
 
 ## 5. Dependency Declarations
 
-- Feature-surface dependencies are **explicitly gated by the root `conanfile.py`'s `with_webauthn` / `with_identity` / `with_social` options**, not smuggled in as transitive surprises.
-  NOTE: the CBOR decoding dependency (`libcbor`) required by real WebAuthn (FIDO2) used to be declared here, but the current WebAuthn controller is a non-cryptographic stub (it consumes no CBOR), so `libcbor` has been removed as a dead dependency; it must be re-added once real WebAuthn cryptography lands (see the corresponding comment in `conanfile.py`).
-- Disabling an option (e.g. `-o with_webauthn=False`) maps through to the CMake-side `WITH_*` variables and prunes the corresponding compiled surface, so consumers can shrink their dependency footprint accordingly.
+- `with_social` / `with_webauthn` map to CMake's `WITH_SOCIAL` /
+  `WITH_WEBAUTHN` switches and remove the corresponding services/controllers
+  from the compiled surface.
+- `with_identity=False` / `WITH_IDENTITY=OFF` is **unsupported**. The product
+  and Postgres adapter still require `fulla::identity`; configuration fails
+  explicitly. Keep identity enabled when configuring the repository.
+- WebAuthn performs real CBOR/COSE and ES256 verification. `libcbor` remains
+  an **unconditional dependency**, including when WebAuthn is disabled,
+  because `WebAuthnCrypto.cc` and its tests are still compiled. Disabling a
+  feature does not currently guarantee removal of all of its dependencies.
 
 ## 6. Plugin Registration and Configuration Contract (Host Integration)
 
 - The `OAuth2Plugin` class name and the config `plugins[].name` reflective-loading contract **remain stable** (Option A): the class-name string in `"plugins":[{"name":"OAuth2Plugin","config":{...}}]` across the configs (`config.{json,dev,ci,prod,bench}.json`) and the schema of the `config{}` block are part of the product configuration contract and will not be renamed in v1.x.
-- The plugin itself is linked into the host as a CMake **OBJECT library**: object files are linked in directly, one by one, so there is no static-library on-demand extraction that could drop self-registration symbols — **whole-archive is not needed today**.
-- If the plugin is ever **distributed in static-library form**, the linker may strip its self-registration symbols and Drogon reflection will fail with "plugin not found" — at that point whole-archive (or an equivalent forced-linking scheme) becomes mandatory; `OAuth2Plugin` has no `AutoCreation` parameter available, so a whole-archive-free scheme is not applicable.
-- See `examples/third-party-host/` for a third-party host integration example.
+- `fulla::drogon` is a **STATIC library**, including the plugin sources;
+  the former separate OBJECT library has been absorbed into it.
+- A host must retain the controller/plugin registration code it uses. Follow
+  `examples/full-stack-host/`, which compiles the product bootstrap sources,
+  explicitly registers controllers and wires plugin dependencies. A config
+  class-name string alone does not force extraction of static-library objects.
+- A wrapper relying only on unreferenced static self-registration must force
+  the relevant objects into the executable (for example, whole-archive on
+  applicable linkers) and verify registration in its own smoke test.
+- See `examples/full-stack-host/` for HTTP host integration and `examples/third-party-host/` for engine-only integration.
 
 
 ---

@@ -41,14 +41,14 @@ Fulla 是以 C++17 构建的**高性能开源身份与访问管理（IAM）核�
 |----|------|------|
 | `fulla::common` | 共享内核：值对象、Result、错误目录、端口（时钟/加密/指标/邮件/审计） | 零 Drogon 依赖 |
 | `fulla::oauth2` | OAuth2/OIDC 引擎：授权流、令牌服务、PKCE、JWK 管理、scope 决策引擎 | 协议核心，存储无关 |
-| `fulla::identity` | 认证域：用户、会话、MFA、WebAuthn、社交账号、角色提供 | 构建期可选 |
+| `fulla::identity` | 认证域：用户、会话、MFA、WebAuthn、社交账号、角色提供 | 当前产品构建必须启用 |
 | `fulla::drogon` | Drogon 适配层：HTTP 控制器、过滤器、视图、OAuth2 插件、管理服务 | 服务器宿主链接的包 |
 | `fulla::storage::memory` | 内存仓储实现（测试、嵌入式单进程场景） | 零外部依赖 |
 | `fulla::storage::postgres` | PostgreSQL 仓储 + Drogon ORM 模型、schema 管理 | PostgreSQL 14+ |
 | `fulla::storage::redis` | Redis 缓存旁路层（延迟双删失效） | 包装任意仓储层 |
 | `fulla::storage` 契约 | `IClientRepository` / `IGrantRepository` / `ITokenRepository` / `IConsentRepository` | 契约测试套件跨实现验证 |
 
-通过 Conan/CMake 选项（`with_identity` / `with_social` / `with_webauthn`）收缩功能面，SDK 消费方只拉取所需部分。
+通过 Conan/CMake 选项（`with_social` / `with_webauthn`）裁剪对应编译面；身份模块当前必须启用。
 
 ---
 
@@ -87,7 +87,7 @@ graph TD
     common["fulla::common<br/>共享内核 · 端口接口"]
 ```
 
-可选特性面由 Conan/CMake 选项门控（`with_identity` / `with_social` / `with_webauthn`），SDK 消费方可据此收缩依赖表面。
+Conan/CMake 选项 `with_social` / `with_webauthn` 裁剪对应编译面；`with_identity=False` 当前不受支持。关闭 WebAuthn 后，其加密辅助代码及测试仍需要 libcbor，详见 [SDK 运行时契约](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations)。
 
 ### 技术栈
 
