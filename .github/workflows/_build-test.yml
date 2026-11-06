@@ -206,6 +206,15 @@ jobs:
       - name: Build
         run: cmake --build --preset "$CMAKE_PRESET"
 
+      - name: Compile standalone connection diagnostic (Linux)
+        if: inputs.platform == 'linux'
+        shell: bash
+        run: |
+          cmake -S benchmarks/diagnostics/connection-churn -B "$RUNNER_TEMP/fulla-connection-probe" \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/$PRESET_DIR/conan_toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/fulla-connection-probe" --parallel 2
+
       - name: Start PostgreSQL and Redis
         if: inputs.use_database
         # Linux-only: run the DB/cache as Docker containers (service containers
@@ -400,4 +409,3 @@ jobs:
             ${{ github.workspace }}/${{ inputs.preset_dir }}/Testing/
             ${{ github.workspace }}/apps/server/logs/
           retention-days: 7
-

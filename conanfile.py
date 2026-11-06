@@ -1,26 +1,17 @@
 """Fulla Conan dependency descriptor.
 
-Replaces the legacy conanfile.txt (see design.md §9.1). This file is the
-single, three-platform (Linux/Windows/macOS) source of truth for Fulla's
-C++ dependencies.
+Dependencies are pinned here and in conan.lock for Linux, Windows and macOS.
+with_social and with_webauthn map to CMake's WITH_* feature switches.
+with_identity=False is reserved but unsupported: the product and Postgres
+adapter still require the identity package, so validate() rejects it explicitly.
 
-Notable options beyond plain dependency pinning:
-  - with_identity / with_social / with_webauthn: gate optional Fulla
-    feature areas (identity SDK, social login controllers, WebAuthn/FIDO2)
-    that will be wired up to conditional compilation in later milestones
-    (F9). They default to True to preserve today's build behavior; setting
-    them to False lets a consumer shrink the dependency surface once the
-    corresponding milestone (M2.5/M5) lands the conditional compilation.
-  - with_webauthn additionally pulls in the extra crypto dependencies
-    FIDO2 needs (declared explicitly rather than left as a transitive
-    surprise). NOTE: a real WebAuthn implementation will require CBOR
-    decoding for attestation/assertion objects, but the current controller
-    is a non-cryptographic stub (see WebAuthnService.h:44-56) and consumes
-    no CBOR; the libcbor dependency was removed as dead (zero #include).
-    It should be re-added when real WebAuthn crypto lands.
+WebAuthn performs real CBOR/COSE and ES256 verification. libcbor remains an
+unconditional requirement because the identity build compiles WebAuthnCrypto
+and its tests even when the WebAuthn service/controllers are disabled.
 """
 
 from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
 from conan.tools.cmake import CMakeToolchain, CMakeDeps
 
 
@@ -55,6 +46,14 @@ class FullaConan(ConanFile):
         # --- libcurl: keep a single TLS stack (OpenSSL) across the project ---
         "libcurl/*:with_ssl": "openssl",
     }
+
+    def validate(self):
+        if not self.options.with_identity:
+            raise ConanInvalidConfiguration(
+                "with_identity=False is not supported: the product and Postgres "
+                "adapter require fulla::identity. Keep with_identity=True; use "
+                "with_social and with_webauthn to disable their compiled surfaces."
+            )
 
     def requirements(self):
         self.requires("drogon/1.9.13")
