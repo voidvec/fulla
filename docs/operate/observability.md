@@ -43,8 +43,8 @@ Critical security operations (such as token issuance) emit logs tagged with `[AU
 **Example**:
 
 ```
-2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
-2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
+2026-10-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
+2026-10-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
 ```
 
 Security-relevant policy denials and social-login issuance use stable action keywords:
@@ -53,10 +53,23 @@ Security-relevant policy denials and social-login issuance use stable action key
   hash is legacy-format and `auth.allow_legacy_hash=false` (#103). WARN
   with the internal user id; migrate the account via password reset or a
   temporary window reopen (docs/operate/configuration-guide.md §10).
-- `SOCIAL_LOGIN_TOKEN_ISSUED` — a social login endpoint (GitHub/Google/WeChat)- `webauthn_clone_detected` — an assertion presented a non-increasing signCount
+- `SOCIAL_LOGIN_TOKEN_ISSUED` — a social login endpoint (GitHub/Google/WeChat)
+  issued a first-party token pair (#70). Details carry provider/client/scope/internal id.
+- `webauthn_clone_detected` — an assertion presented a non-increasing signCount
   (#142): rejected as a possible cloned authenticator; the credential should be
   de-registered and re-registered.
-  issued a first-party token pair (#70). Details carry provider/client/scope/internal id.
+- `mfa_backup_code_used` — a failed TOTP attempt was rescued by an MFA backup
+  code (v1.5.0); the token response carries `backup_codes_remaining`.
+- `webauthn_credential_deleted` — a passkey removed via
+  `DELETE /api/me/webauthn/credentials/{credentialId}` (v1.5.0; the delete
+  predicate binds ownership, so foreign and unknown ids answer the same 404).
+
+Since v1.6.0 the audit trail is also exportable as CSV:
+`GET /api/admin/logs/export` (admin role + `audit:read` scope; same filters as
+the list endpoint plus a mandatory time window unless `all=true`; cells are
+formula-injection hardened; every export is itself audited as `audit_exported`).
+Retention and the export row cap are configurable — see
+[Configuration Guide §13](configuration-guide.md).
 
 ### 2.2 Contextual Logs
 

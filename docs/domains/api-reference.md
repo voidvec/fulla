@@ -177,24 +177,30 @@ Authorization: `Bearer {access_token}`
 }
 ```
 
-### 3.x Path → required-scope mapping (F-010 minimal resource-scope model)
+### 3.x Path → required-scope mapping (#43 resource-scope model)
 
 After an access token passes validation, `OAuth2AuthFilter` / `AuthorizationFilter`
-enforce a minimal required scope based on the request path (RFC 6750 §3.1). When the
-token's scope is insufficient, a 403 is returned with `WWW-Authenticate: Bearer
-realm="fulla", error="insufficient_scope", scope="<required>"`, where the `scope`
-attribute names the scope required to unlock the resource.
+enforce the route's required scope (RFC 6750 §3.1). Requirements are declared per
+`(path, method)` on each controller's endpoint metadata and folded into the central
+`ResourceScopeRegistry` at startup; both filters consult that registry at request
+time. When the token's scope is insufficient, a 403 is returned with
+`WWW-Authenticate: Bearer realm="fulla", error="insufficient_scope", scope="<required>"`,
+where the `scope` attribute names the scope(s) that would unlock the resource.
 
 | Path | Required Scope | Notes |
 |---|---|---|
 | `/oauth2/userinfo` | `openid` | Coexists with the F-023 check inside the userinfo handler (defense-in-depth) |
-| `/api/me`, `/api/me/*` | `profile` | Enforced via `OAuth2AuthFilter` |
-| `/api/admin/*` | `admin` | Enforced via `AuthorizationFilter`, **layered on top of the existing RBAC role check** (the scope gate runs first, then the role gate; both must pass) |
+| `/api/me`, `/api/me/*` | `profile` | Enforced via `OAuth2AuthFilter` (exact-template entries plus a `/api/me` prefix catch-all; NOT implied by `admin`) |
+| `/api/admin/*` | resource scope per route (V023 family: `users:read`/`users:write`, `clients:read`/`clients:write`, `tokens:read`/`tokens:write`, `roles:read`/`roles:write`, `audit:read`), satisfied by the exact scope or by `admin` via `impliedBy` | Enforced via `AuthorizationFilter`, **layered on top of the RBAC role/permission gate** (the scope gate runs first, then the role gate; both must pass) |
 
-> **A complete resource-scope authorization model is future work** (separate issue
-> "Complete resource-scope authorization model"). Only the minimal mapping above
-> applies today; all other `/api/*` paths remain guarded solely by the existing RBAC
-> rules (`rbac_rules`), with no additional scope requirement. Scope matching is exact
+> The complete resource-scope authorization model (#43) is **live**: route-level
+> required scopes, the V023 resource-scope family, and the V043 permission catalog
+> (roles resolve to their resource-scope permission set, ADR-0014 delegated
+> administration — see the [Configuration Guide §15](../operate/configuration-guide.md)).
+> OIDC standard scopes (`openid`/`profile`/`email`) are never implied by `admin` —
+> a userinfo request always needs a user token actually carrying `openid`. The full
+> `(path, method) → scopes` matrix is discoverable at
+> `GET /api/admin/scopes/resources`. Scope matching is exact
 > matching against space-separated tokens (`fulla::drogon::utils::hasScope()`),
 > preventing `openidprofile` from erroneously passing `openid`/`profile`.
 
@@ -334,7 +340,7 @@ OIDC RP-Initiated Logout 1.0 §2 — terminates the user's server-side session a
 
 > **Language note**: the `Default Message` / `Description` columns quote the **exact strings the server emits** (registered in `ErrorCatalog`); they are kept verbatim — currently Chinese — because a client matching on `error_description` must see precisely what the catalog defines. A CI test (`Unit_P0_ErrorCatalogDoc_*`) fails if these tables drift from the catalog.
 
-Business endpoints (Application_Endpoint) return a uniform error envelope whose `error.code` values belong to the Error_Code set registered in the table below; `numeric_code` and `category` likewise come from the table, and the HTTP status code maps consistently by Error_Category (the NETWORK category distinguishes 502/504 by numeric_code). A few resource-semantics VALIDATION codes retain their pre-migration HTTP status codes via entry-level explicit overrides (Option A / requirement 11.4): `VALIDATION_RESOURCE_NOT_FOUND` → 404, resource-already-exists/conflict codes (`VALIDATION_RESOURCE_CONFLICT`, `VALIDATION_USERNAME_TAKEN`, `VALIDATION_EMAIL_TAKEN`, `VALIDATION_CREDENTIAL_ALREADY_REGISTERED`) → 409, `VALIDATION_RATE_LIMITED` → 429; all other VALIDATION codes remain 400.
+Business endpoints (Application_Endpoint) return a uniform error envelope whose `error.code` values belong to the Error_Code set registered in the table below; `numeric_code` and `category` likewise come from the table, and the HTTP status code maps consistently by Error_Category (the NETWORK category distinguishes 502/504 by numeric_code). A few resource-semantics VALIDATION codes retain their pre-migration HTTP status codes via entry-level explicit overrides (Option A / requirement 11.4): `VALIDATION_RESOURCE_NOT_FOUND` → 404, resource-already-exists/conflict codes (`VALIDATION_RESOURCE_CONFLICT`, `VALIDATION_USERNAME_TAKEN`, `VALIDATION_EMAIL_TAKEN`, `VALIDATION_CREDENTIAL_ALREADY_REGISTERED`) → 409, `VALIDATION_RATE_LIMITED` → 429, `EMAIL_TEMPLATE_NOT_FOUND` → 404, `EMAIL_TEST_RECIPIENT_DENIED` → 403, `EMAIL_TEST_QUOTA_EXCEEDED` → 429; all other VALIDATION codes remain 400.
 
 | Error_Code | numeric_code | Error_Category | HTTP Status | Default Message (Client_Safe_Message) |
 |---|---|---|---|---|
@@ -352,7 +358,6 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `VALIDATION_USERNAME_TAKEN` | 3006 | VALIDATION | 409 | 该用户名已被注册 |
 | `VALIDATION_EMAIL_TAKEN` | 3007 | VALIDATION | 409 | 该邮箱已被注册 |
 | `VALIDATION_CREDENTIAL_ALREADY_REGISTERED` | 3008 | VALIDATION | 409 | 该安全密钥已注册，无需重复添加 |
-
 | `WEBAUTHN_INVALID_ATTESTATION` | 3015 | VALIDATION | 400 | 注册声明无法通过验证 |
 | `WEBAUTHN_CHALLENGE_MISMATCH` | 3016 | VALIDATION | 400 | 注册挑战校验失败 |
 | `VALIDATION_RESET_TOKEN_INVALID` | 3009 | VALIDATION | 400 | 重置链接已失效，请重新申请 |

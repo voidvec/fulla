@@ -132,7 +132,7 @@ now executed):
 | sdk | sdk-integration-guide + sdk-runtime-contract + official Python/Go clients | done |
 | operate | deployment, docker-deployment, deployment-windows-docker-desktop, configuration-guide, observability, account-lockout, postgresql-major-upgrade, verification-checklist | done |
 | benchmark | COMPARISON.md (repo) + competitor-benchmark-design.md (docs/benchmark/) | done |
-| adr | ADR-0001..0012 + three trust archives | done |
+| adr | ADR-0001..0014 + three trust archives | done |
 | API | openapi.yaml rendered at runtime by the server (swagger-ui static assets are server-hosted, not site content) | n/a |
 
 Bilingual policy (v4): **English is the primary site language** (fulla.dev
@@ -172,7 +172,7 @@ docs/ (English) and website/i18n/zh-CN/.../current/ (Chinese), mirrored:
 ├── contribute/     # contributing: testing-guide / ci-cd-guide / versioning-and-release /
 │                  #               admin-test-cases / user-frontend-test-cases / admin-e2e-testing-guide
 ├── benchmark/      # competitor-benchmark methodology (results live in the repo's benchmarks/)
-└── adr/            # ADR-0001..0012 + three historical archives (Chinese body, bilingual note)
+└── adr/            # ADR-0001..0014 + three historical archives (Chinese body, bilingual note)
 ```
 
 **Layer 2: in-repo non-docs assets (tracked, not site content)** — referenced

@@ -200,7 +200,6 @@ explicitly):
   "auth": {
     "require_pkce_for_public": true,
     "allow_http_redirect_uri": true,
-    "allow_pkce_plain": false,
     "rate_limit": {
       "max_failures": 30,
       "window_seconds": 60
@@ -209,13 +208,15 @@ explicitly):
 }
 ```
 
-`allow_pkce_plain` (P0-5, default `false`): authorize is S256-only per RFC 9700
-§2.1.1 — a `code_challenge_method=plain` request (or an omitted method, which
-RFC 7636 §4.3 would default to plain) is rejected with `invalid_request`. The
-key is a one-release escape hatch for legacy PUBLIC clients still on plain
-PKCE; it will be removed in a later minor.
+PKCE at the authorize endpoint is **S256-only** (P0-5, RFC 9700 §2.1.1): a
+`code_challenge_method=plain` request (or an omitted method, which RFC 7636
+§4.3 would default to plain) is rejected with `invalid_request`. The
+`auth.allow_pkce_plain` escape hatch that shipped in v1.5.0 as a one-release
+transition for legacy PUBLIC clients was **removed in v1.6.0** (see §14) — the
+config key no longer exists, and `code_challenge_method=plain` is rejected
+regardless of configuration.
 
-Both keys may be omitted; when the `rate_limit` object is missing, built-in defaults are used
+The `rate_limit` object may be omitted; when it is missing, built-in defaults are used
 (30 / 60). The limiter is a function-local singleton (`RateLimiter::instance()` from
 `libs/common/include/fulla/common/utils/RateLimiter.h`); the four protected endpoints share
 one counter table within the same process. This is minimal brute-force / token-probing

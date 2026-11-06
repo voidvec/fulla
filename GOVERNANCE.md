@@ -37,8 +37,10 @@ who records the rationale in the relevant issue.
 Fulla follows [Semantic Versioning](https://semver.org/) for its published
 artifacts (C++ SDK, Python/Go clients, container images). Releases are cut via
 the automated pipeline (`.github/workflows/release.yml`) driven by version
-tags; the release checklist and the six-point version sync list live in
-`docs/` and the release workflow.
+tags; the release checklist and the six-point version sync list live in the
+release-engineering skill (`.claude/skills/release-engineering/SKILL.md`),
+with the version-source inventory in
+[docs/contribute/versioning-and-release.md](docs/contribute/versioning-and-release.md) §1.
 
 ## Code of conduct
 
