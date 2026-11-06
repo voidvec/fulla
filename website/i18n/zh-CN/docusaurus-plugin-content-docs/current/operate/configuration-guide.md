@@ -172,16 +172,47 @@ token / introspect / revoke / device-code 轮询四个端点共享一个进程�
 这是最小化的暴力破解/令牌探测防护；多实例部署需要共享存储（Redis），
 为后续工作。
 
-## 9. JWKS 密钥轮换（F-029 —— 运维待办）
+## 9. JWKS 密钥轮换（#110 —— keystore 目录）
 
-JWKS 端点（`/.well-known/jwks.json`）当前只服务**单个静态 `kid`**，在插件
-启动时由配置的 JWK 物料初始化一次（`OAuth2Plugin::initAndStart()` →
-`JwkManager::init()`）。**轮换尚未实现**：没有轮换周期、没有 kid 滚动窗口、
-没有双密钥发布。当前密钥签发的令牌在其整个生命周期内有效；轮换密钥会使
-前任密钥签发的所有存量令牌失效。
+`plugins.OAuth2Plugin.config.oidc.signing_keystore_dir` 指向一个 **keystore
+目录**，即密钥轮换机制：
 
-生产轮换已登记为运维待办。在此之前，将密钥泄露纳入威胁模型的运维者应
-以新 JWK 物料重启服务器（并接受此前签发的全部令牌失效）。
+```
+<path>/
+  2026-09.pem        # 每文件一把 RSA 私钥；文件名（去 .pem）= kid
+  2026-12.pem
+  active_kid         # 单行文本，指名当前签名 kid（如 "2026-12"）
+```
+
+语义：
+
+- **签名**始终使用 `active_kid` 指名的密钥；JWT 头携带该 kid。
+- **验签**按令牌头部的 kid 在全部已加载密钥中路由，JWKS 端点
+  （`/.well-known/jwks.json`）发布全部已加载公钥——只要旧密钥还在目录里，
+  存量令牌就能继续解析。
+- `GET /api/admin/oidc/keys` 上报实时状态：每个 kid、哪个 `active`、哪些仅
+  `published`。
+- keystore 优先于 `FULLA_SIGNING_KEY` / `FULLA_JWT_KEY_PATH` /
+  `signing_key_path`；配置了但目录损坏是**硬启动失败**（绝不静默回退到其它
+  密钥来源）。
+
+**轮换流程**（JwkManager 设计为 init-once/只读，每步都要重启——一个周期三次
+重启）：
+
+1. **发布**：把新的 `<kid>.pem` 放入目录，重启。两把密钥都进入 JWKS；旧密钥
+   继续签名。至少等待 JWKS `Cache-Control` max-age（1 小时）再进第 2 步——
+   严格缓存的 RP 否则还解析不到新 kid。
+2. **切换**：把 `active_kid` 改为新 kid，重启。新令牌携带新 kid；旧令牌仍可
+   验签（旧密钥仍发布）。
+3. **退役**：等最大令牌生命周期流逝后（按令牌 TTL 估算，不看第 2 步时钟），
+   删除旧 `<kid>.pem` 并重启。旧密钥令牌从此验签失败（未知 kid）。
+
+跳过第 3 步会让旧密钥永久发布（无害，但扩大泄露面）；提前执行则使旧密钥的
+存量令牌失效。
+
+密钥生成用标准工具即可，例如
+`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out 2026-12.pem`。
+像保护任何私钥材料一样保护该目录（文件权限 / secret 挂载）。
 
 ## 12. 邮件模板（P1-2，#278）
 

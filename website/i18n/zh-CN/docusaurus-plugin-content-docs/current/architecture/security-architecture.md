@@ -141,8 +141,11 @@ sequenceDiagram
 **例行验证**：密钥不入库（`git grep` 抽查 + Secret Hygiene CI 门）；`.env*` 均被 ignore；
 前端生产构建无内嵌凭据。
 
-**密钥轮换**：JWKS 当前为单 kid 静态密钥（F-029 为后续运维任务，轮换流程未自动化）；
-DB/SMTP/社交凭据轮换 = 改 env + 滚动重启。
+**密钥轮换**：签名密钥经 keystore 目录轮换（`oidc.signing_keystore_dir`，#110——见
+[配置指南 §9](../operate/configuration-guide.md)）：目录内为 `<kid>.pem` 文件 + `active_kid`
+标记；JWKS 端点发布全部已加载密钥，验签按令牌 `kid` 路由，切换期间存量令牌不受影响。
+轮换是文档化的手动三次重启流程（发布 → 切换 → 退役），未自动化；`GET /api/admin/oidc/keys`
+上报实时密钥状态。DB/SMTP/社交凭据轮换 = 改 env + 滚动重启。
 
 **事件响应**：泄漏怀疑 → 立即轮换受影响凭据 → 如涉历史提交，用 `git filter-repo`
 （勿用已弃用的 filter-branch）重写并强推 → 通报。

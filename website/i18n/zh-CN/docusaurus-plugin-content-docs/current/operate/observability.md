@@ -43,9 +43,28 @@
 **示例**:
 
 ```
-2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
-2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
+2026-10-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
+2026-10-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
 ```
+
+安全相关的策略拒绝与社交登录签发使用稳定的动作关键字：
+
+- `AUTH_LEGACY_HASH_REJECTED`——存储的密码哈希为旧格式且 `auth.allow_legacy_hash=false`
+  时拒绝登录（#103）。以 WARN 级别记录并附内部用户 id；可通过密码重置或临时重开兼容窗口
+  迁移该账号（docs/operate/configuration-guide.md §10）。
+- `SOCIAL_LOGIN_TOKEN_ISSUED`——社交登录端点（GitHub/Google/微信）签发了一对第一方 token
+  （#70）。详情携带 provider/client/scope/内部 id。
+- `webauthn_clone_detected`——某次断言（assertion）出示的 signCount 未递增（#142）：按疑似
+  克隆的认证器拒绝；应注销该凭据后重新注册。
+- `mfa_backup_code_used`——一次失败的 TOTP 尝试由 MFA 备用码挽回（v1.5.0）；token 响应携带
+  `backup_codes_remaining`。
+- `webauthn_credential_deleted`——经 `DELETE /api/me/webauthn/credentials/{credentialId}`
+  删除了一个 passkey（v1.5.0；删除谓词绑定归属，因此他人的 id 与不存在的 id 返回同样的 404）。
+
+自 v1.6.0 起审计记录还支持 CSV 导出：`GET /api/admin/logs/export`
+（admin 角色 + `audit:read` scope；过滤器与列表端点相同，外加强制时间窗，
+除非 `all=true`；单元格做了公式注入加固；每次导出本身审计为 `audit_exported`）。
+保留策略与导出行数上限可配置——见[配置指南 §13](configuration-guide.md)。
 
 ### 2.2 Contextual Logs (上下文日志)
 

@@ -174,39 +174,45 @@ token（subject `client:*`）。响应附带
 }
 ```
 
-### 3.x 路徑→required-scope 映射（F-010 最小资源-scope 模型）
+### 3.x 路径→required-scope 映射（#43 资源-scope 模型）
 
-`OAuth2AuthFilter` / `AuthorizationFilter` 在 access token 校验通过后，按請求
-路徑強制最小 required-scope（RFC 6750 §3.1）。token scope 不足时返回 403，
+`OAuth2AuthFilter` / `AuthorizationFilter` 在 access token 校验通过后，强制
+路由的 required-scope（RFC 6750 §3.1）。要求按 `(path, method)` 在各 controller
+的端点元数据上声明，启动时折叠进中央 `ResourceScopeRegistry`；两个 filter
+在请求时查询该注册表。token scope 不足时返回 403，
 响应附带 `WWW-Authenticate: Bearer realm="fulla", error="insufficient_scope",
-scope="<required>"`，其中 `scope` 屬性命名解锁该资源所需的 scope。
+scope="<required>"`，其中 `scope` 属性命名解锁该资源所需的 scope。
 
-| 路徑 | Required Scope | 備注 |
+| 路径 | Required Scope | 备注 |
 |---|---|---|
 | `/oauth2/userinfo` | `openid` | 与 userinfo handler 内的 F-023 检查并存（defense-in-depth） |
-| `/api/me`、`/api/me/*` | `profile` | 經 `OAuth2AuthFilter` |
-| `/api/admin/*` | `admin` | 經 `AuthorizationFilter`，**疊加在既有 RBAC 角色检查之上**（scope 閘門先跑，角色閘門后跑，两者都須通过） |
+| `/api/me`、`/api/me/*` | `profile` | 经 `OAuth2AuthFilter`（精确模板条目 + `/api/me` 前缀兜底；**不**被 `admin` 隐含） |
+| `/api/admin/*` | 按路由的资源 scope（V023 家族：`users:read`/`users:write`、`clients:read`/`clients:write`、`tokens:read`/`tokens:write`、`roles:read`/`roles:write`、`audit:read`），精确匹配或经 `impliedBy` 由 `admin` 满足 | 经 `AuthorizationFilter`，**叠加在 RBAC 角色/权限门之上**（scope 门先跑，角色门后跑，两者都须通过） |
 
-> **完整资源-scope 授權模型为后续工作**（独立 issue「完整资源-scope 授權模型」）。
-> 當前仅上述最小映射；其餘 `/api/*` 路徑仍仅由既有 RBAC 规則（`rbac_rules`）
-> 把关，不额外要求特定 scope。Scope 匹配为空格分隔 token 的精确匹配
+> 完整的资源-scope 授权模型（#43）**已上线**：路由级 required-scope、V023
+> 资源-scope 家族、V043 权限目录（角色解析为其资源-scope 权限集，ADR-0014
+> 委托式管理——见[配置指南 §15](../operate/configuration-guide.md)）。
+> OIDC 标准 scope（`openid`/`profile`/`email`）永不被 `admin` 隐含——userinfo
+> 请求始终需要真正携带 `openid` 的用户 token。完整
+> `(path, method) → scopes` 矩阵可经
+> `GET /api/admin/scopes/resources` 发现。Scope 匹配为空格分隔 token 的精确匹配
 > （`fulla::drogon::utils::hasScope()`），避免 `openidprofile` 误过
 > `openid`/`profile`。
 
 ### 3.y 客户端管理（F-030：admin-only，无 RFC 7592 自管理）
 
-客户端注册与管理**仅**經 admin API `/api/admin/clients/*`（需 admin scope +
-admin 角色）。本服務**不**实作 RFC 7592 動態客户端管理的
+客户端注册与管理**仅**经 admin API `/api/admin/clients/*`（需 admin scope +
+admin 角色）。本服务**不**实现 RFC 7592 动态客户端管理的
 `registration_access_token` 自管理端点 —— 客户端无法自助查看/修改自身注册
-信息。需要變更的客户端須联繫管理員經 admin API 处理。
+信息。需要变更的客户端须联系管理员经 admin API 处理。
 
-### 3.z nonce 重放防護（F-026：客户端責任）
+### 3.z nonce 重放防护（F-026：客户端责任）
 
-OIDC Core §15.5.2 规定 nonce 重放检查为**客户端 MUST**：服務端在 id_token 中
-**回顯**（echo）客户端提交的 nonce，但**不**为其存储或做服務端重放检查。客户端
-必須（1）为每次认证請求生成唯一的 nonce，（2）在收到 id_token 后比对回顯值与
-本地 nonce，并（3）拒絕重複或缺失 nonce 的 id_token。本服務遵循此分工，不
-提供服務端 nonce 重放防護。
+OIDC Core §15.5.2 规定 nonce 重放检查为**客户端 MUST**：服务端在 id_token 中
+**回显**（echo）客户端提交的 nonce，但**不**为其存储或做服务端重放检查。客户端
+必须（1）为每次认证请求生成唯一的 nonce，（2）在收到 id_token 后比对回显值与
+本地 nonce，并（3）拒绝重复或缺失 nonce 的 id_token。本服务遵循此分工，不
+提供服务端 nonce 重放防护。
 
 ---
 
@@ -325,10 +331,23 @@ OIDC RP-Initiated Logout 1.0 §2 — 終止用户的 server-side session，并�
 | `VALIDATION_USERNAME_TAKEN` | 3006 | VALIDATION | 409 | 该用户名已被注册 |
 | `VALIDATION_EMAIL_TAKEN` | 3007 | VALIDATION | 409 | 该邮箱已被注册 |
 | `VALIDATION_CREDENTIAL_ALREADY_REGISTERED` | 3008 | VALIDATION | 409 | 该安全密钥已注册，无需重复添加 |
+| `WEBAUTHN_INVALID_ATTESTATION` | 3015 | VALIDATION | 400 | 注册声明无法通过验证 |
+| `WEBAUTHN_CHALLENGE_MISMATCH` | 3016 | VALIDATION | 400 | 注册挑战校验失败 |
 | `VALIDATION_RESET_TOKEN_INVALID` | 3009 | VALIDATION | 400 | 重置链接已失效，请重新申请 |
 | `VALIDATION_VERIFICATION_TOKEN_INVALID` | 3010 | VALIDATION | 400 | 验证链接已失效，请重新发送邮件 |
 | `VALIDATION_DEVICE_CODE_INVALID` | 3011 | VALIDATION | 400 | 设备码无效、已过期或已被处理 |
 | `VALIDATION_RATE_LIMITED` | 3012 | VALIDATION | 429 | 请求过于频繁，请稍后重试 |
+| `VALIDATION_REDIRECT_URI_NOT_REGISTERED` | 3013 | VALIDATION | 400 | 登出重定向地址未注册 |
+| `EMAIL_TEMPLATE_NOT_FOUND` | 3017 | VALIDATION | 404 | 邮件模板不存在 |
+| `EMAIL_TEMPLATE_CONTENT_REJECTED` | 3018 | VALIDATION | 400 | 邮件模板内容被拒绝 |
+| `EMAIL_TEST_RECIPIENT_DENIED` | 3019 | VALIDATION | 403 | 测试收件人不在白名单 |
+| `EMAIL_TEST_QUOTA_EXCEEDED` | 3020 | VALIDATION | 429 | 测试发送配额已用尽 |
+| `AUDIT_EXPORT_WINDOW_REQUIRED` | 3021 | VALIDATION | 400 | 导出必须限定时间窗 |
+| `AUDIT_EXPORT_TOO_LARGE` | 3022 | VALIDATION | 400 | 导出行数超过上限 |
+| `CLAIM_MAPPING_RESERVED_CLAIM` | 3023 | VALIDATION | 400 | claim 名为保留字 |
+| `CLAIM_MAPPING_INVALID_SOURCE` | 3024 | VALIDATION | 400 | 映射源路径不在白名单 |
+| `CLAIM_MAPPING_FORBIDDEN_SCOPE` | 3025 | VALIDATION | 400 | 触发 scope 不允许 |
+| `CUSTOM_ATTRIBUTES_INVALID` | 3026 | VALIDATION | 400 | 自定义属性不合法 |
 | `AUTH_INVALID_CREDENTIALS` | 4001 | AUTHENTICATION | 401 | 用户名或密码错误 |
 | `AUTH_TOKEN_EXPIRED` | 4002 | AUTHENTICATION | 401 | 登录已过期 |
 | `AUTH_TOKEN_INVALID` | 4003 | AUTHENTICATION | 401 | 登录凭证无效 |
@@ -340,6 +359,7 @@ OIDC RP-Initiated Logout 1.0 §2 — 終止用户的 server-side session，并�
 | `AUTH_PASSWORD_CHANGE_REQUIRED` | 4009 | AUTHENTICATION | 403 | 必须先修改密码 |
 | `AUTHZ_ACCESS_DENIED` | 5001 | AUTHORIZATION | 403 | 没有访问权限 |
 | `AUTHZ_INSUFFICIENT_PERMISSIONS` | 5002 | AUTHORIZATION | 403 | 权限不足 |
+| `AUTH_SOCIAL_ACCOUNT_NOT_LINKED` | 5003 | AUTHORIZATION | 403 | 该第三方账号尚未绑定本地账户 |
 | `INTERNAL_ERROR` | 6001 | INTERNAL | 500 | 服务器内部错误 |
 
 ### 5.2 OAuth2 协议错误码 (RFC 6749 §5.2 / RFC 7009 / RFC 8628)

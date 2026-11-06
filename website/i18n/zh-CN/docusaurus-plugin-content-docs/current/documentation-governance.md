@@ -153,7 +153,7 @@ docs/（英文）与 website/i18n/zh-CN/.../current/（中文）同构：
 ├── contribute/     # 贡献：testing-guide / ci-cd-guide / versioning-and-release /
 │                  #        admin-test-cases / user-frontend-test-cases / admin-e2e-testing-guide
 ├── benchmark/      # 竞品基准方法论（competitor-benchmark-design；结果表在仓库 benchmarks/）
-└── adr/            # ADR-0001..0012 + 三份历史档案（中文正文 + 双语说明头）
+└── adr/            # ADR-0001..0014 + 三份历史档案（中文正文 + 双语说明头）
 ```
 
 **第 2 层：仓库内非 docs 资产（入库、不上站）** —— 站内以绝对链接引用，不复制：
