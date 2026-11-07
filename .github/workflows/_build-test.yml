@@ -200,8 +200,19 @@ jobs:
           echo "CCACHE_LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
           if [ "${{ inputs.platform }}" = "linux" ]; then
             mold --version
-            test -x /usr/lib/mold/ld || { echo "::error::/usr/lib/mold/ld missing — mold package layout changed"; exit 1; }
-            echo "LINKER_FLAGS=-DCMAKE_EXE_LINKER_FLAGS=-B/usr/lib/mold -DCMAKE_SHARED_LINKER_FLAGS=-B/usr/lib/mold" >> "$GITHUB_ENV"
+            # Debian/Ubuntu ship the ld shim under /usr/libexec/mold; the
+            # upstream binary release layout is /usr/lib/mold — probe both.
+            MOLD_DIR=""
+            for d in /usr/libexec/mold /usr/lib/mold; do
+              [ -x "$d/ld" ] && MOLD_DIR="$d" && break
+            done
+            if [ -z "$MOLD_DIR" ]; then
+              dpkg -L mold | sed 's|^|mold-package: |' || true
+              echo "::error::no mold ld shim found (expected /usr/libexec/mold/ld or /usr/lib/mold/ld)"
+              exit 1
+            fi
+            echo "Using mold shim dir: $MOLD_DIR"
+            echo "LINKER_FLAGS=-DCMAKE_EXE_LINKER_FLAGS=-B$MOLD_DIR -DCMAKE_SHARED_LINKER_FLAGS=-B$MOLD_DIR" >> "$GITHUB_ENV"
           fi
 
       - name: Configure CMake using Conan
