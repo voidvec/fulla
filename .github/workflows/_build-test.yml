@@ -186,13 +186,22 @@ jobs:
         # link) — the two compose. mold is Linux-only here: the macOS arm64
         # image already links with the platform's fast ld-prime. $LINKER_FLAGS
         # stays empty on macOS via the branch below.
+        #
+        # Integration path: -B/usr/lib/mold (the mold package's ld shim dir),
+        # NOT -fuse-ld=mold. The Conan-built dependency objects carry GCC LTO
+        # bytecode; with -fuse-ld=mold, MOLD itself invokes gcc's lto-wrapper
+        # and that combination failed on every linux leg ("c++: fatal error:
+        # no input files" -> "mold: fatal: lto-wrapper failed", 2026-11-07).
+        # The -B route keeps gcc's collect2 running lto-wrapper natively and
+        # delegates only the final ELF write to mold.
         run: |
           ccache -M 2G
           ccache -z
           echo "CCACHE_LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
           if [ "${{ inputs.platform }}" = "linux" ]; then
             mold --version
-            echo "LINKER_FLAGS=-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold" >> "$GITHUB_ENV"
+            test -x /usr/lib/mold/ld || { echo "::error::/usr/lib/mold/ld missing — mold package layout changed"; exit 1; }
+            echo "LINKER_FLAGS=-DCMAKE_EXE_LINKER_FLAGS=-B/usr/lib/mold -DCMAKE_SHARED_LINKER_FLAGS=-B/usr/lib/mold" >> "$GITHUB_ENV"
           fi
 
       - name: Configure CMake using Conan
