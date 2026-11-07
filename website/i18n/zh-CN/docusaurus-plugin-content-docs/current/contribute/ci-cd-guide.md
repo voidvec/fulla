@@ -81,7 +81,7 @@ concurrency:
 | `openapi-governance.yml` | PR master / dispatch（路径：`apps/server/openapi.yaml`、`tools/openapi-governance/**`、自身） | oasdiff 破坏性变更门，base vs PR | 门禁 |
 | `clients-sdk.yml` | PR master / push master / dispatch（路径：`clients/**`、`tools/clients/**`、`apps/server/openapi.yaml`、自身） | Python/Go/TS 三客户端：生成树漂移门 + 版本联动 + 单元测试 | 门禁 |
 | `security.yml` | push master / PR master / 每周 cron（周一 03:00 UTC）/ dispatch（无路径） | `conan.lock` 依赖 EOL 扫描 + 密钥/敏感文件卫生检查 | 门禁（cron 腿：对新增 EOL 依赖报警） |
-| `sanitizer.yml` | PR master / push master / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`cmake/**`、`CMakePresets.json`，PR 时含自身） | `asan-ubsan`：真实 Postgres+Redis 下的全量 ctest；`tsan-nightly`：TSan 全量 ctest | `asan-ubsan`：门禁；`tsan-nightly`：目前仅 dispatch |
+| `sanitizer.yml` | PR master / push master / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`cmake/**`、`CMakePresets.json`，PR 时含自身） | `asan-ubsan`：真实 Postgres+Redis 下的全量 ctest；`tsan-nightly`：TSan 全量 ctest | `asan-ubsan`：门禁；`tsan-nightly`：每夜 cron + dispatch（2026-11-07 补上 cron）|
 | `coverage.yml` | PR master / push master / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`tools/coverage/**`，PR 时另含脚本/cmake/自身） | gcov 插桩构建、逐库覆盖率报告、对基线的 ratchet 比对 | 构建/报告：门禁；ctest 与 ratchet：**参考**（v1.6.0 起 `continue-on-error`） |
 | `website.yml` | push master / PR（任意分支，路径：`docs/**`、`blog/**`、`website/**`、`scripts/gen-llms-txt.mjs`、自身）/ dispatch | llms.txt 新鲜度门 + Docusaurus 构建（`onBrokenLinks: 'throw'`）；master/dispatch 时部署 Pages | 门禁（build）；deploy：仅 master push / dispatch |
 | `interop.yml` | push master / push `release/**` / dispatch（无路径） | RP 互操作冒烟：三个 RP 库 + nextjs-demo 浏览器驱动对真实 fulla 栈 | 合并后 / release 分支门禁（刻意不进 PR 热路径） |
@@ -141,7 +141,7 @@ concurrency:
 **触发**：PR master / push master / dispatch，路径过滤到 `libs/**`、`apps/server/**`、`tests/**`、`cmake/**`、`CMakePresets.json`（工作流自身仅 PR 时在列）。
 
 - **`asan-ubsan`**（门禁，60 分钟）——GCC Debug 构建，`linux-asan-ubsan` preset（UBSan 经 `halt_on_error=1` 达到遇错即止语义，ASan 开泄漏检测），对真实 Postgres 17 + Redis 7 容器跑全量 ctest（单测 900 秒上限），集成套件同样覆盖。失败上传日志。分诊策略：真实缺陷同 PR 修复；第三方/系统调用误报在 `tools/sanitizers/` 下配带说明的抑制文件。
-- **`tsan-nightly`**（TSan，90 分钟）——`if: schedule || dispatch`；TSan 与 ASan/UBSan 互斥，故独立 Job 用 `linux-release-tsan` preset 跑**全量**套件。注意：名字带 nightly，但**文件里目前没有配置 `schedule:` cron**——该 Job 实际只能经 `workflow_dispatch` 触发。
+- **`tsan-nightly`**（TSan，90 分钟）——`if: schedule || dispatch`；TSan 与 ASan/UBSan 互斥，故独立 Job 用 `linux-release-tsan` preset 跑**全量**套件。经 `schedule: 0 3 * * *` 每夜运行（cron 于 2026-11-07 补上——此前虽有 nightly 之名，实际只能手动 dispatch 触发）。
 
 ### 3.9 `coverage.yml` — Coverage
 
