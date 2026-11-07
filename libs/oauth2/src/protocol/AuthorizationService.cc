@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 
 namespace fulla::oauth2::protocol
@@ -161,6 +162,20 @@ void AuthorizationService::evaluateScopes(
 
                     auto consentMap = std::make_shared<std::unordered_map<std::string, bool>>();
                     auto remaining = std::make_shared<size_t>(requestedScopes.size());
+                    // Serialize the per-scope finishers. The consent lookups
+                    // fan out over the DbClient; with more than one IO
+                    // thread the callbacks for different scopes land on
+                    // different threads and the unsynchronized
+                    // `(*consentMap)[scope] = ...` / `--(*remaining)` below
+                    // raced (ASan heap-buffer-overflow inside the
+                    // unordered_map buckets, and a torn counter that fired
+                    // the final callback early or never -- wrong consent
+                    // decisions under load, first caught 2026-11-07 on the
+                    // ASan leg, latent since the v1.5.0-M2 union fan-out).
+                    // Once `remaining` hits zero under the lock, every
+                    // writer is done, so the summary evaluation and the
+                    // callback fire OUTSIDE the lock, exactly once.
+                    auto finisherMu = std::make_shared<std::mutex>();
                     if (requestedScopes.empty())
                     {
                         callback(
@@ -198,32 +213,38 @@ void AuthorizationService::evaluateScopes(
                         // pre-M2). shared_ptr finisher: both hops funnel
                         // into it exactly once each.
                         auto finisher = std::make_shared<std::function<void(bool)>>(
-                          [this, consentMap, remaining, scope, client, hasAdminRole,
+                          [this, consentMap, remaining, finisherMu, scope, client, hasAdminRole,
                            requestedScopes, callback,
                            userPermissions](bool hasConsent) mutable {
+                              bool fire = false;
+                              {
+                                  std::lock_guard<std::mutex> lock(*finisherMu);
+                                  (*consentMap)[scope] = hasConsent;
+                                  fire = (--(*remaining) == 0);
+                              }
+                              if (!fire)
+                              {
+                                  return;
+                              }
                               try
                               {
-                                  (*consentMap)[scope] = hasConsent;
-                                  if (--(*remaining) == 0)
-                                  {
-                                      callback(
-                                        fulla::oauth2::access::evaluateScopes(
-                                          requestedScopes,
-                                          *client,
-                                          hasAdminRole,
-                                          [consentMap](const std::string &s) {
-                                              auto it = consentMap->find(s);
-                                              return it != consentMap->end() && it->second;
-                                          },
-                                          [this, userPermissions](const std::string &s) {
-                                              return adminScopes_.count(s) > 0 &&
-                                                     std::find(userPermissions.begin(),
-                                                               userPermissions.end(),
-                                                               s) == userPermissions.end();
-                                          }
-                                        )
-                                      );
-                                  }
+                                  callback(
+                                    fulla::oauth2::access::evaluateScopes(
+                                      requestedScopes,
+                                      *client,
+                                      hasAdminRole,
+                                      [consentMap](const std::string &s) {
+                                          auto it = consentMap->find(s);
+                                          return it != consentMap->end() && it->second;
+                                      },
+                                      [this, userPermissions](const std::string &s) {
+                                          return adminScopes_.count(s) > 0 &&
+                                                 std::find(userPermissions.begin(),
+                                                           userPermissions.end(),
+                                                           s) == userPermissions.end();
+                                      }
+                                    )
+                                  );
                               }
                               catch (const std::exception &)
                               {
