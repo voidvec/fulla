@@ -243,7 +243,7 @@ In test case SomeTestName
 - **基线是地板，不是目标。** `tools/coverage/ratchet-baseline.json` 逐库记录 `covered / total / pct`。每次 Coverage 运行，`measure_coverage.py --ratchet` 把每库当前百分比（截断到 0.1pp）与 `基线 pct - 0.5pp`（`RATCHET_TOLERANCE_PP`）比对；跌破地板即门禁失败（exit 1）。基线中插桩行数少于 200（`MIN_LINES`）的库豁免——目前没有库豁免。基线里的库在本次运行中消失、或插桩行数塌缩到 `MIN_LINES` 以下，同样失败：丢失插桩永远不算通过。本次运行新增的库通过，直到被写入基线。
 - **没有自动上调。** 覆盖率提升后要抬高地板，须刻意重定基线：取工作流打印的逐库数字（本地 `measure_coverage.py --json` 输出的正是基线的格式），在经过评审的 PR 中修改 `tools/coverage/ratchet-baseline.json`，并说明是哪些测试抬高了数字。下调基线是同样的编辑，也需要同样的理由。
 - **Seed 模式**：基线文件缺失时，脚本打印应提交的 JSON 并退出 0——现行基线正是这样产出的（PR #176）。
-- **门禁状态（v1.6.0）**：`coverage.yml` 中的 ctest 运行与 ratchet 步骤目前带 `continue-on-error: true`——gcov 插桩后的服务端无法在合理时限内跑完全量套件，`.gcda` 不全会被读成假回归。构建/插桩步骤仍然硬失败；待覆盖率腿能跑完全量套件后恢复门禁。在此之前，ratchet 步骤变红是需要排查的信号，不是噪音。见 [CI/CD 指南 §3.9](ci-cd-guide.md)。
+- **门禁状态（2026-11-07 起双腿）**：PR 覆盖率腿保持参考（`continue-on-error`，60 分钟——gcov 插桩比 Release 慢 10–20×，全量套件在该腿跑不完，`.gcda` 不全会被读成假回归；此处 ratchet 变红是需要排查的信号）。**gate 腿**——push master + 每夜（03:30 UTC），150 分钟——要求套件跑完并把 ratchet 作为硬性不增门禁：回归在合并后一天内失败。实测依据与分片/专用 runner 评估见 [CI/CD 指南 §3.9](ci-cd-guide.md)。
 
 #### ⚠ 实测覆盖率必须跑全部 5 个测试二进制
 

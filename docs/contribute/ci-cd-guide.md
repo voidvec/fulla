@@ -82,8 +82,8 @@ Classification used below:
 | `openapi-governance.yml` | PR master / dispatch (paths: `apps/server/openapi.yaml`, `tools/openapi-governance/**`, self) | oasdiff breaking-change gate, base vs PR spec | Gate |
 | `clients-sdk.yml` | PR master / push master / dispatch (paths: `clients/**`, `tools/clients/**`, `apps/server/openapi.yaml`, self) | Python/Go/TS clients: generated-tree drift gate + version linkage + unit tests | Gate |
 | `security.yml` | push master / PR master / weekly cron (Mon 03:00 UTC) / dispatch (no paths) | Dependency EOL scan over `conan.lock` + secret/sensitive-file hygiene | Gate (cron leg: alert for newly-EOL'd deps) |
-| `sanitizer.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json`, self on PR) | `asan-ubsan`: full ctest under ASan+UBSan vs real Postgres+Redis; `tsan-nightly`: full ctest under TSan | `asan-ubsan`: Gate; `tsan-nightly`: dispatch-only today |
-| `coverage.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**`, + script/cmake/self on PR) | gcov instrumented build, per-library coverage report, ratchet vs baseline | Build/report: Gate; ctest run + ratchet: **Reference** (v1.6.0, `continue-on-error`) |
+| `sanitizer.yml` | PR master / push master / nightly / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json`, self on PR) | `asan-ubsan`: full ctest under ASan+UBSan vs real Postgres+Redis; `tsan-nightly`: full ctest under TSan | `asan-ubsan`: Gate; `tsan-nightly`: nightly (cron added 2026-11-07) + dispatch |
+| `coverage.yml` | PR master / push master / nightly / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**`, + script/cmake/self on PR) | gcov instrumented build, per-library coverage report, ratchet vs baseline | PR leg: advisory (60 min); **gate leg: suite completion + ratchet enforced** (push master + nightly, 150 min) |
 | `website.yml` | push master / PR (any branch, paths: `docs/**`, `blog/**`, `website/**`, `scripts/gen-llms-txt.mjs`, self) / dispatch | llms.txt freshness gate + Docusaurus build (`onBrokenLinks: 'throw'`); Pages deploy on master/dispatch | Gate (build); deploy: master push / dispatch only |
 | `interop.yml` | push master / push `release/**` / dispatch (no paths) | RP interop smoke: three RP libraries + nextjs-demo browser driver vs a real fulla stack | Post-merge / release-branch gate (deliberately off the PR hot path) |
 | `release.yml` | push tag `vX.Y.Z` (strict SemVer) / dispatch (dry run) | Version check, SDK tarball, multi-arch images, cosign + SBOM, GitHub Release, PyPI | Release gate (tag only) |
@@ -146,17 +146,14 @@ Gate: yes, all three jobs. Local equivalents are listed in the workflow header c
 
 ### 3.9 `coverage.yml` — Coverage
 
-**Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**` (the PR leg additionally watches `scripts/measure_coverage.py`, `cmake/Coverage.cmake`, `CMakePresets.json`, and the workflow itself).
+**Trigger**: PR master / push master / nightly schedule / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**` (the PR leg additionally watches `scripts/measure_coverage.py`, `cmake/Coverage.cmake`, `CMakePresets.json`, and the workflows themselves). One reusable body (`_coverage-run.yml`) runs as **two legs**:
 
-Linux gcov leg (`linux-coverage` preset, Debug, Postgres+Redis active, 60 min):
+- **advisory** (PRs, 60 min): build with `FULLA_TEST_COVERAGE` instrumentation, best-effort ctest (`continue-on-error`), explicit `gcov -j -p` JSON pass (fails hard on zero `.gcda`/`.gcov.json.gz` — a false-green report is itself a failure), per-library summary, ratchet as reference-only. A coverage regression here is a signal to investigate, not a blocker.
+- **gate** (push master + nightly 03:30 UTC + dispatch, 150 min): the same body with suite completion REQUIRED (ctest failures propagate) and the **ratchet as a hard gate** — a no-decrease regression fails within a day of merge.
 
-1. Build with `FULLA_TEST_COVERAGE` instrumentation, run the full ctest suite split into two passes (non-`OAuth2Tests`, then `OAuth2Tests`) with `FULLA_TEST_HTTP_TIMEOUT=180`.
-2. **Gate**: the explicit `gcov -j -p` JSON pass fails hard if zero `.gcda` or zero `.gcov.json.gz` files were produced (a false-green report is itself a failure — an empty baseline was seeded exactly this way once).
-3. Per-library summary appended to the run's step summary via `scripts/measure_coverage.py`.
-4. **Ratchet gate** — `measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` compares each library against the committed baseline (see the [Testing Guide §7](testing-guide.md) for the baseline table and the ratchet mechanism).
-5. Raw gcov JSON + test logs uploaded as artifacts.
+Both legs share steps 2–5 above (gcov JSON pass hard-fails on empty data; `measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` compares each library against the committed baseline — see the [Testing Guide §7](testing-guide.md); raw gcov JSON + test logs uploaded as artifacts).
 
-**Gate vs. reference (v1.6.0)**: the ctest run and the ratchet comparison are `continue-on-error: true` — the gcov-instrumented server cannot finish the full suite inside practical ceilings, so a partial `.gcda` set would read as false regressions. Correctness stays gated by the Build&Test matrix and the ASan/UBSan leg; gating is to be restored once the coverage leg can run the suite to completion (dedicated runner or suite sharding).
+**Why two legs (measured 2026-11-07)**: the full 61k-assertion suite takes ~3.5 min at Release on the CI linux runner; gcov instrumentation slows the in-process server 10–20×, so the instrumented suite needs ~35–70 min of test wall time — it cannot fit a 60 min PR leg that also carries the ~29 min build. Suite sharding was evaluated and rejected: `OAuth2Tests` is one `add_test()` over the monolithic test binary, per-case `ctest -r` invocations would re-bootstrap the server for every case (only the repository-only Contract suite can afford that), and splitting the binary is a build-system refactor out of proportion for a 3.5-min-Release suite. A dedicated larger runner would work but is unnecessary once the ceiling is honestly sized (≈100 min fits the standard hosted runner; max 360).
 
 ### 3.10 `website.yml` — Website
 

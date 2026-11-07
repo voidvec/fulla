@@ -81,8 +81,8 @@ concurrency:
 | `openapi-governance.yml` | PR master / dispatch（路径：`apps/server/openapi.yaml`、`tools/openapi-governance/**`、自身） | oasdiff 破坏性变更门，base vs PR | 门禁 |
 | `clients-sdk.yml` | PR master / push master / dispatch（路径：`clients/**`、`tools/clients/**`、`apps/server/openapi.yaml`、自身） | Python/Go/TS 三客户端：生成树漂移门 + 版本联动 + 单元测试 | 门禁 |
 | `security.yml` | push master / PR master / 每周 cron（周一 03:00 UTC）/ dispatch（无路径） | `conan.lock` 依赖 EOL 扫描 + 密钥/敏感文件卫生检查 | 门禁（cron 腿：对新增 EOL 依赖报警） |
-| `sanitizer.yml` | PR master / push master / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`cmake/**`、`CMakePresets.json`，PR 时含自身） | `asan-ubsan`：真实 Postgres+Redis 下的全量 ctest；`tsan-nightly`：TSan 全量 ctest | `asan-ubsan`：门禁；`tsan-nightly`：每夜 cron + dispatch（2026-11-07 补上 cron）|
-| `coverage.yml` | PR master / push master / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`tools/coverage/**`，PR 时另含脚本/cmake/自身） | gcov 插桩构建、逐库覆盖率报告、对基线的 ratchet 比对 | 构建/报告：门禁；ctest 与 ratchet：**参考**（v1.6.0 起 `continue-on-error`） |
+| `sanitizer.yml` | PR master / push master / 每夜 / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`cmake/**`、`CMakePresets.json`，PR 时含自身） | `asan-ubsan`：真实 Postgres+Redis 下的全量 ctest；`tsan-nightly`：TSan 全量 ctest | `asan-ubsan`：门禁；`tsan-nightly`：每夜 cron + dispatch（2026-11-07 补上 cron）|
+| `coverage.yml` | PR master / push master / 每夜 / dispatch（路径：`libs/**`、`apps/server/**`、`tests/**`、`tools/coverage/**`，PR 时另含脚本/cmake/自身） | gcov 插桩构建、逐库覆盖率报告、对基线的 ratchet 比对 | PR 腿：参考（60 分钟）；**gate 腿：套件完成 + ratchet 硬门禁**（push master + 每夜，150 分钟） |
 | `website.yml` | push master / PR（任意分支，路径：`docs/**`、`blog/**`、`website/**`、`scripts/gen-llms-txt.mjs`、自身）/ dispatch | llms.txt 新鲜度门 + Docusaurus 构建（`onBrokenLinks: 'throw'`）；master/dispatch 时部署 Pages | 门禁（build）；deploy：仅 master push / dispatch |
 | `interop.yml` | push master / push `release/**` / dispatch（无路径） | RP 互操作冒烟：三个 RP 库 + nextjs-demo 浏览器驱动对真实 fulla 栈 | 合并后 / release 分支门禁（刻意不进 PR 热路径） |
 | `release.yml` | push Tag `vX.Y.Z`（严格 SemVer）/ dispatch（dry run） | 版本校验、SDK tar 包、多架构镜像、cosign + SBOM、GitHub Release、PyPI | 发布门禁（仅 Tag） |
@@ -145,17 +145,14 @@ concurrency:
 
 ### 3.9 `coverage.yml` — Coverage
 
-**触发**：PR master / push master / dispatch，路径过滤到 `libs/**`、`apps/server/**`、`tests/**`、`tools/coverage/**`（PR 腿另盯 `scripts/measure_coverage.py`、`cmake/Coverage.cmake`、`CMakePresets.json` 与工作流自身）。
+**触发**：PR master / push master / 每夜定时 / dispatch，路径过滤到 `libs/**`、`apps/server/**`、`tests/**`、`tools/coverage/**`（PR 腿另盯 `scripts/measure_coverage.py`、`cmake/Coverage.cmake`、`CMakePresets.json` 与工作流自身）。同一复用体（`_coverage-run.yml`）以**双腿**运行：
 
-Linux gcov 腿（`linux-coverage` preset，Debug，Postgres+Redis 激活，60 分钟）：
+- **advisory 腿**（PR，60 分钟）：`FULLA_TEST_COVERAGE` 插桩构建、尽力而为的 ctest（`continue-on-error`）、显式 `gcov -j -p` JSON 生成（`.gcda`/`.gcov.json.gz` 为零即硬失败——假绿报告本身就是失败）、逐库汇总、ratchet 仅作参考。此处回归是"需要排查的信号"，不阻塞。
+- **gate 腿**（push master + 每夜 03:30 UTC + dispatch，150 分钟）：同一执行体，但**套件必须跑完**（ctest 失败向上传播）且 **ratchet 为硬门禁**——不增回归在合并后一天内被挡下。
 
-1. 以 `FULLA_TEST_COVERAGE` 插桩构建，全量 ctest 拆两遍跑（先非 `OAuth2Tests`，后 `OAuth2Tests`），`FULLA_TEST_HTTP_TIMEOUT=180`。
-2. **门禁**：显式 `gcov -j -p` JSON 生成步骤在 `.gcda` 或 `.gcov.json.gz` 数量为零时硬失败（假绿报告本身就是失败——空基线正是这样混进去过一次）。
-3. 经 `scripts/measure_coverage.py` 把逐库汇总追加到运行的 step summary。
-4. **Ratchet 门**——`measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` 逐库与已提交基线比对（基线数字与 ratchet 机制见[测试指南 §7](testing-guide.md)）。
-5. 原始 gcov JSON + 测试日志上传为 Artifact。
+两腿共享上述 2–5 步（gcov JSON 空数据硬失败；`measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` 逐库与已提交基线比对——见[测试指南 §7](testing-guide.md)；原始 gcov JSON + 测试日志上传为 Artifact）。
 
-**门禁 vs 参考（v1.6.0）**：ctest 运行与 ratchet 比对均为 `continue-on-error: true`——gcov 插桩后的服务端无法在合理时限内跑完全量套件，`.gcda` 不全会被读成假回归。正确性仍由 Build&Test 矩阵与 ASan/UBSan 腿把关；待覆盖率腿能跑完全量套件（专用 runner 或套件分片）后恢复门禁。
+**为什么双腿（2026-11-07 实测）**：6.1 万断言的全量套件在 CI linux runner 的 Release 速度下约 3.5 分钟；gcov 插桩使进程内服务端慢 10–20×，插桩后套件需 35–70 分钟纯测试时间——塞不进还要容纳约 29 分钟构建的 60 分钟 PR 腿。套件分片经评估被否决：`OAuth2Tests` 是单体测试二进制上的**单个** `add_test()`，按用例 `ctest -r` 会为每个用例重新拉起服务端（只有纯仓储的 Contract 套件付得起这个代价），拆分二进制则是对 3.5 分钟套件不成比例的构建系统改造。专用大 runner 可行但无必要——时限如实放大后（约 100 分钟）标准托管 runner 就装得下（上限 360）。
 
 ### 3.10 `website.yml` — Website
 

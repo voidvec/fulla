@@ -1,0 +1,213 @@
+name: Coverage Run (reusable)
+
+# _coverage-run.yml — the single gcov coverage leg, parameterized by gating
+# mode. Extracted from coverage.yml when the ratchet gate moved to a
+# post-merge cadence (see the caller for WHY the modes exist).
+#
+# Measured basis (2026-11-07, run 42323015819):
+#   * the FULL 61k-assertion suite takes ~3.5 min at Release speed on the
+#     CI linux runner (the 33 min Build&Test job is ~29 min build);
+#   * gcov instrumentation makes the in-process server 10-20x slower, so
+#     the instrumented suite needs ~35-70 min of test wall time — it does
+#     NOT fit a 60 min job budget that also carries the ~29 min build.
+#   * it is throughput, not per-test timeout tuning (logins null-respond
+#     under load even at a 900 s ctest ceiling; see FULLA_TEST_HTTP_TIMEOUT
+#     below) — only more wall time (or more server cores) helps.
+#
+# Callers:
+#   * PR leg  (gating=false, 60 min):  fast advisory run; partial .gcda
+#     still feeds the reported ratio (an under-counted denominator only
+#     makes the ratio conservative). Correctness stays gated by the
+#     Build&Test matrix + ASan/UBSan legs.
+#   * Gate leg (gating=true, 150 min): post-merge on master + nightly;
+#     the suite must COMPLETE and the ratchet must pass — a regression is
+#     caught within a day of merge instead of slowing every PR by hours.
+
+on:
+  workflow_call:
+    inputs:
+      gating:
+        description: 'Hard gate: suite completion + ratchet failures fail the job'
+        type: boolean
+        default: false
+      timeout_minutes:
+        description: 'Job ceiling (gate leg needs build + 10-20x-slowed suite)'
+        type: number
+        default: 60
+
+jobs:
+  coverage:
+    name: gcov line coverage (linux${{ inputs.gating && ', GATING' || ', advisory' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    env:
+      PRESET: linux-coverage
+      GATING: ${{ inputs.gating && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ cmake uuid-dev redis-tools gcovr
+          pip install conan
+          conan profile detect --force
+
+      - name: Cache Conan packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.conan2
+          key: conan-${{ runner.os }}-v1-cpp17-debug-${{ hashFiles('conanfile.py', 'conan.lock') }}
+          restore-keys: |
+            conan-${{ runner.os }}-v1-cpp17-debug-
+
+      - name: Configure CMake using Conan (Debug + FULLA_TEST_COVERAGE=ON)
+        run: |
+          conan install . --output-folder=build/$PRESET --build=missing \
+            -s build_type=Debug -s compiler.cppstd=17
+          # drogon_ctl lives in the Conan package cache, not in $PATH;
+          # drogon_create_views() invokes it at build time, so prepend
+          # its directory for the subsequent cmake --build step.
+          # Two-legged discovery (cache-layout flake hardening): the legacy
+          # find over ~/.conan2/p, then the authoritative Drogon-*-data.cmake
+          # package-folder read _build-test.yml uses.
+          DROGON_BIN_DIR="$(find ~/.conan2/p -name drogon_ctl -type f -executable -printf '%h\n' | head -1)"
+          if [ -z "$DROGON_BIN_DIR" ]; then
+            data_file=$(find "build/$PRESET" -maxdepth 1 -name 'Drogon-*-data.cmake' | head -n1)
+            if [ -n "$data_file" ]; then
+              drogon_folder=$(grep -E 'set\(drogon_PACKAGE_FOLDER_DEBUG "' "$data_file" | sed -E 's/.*"(.+)".*/\1/')
+              if [ -n "$drogon_folder" ] && [ -x "$drogon_folder/bin/drogon_ctl" ]; then
+                DROGON_BIN_DIR="$drogon_folder/bin"
+              fi
+            fi
+          fi
+          if [ -z "$DROGON_BIN_DIR" ]; then
+            echo "::error::drogon_ctl not found (neither in Conan cache nor via Drogon-*-data.cmake)"
+            exit 1
+          fi
+          echo "Found drogon_ctl in $DROGON_BIN_DIR"
+          echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
+          cmake --preset "$PRESET"
+
+      - name: Build
+        run: cmake --build --preset "$PRESET"
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker run -d --name fulla-postgres \
+            -e POSTGRES_USER=fulla_user -e POSTGRES_PASSWORD=123456 \
+            -e POSTGRES_DB=fulla_db -p 5432:5432 postgres:17-alpine
+          docker run -d --name fulla-redis -p 6379:6379 redis:7-alpine
+
+      - name: Wait for services and initialize database
+        working-directory: ${{ github.workspace }}/apps/server
+        env:
+          PGPASSWORD: 123456
+        run: |
+          for i in $(seq 1 15); do
+            PGPASSWORD=123456 psql -h localhost -U fulla_user -d fulla_db -c 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 2
+          done
+          PGPASSWORD=123456 psql -h localhost -U fulla_user -d fulla_db -c 'SELECT 1'
+          for i in $(seq 1 15); do
+            redis-cli -h localhost ping | grep -q PONG && break
+            sleep 2
+          done
+          redis-cli -h localhost ping
+          for f in migrations/V*.sql seed/*.sql; do
+            echo "Applying $f..."
+            psql -h localhost -U fulla_user -d fulla_db -f "$f"
+          done
+
+      - name: Run tests (ctest, full suite)
+        working-directory: build/${{ env.PRESET }}
+        env:
+          # CI Redis has no password; override the dev config's passwd so
+          # the test binary doesn't AUTH against a passwordless server
+          # (mirrors _build-test.yml's FULLA_REDIS_PASSWORD="").
+          FULLA_REDIS_PASSWORD: ""
+          # gcov instrumentation makes the in-process server 10-20x slower
+          # than Release; under the full-suite client load a login can take
+          # past the default 30s and the null responses look like random
+          # test failures (see the [loginAsUserTokens] diagnostics and the
+          # fullaTestHttpTimeout() note in HttpTestClient.h).
+          FULLA_TEST_HTTP_TIMEOUT: "180"
+        # Advisory mode (PR leg): the gcov-instrumented server cannot
+        # sustain the full suite inside a 60 min job — whatever fraction
+        # completes still feeds the coverage number (conservative
+        # denominator), correctness is gated elsewhere. Gate mode (master
+        # push + nightly, 150 min ceiling): failures propagate — the suite
+        # MUST complete for the ratchet numbers to mean anything.
+        continue-on-error: ${{ env.GATING == 'false' }}
+        run: |
+          if [ "$GATING" = "true" ]; then
+            ctest -C Debug --output-on-failure --timeout 3600 -R "^(?!.*OAuth2Tests).*$"
+            ctest -C Debug --output-on-failure --timeout 3600 -R "^OAuth2Tests$"
+          else
+            ctest -C Debug --output-on-failure --timeout 1800 -R "^(?!.*OAuth2Tests).*$" || true
+            ctest -C Debug --output-on-failure --timeout 1800 -R "^OAuth2Tests$" || true
+          fi
+
+      - name: Generate gcov JSON reports
+        # Coverage.cmake only adds the instrumentation flags; the *.gcov.json.gz
+        # files consumed by measure_coverage.py must be produced by an explicit
+        # gcov pass over the .gcda files the test run left behind (#105 review:
+        # without this step the report is empty and the job is a false green).
+        # PR #176: gcov -j -p writes <mangled-path>.gcov.json.gz into the
+        # CURRENT directory, not next to the .gcda -- normalize them under
+        # libs/ so the summarize/ratchet/artifact steps keep one find path,
+        # and fail loudly on zero instead of masking with || true (the gate
+        # seeded an EMPTY baseline for exactly this reason before).
+        working-directory: build/${{ env.PRESET }}
+        run: |
+          gcda_count=$(find libs -name '*.gcda' | wc -l)
+          echo "Found $gcda_count .gcda files"
+          if [ "$gcda_count" -eq 0 ]; then
+            echo "::error::No coverage data produced (instrumentation or test run failed)"
+            exit 1
+          fi
+          find libs -name '*.gcda' -print0 | xargs -0 -n 32 gcov -j -p || true
+          repo_wide=$(find . -name '*.gcov.json.gz' | wc -l)
+          echo "gcov produced $repo_wide report(s) repo-wide; relocating any left in the cwd into libs/"
+          find . -maxdepth 1 -name '*.gcov.json.gz' -exec mv {} libs/ \; 2>/dev/null || true
+          json_count=$(find libs -name '*.gcov.json.gz' | wc -l)
+          echo "Generated $json_count gcov JSON reports under libs/"
+          if [ "$json_count" -eq 0 ]; then
+            echo "::error::gcov pass produced no JSON reports under libs/ (see repo-wide count above)"
+            exit 1
+          fi
+
+      - name: Summarize coverage (measure_coverage.py)
+        working-directory: ${{ github.workspace }}
+        run: |
+          {
+            echo "## Line coverage (libs, gcov, ${{ env.GATING == 'true' && 'GATE leg' || 'advisory leg' }})"
+            echo '```'
+            find build/$PRESET/libs -name '*.gcov.json.gz' | python3 scripts/measure_coverage.py
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage ratchet gate (#105, no-decrease vs baseline)
+        # Decision B (local self-contained gate): fail when any non-exempt
+        # library drops more than 0.5pp below tools/coverage/
+        # ratchet-baseline.json. Seed mode (baseline absent) prints the JSON
+        # to commit and passes.
+        #
+        # Gating ONLY on the gate leg (master push + nightly, 150 min): on
+        # the PR/advisory leg the .gcda set is partial and the ratchet would
+        # read "regressions" that are really missing data. This restores the
+        # hard no-decrease guarantee (down within a day of merge) without a
+        # multi-hour leg on every PR.
+        continue-on-error: ${{ env.GATING == 'false' }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          find build/$PRESET/libs -name '*.gcov.json.gz' | python3 scripts/measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-reports${{ env.GATING == 'true' && '-gate' || '' }}
+          path: |
+            build/${{ env.PRESET }}/libs/**/*.gcov.json.gz
+            build/${{ env.PRESET }}/Testing/
+          if-no-files-found: error
