@@ -64,7 +64,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc g++ cmake uuid-dev redis-tools
+          sudo apt-get install -y gcc g++ cmake ccache uuid-dev redis-tools
           pip install conan
           conan profile detect --force
 
@@ -75,6 +75,18 @@ jobs:
           key: conan-${{ runner.os }}-v1-cpp17-debug-${{ hashFiles('conanfile.py', 'conan.lock') }}
           restore-keys: |
             conan-${{ runner.os }}-v1-cpp17-debug-
+
+      - name: Prepare ccache (compile cache)
+        # Same rationale as _build-test.yml (2026-11-07): the build dominates
+        # the leg. The sanitizer flags hash into distinct ccache entries, so
+        # one cache dir safely serves this and the release/debug variants.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-v1-
 
       - name: Configure CMake using Conan (Debug + address,undefined)
         run: |
@@ -103,10 +115,15 @@ jobs:
           fi
           echo "Found drogon_ctl in $DROGON_BIN_DIR"
           echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
-          cmake --preset "$PRESET"
+          ccache -M 2G
+          ccache -z
+          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build --preset "$PRESET"
+
+      - name: ccache statistics
+        run: ccache -s
 
       - name: Start PostgreSQL and Redis
         run: |
@@ -173,7 +190,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc g++ cmake uuid-dev redis-tools
+          sudo apt-get install -y gcc g++ cmake ccache uuid-dev redis-tools
           pip install conan
           conan profile detect --force
 
@@ -184,6 +201,16 @@ jobs:
           key: conan-${{ runner.os }}-v1-cpp17-debug-${{ hashFiles('conanfile.py', 'conan.lock') }}
           restore-keys: |
             conan-${{ runner.os }}-v1-cpp17-debug-
+
+      - name: Prepare ccache (compile cache)
+        # Same rationale as _build-test.yml (2026-11-07).
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-v1-
 
       - name: Configure CMake using Conan (Debug + thread)
         run: |
@@ -205,10 +232,15 @@ jobs:
             exit 1
           fi
           echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
-          cmake --preset "$PRESET"
+          ccache -M 2G
+          ccache -z
+          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build --preset "$PRESET"
+
+      - name: ccache statistics
+        run: ccache -s
 
       - name: Start PostgreSQL and Redis
         run: |

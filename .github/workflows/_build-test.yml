@@ -122,6 +122,7 @@ jobs:
             gcc \
             g++ \
             cmake \
+            ccache \
             uuid-dev \
             redis-tools
 
@@ -144,6 +145,7 @@ jobs:
         # "externally-managed-environment" Python that blocks a plain pip3
         # install. --break-system-packages is safe on an ephemeral CI VM.
         run: |
+          brew install ccache
           pip3 install --break-system-packages conan
           conan profile detect --force
 
@@ -157,6 +159,31 @@ jobs:
           key: conan-${{ runner.os }}-v1-cpp17-${{ hashFiles('conanfile.py', 'conan.lock') }}
           restore-keys: |
             conan-${{ runner.os }}-v1-cpp17-
+
+      - name: Prepare ccache (compile cache)
+        # 2026-11-07: the linux leg spent ~29 of its ~33 min COMPILING (~360
+        # first-party TUs on a 4-vcpu runner; the Conan deps were already
+        # cached). ccache keys on preprocessor output, so PR iterations only
+        # recompile changed TUs and relink — measured builds should drop to
+        # single-digit minutes once warm. Internal flag hashing keeps the
+        # release/debug/asan variants in ONE cache dir safely. Windows is
+        # skipped (MSVC + ccache on hosted runners is flaky); revisit later.
+        if: inputs.platform != 'windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/Library/Caches/ccache
+          key: ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-v1-
+      - name: Configure ccache
+        if: inputs.platform != 'windows'
+        run: |
+          ccache -M 2G
+          ccache -z
+          echo "CCACHE_LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
 
       - name: Configure CMake using Conan
         # Drogon (with_orm/with_postgres/with_redis/with_ctl/with_sqlite/with_brotli)
@@ -201,10 +228,15 @@ jobs:
         # The preset carries CMAKE_BUILD_TYPE, C++ standard, generator, and the
         # Conan toolchain (build/<preset>/conan_toolchain.cmake). Platform-only
         # flags (e.g. FULLA_MEMORY_TESTS_ONLY on macOS) come via configure_extra_args.
-        run: cmake --preset "$CMAKE_PRESET" ${{ inputs.configure_extra_args }}
+        # $CCACHE_LAUNCHER is empty on Windows (see the ccache prep step).
+        run: cmake --preset "$CMAKE_PRESET" ${{ inputs.configure_extra_args }} $CCACHE_LAUNCHER
 
       - name: Build
         run: cmake --build --preset "$CMAKE_PRESET"
+
+      - name: ccache statistics
+        if: inputs.platform != 'windows'
+        run: ccache -s
 
       - name: Start PostgreSQL and Redis
         if: inputs.use_database

@@ -95,10 +95,12 @@ Classification used below:
 
 The single entry point that chains the three gates via `needs` (see the tree in §1):
 
-- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
+- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, the tracked-markdown link gate, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
 - **`frontend`** — calls `_frontend.yml` (see §3.3 and §4).
 - **`build-test`** — calls `_build-test.yml` as a `{linux, windows, macos}` matrix (`fail-fast: false`; each leg 60 min, `-DFULLA_WERROR=ON` everywhere; see §3.2 and §5).
 - **`sdk-smoke`** — calls `_sdk-smoke.yml` after build-test (see §3.4).
+
+**Compile caching (2026-11-07)**: every compiling workflow (`_build-test` Linux+macOS legs, `_coverage-run`, `sanitizer`, `_sdk-smoke`) builds through **ccache** (`CMAKE_{C,CXX}_COMPILER_LAUNCHER`, 2 GB cap, cached via `actions/cache` keyed on `conan.lock` + SHA with prefix fallbacks). Measured motivation: the linux leg spent ~29 of its ~33 min compiling ~360 first-party TUs with dependencies already cached. One cache directory safely serves the release/debug/asan/tsan/gcov variants — ccache keys on the preprocessed input, and the flag sets hash into distinct entries. Windows is excluded for now (MSVC + ccache on hosted runners is flaky). Each leg logs its `ccache -s` hit rate after the build. **Cache scoping caveat**: `actions/cache` saves under the ref it ran on — a PR's caches are visible only to that PR; only the master-branch runs seed the cross-PR pool. So expect cold builds until the first post-merge master run has saved `ccache-*` under `refs/heads/master`, warm rebuilds for subsequent pushes to the SAME PR immediately, and warm builds for every NEW PR only after master has seeded the pool.
 
 ### 3.2 `_build-test.yml` — Reusable Build & Test (MAIN gate)
 

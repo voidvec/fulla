@@ -41,6 +41,7 @@ jobs:
             gcc \
             g++ \
             cmake \
+            ccache \
             uuid-dev
 
       - name: Install Conan
@@ -56,6 +57,16 @@ jobs:
           key: conan-${{ runner.os }}-v1-cpp17-${{ hashFiles('conanfile.py', 'conan.lock') }}
           restore-keys: |
             conan-${{ runner.os }}-v1-cpp17-
+
+      - name: Prepare ccache (compile cache)
+        # Same rationale as _build-test.yml (2026-11-07).
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-v1-
 
       - name: Configure CMake using Conan
         run: |
@@ -91,10 +102,15 @@ jobs:
         # so configure emits the build-tree package configs the smoke consumes.
         run: |
           cp apps/server/config/config.ci.json apps/server/config/config.json
-          cmake --preset "$CMAKE_PRESET"
+          ccache -M 2G
+          ccache -z
+          cmake --preset "$CMAKE_PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (full stack -> build-tree package configs)
         run: cmake --build --preset "$CMAKE_PRESET"
+
+      - name: ccache statistics
+        run: ccache -s
 
       - name: Run SDK Smoke (SdkSmoke label)
         working-directory: ${{ github.workspace }}/${{ env.PRESET_DIR }}
