@@ -78,7 +78,7 @@ docker compose -f docker-compose.prod.yml up -d
 curl -fsS http://<backend>/health/ready
 ```
 
-按 [verification-checklist.md](../operate/verification-checklist) 走一遍核心路径
+按 [verification-checklist.md](verification-checklist.md) 走一遍核心路径
 （登录 → 授权码 → token → introspect → userinfo）。通过后保留 dump 文件与
 旧卷留底至少一个回归周期，再清理。
 

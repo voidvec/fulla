@@ -20,16 +20,26 @@ checked=0
 tmpfile=$(mktemp)
 trap 'rm -f "$tmpfile"' EXIT
 
+# TRACKED files only: `git ls-files` keeps the check reproducible in CI and
+# skips local scratch/untracked directories (the old `find` walked them).
+# Fallback to find when run outside a git work tree.
+mdfiles=$(mktemp)
+trap 'rm -f "$tmpfile" "$mdfiles"' EXIT
+if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$ROOT_DIR" ls-files -z -- '*.md' > "$mdfiles"
+else
+    find "$ROOT_DIR" -name '*.md' -not -path '*/node_modules/*' -not -path '*/.git/*' -print0 > "$mdfiles"
+fi
+
 while IFS= read -r -d '' mdfile; do
     dir="$(dirname "$mdfile")"
 
     # Extract markdown links outside of fenced code blocks.
     # awk skips lines inside ``` fences, then grep extracts link targets.
-    awk '
-        { sub(/\r$/, "") }
-        /^[[:space:]]*```/ { in_fence = !in_fence; next }
-        !in_fence { print }
-    ' "$mdfile" | grep -oP '\[(?:[^\]]*)\]\(\K[^)]+' 2>/dev/null | while IFS= read -r link; do
+    # Process substitution (not a pipe) keeps the loop in THIS shell so the
+    # counters below actually accumulate — the old piped variant lost every
+    # increment to the subshell and always reported "0 links checked".
+    while IFS= read -r link; do
         # Strip anchor fragments
         link_path="${link%%#*}"
 
@@ -47,14 +57,23 @@ while IFS= read -r -d '' mdfile; do
         [[ "$link_path" == *"<"* || "$link_path" == *">"* ]] && continue
         [[ "$link_path" == *" "* ]] && continue
 
-        # Resolve relative to the markdown file's directory
+        checked=$((checked + 1))
+
+        # Resolve relative to the markdown file's directory (GitHub
+        # semantics — the exact blind spot of the Docusaurus onBrokenLinks
+        # gate, which resolves bare relative links against the docs root
+        # and never looks at md files outside docs/).
         target="$dir/$link_path"
 
         if [[ ! -e "$target" ]]; then
             echo "BROKEN: $mdfile -> $link_path" >> "$tmpfile"
         fi
-    done || true
-done < <(find "$ROOT_DIR" -name '*.md' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/.venv/*' -not -path '*/.kiro/*' -not -path '*/docs/history/*' -print0)
+    done < <(awk '
+        { sub(/\r$/, "") }
+        /^[[:space:]]*```/ { in_fence = !in_fence; next }
+        !in_fence { print }
+    ' "$mdfile" | grep -oP '\[(?:[^\]]*)\]\(\K[^)]+' 2>/dev/null) || true
+done < "$mdfiles"
 
 broken=$(wc -l < "$tmpfile" 2>/dev/null || echo 0)
 broken=$((broken + 0))  # ensure numeric

@@ -1,7 +1,7 @@
 # RBAC 权限控制（Role-Based Access Control）
 
 fulla 的访问控制是一个由**三道门**强制执行的**三层模型**（v1.6.0 起，P1-8，
-[ADR-0014](../adr/ADR-0014-rbac-permission-enforcement.md) 含 Erratum 2）：
+[ADR-0014](https://fulla.dev/docs/adr/ADR-0014-rbac-permission-enforcement) 含 Erratum 2）：
 角色是粗粒度层，OAuth2 资源 scope 是细粒度层，而角色的**权限集**——两层之间的
 桥——是该角色可携带的资源 scope 子集。本页描述该模型、schema、管理 API、
 三道门各自的判定逻辑，以及配置与运维要点。

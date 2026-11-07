@@ -56,6 +56,13 @@ jobs:
           node scripts/gen-llms-txt.mjs
           git diff --exit-code --stat -- website/static/llms.txt website/static/llms-full.txt
 
+      # zh-CN mirror structural parity (governance §6-7: same-PR dual
+      # writes). Catches dropped sections / error-table drift that neither
+      # the Docusaurus build (silent EN fallback) nor ErrorCatalogDocTest
+      # (EN-only) can see. Dependency-free like the llms generator above.
+      - name: zh-CN mirror consistency gate
+        run: node scripts/check-zh-mirror-consistency.mjs
+
       - name: Build website
         working-directory: website
         run: |

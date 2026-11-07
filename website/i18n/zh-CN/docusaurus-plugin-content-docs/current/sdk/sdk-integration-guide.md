@@ -2,7 +2,7 @@
 
 如何获取并集成 Fulla 的发布产物：SDK 二进制包（库 + 头 +
 `fulla-*Config.cmake`）与 GHCR 容器镜像。运行时行为承诺（线程 / ABI /
-异常 / 日志 / 插件注册）见 [SDK Runtime Contract](sdk-runtime-contract)，
+异常 / 日志 / 插件注册）见 [SDK Runtime Contract](sdk-runtime-contract.md)，
 本文只讲"怎么拿、怎么接"。发布流水线为
 `.github/workflows/release.yml`（严格 SemVer tag `vX.Y.Z` 触发）。
 

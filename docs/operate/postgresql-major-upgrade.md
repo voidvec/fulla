@@ -85,7 +85,7 @@ docker compose -f docker-compose.prod.yml up -d
 curl -fsS http://<backend>/health/ready
 ```
 
-Run the core paths from [verification-checklist.md](../operate/verification-checklist)
+Run the core paths from [verification-checklist.md](verification-checklist.md)
 (login → authorization code → token → introspect → userinfo). After passing, keep the dump
 file and the old-volume copy for at least one regression cycle before cleaning up.
 

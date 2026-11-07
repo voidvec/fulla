@@ -156,6 +156,11 @@ docs/（英文）与 website/i18n/zh-CN/.../current/（中文）同构：
 └── adr/            # ADR-0001..0014 + 三份历史档案（中文正文 + 双语说明头）
 ```
 
+ADR 文件命名：`ADR-NNNN[-topic].md` —— 编号必填、零填充；同一主题多篇时鼓励在编号后
+加简短主题后缀（如 `ADR-0014-rbac-permission-enforcement.md`，该文件自 v1.5.0 起已有
+公开 URL，改名即断链）。历史档案保留描述性文件名（`oauth-oidc-compliance-audit.md` 等）。
+
+
 **第 2 层：仓库内非 docs 资产（入库、不上站）** —— 站内以绝对链接引用，不复制：
 
 | 资产 | 角色 |

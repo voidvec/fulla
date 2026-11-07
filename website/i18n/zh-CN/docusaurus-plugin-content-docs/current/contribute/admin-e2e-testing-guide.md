@@ -900,7 +900,7 @@ psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_co
 2. **确保凭证正确**：检查测试脚本中的用户名和密码
 3. **测试后自动清理**：在测试脚本末尾添加清理代码
 
-详细说明请参考：[账号锁定机制](operate/account-lockout.md)
+详细说明请参考：[账号锁定机制](../operate/account-lockout.md)
 
 ---
 

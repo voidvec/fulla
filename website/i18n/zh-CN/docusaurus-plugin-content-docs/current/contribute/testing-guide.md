@@ -194,7 +194,7 @@ In test case SomeTestName
 3. 编译项目
 4. 运行 `ctest`
 
-详见 [CI/CD 指南](../contribute/ci-cd-guide)。
+详见 [CI/CD 指南](ci-cd-guide.md)。
 
 ---
 

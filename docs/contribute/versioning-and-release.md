@@ -14,7 +14,7 @@ conflict, this document wins — fix the pipeline.
 > - [SDK Runtime Contract](../sdk/sdk-runtime-contract.md) §2 declares the ABI /
 >   source-level SemVer commitments and the deprecation process; this document
 >   expands on their versioning-governance side.
-> - [CI/CD Guide](../contribute/ci-cd-guide) describes where the release pipeline
+> - [CI/CD Guide](ci-cd-guide.md) describes where the release pipeline
 >   sits in the overall CI.
 
 ---

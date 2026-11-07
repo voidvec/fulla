@@ -84,6 +84,15 @@ jobs:
           chmod +x tools/manage-parity-check.sh
           ./tools/manage-parity-check.sh
 
+      - name: Check doc links (tracked markdown, GitHub semantics)
+        # Relative-link lint over EVERY tracked .md file — the exact blind
+        # spot of the Docusaurus onBrokenLinks gate (resolves bare relative
+        # links against the docs root, never looks outside docs/). Found 31
+        # real "site-renders/GitHub-404" links on first wiring (2026-11-07).
+        run: |
+          chmod +x scripts/check-doc-links.sh
+          ./scripts/check-doc-links.sh
+
       - name: Validate OpenAPI Spec
         run: |
           pip install openapi-spec-validator pyyaml

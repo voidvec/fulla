@@ -38,6 +38,11 @@ on:
       - "tests/**"
       - "cmake/**"
       - "CMakePresets.json"
+  schedule:
+    # tsan-nightly's documented cadence (see the job comment above). The
+    # job's `if:` already accepts schedule events; the trigger itself was
+    # missing until 2026-11-07, leaving tsan-nightly dispatch-only.
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 concurrency:

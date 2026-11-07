@@ -908,7 +908,7 @@ Depending on the number of failures, the account unlocks automatically after the
 2. **Make sure credentials are correct**: check the username and password in the test script
 3. **Clean up automatically after testing**: append cleanup code at the end of the test script
 
-For details, see [Account lockout mechanism](operate/account-lockout.md).
+For details, see [Account lockout mechanism](../operate/account-lockout.md).
 
 ---
 
