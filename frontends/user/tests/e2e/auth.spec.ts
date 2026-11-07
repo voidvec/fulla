@@ -253,15 +253,31 @@ test.describe('GitHub Login', () => {
     await expect(btn).toBeVisible()
   })
 
-  test('GitHub button links to GitHub OAuth', async ({ page }) => {
-    await page.goto('/login')
-    await page.locator('form').first().waitFor()
-    const githubLink = page.locator('a:has-text("Sign in with GitHub")')
+  test('GitHub button starts a browser-bound OAuth transaction', async ({ page }) => {
     if (!githubProviderConfigured)
       test.skip(true, 'E2E_EXTERNAL_PROVIDERS does not include github')
-    await expect(githubLink).toBeVisible()
-    const href = await githubLink.getAttribute('href')
-    expect(href).toContain('github.com/login/oauth/authorize')
+    let starts = 0
+    const state = 'a'.repeat(64)
+    await page.route('**/api/auth/providers/github/authorize', async (route) => {
+      starts++
+      if (starts === 1) return route.fulfill({ status: 204 })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        state, authorize_url: `https://github.com/login/oauth/authorize?state=${state}`,
+        redirect_uri: 'http://localhost:5173/callback/github', expires_in: 600,
+      }) })
+    })
+    await page.route('https://github.com/**', route => route.fulfill({
+      status: 200, contentType: 'text/html', body: '<html><body>Provider</body></html>',
+    }))
+    await page.goto('/login')
+    const outbound = page.waitForRequest('https://github.com/**')
+    await page.getByRole('button', { name: 'Sign in with GitHub' }).click()
+    expect((await outbound).url()).toContain(`state=${state}`)
+    expect(starts).toBe(2)
+    await page.waitForURL('https://github.com/**')
+    await page.goto('/login')
+    const flow = await page.evaluate(s => JSON.parse(sessionStorage.getItem('fulla_social_flow:' + s)!), state)
+    expect(flow).toMatchObject({ purpose: 'login', provider: 'github', redirectUri: 'http://localhost:5173/callback/github' })
   })
 })
 

@@ -6,29 +6,51 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="PostApiGithubLoginBody")
+T = TypeVar("T", bound="SocialLoginRequest")
 
 
 @_attrs_define
-class PostApiGithubLoginBody:
-    """Optional empty body (action-style operation)."""
+class SocialLoginRequest:
+    """
+    Attributes:
+        code (str):
+        state (str):
+    """
 
+    code: str
+    state: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        code = self.code
+
+        state = self.state
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
+        field_dict.update(
+            {
+                "code": code,
+                "state": state,
+            }
+        )
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        post_api_github_login_body = cls()
+        code = d.pop("code")
 
-        post_api_github_login_body.additional_properties = d
-        return post_api_github_login_body
+        state = d.pop("state")
+
+        social_login_request = cls(
+            code=code,
+            state=state,
+        )
+
+        social_login_request.additional_properties = d
+        return social_login_request
 
     @property
     def additional_keys(self) -> list[str]:

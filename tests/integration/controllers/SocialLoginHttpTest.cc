@@ -34,6 +34,8 @@
 #include <utility>
 
 using fulla::test::http::parseJsonBody;
+using fulla::test::social::sendLoginForm;
+using fulla::test::social::sendLoginJson;
 using fulla::test::http::sendPostForm;
 using fulla::test::http::serverReachable;
 using fulla::test::http::statusIs;
@@ -84,7 +86,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_FakeExchange_ReturnsTokens)
     userBody["picture"] = "https://example.test/pic.png";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/google/login", "code=test-auth-code");
+    auto resp = sendLoginForm("/api/google/login", "code=test-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -115,7 +117,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_AutoCreateDisabled_Returns403)
     userBody["email"] = "x@example.test";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/google/login", "code=test-auth-code");
+    auto resp = sendLoginForm("/api/google/login", "code=test-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k403Forbidden));
     Json::Value body;
@@ -125,16 +127,14 @@ DROGON_TEST(Integration_P0_GoogleLogin_AutoCreateDisabled_Returns403)
 }
 
 // Missing code -> 400 VALIDATION_MISSING_REQUIRED_FIELD (controller's own
-// validation, before the service is called). The controller reads the code
-// from a JSON body first, then falls back to query parameters and
-// form-urlencoded bodies; this form-encoded probe is empty of "code" in all
-// three representations, so it must 400.
+// validation, before the service is called). Only JSON and form bodies
+// are accepted; the helper obtains the browser-bound state over HTTP.
 DROGON_TEST(Integration_P1_GoogleLogin_MissingCode_Returns400)
 {
     SOCIAL_SKIP_GUARD;
 
     injectGoogleFake();  // install fake (not actually hit on this path)
-    auto resp = sendPostForm("/api/google/login", "state=xyz&other=val");
+    auto resp = sendLoginForm("/api/google/login", "other=val");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
 }
@@ -161,7 +161,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_JsonCodeBody_ReturnsTokens)
 
     Json::Value reqBody;
     reqBody["code"] = "test-auth-code";
-    auto resp = sendPostJson("/api/google/login", reqBody);
+    auto resp = sendLoginJson("/api/google/login", reqBody);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -182,7 +182,7 @@ DROGON_TEST(Integration_P1_GoogleLogin_NonStringCode_Returns400)
     injectGoogleFake();  // install fake (must not be hit on this path)
     Json::Value hostile;
     hostile["code"]["evil"] = true;
-    auto resp = sendPostJson("/api/google/login", hostile);
+    auto resp = sendLoginJson("/api/google/login", hostile);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
 }
@@ -197,7 +197,7 @@ DROGON_TEST(Integration_P1_GoogleLogin_TransportFailure_Returns502)
     auto h = injectGoogleFake();
     h.http->postFormResponses.push_back(fulla::identity::testing::transportFailure());
 
-    auto resp = sendPostForm("/api/google/login", "code=test-auth-code");
+    auto resp = sendLoginForm("/api/google/login", "code=test-auth-code");
     REQUIRE(resp != nullptr);
     // NET_CONNECTION_FAILED is NETWORK-category -> 502 (ErrorTypes.cc default).
     CHECK(statusIs(resp, drogon::k502BadGateway));
@@ -222,7 +222,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_FakeExchange_ReturnsTokens)
     userBody["nickname"] = "WX User";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/wechat/login", "code=wx-auth-code");
+    auto resp = sendLoginForm("/api/wechat/login", "code=wx-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -252,7 +252,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_JsonCodeBody_ReturnsTokens)
 
     Json::Value reqBody;
     reqBody["code"] = "wx-auth-code";
-    auto resp = sendPostJson("/api/wechat/login", reqBody);
+    auto resp = sendLoginJson("/api/wechat/login", reqBody);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -281,7 +281,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_LinkedUser_ReturnsTokens)
     userBody["openid"] = "wx-linked-1";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/wechat/login", "code=wx-auth-code");
+    auto resp = sendLoginForm("/api/wechat/login", "code=wx-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -310,7 +310,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
     userBody["email"] = "c@example.test";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/google/login", "code=test-auth-code");
+    auto resp = sendLoginForm("/api/google/login", "code=test-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -321,15 +321,14 @@ DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
 }
 
 // Missing code -> 400 (controller validation, service not called). The body
-// carries no "code" in any of the three supported representations (JSON body,
-// query, form), so it must 400.
+// carries no code in its form body, so it must return 400 before exchange.
 
 DROGON_TEST(Integration_P1_WeChatLogin_MissingCode_Returns400)
 {
     SOCIAL_SKIP_GUARD;
 
     injectWeChatFake();
-    auto resp = sendPostForm("/api/wechat/login", "state=xyz&other=val");
+    auto resp = sendLoginForm("/api/wechat/login", "other=val");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
 }
@@ -369,7 +368,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens)
     userBody["name"] = "GH Test";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -399,7 +398,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_JsonCodeBody_ReturnsTokens)
 
     Json::Value reqBody;
     reqBody["code"] = "gh-auth-code";
-    auto resp = sendPostJson("/api/github/login", reqBody);
+    auto resp = sendLoginJson("/api/github/login", reqBody);
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k200OK));
     Json::Value body;
@@ -414,7 +413,7 @@ DROGON_TEST(Integration_P1_GitHubLogin_MissingCode_Returns400)
     SOCIAL_SKIP_GUARD;
 
     injectGitHubFake();
-    auto resp = sendPostForm("/api/github/login", "state=xyz");
+    auto resp = sendLoginForm("/api/github/login", "other=val");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k400BadRequest));
 }
@@ -429,7 +428,7 @@ DROGON_TEST(Integration_P1_GitHubLogin_TransportFailure_Returns502)
     auto h = injectGitHubFake();
     h.http->postFormResponses.push_back(fulla::identity::testing::transportFailure());
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k502BadGateway));
 }
@@ -457,7 +456,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_DeletedLinkedUser_Rejected401)
     userBody["email"] = "gh@example.com";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(statusIs(resp, drogon::k401Unauthorized));
     Json::Value body;
@@ -484,7 +483,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_RepoError_Returns5xx_NoCreation)
     userBody["email"] = "gh@example.com";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() >= 500);
     Json::Value body;
@@ -517,7 +516,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_ConflictingUsername_RetriesWithoutAdoptio
     userBody["email"] = "gh@example.com";
     h.http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     REQUIRE(resp != nullptr);
     // #70: the suffixed retry succeeds — the CONFLICTING account itself is
     // still never adopted (no takeover), a NEW account is created instead.
@@ -559,7 +558,7 @@ std::optional<std::pair<std::string, std::string>> fakeGitHubLoginForTokens(
     userBody["email"] = "gh" + std::to_string(githubId) + "@example.test";
     http->getResponses.push_back(fulla::identity::testing::okJson(userBody));
 
-    auto resp = sendPostForm("/api/github/login", "code=gh-auth-code");
+    auto resp = sendLoginForm("/api/github/login", "code=gh-auth-code");
     if (!resp || resp->getStatusCode() != ::drogon::k200OK)
         return std::nullopt;
     Json::Value body;
@@ -734,4 +733,121 @@ DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_AuthenticatedEndpointsWork)
     auto unlinkResp = sendDelete("/api/me/social/links/github", tokens->first);
     REQUIRE(unlinkResp != nullptr);
     CHECK(statusIs(unlinkResp, drogon::k200OK));
+}
+
+DROGON_TEST(Integration_P0_SocialLogin_StateGuardRejectsBeforeUpstream)
+{
+    SOCIAL_SKIP_GUARD;
+    auto h = injectGitHubFake();
+    fulla::test::social::LoginBrowser browser;
+    REQUIRE(browser.begin("github"));
+    const auto body = "code=canary-code&state=" + browser.state;
+    auto response = browser.send("/api/github/login", body, "application/x-www-form-urlencoded", "");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k403Forbidden);
+    response = browser.send("/api/github/login", body, "application/x-www-form-urlencoded", "https://attacker.test");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k403Forbidden);
+    auto other = browser;
+    other.cookie = "fulla-social-binding-dev=" + std::string(64, 'b');
+    response = other.send("/api/github/login", body, "application/x-www-form-urlencoded");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    response = browser.send("/api/google/login", body, "application/x-www-form-urlencoded");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    for (const auto &badBody : {
+        body + "&%73tate=" + browser.state,
+        body + "&co%64e=other",
+        std::string("code=only-code"),
+        std::string("state=") + browser.state})
+    {
+        response = browser.send("/api/github/login", badBody, "application/x-www-form-urlencoded");
+        REQUIRE(response);
+        CHECK(response->statusCode() == drogon::k400BadRequest);
+        CHECK(response->getHeader("cache-control") == "no-store");
+    }
+    response = browser.send("/api/github/login", "{\"code\":\"a\",\"code\":\"b\",\"state\":\"" + browser.state + "\"}");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    response = browser.send("/api/github/login?code=query&state=" + browser.state, "{}");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    CHECK(h.http->postFormCalls.empty());
+    CHECK(h.http->getCalls.empty());
+    CHECK(h.accountRepo->linked.empty());
+    // None of the rejected requests consumed the legitimate transaction.
+    h.http->postFormResponses.push_back(fulla::identity::testing::transportFailure());
+    response = browser.send("/api/github/login", body, "application/x-www-form-urlencoded");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k502BadGateway);
+    CHECK(h.http->postFormCalls.size() == 1);
+    response = browser.send("/api/github/login", body, "application/x-www-form-urlencoded");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    CHECK(h.http->postFormCalls.size() == 1);
+}
+
+DROGON_TEST(Integration_P0_SocialLogin_AuthorizeFailsClosed)
+{
+    SOCIAL_SKIP_GUARD;
+    injectGoogleFake();
+    fulla::test::social::LoginBrowser browser;
+    auto response = browser.send("/api/auth/providers/google/authorize", "", "application/json", "");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k403Forbidden);
+    CHECK(response->getCookie("fulla-social-binding-dev").value().empty());
+    CHECK(response->getCookie("__Host-fulla-social-binding").value().empty());
+    response = browser.send("/api/auth/providers/unknown/authorize");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k404NotFound);
+    response = browser.send("/api/auth/providers/google/authorize");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k204NoContent);
+    CHECK(response->body().empty());
+    const auto cookie = response->getCookie("fulla-social-binding-dev");
+    CHECK(cookie.value().size() == 64);
+    CHECK(cookie.isHttpOnly());
+    CHECK(cookie.path() == "/");
+    CHECK(cookie.maxAge() == 600);
+    browser.cookie = "fulla-social-binding-dev=malformed";
+    response = browser.send("/api/auth/providers/google/authorize");
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    CHECK(response->getCookie("fulla-social-binding-dev").maxAge() == 0);
+    CHECK(response->getHeader("cache-control") == "no-store");
+}
+
+DROGON_TEST(Integration_P0_SocialLogin_ProductionCookieAndEmptyBinding)
+{
+    Json::Value config;
+    config["frontend"]["url"] = "http://localhost:5173";
+    config["cors"]["allow_origins"].append("http://localhost:5173");
+    config["external_auth"]["github"]["client_id"] = "client";
+    config["external_auth"]["github"]["client_secret"] = "secret";
+    auto store = std::make_shared<fulla::identity::testing::MemorySocialLoginStateStore>(
+      std::make_shared<fulla::common::testing::FakeClock>());
+    auto states = std::make_shared<fulla::identity::SocialLoginStateService>(
+      store, std::make_shared<fulla::common::testing::FakeCryptoProvider>(100));
+    auto guard = std::make_shared<fulla::drogon::services::SocialLoginGuard>(
+      states, config, std::vector<std::string>{"github"}, false);
+    auto request = drogon::HttpRequest::newHttpRequest();
+    request->addHeader("Origin", "http://localhost:5173");
+    drogon::HttpResponsePtr response;
+    guard->authorize(request, "github", [&](const auto &value) { response = value; });
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k204NoContent);
+    const auto cookie = response->getCookie("__Host-fulla-social-binding");
+    CHECK(cookie.isSecure());
+    CHECK(cookie.isHttpOnly());
+    CHECK(cookie.domain().empty());
+    CHECK(cookie.path() == "/");
+    CHECK(cookie.maxAge() == 600);
+    CHECK(cookie.getCookieString().find("SameSite=Lax") != std::string::npos);
+    CHECK(response->getHeader("cache-control") == "no-store");
+    request->addCookie("__Host-fulla-social-binding", "");
+    guard->authorize(request, "github", [&](const auto &value) { response = value; });
+    REQUIRE(response);
+    CHECK(response->statusCode() == drogon::k400BadRequest);
+    CHECK(response->getCookie("__Host-fulla-social-binding").maxAge() == 0);
 }

@@ -141,3 +141,26 @@ known consumers are this repo's own admin SPA and the regenerated SDKs.
 
 - in API POST /api/admin/users removed the request property `org_id`
 - in API PUT /api/admin/users/{userId} removed the request property `org_id`
+
+## 2026-11-06 · browser-bound social login security hardening (next MINOR)
+
+These three existing first-party extension endpoints intentionally require body
+code + one-time state, Origin and a browser cookie. Keeping query-only or
+optional-state compatibility would preserve login CSRF. The paired SPA and
+Python/Go/TypeScript SDKs change together. Discovery's authorize_url remains a
+string but is empty and deprecated. Operators must coordinate rollout; details
+and rollback boundaries are in docs/domains/social-login.md. No general OAuth
+endpoint or account-link state contract changes.
+
+- POST /api/github/login request body became required
+- POST /api/google/login request body became required
+- POST /api/wechat/login request body became required
+- POST /api/github/login removed the query request parameter code
+- POST /api/google/login removed the query request parameter code
+- POST /api/wechat/login removed the query request parameter code
+- POST /api/github/login added the new required request property `code`
+- POST /api/github/login added the new required request property `state`
+- POST /api/google/login added the new required request property `code`
+- POST /api/google/login added the new required request property `state`
+- POST /api/wechat/login added the new required request property `code`
+- POST /api/wechat/login added the new required request property `state`

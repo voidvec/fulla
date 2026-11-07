@@ -343,10 +343,25 @@ export type SocialLinkResult = {
     message: string;
 };
 
+export type SocialLoginRequest = {
+    code: string;
+    state: string;
+};
+
+export type SocialLoginAuthorization = {
+    authorize_url: string;
+    state: string;
+    redirect_uri: string;
+    expires_in: 600;
+};
+
 /**
- * An external login provider currently enabled on this deployment (v1.4.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+ * An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST.
  */
 export type AuthProvider = {
+    /**
+     * @deprecated
+     */
     authorize_url: string;
     provider: 'github' | 'google' | 'wechat';
 };
@@ -2395,32 +2410,76 @@ export type GetApiAuthProvidersResponses = {
 
 export type GetApiAuthProvidersResponse = GetApiAuthProvidersResponses[keyof GetApiAuthProvidersResponses];
 
-export type PostApiGithubLoginData = {
+export type PostApiAuthProvidersProviderAuthorizeData = {
     /**
-     * Optional empty body (action-style operation).
+     * Optional empty initialization body.
      */
     body?: {
         [key: string]: unknown;
     };
-    path?: never;
-    query: {
-        /**
-         * Authorization code from GitHub OAuth2 callback (required)
-         */
-        code: string;
+    path: {
+        provider: 'github' | 'google' | 'wechat';
     };
+    query?: never;
+    url: '/api/auth/providers/{provider}/authorize';
+};
+
+export type PostApiAuthProvidersProviderAuthorizeErrors = {
+    /**
+     * VALIDATION_INVALID_INPUT; malformed binding is cleared
+     */
+    400: unknown;
+    /**
+     * AUTHZ_ACCESS_DENIED; missing or disallowed Origin or cross-site request
+     */
+    403: unknown;
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND; unknown or disabled provider
+     */
+    404: unknown;
+    /**
+     * INTERNAL_ERROR; random generation or state storage unavailable
+     */
+    500: unknown;
+};
+
+export type PostApiAuthProvidersProviderAuthorizeResponses = {
+    /**
+     * One-time browser-bound authorization transaction
+     */
+    200: SocialLoginAuthorization;
+    /**
+     * Binding cookie initialized; retry once with cookies enabled
+     */
+    204: void;
+};
+
+export type PostApiAuthProvidersProviderAuthorizeResponse = PostApiAuthProvidersProviderAuthorizeResponses[keyof PostApiAuthProvidersProviderAuthorizeResponses];
+
+export type PostApiGithubLoginData = {
+    body: SocialLoginRequest;
+    path?: never;
+    query?: never;
     url: '/api/github/login';
 };
 
 export type PostApiGithubLoginErrors = {
     /**
-     * Invalid request (missing or invalid code)
+     * Missing required field or invalid, expired, mismatched or replayed transaction
      */
     400: unknown;
     /**
-     * Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+     * Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
      */
     403: unknown;
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+     */
+    404: unknown;
+    /**
+     * INTERNAL_ERROR; state storage unavailable
+     */
+    500: unknown;
     /**
      * Failed to contact GitHub API
      */
@@ -2437,31 +2496,29 @@ export type PostApiGithubLoginResponses = {
 export type PostApiGithubLoginResponse = PostApiGithubLoginResponses[keyof PostApiGithubLoginResponses];
 
 export type PostApiGoogleLoginData = {
-    /**
-     * Optional empty body (action-style operation).
-     */
-    body?: {
-        [key: string]: unknown;
-    };
+    body: SocialLoginRequest;
     path?: never;
-    query: {
-        /**
-         * Authorization code from Google OAuth2 callback (required)
-         */
-        code: string;
-    };
+    query?: never;
     url: '/api/google/login';
 };
 
 export type PostApiGoogleLoginErrors = {
     /**
-     * Invalid request (missing or invalid code)
+     * Missing required field or invalid, expired, mismatched or replayed transaction
      */
     400: unknown;
     /**
-     * Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+     * Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
      */
     403: unknown;
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+     */
+    404: unknown;
+    /**
+     * INTERNAL_ERROR; state storage unavailable
+     */
+    500: unknown;
     /**
      * Failed to contact Google API
      */
@@ -4461,31 +4518,29 @@ export type PostApiVerifyEmailResendByEmailResponses = {
 };
 
 export type PostApiWechatLoginData = {
-    /**
-     * Optional empty body (action-style operation).
-     */
-    body?: {
-        [key: string]: unknown;
-    };
+    body: SocialLoginRequest;
     path?: never;
-    query: {
-        /**
-         * Authorization code from WeChat OAuth2 callback (required)
-         */
-        code: string;
-    };
+    query?: never;
     url: '/api/wechat/login';
 };
 
 export type PostApiWechatLoginErrors = {
     /**
-     * Invalid request (missing or invalid code)
+     * Missing required field or invalid, expired, mismatched or replayed transaction
      */
     400: unknown;
     /**
-     * Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+     * Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
      */
     403: unknown;
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+     */
+    404: unknown;
+    /**
+     * INTERNAL_ERROR; state storage unavailable
+     */
+    500: unknown;
     /**
      * Failed to contact WeChat API
      */

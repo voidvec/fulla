@@ -13,6 +13,8 @@
 // -- see this .cc file's own top comment for why identity assembly needs
 // the same ordering (a real DB client, not just a constructed plugin).
 
+#include <json/json.h>
+
 namespace bootstrap
 {
 
@@ -35,6 +37,6 @@ namespace bootstrap
 // SessionController on its pre-Task-24 fallback path (see
 // SessionController.h's setIdentityAuthService()/setSessionManager()
 // comments).
-void wireIdentityServices();
+void wireIdentityServices(const Json::Value &runtimeConfig);
 
 }  // namespace bootstrap

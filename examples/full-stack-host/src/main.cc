@@ -39,6 +39,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <string>
 #include <thread>
@@ -77,7 +78,15 @@ int main()
         std::fprintf(stderr, "[FAIL] config.json not found next to executable\n");
         return 1;
     }
-    app().loadConfigFile(configPath);
+    Json::Value identityRuntimeConfig;
+    Json::CharReaderBuilder configReader;
+    std::ifstream configFile(configPath);
+    if (!Json::parseFromStream(configReader, configFile, &identityRuntimeConfig, nullptr))
+    {
+        std::fprintf(stderr, "[FAIL] unable to parse smoke configuration\n");
+        return 1;
+    }
+    app().loadConfigJson(identityRuntimeConfig);
 
     // 2. Product-level assembly, identical to apps/server/src/main.cc but
     // consumed here purely from the SDK: register every AutoCreation=false
@@ -97,7 +106,7 @@ int main()
         {
             app().registerBeginningAdvice([&]() {
                 bootstrap::wireControllerPluginDependencies();
-                bootstrap::wireIdentityServices();
+                bootstrap::wireIdentityServices(identityRuntimeConfig);
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 bool expected = false;
                 if (signaled.compare_exchange_strong(expected, true))

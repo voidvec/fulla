@@ -45,11 +45,103 @@ server-side gate with two switches under `custom_config` in `config.json` (env a
 Effective enablement = tier on AND credentials configured (a tier switch
 composes with the credential gate, never replaces it). The login page
 discovers the result at runtime via the public `GET /api/auth/providers`
-endpoint — it returns each enabled provider with a fully built
-`authorize_url` (same redirect resolution as the link flow:
-per-provider `redirect_uri` override, else `frontend.url` +
-`/callback/{provider}`) — so toggling a tier takes effect on restart with
-no frontend rebuild. Both tiers default to `true` (upgrade compatibility).
+endpoint. Each entry contains a provider name and a deprecated, empty
+`authorize_url`. Starting login requires the transaction endpoint below.
+Both tiers default to `true`. Missing credentials and `YOUR_` / `OVERRIDE_`
+placeholders disable a provider.
+
+## Browser-bound login protocol (security hardening)
+
+1. Discover enabled providers using `GET /api/auth/providers`.
+2. POST `{}` to `/api/auth/providers/{provider}/authorize` using an exact
+   configured `Origin` and a credentialed cookie jar (`withCredentials: true`
+   or fetch `credentials: 'include'`). No Bearer token is required.
+3. Without a binding cookie the server returns **204**, sets the cookie and
+   issues no state. Retry this initialization **once** with the cookie. A
+   second 204 means cookies are unavailable; stop and ask the user to enable
+   them or restart login. Never loop or navigate without a saved transaction.
+4. The successful **200** body contains `authorize_url`, `state`, `redirect_uri`
+   and `expires_in: 600`. Store a per-state sessionStorage record containing
+   `purpose: 'login'`, provider, redirect URI and creation time, then navigate
+   to the returned authorize URL. Do not build provider URLs in the browser.
+5. Before router startup, clear code/state/error from the callback URL. Validate
+   the returned state against that tab's unexpired local transaction, including
+   provider and callback origin/path. An unsolicited callback must never
+   exchange a code or fall through to the account-linking endpoint.
+6. POST `{ "code": "...", "state": "..." }` to `/api/{provider}/login` with
+   the same Origin and cookie jar. JSON and form-urlencoded bodies are accepted;
+   query parameters and duplicate code/state fields are rejected. The backend
+   validates and atomically consumes state before contacting the provider or
+   modifying accounts. Never automatically retry this POST, including after a
+   timeout or an upstream failure; begin a new transaction instead.
+
+State and binding cookies are independently generated from 32 CSPRNG bytes
+(64 lowercase hex characters). Redis stores only their SHA-256 digests, plus
+provider, upstream client ID, fixed redirect URI and purpose `login`. State
+uses `SET NX EX 600` and an atomic compare-before-delete Lua operation. A wrong
+browser or provider cannot consume a legitimate transaction. Redis outages,
+malformed records, randomness failures, expiry and replay fail closed; there is
+no stateless or production-memory fallback. Redis operations have a five-second
+completion bound; a command can still finish after timeout, so restart the flow.
+
+| Failure | HTTP / error code |
+| --- | --- |
+| Missing code/state | 400 `VALIDATION_MISSING_REQUIRED_FIELD` |
+| Invalid body/binding, expired, mismatched or replayed state | 400 `VALIDATION_INVALID_INPUT` |
+| Missing/disallowed Origin or explicit cross-site fetch | 403 `AUTHZ_ACCESS_DENIED` |
+| Unknown/disabled provider | 404 `VALIDATION_RESOURCE_NOT_FOUND` |
+| State storage or randomness unavailable | 500 `INTERNAL_ERROR` |
+
+### Deployment and callback configuration
+
+Configure exact portal origins in `custom_config.cors.allow_origins`; wildcard
+origins are not accepted for social transactions. The portal and API must be
+same-site for the Lax cookie to accompany the callback exchange. Prefer serving
+them behind one HTTPS origin. A cross-site portal/API setup is unsupported;
+`withCredentials` does not override SameSite policy.
+
+Production uses `__Host-fulla-social-binding; Secure; HttpOnly; SameSite=Lax;
+Path=/; Max-Age=600` without Domain. Issuing another state renews the same binding
+value, preserving other pending transactions. Only non-production with a
+configured HTTP loopback portal may use `fulla-social-binding-dev` without
+Secure. `FULLA_ENV=production` always selects the production cookie, including
+when loaded from .env. Do not configure insecure public portals.
+
+The callback is resolved once from `external_auth.{provider}.redirect_uri`, else
+`frontend.url` + `/callback/{provider}`. Enabled providers must have distinct
+canonical callback origin/path pairs; changing only query parameters does not
+make callbacks distinct. Production callbacks require HTTPS. Encoded, dot-segment
+and ambiguous callback paths are rejected at startup. Register exactly the same
+URI with the upstream provider; Google authorization and token exchange use the
+same resolved URI. This state defense does not claim full OAuth Security BCP,
+PKCE, issuer validation or account-policy completion.
+
+### Linking, tokens and logging
+
+Account linking keeps its own authenticated server-side state protocol. Before
+navigating from the security page, save a per-state `purpose: 'link'` context.
+The shared callback restores the authenticated session before calling the link
+endpoint. Login state never implies linking. Upgrades invalidate old in-flight
+callbacks without local context; users restart the flow. Access tokens remain
+in memory; neither state handling nor linking adds persistent access tokens.
+
+Issuance, exchange and callback documents use `Cache-Control: no-store`.
+The bundled user and gateway Nginx access logs omit query strings and Referer;
+callback locations suppress error-log request dumps, and `Referrer-Policy:
+no-referrer` is retained. Operators must independently remove callback queries,
+request bodies, Cookie/Set-Cookie and tokens from external ingress, CDN, APM,
+tracing and browser analytics. Do not enable raw request capture to debug login.
+
+### Upgrade / rollback (next MINOR)
+
+This deliberately tightens an existing endpoint for security. Deploy matching
+backend and frontend together, purge old SPA caches, configure exact CORS origins,
+Redis and HTTPS, then verify 204 → 200 → one successful exchange, replay rejection
+and linking. Generated SDK consumers must retain cookies and send Origin, code
+and state; discovery's empty deprecated field is not a navigation URL. A failed
+rollout may disable social providers or roll forward with the paired build.
+Do not restore stateless login. No database migration, tag or release is required
+by this change.
 
 ## GitHub (fully wired, mainline)
 

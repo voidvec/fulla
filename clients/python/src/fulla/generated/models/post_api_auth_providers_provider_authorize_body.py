@@ -6,12 +6,12 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="PostApiGoogleLoginBody")
+T = TypeVar("T", bound="PostApiAuthProvidersProviderAuthorizeBody")
 
 
 @_attrs_define
-class PostApiGoogleLoginBody:
-    """Optional empty body (action-style operation)."""
+class PostApiAuthProvidersProviderAuthorizeBody:
+    """Optional empty initialization body."""
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -25,10 +25,10 @@ class PostApiGoogleLoginBody:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        post_api_google_login_body = cls()
+        post_api_auth_providers_provider_authorize_body = cls()
 
-        post_api_google_login_body.additional_properties = d
-        return post_api_google_login_body
+        post_api_auth_providers_provider_authorize_body.additional_properties = d
+        return post_api_auth_providers_provider_authorize_body
 
     @property
     def additional_keys(self) -> list[str]:
