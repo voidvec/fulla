@@ -224,7 +224,7 @@ def build_report() -> str:
     L.append("# 竞品同环境性能对比（COMPARISON）")
     L.append("")
     L.append(f"> 生成时间：{now} · 生成器：`benchmarks/reporting/gen-comparison.py`（无手填数字，全部溯源到入仓 JSON）")
-    L.append("> 设计与方法论：`docs/productization-evolution/in-progress/competitor-benchmark-design.md`")
+    L.append("> 设计与方法论：`docs/benchmark/competitor-benchmark-design.md`")
     L.append("")
     L.append("## 环境与版本")
     L.append("")

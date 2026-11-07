@@ -34,7 +34,7 @@ This document is the single source of truth for external commitments; wherever S
 ## 5. Dependency Declarations
 
 - Feature-surface dependencies are **explicitly gated by the root `conanfile.py`'s `with_webauthn` / `with_identity` / `with_social` options**, not smuggled in as transitive surprises.
-  NOTE: the CBOR decoding dependency (`libcbor`) required by real WebAuthn (FIDO2) used to be declared here, but the current WebAuthn controller is a non-cryptographic stub (it consumes no CBOR), so `libcbor` has been removed as a dead dependency; it must be re-added once real WebAuthn cryptography lands (see the corresponding comment in `conanfile.py`).
+  NOTE: WebAuthn performs real W3C Level 2 cryptographic verification since v1.1.0 (#142 — `libs/identity/src/webauthn/WebAuthnCrypto.cc`), and its CBOR decoding dependency (`libcbor`, backing the typed read-only `CborReader` in `libs/identity/src/webauthn/`) is declared explicitly in `conanfile.py`.
 - Disabling an option (e.g. `-o with_webauthn=False`) maps through to the CMake-side `WITH_*` variables and prunes the corresponding compiled surface, so consumers can shrink their dependency footprint accordingly.
 
 ## 6. Plugin Registration and Configuration Contract (Host Integration)

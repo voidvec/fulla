@@ -20,7 +20,7 @@ Domains docs:
 - [Custom Claims (Claims Mapping)](https://fulla.dev/docs/domains/claims-mapping): Since **v1.6.0** (P1-3, #280) fulla can publish **per-user custom claims** into
 - [Multi-Tenancy (Organizations)](https://fulla.dev/docs/domains/multi-tenancy): fulla's multi-tenancy today is an **organizational layer**: organizations
 - [OpenID Connect (OIDC) Integration Guide](https://fulla.dev/docs/domains/oidc-guide): This guide describes how to integrate this OAuth2 service into your application as an OIDC Provider.
-- [RBAC Access Control System (Role-Based Access Control)](https://fulla.dev/docs/domains/rbac-guide): This document details the design and usage of the system's role-based access control (RBAC).
+- [RBAC Access Control (Role-Based Access Control)](https://fulla.dev/docs/domains/rbac-guide): fulla's access control is a **three-layer model** enforced by **three gates**
 - [Session Management](https://fulla.dev/docs/domains/session-management): fulla has **two different lifetimes that people often conflate**: the
 - [Social Login Guide](https://fulla.dev/docs/domains/social-login): Backend social login is implemented with a "provider adapter" pattern. Since #70 all three providers — GitHub, Google, WeChat — run the SAME closed loop: upstr…
 - [Token Lifecycle](https://fulla.dev/docs/domains/token-lifecycle): How tokens are born, live, and die in fulla: the three token types, what is

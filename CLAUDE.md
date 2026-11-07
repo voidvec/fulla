@@ -5,9 +5,11 @@ project instructions rather than per-assistant copies.
 
 - **Read [AGENTS.md](AGENTS.md) first** — the cross-tool entry point. It
   indexes the authoritative rule files and module guides.
-- **`.claude/rules/`** auto-loads path-scoped hard constraints (DB operations,
-  ORM model generation, data access, dev workflow). When a rule there applies
-  to files you are touching, follow it.
+- **`.claude/rules/`** auto-loads path-scoped hard constraints:
+  `db-operations`, `data-access`, `orm-models`, `dev-workflow`, `sync-points`,
+  `frontend-contract`, `async-cpp-gotchas` (one-line summaries in the
+  AGENTS.md rule index). When a rule there applies to files you are touching,
+  follow it.
 - Human-facing docs cover the rest: [CONTRIBUTING.md](CONTRIBUTING.md)
   (build/test, conventions, CI gates), [docs/](docs/) (architecture, testing,
   operations, SDK contracts), [README.md](README.md) (quick start).

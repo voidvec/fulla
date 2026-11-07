@@ -15,33 +15,59 @@
 
 ## 2. 模块布局
 
-为保证真正的可插拔，项目重构为「核心插件库 + 演示服务器」两层：
+后端拆分为 **8 个 CMake 包**，依赖方向受强制约束——领域层（`common` /
+`oauth2` / `identity`）永不依赖 Drogon（由 CI 中的 `tools/arch-guard`
+校验）。箭头读作「依赖于」：
+
+```mermaid
+graph TD
+    server["fulla-server<br/>(apps/server)"] --> drogon
+    drogon["fulla::drogon<br/>plugin · controllers · filters · services"] --> oauth2
+    drogon --> identity
+    drogon --> memory
+    drogon --> redis
+    drogon --> postgres
+    memory["fulla::storage::memory"] --> oauth2
+    redis["fulla::storage::redis"] --> oauth2
+    postgres["fulla::storage::postgres<br/>(ORM models)"] --> identity
+    oauth2["fulla::oauth2<br/>OAuth2/OIDC 引擎"] --> common
+    identity["fulla::identity<br/>auth · MFA · WebAuthn · RBAC"] --> common
+    common["fulla::common<br/>shared kernel · ports"]
+```
+
+一条请求如何流经这些包：
 
 ```text
 HTTP 请求
   |
-  |-- fulla-server（apps/server —— 演示服务器二进制）
-  |   `-- AuthService：本地应用认证（libs/drogon/src/AuthService.cc）
+  |-- fulla-server（apps/server —— 授权服务器二进制；纯装配层：
+  |   bootstrap、配置、迁移、OpenAPI）
+  |   `-- AuthService：本地应用登录/注册（libs/drogon/src/AuthService.cc）
   |
-  `-- fulla::drogon（libs/drogon —— 独立 SDK 包，target fulla::drogon）
-      |-- 插件核心
-      |   `-- OAuth2Plugin：初始化与生命周期管理
+  `-- fulla::drogon（libs/drogon —— Drogon 适配/SDK 包，target fulla::drogon）
+      |-- OAuth2Plugin：初始化与生命周期管理
       |
       |-- 协议控制器与过滤器（自动注册）
       |   |-- AuthorizationEndpointController / TokenEndpointController / DiscoveryController：
       |   |     处理 /oauth2/authorize、/oauth2/token、/.well-known/*、/userinfo
-      |   `-- 过滤器：AuthorizationFilter、OAuth2AuthFilter
+      |   `-- 过滤器：AuthorizationFilter（admin API：scope 门 + RBAC
+      |         角色/权限门）、OAuth2AuthFilter（用户路由）
       |
-      |-- 服务层（核心业务逻辑，libs/oauth2）
-      |   |-- TokenService：PKCE、授权码/令牌的生成与交换
-      |   |-- ClientService：客户端凭据与 redirect URI 校验
-      |   `-- IdentityService：RBAC、subject 映射与用户同意
+      |-- 服务层（面向 HTTP 的业务编排）
+      |   |-- TokenService（libs/oauth2）：PKCE、授权码/令牌的生成与交换
+      |   |-- ClientService（libs/oauth2）：客户端凭据与 redirect URI 校验
+      |   `-- IdentityService（libs/drogon/src/services/IdentityService.cc，
+      |         命名空间 fulla::identity）：RBAC/scope 分层、subject 映射、
+      |         用户同意——因其编排 HTTP 流程而位于适配层；identity 领域
+      |         逻辑及其仓储接口（IUserRepository / IRoleRepository /
+      |         ISubjectMappingRepository）位于 libs/identity
       |
-      `-- 存储层（按仓储定义端口，按后端装配 Bundle）
-          |-- I{Client,Grant,Token,Consent,UserInfo}Repository：存储端口（libs/oauth2）
+      `-- 存储层（按聚合定义仓储端口，按后端装配 Bundle）
+          |-- I{Client,Grant,Token,Consent}Repository：存储端口（libs/oauth2）
           |-- MemoryRepositoryBundle：进程内测试存储（libs/storage-memory）
-          |-- PostgresRepositoryBundle：持久化存储（libs/storage-postgres）
-          `-- RedisRepositoryBundle：Redis 存储（libs/storage-redis）
+          |-- PostgresRepositoryBundle：持久化存储（libs/storage-postgres；
+          |     身份侧持久化在 PostgresIdentityRepository）
+          `-- RedisRepositoryBundle：Redis 存储（libs/storage-redis）——已弃用
 ```
 
 ## 3. 授权码流程
@@ -56,7 +82,7 @@ sequenceDiagram
     SPA->>Core: GET /oauth2/authorize
     Core->>Store: validate client
     Core-->>SPA: 302 → App /login
-    SPA->>App: POST /api/login
+    SPA->>App: POST /oauth2/login
     App->>Store: AuthService::validateUser
     App-->>SPA: 302 /callback?code=...
     SPA->>Core: POST /oauth2/token
@@ -78,7 +104,7 @@ sequenceDiagram
 | redis | `RedisRepositoryBundle` | **已弃用**——启动时打 ERROR 日志，并以 `unsupported_grant_type` 拒绝 `refresh_token` 授权；不要使用。Redis 现在仅作为 Postgres 前置的可选缓存层（见[配置指南 §3](../operate/configuration-guide.md)） |
 | postgres | `PostgresRepositoryBundle` | 生产持久化存储 |
 
-> 每个 `*RepositoryBundle` 同时装配同一后端下的 client / grant / token / consent / userinfo 五个仓储实现（见各 `libs/storage-*/include` 下的头文件）。
+> 每个 `*RepositoryBundle` 装配同一后端下的四个 OAuth2 仓储实现——client / grant / token / consent（见各 `libs/storage-*/include` 下的头文件）。身份侧持久化（用户、角色、subject 映射）在 Bundle 之外，位于 `PostgresIdentityRepository`（libs/storage-postgres），经 `libs/identity` 的仓储接口消费。
 
 ## 5. 前后端集成
 
@@ -87,20 +113,23 @@ sequenceDiagram
 
 第三方社交登录时，前端接收外部授权码后提交给后端端点：
 
+- `/api/github/login`
 - `/api/google/login`
 - `/api/wechat/login`
+
+启用的 provider 集合可经 `GET /api/auth/providers` 发现（登录页据此渲染 provider 按钮）。
 
 与 provider 的令牌交换在服务端完成，provider 密钥不暴露给浏览器。
 
 ## 6. 部署形态
 
-Docker Compose 默认启动：
+Docker Compose（`deploy/docker/docker-compose.yml`）默认启动：
 
 - `fulla-frontend`：端口 `8080`
 - `fulla-admin`（管理后台）：端口 `8081`
 - `fulla-backend`：端口 `5555`
-- PostgreSQL：宿主端口 `5433`
-- Redis：宿主端口 `6380`
+- PostgreSQL：宿主端口 `5433`（绑定 `127.0.0.1`）
+- Redis：宿主端口 `6380`（绑定 `127.0.0.1`）
 - Prometheus：端口 `9090`
 
 生产环境建议在反向代理终结 TLS，再将 API 请求代理到 Drogon 后端

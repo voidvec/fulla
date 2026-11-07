@@ -2,7 +2,7 @@
 
 > 生成时间：2026-08-23 17:28 UTC · 生成器：`benchmarks/reporting/gen-comparison.py`（无手填数字，全部溯源到入仓 JSON）
 > **名称溯源**：全部测量于 2026-08 以项目旧名 **authforge** 进行，2026-08-26 更名为 fulla；本报告与结果 JSON 中的产品标签已统一改为 fulla，测量数据与文件名中的日期/commit 溯源标识未改动。
-> 设计与方法论：`docs/productization-evolution/in-progress/competitor-benchmark-design.md`
+> 设计与方法论：`docs/benchmark/competitor-benchmark-design.md`
 
 ## 环境与版本
 

@@ -22,11 +22,11 @@
 
 热点模块的嵌套指令文件，聚焦该模块的职责边界、关键文件路由和开发约束：
 
-| 模块 | 文件 | 职责 | 高频变更 Top 1 |
+| 模块 | 文件 | 职责 | 高频变更热点（次数略，见 git log） |
 |---|---|---|---|
-| Drogon 绑定层 | [`libs/drogon/AGENTS.md`](libs/drogon/AGENTS.md) | Adapter 层 Drogon 适配包（Controllers、Filters、Plugin、Adapters） | `src/controllers/SessionController.cc`（31 次变更） |
-| Postgres 存储层 | [`libs/storage-postgres/AGENTS.md`](libs/storage-postgres/AGENTS.md) | Adapter 层 Postgres Repository 实现（ORM 模型 + Repository 接口） | `src/PostgresIdentityRepository.cc`（18 次变更） |
-| 服务器装配层 | [`apps/server/AGENTS.md`](apps/server/AGENTS.md) | 纯装配层（Bootstrap、配置、迁移、OpenAPI） | `openapi.yaml`（33 次变更） |
+| Drogon 绑定层 | [`libs/drogon/AGENTS.md`](libs/drogon/AGENTS.md) | Adapter 层 Drogon 适配包（Controllers、Filters、Plugin、Adapters） | `src/controllers/SessionController.cc` |
+| Postgres 存储层 | [`libs/storage-postgres/AGENTS.md`](libs/storage-postgres/AGENTS.md) | Adapter 层 Postgres Repository 实现（ORM 模型 + Repository 接口） | `src/PostgresIdentityRepository.cc` |
+| 服务器装配层 | [`apps/server/AGENTS.md`](apps/server/AGENTS.md) | 纯装配层（Bootstrap、配置、迁移、OpenAPI） | `openapi.yaml` |
 
 ## 异步编程与 DB 访问
 
@@ -44,7 +44,7 @@
 不同层级约定不同，不要混淆：
 
 - **Domain 服务层**（`libs/oauth2`、`libs/identity` 的 service）：**禁止** `[this]` 和 `[&var]`，必须 `auto self = shared_from_this()` 后捕获 `self`。见 db-operations.md。
-- **Controller 层**（`libs/drogon/.../controllers`）：`[this]` **允许且普遍**。Drogon `HttpController<T,false>` 是进程级单例，由 Drogon 用裸指针管理，存活整个进程；`shared_from_this()` 不适用（不继承 `enable_shared_from_this`）。范例注释见 `TokenEndpointController.cc:1306-1311`。
+- **Controller 层**（`libs/drogon/.../controllers`）：`[this]` **允许且普遍**。Drogon `HttpController<T,false>` 是进程级单例，由 Drogon 用裸指针管理，存活整个进程；`shared_from_this()` 不适用（不继承 `enable_shared_from_this`）。范例注释见 `TokenEndpointController.cc:2165-2170`（以 `P1 #4` 开头的注释块）。
 
 > 旧版 `TECH_SPECS.md` 曾把 `[this]` 列为全局禁令，与 controller 层实践冲突，已在本次精简中移除该条。
 

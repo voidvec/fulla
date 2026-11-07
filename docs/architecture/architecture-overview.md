@@ -15,33 +15,60 @@ This page summarizes the overall architecture of fulla from four perspectives: t
 
 ## 2. Module Layout
 
-To keep the system genuinely pluggable, the project is structured as two tiers: a core plugin library plus a demo server:
+The backend is split into **8 CMake packages** with an enforced dependency direction — the Domain layer (`common` / `oauth2` / `identity`) never depends on Drogon (verified by `tools/arch-guard` in CI). Arrows read "depends on":
+
+```mermaid
+graph TD
+    server["fulla-server<br/>(apps/server)"] --> drogon
+    drogon["fulla::drogon<br/>plugin · controllers · filters · services"] --> oauth2
+    drogon --> identity
+    drogon --> memory
+    drogon --> redis
+    drogon --> postgres
+    memory["fulla::storage::memory"] --> oauth2
+    redis["fulla::storage::redis"] --> oauth2
+    postgres["fulla::storage::postgres<br/>(ORM models)"] --> identity
+    oauth2["fulla::oauth2<br/>OAuth2/OIDC engine"] --> common
+    identity["fulla::identity<br/>auth · MFA · WebAuthn · RBAC"] --> common
+    common["fulla::common<br/>shared kernel · ports"]
+```
+
+How a request flows through those packages:
 
 ```text
-HTTP 请求
+HTTP request
   |
-  |-- fulla-server（apps/server —— 演示服务器二进制）
-  |   `-- AuthService：本地应用认证（libs/drogon/src/AuthService.cc）
+  |-- fulla-server (apps/server -- authorization-server binary; pure
+  |   assembly: bootstrap, config, migrations, OpenAPI)
+  |   `-- AuthService: local application login/registration
+  |       (libs/drogon/src/AuthService.cc)
   |
-  `-- fulla::drogon（libs/drogon —— 独立 SDK 包，target fulla::drogon）
-      |-- 插件核心
-      |   `-- OAuth2Plugin：初始化与生命周期管理
+  `-- fulla::drogon (libs/drogon -- Drogon adapter/SDK package, target fulla::drogon)
+      |-- OAuth2Plugin: initialization & lifecycle management
       |
-      |-- 协议控制器与过滤器（自动注册）
-      |   |-- AuthorizationEndpointController / TokenEndpointController / DiscoveryController：
-      |   |     处理 /oauth2/authorize、/oauth2/token、/.well-known/*、/userinfo
-      |   `-- 过滤器：AuthorizationFilter、OAuth2AuthFilter
+      |-- Protocol controllers & filters (auto-registered)
+      |   |-- AuthorizationEndpointController / TokenEndpointController / DiscoveryController:
+      |   |     /oauth2/authorize, /oauth2/token, /.well-known/*, /userinfo
+      |   `-- Filters: AuthorizationFilter (admin API: scope gate + RBAC
+      |         role/permission gate), OAuth2AuthFilter (user routes)
       |
-      |-- 服务层（核心业务逻辑，libs/oauth2）
-      |   |-- TokenService：PKCE、授权码/令牌的生成与交换
-      |   |-- ClientService：客户端凭据与 redirect URI 校验
-      |   `-- IdentityService：RBAC、subject 映射与用户同意
+      |-- Services (HTTP-facing business orchestration)
+      |   |-- TokenService (libs/oauth2): PKCE, authorization-code/token
+      |   |     generation & exchange
+      |   |-- ClientService (libs/oauth2): client credentials & redirect URI checks
+      |   `-- IdentityService (libs/drogon/src/services/IdentityService.cc,
+      |         namespace fulla::identity): RBAC/scope tiering, subject
+      |         mapping, user consent — lives in the adapter layer because it
+      |         orchestrates HTTP flows; the identity domain logic and its
+      |         repository interfaces (IUserRepository / IRoleRepository /
+      |         ISubjectMappingRepository) live in libs/identity
       |
-      `-- 存储层（按仓储定义端口，按后端装配 Bundle）
-          |-- I{Client,Grant,Token,Consent,UserInfo}Repository：存储端口（libs/oauth2）
-          |-- MemoryRepositoryBundle：进程内测试存储（libs/storage-memory）
-          |-- PostgresRepositoryBundle：持久化存储（libs/storage-postgres）
-          `-- RedisRepositoryBundle：Redis 存储（libs/storage-redis）
+      `-- Storage (repository ports per aggregate, one bundle per backend)
+          |-- I{Client,Grant,Token,Consent}Repository: storage ports (libs/oauth2)
+          |-- MemoryRepositoryBundle: in-process test storage (libs/storage-memory)
+          |-- PostgresRepositoryBundle: persistent storage (libs/storage-postgres;
+          |     identity-side persistence in PostgresIdentityRepository)
+          `-- RedisRepositoryBundle: Redis storage (libs/storage-redis) — deprecated
 ```
 
 ## 3. Authorization-Code Flow
@@ -56,7 +83,7 @@ sequenceDiagram
     SPA->>Core: GET /oauth2/authorize
     Core->>Store: validate client
     Core-->>SPA: 302 → App /login
-    SPA->>App: POST /api/login
+    SPA->>App: POST /oauth2/login
     App->>Store: AuthService::validateUser
     App-->>SPA: 302 /callback?code=...
     SPA->>Core: POST /oauth2/token
@@ -78,7 +105,7 @@ sequenceDiagram
 | redis | `RedisRepositoryBundle` | **Deprecated** — logs an ERROR at startup and rejects the `refresh_token` grant with `unsupported_grant_type`; do not use. Redis now serves only as an optional cache layer in front of Postgres (see [Configuration Guide §3](../operate/configuration-guide.md)) |
 | postgres | `PostgresRepositoryBundle` | Production persistent storage |
 
-> Each `*RepositoryBundle` assembles all five repository implementations for its backend — client / grant / token / consent / userinfo (see the headers under each `libs/storage-*/include`).
+> Each `*RepositoryBundle` assembles the four OAuth2 repository implementations for its backend — client / grant / token / consent (see the headers under each `libs/storage-*/include`). Identity-side persistence (users, roles, subject mappings) lives outside the bundles in `PostgresIdentityRepository` (libs/storage-postgres), consumed through the `libs/identity` repository interfaces.
 
 ## 5. Frontend–Backend Integration
 
@@ -89,20 +116,23 @@ code for tokens, and then calls `/oauth2/userinfo`.
 For third-party social login, the frontend receives the external authorization code
 and submits it to backend endpoints:
 
+- `/api/github/login`
 - `/api/google/login`
 - `/api/wechat/login`
+
+The enabled set is discoverable via `GET /api/auth/providers` (the login page renders its provider buttons from it).
 
 Token exchange with the provider happens on the server side; provider secrets are never exposed to the browser.
 
 ## 6. Deployment Topology
 
-Docker Compose starts the following by default:
+Docker Compose (`deploy/docker/docker-compose.yml`) starts the following by default:
 
 - `fulla-frontend`: port `8080`
 - `fulla-admin` (admin console): port `8081`
 - `fulla-backend`: port `5555`
-- PostgreSQL: host port `5433`
-- Redis: host port `6380`
+- PostgreSQL: host port `5433` (bound to `127.0.0.1`)
+- Redis: host port `6380` (bound to `127.0.0.1`)
 - Prometheus: port `9090`
 
 For production, terminate TLS at a reverse proxy and proxy API requests to the Drogon

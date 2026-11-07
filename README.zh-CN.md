@@ -25,7 +25,7 @@ Fulla 是以 C++17 构建的**高性能开源身份与访问管理（IAM）核�
 | 领域 | 能力 | 深入文档 |
 |------|------|----------|
 | **认证** | 登录/注册、邮箱验证、密码重置、TOTP MFA、WebAuthn (FIDO2)、Google/微信社交登录、渐进式账户锁定 | [安全架构](https://fulla.dev/zh-CN/docs/architecture/security-architecture) |
-| **授权（OAuth2/OIDC）** | 授权码 + PKCE、client-credentials、刷新轮换、设备流、动态客户端注册、用户同意、内省、吊销、OIDC discovery/JWKS/UserInfo、含前/后向通道登出的 end-session | [架构总览](https://fulla.dev/zh-CN/docs/architecture/architecture-overview) |
+| **授权（OAuth2/OIDC）** | 授权码 + PKCE、client-credentials、刷新轮换、设备流、动态客户端注册、用户同意、内省、吊销、OIDC discovery/JWKS/UserInfo、含后向通道登出的 end-session | [架构总览](https://fulla.dev/zh-CN/docs/architecture/architecture-overview) |
 | **访问控制** | RBAC（内置 admin/user + 自定义角色）、细粒度 scope、DB 驱动的资源 scope 注册表、三重校验（客户端限制 + 角色 + 同意） | [RBAC 指南](https://fulla.dev/zh-CN/docs/domains/rbac-guide) |
 | **令牌生命周期** | 签发、TTL 约束保留、基于家族的刷新轮换、按令牌/客户端/用户吊销、延迟双删的缓存旁路失效 | [令牌生命周期](https://fulla.dev/zh-CN/docs/domains/token-lifecycle) |
 | **多租户** | 组织、组织级客户端与用户、组织授权 + 授权申请工作流、负责人继任、`org_ctx` claims、租户感知的管理 | [多租户](https://fulla.dev/zh-CN/docs/domains/multi-tenancy) |
@@ -279,7 +279,7 @@ target_link_libraries(my-engine PRIVATE fulla::oauth2 fulla::storage::memory)
 
 > v1.x 对公共头（`include/fulla/**`）承诺**源码级 SemVer**（CI 中 api-diff 门禁强制），不承诺二进制 ABI。第三方依赖请用仓库的 `conanfile.py` + `conan.lock` 解析。详见 [SDK 集成指南](https://fulla.dev/zh-CN/docs/sdk/sdk-integration-guide) · [SDK 运行时契约](https://fulla.dev/zh-CN/docs/sdk/sdk-runtime-contract)；参考消费方：[`examples/full-stack-host`](examples/full-stack-host)、[`examples/third-party-host`](examples/third-party-host)（均由 CI 持续验证）。
 
-### 路径 D — 客户端 SDK（Python / Go）
+### 路径 D — 客户端 SDK（Python / Go / TypeScript）
 
 非 C++ 服务通过 HTTP API 使用 Fulla：类型化生成客户端 + 手写 auth 层（token 生命周期绝不模板化生成）：
 
@@ -295,7 +295,7 @@ client = m2m_client("http://localhost:5555", "backend-svc", "…", scopes=["toke
 client, _ := af.NewM2MClient(ctx, "http://localhost:5555", "backend-svc", "…", []string{"tokens:read"})
 ```
 
-两者均从单一源 OpenAPI spec（`apps/server/openapi.yaml`）生成，CI 有新鲜度漂移门。见 [`clients/python`](clients/python) 与 [`clients/go`](clients/go)。包管理器发布（PyPI / Go module proxy）随首个携带它们的 tag 版本启动。
+TypeScript/JavaScript 客户端为 npm 包 `fulla-oauth2`（PKCE 授权码流程、刷新轮换、M2M，外加生成的类型化端点；零运行时依赖）。三者均从单一源 OpenAPI spec（`apps/server/openapi.yaml`）生成，CI 有新鲜度漂移门。见 [`clients/python`](clients/python)、[`clients/go`](clients/go) 与 [`clients/ts`](clients/ts)；可运行的 Web 应用集成示例（登录 → 回调 → 会话 → 受保护 API → 登出）见 [`examples/nextjs-demo`](examples/nextjs-demo)。包管理器发布（PyPI / Go module proxy / npm）随首个携带它们的 tag 版本启动。
 
 ### 默认账号
 

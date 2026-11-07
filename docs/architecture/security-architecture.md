@@ -146,9 +146,13 @@ responses are returned via the error envelope `VALIDATION_RATE_LIMITED` (429).
 Secret Hygiene CI gate); all `.env*` files ignored; frontend production builds contain no
 embedded credentials.
 
-**Key rotation**: JWKS currently uses a single static `kid` (F-029 is a follow-up operations
-task; the rotation procedure is not automated); rotating DB/SMTP/social credentials = change
-env vars + rolling restart.
+**Key rotation**: signing keys rotate through the keystore directory
+(`oidc.signing_keystore_dir`, #110 — see [Configuration Guide §9](../operate/configuration-guide.md)):
+`<kid>.pem` files plus an `active_kid` marker; the JWKS endpoint publishes every loaded key
+and verification routes on the token's `kid`, so outstanding tokens survive a switch. Rotation
+is a documented manual three-restart procedure (publish → switch → retire), not automated;
+`GET /api/admin/oidc/keys` reports the live key set. Rotating DB/SMTP/social credentials =
+change env vars + rolling restart.
 
 **Incident response**: suspected leak → immediately rotate the affected credentials → if
 historical commits are involved, rewrite them with `git filter-repo` (not the deprecated

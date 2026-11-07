@@ -47,12 +47,23 @@ MAJOR.MINOR.PATCH[-prerelease]
 | Component | Version source | Sync validation |
 |---|---|---|
 | C++ libraries + server | `MAJOR/MINOR/PATCH` in [`cmake/Version.cmake`](https://github.com/voidvec/fulla/blob/master/cmake/Version.cmake) | ✅ `tools/api-diff/api_diff.py` cross-checks `Version.cmake` / `CMakeLists.txt project(VERSION)` / `conanfile.py version` |
+| Frontend SPAs | `frontends/admin/package.json` + `frontends/user/package.json` | Six-point sync list (see below) |
+| OpenAPI spec | `apps/server/openapi.yaml` `info.version` | ✅ OpenAPI governance gate checks it equals `Version.cmake` |
+| Python client | `clients/python/pyproject.toml` `version` | ✅ `regen_clients` drift gate checks it equals `Version.cmake` |
+| TypeScript client | `clients/ts/package.json` `version` | Joins the `pyproject` == cmake linkage since v1.6.0 |
 | Docker images | Read from `Version.cmake` by `release.yml` | GHCR tag = `<version>` |
+| Chinese doc mirrors | `website/i18n/zh-CN/**` pages that embed concrete versions (e.g. `sdk-integration-guide` carries the tarball name / `CMAKE_PREFIX_PATH` / GHCR tag examples) | Same-PR dual-write duty; **explicitly on the carrier list** — the v1.5.0 and v1.6.0 bumps both missed these pages |
 | DB schema | The numbering of `apps/server/migrations/V0NN_*.sql` | **Not coupled to the product version** (see §6) |
 
 **The first step of any release is editing `cmake/Version.cmake`**; version drift
-across the three locations is intercepted by `api-diff` in the `version-check`
-job of `release.yml`.
+is intercepted by `api-diff` in the `version-check` job of `release.yml`.
+
+> The authoritative **six-point version sync list** (the minimum set that fails
+> the tag gate) plus the ~15 additional version carriers lives in the maintainer
+> **release-engineering skill** at
+> [`.claude/skills/release-engineering/SKILL.md`](https://github.com/voidvec/fulla/blob/master/.claude/skills/release-engineering/SKILL.md)
+> — this table summarizes it; the skill is the checklist to walk when cutting a
+> release.
 
 ---
 
@@ -324,11 +335,9 @@ git checkout -b release/2.0 v2.0.0 && git push origin release/2.0
 
 | # | Item | Problem it solves |
 |---|---|---|
-| **T1** | Write this document (✅ this file) | No written bump rules before |
-| **T2** | Execute the first official release since v1.0.0 (v1.0.1 or v1.1.0) | 840 commits piled up after v1.0.0, unreleased |
 | **T3** | Extend the `release.yml` tag trigger pattern + `latest` skip logic, enabling the pre-release channel | Prerelease tags currently do not trigger a release |
 | **T4** | Add a `latest` warning cross-reference to the prod deployment doc (`docker-deployment.md`) | The `latest` default poses a rolling-update risk in production |
 | **T5** | Define the release branch naming convention and add a pointer in the README (create the branch when first actually needed) | The patch release process is not yet instantiated |
 
-T1 is this file; T2 is the immediate priority; T3–T5 can land when their
-scenarios first occur.
+T1 (this document) and T2 (the first release after v1.0.0, shipped as v1.0.1)
+are done and no longer listed; T3–T5 can land when their scenarios first occur.

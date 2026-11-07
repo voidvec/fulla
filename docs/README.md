@@ -16,6 +16,8 @@ translation mirrors it at `website/i18n/zh-CN/` and is served at
 
 ## Integrate
 
+**Guides**: [Build an app (OIDC sign-in)](guides/build-an-app.md) · [Automation (no human in the loop)](guides/automation.md)
+
 **C++ SDK (embedded)**: [Integration Guide](sdk/sdk-integration-guide.md) · [Runtime Contract](sdk/sdk-runtime-contract.md)
 
 **HTTP API (any language)**: [API Reference](domains/api-reference.md) (authoritative contract:
@@ -40,13 +42,15 @@ translation mirrors it at `website/i18n/zh-CN/` and is served at
 
 [Testing Guide](contribute/testing-guide.md) · [CI/CD](contribute/ci-cd-guide.md) ·
 [Versioning & Release](contribute/versioning-and-release.md) · [Documentation Governance](documentation-governance.md) ·
+[Frontend i18n](contribute/frontend-i18n.md) ·
 Frontend tests: [Admin cases](contribute/admin-test-cases.md) · [User cases](contribute/user-frontend-test-cases.md) ·
 [E2E methodology](contribute/admin-e2e-testing-guide.md)
 
 ## Decision record (ADR)
 
-[docs/adr/](adr/) — 13 current architecture decision records (SDK layering,
-ErrorCatalog, opaque tokens, coroutine exclusion, …) plus three historical
+[docs/adr/](adr/) — 14 current architecture decision records (SDK layering,
+ErrorCatalog, opaque tokens, coroutine exclusion, frontend i18n, RBAC
+permission enforcement, …) plus three historical
 archives: the [OAuth/OIDC compliance audit](adr/oauth-oidc-compliance-audit.md)
 (2026-08-07 baseline, all 31 findings fixed), the
 [rename impact analysis](adr/rename-impact-fulla.md), and the

@@ -7,8 +7,7 @@ authorization server.
 - **API surface:** generated from the server's single-source OpenAPI spec (`apps/server/openapi.yaml`)
   with [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) v2.8.0 — 78 operations, typed
   request/response models
-- **Auth layer:** handwritten (`auth/` package) — token lifecycle is too sensitive to template (see the
-  [design doc](../../docs/productization-evolution/in-progress/client-sdk-facility-design.md))
+- **Auth layer:** handwritten (`auth/` package) — token lifecycle is too sensitive to template
 
 ```bash
 go get github.com/voidvec/fulla/clients/go

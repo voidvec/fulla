@@ -42,11 +42,21 @@ MAJOR.MINOR.PATCH[-prerelease]
 | 组件 | 版本来源 | 同步校验 |
 |---|---|---|
 | C++ 库 + server | [`cmake/Version.cmake`](https://github.com/voidvec/fulla/blob/master/cmake/Version.cmake) 的 `MAJOR/MINOR/PATCH` | ✅ `tools/api-diff/api_diff.py` 交叉校验 `Version.cmake` / `CMakeLists.txt project(VERSION)` / `conanfile.py version` |
+| 前端 SPA | `frontends/admin/package.json` + `frontends/user/package.json` | 六点同步清单（见下） |
+| OpenAPI 规格 | `apps/server/openapi.yaml` 的 `info.version` | ✅ OpenAPI 治理门校验 == `Version.cmake` |
+| Python 客户端 | `clients/python/pyproject.toml` 的 `version` | ✅ `regen_clients` 漂移门校验 == `Version.cmake` |
+| TypeScript 客户端 | `clients/ts/package.json` 的 `version` | v1.6.0 起并入 pyproject == cmake 版本联动 |
 | Docker 镜像 | 由 `release.yml` 从 `Version.cmake` 读取 | GHCR tag = `<version>` |
+| 中文文档镜像 | `website/i18n/zh-CN/**` 中内嵌具体版本号的页面（如 `sdk-integration-guide` 携带 tarball 名 / `CMAKE_PREFIX_PATH` / GHCR tag 示例） | 同 PR 双写义务；**明确列入版本载体清单**——v1.5.0 与 v1.6.0 两次升版都漏了这些页面 |
 | DB schema | `apps/server/migrations/V0NN_*.sql` 编号 | **不耦合产品版本**（见 §6） |
 
-**任何版本发布的第一步都是改 `cmake/Version.cmake`**；三处版本号漂移会被
+**任何版本发布的第一步都是改 `cmake/Version.cmake`**；版本号漂移会被
 `api-diff` 在 `release.yml` 的 `version-check` job 拦截。
+
+> 权威的**六点版本同步清单**（tag 门会挂的最小集）与约 15 处额外版本载体，
+> 见维护者 **release-engineering skill**：
+> [`.claude/skills/release-engineering/SKILL.md`](https://github.com/voidvec/fulla/blob/master/.claude/skills/release-engineering/SKILL.md)
+> ——本表只是摘要；发版时以该 skill 为走查清单。
 
 ---
 
@@ -290,10 +300,8 @@ git checkout -b release/2.0 v2.0.0 && git push origin release/2.0
 
 | # | 项 | 解决的问题 |
 |---|---|---|
-| **T1** | 写本文档（✅ 本文件） | 此前无成文 bump 规则 |
-| **T2** | 执行 v1.0.0 以来的首次正式发版（v1.0.1 或 v1.1.0） | 840 个 commit 堆积在 v1.0.0 后未释放 |
 | **T3** | 扩展 `release.yml` tag 触发模式 + `latest` 跳过逻辑，启用 pre-release 通道 | 当前 prerelease tag 不触发发版 |
 | **T4** | 在 prod 部署文档（`docker-deployment.md`）加 `latest` 警告交叉引用 | 默认 `latest` 对生产有滚动风险 |
 | **T5** | 定义 release branch 命名约定并在 README 加指针（首次实际需要时再立分支） | patch release 流程未实例化 |
 
-T1 是本文件；T2 是当务之急；T3–T5 可在对应场景首次出现时落地。
+T1（本文件）与 T2（v1.0.0 后的首次发版）已完成（首个后续版本为 v1.0.1）；T3–T5 可在对应场景首次出现时落地。

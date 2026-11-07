@@ -16,14 +16,15 @@ do yet, and how to use it without over-assuming isolation.
 > (see [RBAC Guide](rbac-guide.md)); today an org-scoped principal is not
 > automatically fenced off from other orgs' data.
 
-## 1. Model (V017 + V034/V036–V038)
+## 1. Model (V017 + V034/V036–V038 + V042)
 
-The core `organizations` table is V017; the organization layer now spans four
+The core `organizations` table is V017; the organization layer now spans five
 more migrations — `organization_members` + `organization_invitations` (V034),
 `organization_consents` (V036; the same migration adds
 `organizations.require_mfa`, org columns on codes/tokens, `audit_logs.org_id`,
 and seeds the `org` scope), `organization_succession_nominations` (V037),
-and `organization_consent_requests` (V038):
+`organization_consent_requests` (V038), and the `organizations.deleted_at`
+soft-delete marker (V042):
 
 ```sql
 organizations (
@@ -59,6 +60,10 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 | `GET /api/admin/organizations` | List organizations (id, slug, name, branding) |
 | `POST /api/admin/organizations` | Create (slug: 3–50 lowercase chars, unique) |
 | `GET /api/admin/organizations/{slug}` | Fetch one |
+| `PATCH /api/admin/organizations/{slug}` | Update name / `logo_uri` / `primary_color` (v1.6.0, P1-4 #281; slug is immutable; brand fields use the P1-1 validation rules; audited `org_updated`) |
+| `DELETE /api/admin/organizations/{slug}` | Soft delete with a closed cascade (v1.6.0, P1-4 #281; V042 `deleted_at` + `#del-<id>` slug placeholder): pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their tokens introspect inactive), memberships detached — one transaction; audited `org_deleted` |
+| `GET /api/admin/organizations/{slug}/members` | Read-only member roster (user_id, username, role, joined_at) (v1.6.0, #281) |
+| `DELETE /api/admin/organizations/{slug}/members/{userId}` | Remove a membership — removing the last owner is rejected with 409 (transfer ownership first); audited `org_member_removed` (v1.6.0, #281) |
 | `POST /api/admin/organizations/{slug}/transfer-ownership` | Reassign the owner seat to another live user (rescues the soft-deleted-owner deadlock; the old owner is demoted to admin) |
 
 Additionally:
@@ -124,9 +129,7 @@ Be explicit with stakeholders — these are **not** implemented:
 2. **No org-scoped filtering/isolation** on user or client listings; an
    admin sees across orgs.
 3. **No org-scoped roles**: roles are global (RBAC), not per-org.
-4. **No update/delete** endpoints for organizations (create/list/get +
-   ownership transfer only; updates go through the database or future API).
-5. **Per-org rate limits and API keys don't exist yet** — but creation
+4. **Per-org rate limits and API keys don't exist yet** — but creation
    *quotas* do: self-service org creation is quota'd per user
    (`max_orgs_per_user`), org-owned client counts are quota'd
    (`max_org_apps`), and self-service *application* creation is rate limited
@@ -148,6 +151,7 @@ in [`apps/server/migrations/`](https://github.com/voidvec/fulla/tree/master/apps
 | `V036` | `organization_consents` + `organizations.require_mfa` + org columns on the authorization chain + dropped the dead `oauth2_clients.org_id` |
 | `V037` | `organization_succession_nominations` |
 | `V038` | `organization_consent_requests` |
+| `V042` | `organizations.deleted_at` soft-delete marker + live-slug partial index (backs the admin DELETE cascade) |
 
 `users.org_id` is a legacy read-only column slated for v2.0 physical removal.
 Storage-layer details: [Data Persistence](../architecture/data-persistence.md).

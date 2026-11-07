@@ -13,11 +13,10 @@ Notable options beyond plain dependency pinning:
     corresponding milestone (M2.5/M5) lands the conditional compilation.
   - with_webauthn additionally pulls in the extra crypto dependencies
     FIDO2 needs (declared explicitly rather than left as a transitive
-    surprise). NOTE: a real WebAuthn implementation will require CBOR
-    decoding for attestation/assertion objects, but the current controller
-    is a non-cryptographic stub (see WebAuthnService.h:44-56) and consumes
-    no CBOR; the libcbor dependency was removed as dead (zero #include).
-    It should be re-added when real WebAuthn crypto lands.
+    surprise). NOTE: WebAuthn performs real W3C Level 2 signature
+    verification since v1.1.0 (#142 — libs/identity/src/webauthn/
+    WebAuthnCrypto.cc); libcbor backs the typed read-only CborReader
+    used for attestation/assertion objects (see requirements()).
 """
 
 from conan import ConanFile

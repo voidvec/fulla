@@ -2,8 +2,8 @@
 
 > **测试日期**: 2026-08-12（本文件 = 自测首版快照）
 > **Git SHA**: 1702246
-> **承重背景**: 验证 [调研报告 §3.1](../../docs/productization-evolution/productization-research.md) 的性能声明
-> **完整设计**: [benchmark-facility-design.md](../../docs/productization-evolution/in-progress/benchmark-facility-design.md)
+> **承重背景**: 验证调研报告 §3.1 的性能声明（该报告未入库）
+> **方法论**: [competitor-benchmark-design.md](../../docs/benchmark/competitor-benchmark-design.md)（§2 以本文件为自测基线）；运行方式见 [benchmarks/README.md](../README.md)
 >
 > ⚠️ **2026-08-23 更新——本文件数字已过时（偏保守）**：后续性能优化计划（Redis 读缓存 wave-2 P0–P4、PG17 + 实例调优、bench 配档池 64/64 + cache-on + LTO、TTL=30 会话）大幅提升了实测值，且竞品同环境对比已完成。**当前权威数字见 [`benchmarks/competitors/results/COMPARISON.md`](../competitors/results/COMPARISON.md)**（2026-08-23 TTL=30 档，同环境四产品对比，Fulla **五场景全部领先**）：S1 discovery 87.5k（Keycloak 41.1k）、S2 client_credentials **14.4k**（本文件 8.9k → +62%）、S3 introspect **22.5k**（17.1k）、S5 refresh **5.5k**（2.0k）、S6 userinfo **49.3k**（16.7k → +195%）。本文件保留作为优化前基线与承重假设首验记录。
 
@@ -244,8 +244,7 @@ S3/S6 高并发 +0~9%；S5 持平（reseed 串行瓶颈）。GC 极值 655ms 档
 
 ### V026 token 冗余索引清理（introspect 覆盖索引方案，子代理评审后落地 C 案）
 
-评审（[`introspect-covering-index-plan.md`](../../docs/productization-evolution/in-progress/introspect-covering-index-plan.md)
-v2）修正了原案三处：① introspect 查询是 `SELECT *`（Mapper::findOne），INCLUDE 5 列的窄覆盖
+评审（`introspect-covering-index-plan.md` v2，未入库）修正了原案三处：① introspect 查询是 `SELECT *`（Mapper::findOne），INCLUDE 5 列的窄覆盖
 索引无法触发 index-only scan——原案单独不成立；② **SchemaManager 把全部迁移包在单事务里执行
 （SchemaManager.cc #46），`CONCURRENTLY` DDL 必败**——V026 改用普通 `DROP INDEX IF EXISTS`；
 ③ 全行 INCLUDE（B 案）降级 backlog：2000 行 bench 小表上收益≈噪声（表常驻 shared_buffers），
