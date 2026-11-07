@@ -157,7 +157,15 @@ jobs:
             timeout_minutes: 60
             log_artifact_name: windows-test-logs
           - platform: macos
-            runs_on: macos-14
+            # macos-15 since 2026-11-07: GitHub retired the macos-14 arm64
+            # pool — every PR-event macOS job since 2026-11-05 was cancelled
+            # at runner allocation with the annotation "The configuration
+            # 'macos-14-arm64-us-default' is not supported" (zero steps
+            # executed; master-push runs on 11-03 still got runners — the
+            # pool drained in between). macos-15 keeps the arm64 +
+            # Xcode/clang toolchain family; if its newer clang grows warnings
+            # under FULLA_WERROR this leg will surface them here first.
+            runs_on: macos-15
             cmake_preset: macos-arm64
             preset_dir: build/macos-arm64
             conan_extra_settings: "-s arch=armv8"
