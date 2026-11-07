@@ -60,17 +60,23 @@ async function walkMarkdown(dir, prefix = '') {
   return files;
 }
 
-function stripFrontmatter(text) {
+function splitFrontmatter(text) {
   // CRLF-tolerant: repo files mix LF/CRLF, and a missed strip leaks
   // `sidebar_position: N` frontmatter into titles/summaries.
   const m = text.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
-  return m ? text.slice(m[0].length) : text;
+  return m ? { fm: m[0], body: text.slice(m[0].length) } : { fm: '', body: text };
 }
 
 function parseDoc(rel, raw) {
-  const text = stripFrontmatter(raw);
+  const { fm, body } = splitFrontmatter(raw);
+  const text = body;
   const lines = text.split('\n');
-  const h1 = (lines.find((l) => l.startsWith('# ')) || `# ${rel}`).slice(2).trim();
+  // Title precedence: frontmatter `title:` (the 17 ADRs carry their real
+  // title ONLY there — no H1 — so the filename fallback used to index them
+  // as bare file names), then the first H1, then the file path.
+  const fmTitle = (fm.match(/^title:\s*(.+)$/m) || [])[1];
+  const h1 = (lines.find((l) => l.startsWith('# ')) || '').slice(2).trim();
+  const title = (fmTitle && fmTitle.trim()) || h1 || rel;
   let summary = '';
   let inCode = false;
   for (const line of lines.slice(1)) {
@@ -83,7 +89,13 @@ function parseDoc(rel, raw) {
     break;
   }
   if (summary.length > MAX_SUMMARY) summary = summary.slice(0, MAX_SUMMARY - 1) + '…';
-  return { rel, url: `${siteBase}/docs/${rel.replace(/\.md$/, '')}`, title: h1, summary, text };
+  // Chinese-language archives live in the (English-canonical) docs tree —
+  // e.g. the compliance-audit and rename-impact reports under adr/. They
+  // stay listed in llms.txt (marked) but must not enter llms-full.txt,
+  // which advertises itself as the English concatenation.
+  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  const zhArchive = cjk > 500 && cjk / Math.max(text.length, 1) > 0.05;
+  return { rel, url: `${siteBase}/docs/${rel.replace(/\.md$/, '')}`, title, summary, text, zhArchive };
 }
 
 async function main() {
@@ -112,22 +124,25 @@ async function main() {
   for (const bucket of [...buckets, reference]) {
     if (bucket.docs.length === 0) continue;
     index += `${first ? 'Essential' : bucket.title} docs:\n`;
-    for (const doc of bucket.docs) index += `- [${doc.title}](${doc.url}): ${doc.summary}\n`;
+    for (const doc of bucket.docs)
+      index += `- [${doc.title}${doc.zhArchive ? ' [zh archive]' : ''}](${doc.url}): ${doc.summary}\n`;
     index += '\n';
     first = false;
   }
   index += `Full documentation (all pages concatenated): ${siteBase}/llms-full.txt\n`;
   await writeFile(path.join(outDir, 'llms.txt'), index, 'utf8');
 
-  // ---- llms-full.txt (concatenation, capped) ----
-  let full = `# fulla — full documentation\n\n> All English documentation pages concatenated for LLM consumption. Source of truth: https://fulla.dev/docs\n\n`;
+  // ---- llms-full.txt (English concatenation, capped) ----
+  let full = `# fulla — full documentation\n\n> All English documentation pages concatenated for LLM consumption (Chinese-language archive reports are listed in llms.txt but excluded here). Source of truth: https://fulla.dev/docs\n\n`;
   let bytes = Buffer.byteLength(full, 'utf8');
+  const dropped = [];
   for (const bucket of [...buckets, reference]) {
     for (const doc of bucket.docs) {
+      if (doc.zhArchive) continue; // indexed with a [zh archive] marker, not concatenated
       const section = `\n\n---\n\n# ${doc.title}\n\nSource: ${doc.url}\n\n${doc.text.trim()}\n`;
       const size = Buffer.byteLength(section, 'utf8');
       if (bytes + size > MAX_FULL_BYTES) {
-        console.warn(`llms-full.txt capped at ${MAX_FULL_BYTES} bytes; dropping ${doc.rel} and the rest of its category.`);
+        dropped.push(doc.rel);
         continue; // keep scanning: smaller later sections may still fit
       }
       full += section;
@@ -136,7 +151,14 @@ async function main() {
   }
   await writeFile(path.join(outDir, 'llms-full.txt'), full, 'utf8');
 
-  console.log(`llms.txt: ${docs.length} docs indexed; llms-full.txt: ${(bytes / 1024).toFixed(0)} KiB.`);
+  // The cap must be loud: a silently truncated "full documentation" file is
+  // worse than a failed CI — the freshness gate would happily ship it.
+  if (dropped.length > 0) {
+    console.error(`llms-full.txt exceeded ${MAX_FULL_BYTES} bytes and DROPPED: ${dropped.join(', ')}. Raise the cap or trim the offending docs.`);
+    process.exitCode = 1;
+  }
+  const zhCount = docs.filter((d) => d.zhArchive).length;
+  console.log(`llms.txt: ${docs.length} docs indexed (${zhCount} zh archives marked); llms-full.txt: ${(bytes / 1024).toFixed(0)} KiB.`);
 }
 
 main().catch((err) => {

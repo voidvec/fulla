@@ -142,7 +142,7 @@ Gate: yes, all three jobs. Local equivalents are listed in the workflow header c
 **Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json` (the workflow file itself only on PR).
 
 - **`asan-ubsan`** (gate, 60 min) — GCC Debug build via the `linux-asan-ubsan` preset (UBSan with `-fno-sanitize-recover` behavior via `halt_on_error=1`, ASan with leak detection), full ctest (900 s per test) against real Postgres 17 + Redis 7 containers, so integration suites are covered. Logs uploaded on failure. Triage policy: real defects are fixed in the same PR; third-party/system-call false positives get a documented suppression file under `tools/sanitizers/`.
-- **`tsan-nightly`** (TSan, 90 min) — `if: schedule || dispatch`; TSan cannot compose with ASan/UBSan, hence a separate job running the **full** suite under the `linux-release-tsan` preset. Note: despite the name, **no `schedule:` cron is configured in the file today** — this job only actually runs via `workflow_dispatch`.
+- **`tsan-nightly`** (TSan, 90 min) — `if: schedule || dispatch`; TSan cannot compose with ASan/UBSan, hence a separate job running the **full** suite under the `linux-release-tsan` preset. Runs nightly via `schedule: 0 3 * * *` (the cron was added 2026-11-07 — until then the job was dispatch-only despite its name).
 
 ### 3.9 `coverage.yml` — Coverage
 

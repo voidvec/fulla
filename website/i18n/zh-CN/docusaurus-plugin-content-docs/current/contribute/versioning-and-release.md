@@ -11,7 +11,7 @@ Fulla 的版本号方案、bump 判定规则、发布节奏、预发布与补丁
 > 相关文档：
 > - [SDK Runtime Contract](../sdk/sdk-runtime-contract.md) §2 声明了 ABI / 源码级
 >   SemVer 承诺与弃用流程，本文是其版本治理侧的展开。
-> - [CI/CD Guide](../contribute/ci-cd-guide) 描述 release 流水线在整体 CI 中的位置。
+> - [CI/CD Guide](ci-cd-guide.md) 描述 release 流水线在整体 CI 中的位置。
 
 ---
 

@@ -201,7 +201,7 @@ On every push to `master` or PR, GitHub Actions CI automatically:
 3. Builds the project
 4. Runs `ctest`
 
-See the [CI/CD Guide](../contribute/ci-cd-guide) for details.
+See the [CI/CD Guide](ci-cd-guide.md) for details.
 
 ---
 

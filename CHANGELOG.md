@@ -23,7 +23,7 @@ that caught a login-CSP bug breaking every browser RP login), and
 RFC 7591 registration surfaced end to end. The pre-release
 five-scenario benchmark gate ran same-machine against v1.5.0, found two
 hot-path regressions and fixed them in-release (userinfo/introspect at
-97-112% of v1.5.0). Four migrations (V041-V044, additive).
+97-112% of v1.5.0). Five migrations (V040–V044, additive).
 
 ### ⚠️ Breaking
 
@@ -32,6 +32,12 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
   dual-emission (kept for one release as pre-announced in 1.5.0) is gone.
   Relying parties reading `username` from userinfo must switch to
   `preferred_username`.
+- **`auth.allow_pkce_plain` is removed** (the one-release transition hatch
+  introduced in v1.5.0 for `code_challenge_method=plain`): the authorize
+  endpoint now rejects plain PKCE unconditionally — the config key no
+  longer exists, and a leftover entry in a shipped config is inert.
+  Deployments whose PUBLIC clients still rely on plain PKCE must migrate
+  to S256 (RFC 7636); the rejection error says exactly that.
 
 ### Fixed
 
@@ -65,6 +71,45 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
 
 ### Added
 
+- **Client/organization branding across the authorization screens**
+  (P1-1, #279): applications and orgs get brand fields — `logo_uri` on
+  clients and applications (V041, https-only with the loopback exemption,
+  no userinfo/fragment, ≤512 — deliberately not the redirect-URI
+  validator) and `logo_uri`/`primary_color` (`^#[0-9a-fA-F]{3,6}$`) on
+  orgs, accepted on admin client create/update, portal application
+  create/update and both org-create paths. `GET /oauth2/authorize-context`
+  additionally returns the client logo and the owning org's brand block
+  `{org_name, logo_uri?, primary_color?}` (admin-seeded clients keep
+  `org:null`); the consent context gains the client display block, org
+  banner fields, and server-side localized scope descriptions
+  (`oauth2_scopes.description_zh`, V041 backfills the 16 seeded scopes; a
+  zh* locale picks zh with en fallback) — every failure degrades to the
+  pre-P1-1 shape, never an error. The consent page renders logos only via
+  `<img src>` (SVG inert in img context, referrerpolicy=no-referrer,
+  letter-avatar fallback); the user and admin SPAs gain an nginx-layer
+  CSP (neither had one). The same package removes the
+  `auth.allow_pkce_plain` hatch — see Breaking.
+- **DB-backed, localized, admin-editable email templates** (P1-2, #278):
+  the three previously hardcoded plain-text emails (verification /
+  password reset / org invitation) move to an `email_templates` table
+  (V040, seeded 3 keys × en/zh-CN with both text and HTML, idempotent).
+  Rendering is `{{var}}` with mandatory HTML-escaping of substituted
+  values; resolution falls back DB (key,locale) → DB (key,en) →
+  compile-time built-in; SMTP delivers text+HTML as
+  `multipart/alternative` (empty HTML degrades to the legacy single-part
+  message). Admin API (admin-gated): `GET /api/admin/email-templates`,
+  `GET/PUT /api/admin/email-templates/{key}/{locale}`, and
+  `POST /api/admin/email-templates/{key}/{locale}/test-send` — test-send
+  recipients are whitelisted (the admin's own address or
+  `email.test_recipients`) under a rolling-24h per-admin quota counted
+  from `email_test_sent` audit rows. A save-time content policy rejects
+  script/iframe/form/object/embed/base tags, `javascript:`/`data:`/
+  `vbscript:` schemes, and outbound http(s) links outside
+  `email.allowed_link_domains`; verification/reset link domains derive
+  only from `config.frontend.url`, so those emails carry no org branding
+  regardless of configuration. New error codes 3017-3020; audited as
+  `email_template_updated` / `email_test_sent`; admin SPA page
+  (list/edit/test-send) with en/zh i18n.
 - Custom attributes + claims mapping (P1-3, #280): `users.custom_attributes`
   (self-service `GET/PUT /api/me/profile/custom-attributes`, depth ≤ 2,
   ≤ 8 KiB, strict key grammar) and the `claim_mappings` table with admin CRUD
@@ -73,6 +118,27 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
   Mapped claims publish on id_token (code + refresh paths, re-evaluated at
   rotation) and userinfo, gated on the mapping's trigger scope;
   `claims_supported` advertises enabled mapping claims.
+- **Organization management completion** (P1-4, #281): admin
+  `PATCH /api/admin/organizations/{slug}` (name/logo_uri/primary_color,
+  slug immutable, P1-1 brand validators reused; audited `org_updated`)
+  and `DELETE /api/admin/organizations/{slug}` — soft delete (V042
+  `organizations.deleted_at` + a partial live-slug index) with a closed
+  cascade in one advisory-locked transaction: the slug is tombstoned to
+  `slug#del-<id>` and both create paths reject re-registering the name
+  (409 — same-name impersonation guard, audit rows still point at the old
+  id), pending invitations and succession nominations are voided, org
+  consents revoked, owned clients suspended (their new client-credentials
+  auth answers `invalid_client`), memberships detached; audited
+  `org_deleted`. `GET .../{slug}/members` (roster, users:read) and
+  `DELETE .../{slug}/members/{userId}` (users:write, last-owner
+  protected — transfer ownership first; audited `org_member_removed`)
+  complete member administration. Introspection overlays the
+  client-owner row so tokens of suspended (org-deleted or
+  open-platform-moderated) clients introspect `active:false` (residual
+  window bounded by the access-token TTL), and every organizations read
+  path filters `deleted_at` — `org_ctx` disappears at the next refresh.
+  The admin console gains the org detail page (edit, roster, ownership
+  transfer, delete behind a cascade-explaining danger zone).
 - TypeScript/JavaScript SDK `fulla-oauth2` (clients/ts, P1-5 #282): a
   generated typed surface from the single OpenAPI spec (pinned
   `@hey-api/openapi-ts` 0.99.0; the emitted fetch client is self-contained —
@@ -97,6 +163,22 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
   Playwright smoke joins interop.yml as the FOURTH driver: unlike the three
   json-mode RP libraries it drives a real browser through the whole chain
   (cookies, redirects, the real login form).
+- **Audit log CSV export + partition retention** (P1-6, #283):
+  `GET /api/admin/logs/export` (admin role, `audit:read`) accepts the
+  list endpoint's filters (action/outcome/actor_id) plus a MANDATORY time
+  window (`from`/`to`, epoch seconds; an explicit `all=true` is the only
+  waiver, else 400 `AUDIT_EXPORT_WINDOW_REQUIRED`); output is row-capped
+  by `audit.export_max_rows` (default 500k; the per-request `limit` can
+  only lower it) with a count-first 400 `AUDIT_EXPORT_TOO_LARGE` carrying
+  a narrowing hint (unbounded-export DoS guard). CSV cells are
+  formula-injection hardened per OWASP — a leading `= + - @` tab or CR
+  gets an apostrophe prefix before RFC 4180 quoting (`user_agent`/`ip`/
+  `details` are fully user-controlled) — and every export writes an
+  `audit_exported` audit row. Retention: `audit.retention_months`
+  (0/unset = keep forever) makes the cleanup cycle drop monthly audit
+  partitions whose whole month precedes the cutoff (the real V025
+  `audit_logs_pYYYY_MM` naming, re-validated before DROP; the DEFAULT
+  partition is never a candidate).
 - **Dynamic client registration documented + surfaced in the admin console**
   (P1-7, #284): `POST /oauth2/register` (RFC 7591, admin-gated) existed but
   was invisible to integrators. build-an-app.md (EN + zh-CN mirror + llms)
@@ -114,6 +196,27 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
   the PUBLIC lock, the full register→secret-once→list-appearance chain
   (with request-body contract assertions) and the client-side redirect-URI
   guard.
+- **Permission-based RBAC enforcement across all three gates** (P1-8,
+  #285, implements ADR-0014): a role's permissions — V043 seeds the
+  catalog with the nine V023 resource-scope names + `admin`, retires the
+  four legacy V005 names in place, and grants the admin role the full
+  set — are enforced end to end, so delegated administration (a helpdesk
+  role holding only `users:read`, per the shipped config example) works:
+  token issuance rejects any admin-class scope outside the user's
+  permission union (the 2-step portal login tiers scopes through the same
+  engine — it previously handed a delegated console unfiltered
+  admin-class scopes), the admin-role requirement check resolves
+  permission-based via the shared RolePermissionResolver, and
+  `rbac_rules` entries accept an object form `{"permissions": [...]}`
+  matched most-specific-first (the `/api/admin/.*` catch-all and the
+  default-deny baseline are untouched).
+  `GET/PUT /api/admin/roles/{roleId}/permissions` (full-replace; unknown
+  names fail the whole replace; audited `role_permissions_updated`;
+  resolver cache invalidated on commit) manages the sets, with a
+  permission multi-select on the admin Roles page. A login-flow bug
+  found en route is fixed on both paths: the login leg passed `public_sub`
+  where the subject resolver needs the numeric id, silently dropping the
+  admin scope.
 
 ## [1.5.0] - 2026-10-15
 
@@ -699,6 +802,14 @@ logs, and WeChat login.
 ---
 
 [1.0.1]: https://github.com/voidvec/fulla/compare/v1.0.0...v1.0.1
-[Unreleased]: https://github.com/voidvec/fulla/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/voidvec/fulla/compare/v1.6.0...HEAD
 [1.1.0]: https://github.com/voidvec/fulla/compare/v1.0.1...v1.1.0
+[1.1.1]: https://github.com/voidvec/fulla/compare/v1.1.0...v1.1.1
+[1.2.0]: https://github.com/voidvec/fulla/compare/v1.1.1...v1.2.0
+[1.3.0]: https://github.com/voidvec/fulla/compare/v1.2.0...v1.3.0
+[1.3.1]: https://github.com/voidvec/fulla/compare/v1.3.0...v1.3.1
+[1.3.2]: https://github.com/voidvec/fulla/compare/v1.3.1...v1.3.2
+[1.4.0]: https://github.com/voidvec/fulla/compare/v1.3.2...v1.4.0
+[1.5.0]: https://github.com/voidvec/fulla/compare/v1.4.0...v1.5.0
+[1.6.0]: https://github.com/voidvec/fulla/compare/v1.5.0...v1.6.0
 [1.0.0]: https://github.com/voidvec/fulla/releases/tag/v1.0.0

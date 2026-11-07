@@ -6,8 +6,8 @@ This document describes the system's security threat model and the corresponding
 
 | Threat | Description | Defense | Related docs |
 |----------|------|----------|----------|
-| **Replay Attack** | An attacker intercepts an auth code and attempts to redeem it before or after the legitimate client. | **Atomic Consume** + **One-Time Use Enforcement**. | [Data Consistency](data-persistence) |
-| **Credential Leakage** | A database breach leaks client secrets. | **SHA256 Salted Hash**. The database stores only hashes, never plaintext. | [Data Persistence](data-persistence) |
+| **Replay Attack** | An attacker intercepts an auth code and attempts to redeem it before or after the legitimate client. | **Atomic Consume** + **One-Time Use Enforcement**. | [Data Consistency](data-persistence.md) |
+| **Credential Leakage** | A database breach leaks client secrets. | **SHA256 Salted Hash**. The database stores only hashes, never plaintext. | [Data Persistence](data-persistence.md) |
 | **Token Theft** | An access token is intercepted. | **Short-lived Token** (1 hour) + **Refresh Token Rotation**. | This document |
 | **CSRF** | An attacker tricks a user into an unintended authorization. | Mandatory validation of the **state** parameter (recommended for clients to implement). | [API Reference](../domains/api-reference.md) |
 

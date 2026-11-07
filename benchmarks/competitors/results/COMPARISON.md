@@ -1,6 +1,8 @@
 # 竞品同环境性能对比（COMPARISON）
 
-> 生成时间：2026-08-23 17:28 UTC · 生成器：`benchmarks/reporting/gen-comparison.py`（无手填数字，全部溯源到入仓 JSON）
+> 生成时间：2026-11-07 03:24 UTC · 生成器：`benchmarks/reporting/gen-comparison.py`（无手填数字，全部溯源到入仓 JSON）
+> 数据批次：`20260823-06bfdaa2`（四方同场次；`--batch` 可显式指定）
+> 较新的 Fulla 单方批次（20261027-3d458c08）未纳入本表——同场次对比口径（设计 §5.1），四产品表仅使用四方同批数据。
 > **名称溯源**：全部测量于 2026-08 以项目旧名 **authforge** 进行，2026-08-26 更名为 fulla；本报告与结果 JSON 中的产品标签已统一改为 fulla，测量数据与文件名中的日期/commit 溯源标识未改动。
 > 设计与方法论：`docs/benchmark/competitor-benchmark-design.md`
 
@@ -95,7 +97,7 @@ c=32 固定，30×10s 串行段；载波场景与偏离见附录。尖峰定义�
 | Ory Hydra | s6-userinfo | 30 | 24.5ms | **24.1ms** | 1830.0ms | 74.65x | 10/30 (33%) |
 | Zitadel | s6-userinfo | 30 | 18.9ms | **18.1ms** | 1850.0ms | 97.99x | 11/30 (37%) |
 
-> **Cleaned P99** = 去除环境噪声尖峰段（P99 > 5x 中位数）后的中位 P99。尖峰段占比 30-37%，全部由 WSL2 宿主 I/O 调度停顿引起（见下方根因分析）。Cleaned 口径下各产品的真实尾部延迟差异可分辨：Fulla 3.0ms < Keycloak 4.6ms < Ory 24.1ms < Zitadel 18.1ms。
+> **Cleaned P99** = 去除环境噪声尖峰段（P99 > 5x 中位数）后的中位 P99（生成器计算，非手填）。尖峰段全部由 WSL2 宿主 I/O 调度停顿引起（见下方根因分析）。Cleaned 口径下各产品的真实尾部延迟差异可分辨。
 
 逐段 P99（ms）：
 
@@ -114,7 +116,7 @@ c=32 固定，30×10s 串行段；载波场景与偏离见附录。尖峰定义�
 >
 > **尖峰特征**：~30s 周期（Keycloak/Ory/Zitadel 精确 3 段=30s，Fulla 均值 32s）；P99 上限收敛至 1750-1850ms（virtio-blk 队列超时特征值）。
 >
-> **Cleaned 口径可比较**：去除环境噪声后，Fulla Cleaned P99 3.0ms 最优（vs Keycloak 4.6ms / Zitadel 18.1ms / Ory 24.1ms）。`run-gc-jitter.sh` 已增加 `--discard-spikes 5.0` 选项自动过滤尖峰段并输出 cleaned 统计。
+> **Cleaned 口径可比较**：去除环境噪声后，Fulla Cleaned P99 3.0ms 最优（vs Keycloak 4.6ms / Zitadel 18.1ms / Ory Hydra 24.1ms）。`run-gc-jitter.sh` 已增加 `--discard-spikes 5.0` 选项自动过滤尖峰段并输出 cleaned 统计。
 >
 > **缓解建议**：(1) `.wslconfig` 增加 `autoMemoryReclaim=disabled` 和 `sparseVhd=true`；(2) 在原生 Linux 环境重跑以获得无噪声基准；(3) 引用本表数据时优先使用 Cleaned P99 列。
 

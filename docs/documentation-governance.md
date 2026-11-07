@@ -175,6 +175,13 @@ docs/ (English) and website/i18n/zh-CN/.../current/ (Chinese), mirrored:
 └── adr/            # ADR-0001..0014 + three historical archives (Chinese body, bilingual note)
 ```
 
+ADR file naming: `ADR-NNNN[-topic].md` — the number is mandatory and
+zero-padded; a short topic suffix after the number is allowed and encouraged
+when several ADRs share a theme (e.g. `ADR-0014-rbac-permission-enforcement.md`,
+which has carried a public URL since v1.5.0 — renaming would break it).
+Historical archives keep descriptive names (`oauth-oidc-compliance-audit.md` &c.).
+
+
 **Layer 2: in-repo non-docs assets (tracked, not site content)** — referenced
 by absolute link, never copied:
 
