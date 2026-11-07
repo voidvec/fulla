@@ -22,10 +22,6 @@ Push/PR to master (and workflow_dispatch)
         │           Playwright e2e, and the frontend Docker image build smoke
         │           (#160, path-filtered to frontends/** + deploy/docker/**)
         │
-        ├── openapi-governance (openapi-governance.yml, PR-triggered) —
-        │     oasdiff breaking-change gate (base vs PR openapi.yaml;
-        │     exemption list tools/openapi-governance/oasdiff-breaking-ignore.md)
-        │
         ├── MAIN gate
         │     └── build-test (_build-test.yml × {linux, windows, macos} matrix)
         │           ├── install system dependencies / Conan
@@ -38,6 +34,8 @@ Push/PR to master (and workflow_dispatch)
         └── RELEASE gate
               └── sdk-smoke (_sdk-smoke.yml) — full-stack find_package smoke test
 ```
+
+> `ci.yml` is only the **per-PR entry point**. `.github/workflows/` holds **13 workflow files** in total; the rest run on their own triggers (path-filtered PR gates, schedules, tags, or manual dispatch). Section 3 covers all of them.
 
 ---
 
@@ -63,7 +61,141 @@ concurrency:
 
 ---
 
-## 3. Frontend Gate (`_frontend.yml`)
+## 3. Workflow Inventory (all 13 files under `.github/workflows/`)
+
+Three of the 13 files are **reusable workflows** (`_build-test.yml`, `_frontend.yml`, `_sdk-smoke.yml`, all `on: workflow_call`) — they run only when `ci.yml` calls them. The other ten are independent top-level workflows with their own triggers and path filters.
+
+Classification used below:
+
+- **Gate** — no `continue-on-error`; a failure turns the run red, and for `pull_request`-triggered workflows blocks the merge.
+- **Reference** — the step carries `continue-on-error: true`: it reports (step summary, annotations, artifacts) but cannot fail the run by itself.
+- **Post-merge / release-only / manual** — never fires on a PR; runs on `master`/`release/**` pushes, tags, or `workflow_dispatch` only.
+
+### 3.0 Summary table
+
+| File | Trigger (+ path filter) | What it does | Classification |
+|---|---|---|---|
+| `ci.yml` | push master / PR master / dispatch (no paths) | FAST → MAIN → RELEASE gates: static checks, frontend, 3-platform build+test, SDK smoke | Gate |
+| `_build-test.yml` | `workflow_call` (from `ci.yml`) | Conan + `cmake --preset` build, full ctest, named test gates, log artifacts | Gate |
+| `_frontend.yml` | `workflow_call` (from `ci.yml`) | UI-kit sync, vitest, ESLint, tsc builds, bundle budget, Playwright e2e, frontend image smoke | Gate |
+| `_sdk-smoke.yml` | `workflow_call` (from `ci.yml`) | Full-stack build + `SdkSmoke.FullStack` external `find_package` consumer | Gate |
+| `openapi-governance.yml` | PR master / dispatch (paths: `apps/server/openapi.yaml`, `tools/openapi-governance/**`, self) | oasdiff breaking-change gate, base vs PR spec | Gate |
+| `clients-sdk.yml` | PR master / push master / dispatch (paths: `clients/**`, `tools/clients/**`, `apps/server/openapi.yaml`, self) | Python/Go/TS clients: generated-tree drift gate + version linkage + unit tests | Gate |
+| `security.yml` | push master / PR master / weekly cron (Mon 03:00 UTC) / dispatch (no paths) | Dependency EOL scan over `conan.lock` + secret/sensitive-file hygiene | Gate (cron leg: alert for newly-EOL'd deps) |
+| `sanitizer.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json`, self on PR) | `asan-ubsan`: full ctest under ASan+UBSan vs real Postgres+Redis; `tsan-nightly`: full ctest under TSan | `asan-ubsan`: Gate; `tsan-nightly`: dispatch-only today |
+| `coverage.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**`, + script/cmake/self on PR) | gcov instrumented build, per-library coverage report, ratchet vs baseline | Build/report: Gate; ctest run + ratchet: **Reference** (v1.6.0, `continue-on-error`) |
+| `website.yml` | push master / PR (any branch, paths: `docs/**`, `blog/**`, `website/**`, `scripts/gen-llms-txt.mjs`, self) / dispatch | llms.txt freshness gate + Docusaurus build (`onBrokenLinks: 'throw'`); Pages deploy on master/dispatch | Gate (build); deploy: master push / dispatch only |
+| `interop.yml` | push master / push `release/**` / dispatch (no paths) | RP interop smoke: three RP libraries + nextjs-demo browser driver vs a real fulla stack | Post-merge / release-branch gate (deliberately off the PR hot path) |
+| `release.yml` | push tag `vX.Y.Z` (strict SemVer) / dispatch (dry run) | Version check, SDK tarball, multi-arch images, cosign + SBOM, GitHub Release, PyPI | Release gate (tag only) |
+| `npm-publish.yml` | dispatch only | `fulla-oauth2` npm package: verify, pack, publish (needs `NPM_TOKEN`) | Manual; never blocks a release |
+
+### 3.1 `ci.yml` — CI
+
+**Trigger**: push master / PR master / workflow_dispatch; concurrency cancels superseded runs per ref.
+
+The single entry point that chains the three gates via `needs` (see the tree in §1):
+
+- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
+- **`frontend`** — calls `_frontend.yml` (see §3.3 and §4).
+- **`build-test`** — calls `_build-test.yml` as a `{linux, windows, macos}` matrix (`fail-fast: false`; each leg 60 min, `-DFULLA_WERROR=ON` everywhere; see §3.2 and §5).
+- **`sdk-smoke`** — calls `_sdk-smoke.yml` after build-test (see §3.4).
+
+### 3.2 `_build-test.yml` — Reusable Build & Test (MAIN gate)
+
+One parameterized job body shared by all three platforms (differences only via inputs). Steps: system deps / Conan install → Conan cache → configure + build → (linux) Postgres/Redis containers, readiness probes, schema + seed init → full ctest → named test gates (`run_named_test_gates`, linux+windows only): Error-Standardization Req 12.x tests, `Performance_P1_Benchmark_*` in-process cases, E2E and RedirectUri integration entries → upload test logs on failure (7-day retention). Detailed behavior: §5.
+
+### 3.3 `_frontend.yml` — Reusable Frontend Quality Gate (FAST gate)
+
+Two jobs: `frontend` (Node 20) and `frontend-image-smoke` (#160, Docker, path-filtered via `dorny/paths-filter` to `frontends/**` + `deploy/docker/**`). Detailed behavior: §4.
+
+### 3.4 `_sdk-smoke.yml` — Reusable SDK Smoke (RELEASE gate)
+
+Linux-only (single authoritative SDK-consumability proof), 60 min. Builds the full stack with `BUILD_EXAMPLES=ON` (build-tree package configs) and runs `ctest -L SdkSmoke`: `SdkSmoke.FullStack` uses `ctest --build-and-test` to configure, build, and run `examples/full-stack-host` as a real external `find_package` consumer. The smoke host runs with memory storage (`config/smoke.json`) — no database. Gate: yes.
+
+### 3.5 `openapi-governance.yml` — OpenAPI Governance
+
+**Trigger**: PR master (paths: `apps/server/openapi.yaml`, `tools/openapi-governance/**`, the workflow itself) + workflow_dispatch; 5 min; needs `fetch-depth: 0` to extract the base spec from `origin/master`.
+
+Runs pinned **oasdiff v1.29.1** `breaking` between the base-branch spec and the PR spec; any breaking change (path removal, request-body tightening, response narrowing, ...) fails **unless** the change ships with a major version bump or is explicitly exempted with justification in `tools/openapi-governance/oasdiff-breaking-ignore.md`. Gate: yes. Reproducible locally with the same `oasdiff` command.
+
+### 3.6 `clients-sdk.yml` — Client SDKs
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `clients/**`, `tools/clients/**`, `apps/server/openapi.yaml`, and the workflow itself — unrelated PRs are not affected. Kept outside `ci.yml`'s static-checks on purpose (needs Python + Go + Node toolchains and the pinned generators).
+
+Three 15-min jobs:
+
+- **`python`** — pinned `openapi-python-client==0.29.0`; **drift gate** (`regen_clients.py --check --python-only`: the committed generated tree must match `openapi.yaml`) + pytest unit tests (MockTransport; integration auto-skips).
+- **`go`** — build + vet + gofmt; **drift gate** (`--go-only`) + `go test ./...` (httptest; integration behind `-tags integration`).
+- **`ts`** — Node 22; **drift gate** (`--ts-only`) + **version linkage** (`--version-only`: `package.json` == `pyproject.toml` == `cmake/Version.cmake`) + `npm run check` (tsc emit + vitest red lines).
+
+Gate: yes, all three jobs. Local equivalents are listed in the workflow header comment.
+
+### 3.7 `security.yml` — Security
+
+**Trigger**: push master / PR master / **weekly cron Mondays 03:00 UTC** / dispatch — the schedule exists so newly-EOL'd dependencies get flagged even when no commits land. Two 5-min jobs, both gates on push/PR:
+
+- **`dependency-eol`** — `tools/security/dependency_eol_check.py` over `conan.lock` (policy floors: openssl >= 3.0, zlib >= 1.2.13, libcurl >= 8.4.0).
+- **`secret-hygiene`** — `scripts/security-check.sh`: tracked `.env` files, hardcoded key patterns, `.gitignore` coverage, config permissions.
+
+### 3.8 `sanitizer.yml` — Sanitizers
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json` (the workflow file itself only on PR).
+
+- **`asan-ubsan`** (gate, 60 min) — GCC Debug build via the `linux-asan-ubsan` preset (UBSan with `-fno-sanitize-recover` behavior via `halt_on_error=1`, ASan with leak detection), full ctest (900 s per test) against real Postgres 17 + Redis 7 containers, so integration suites are covered. Logs uploaded on failure. Triage policy: real defects are fixed in the same PR; third-party/system-call false positives get a documented suppression file under `tools/sanitizers/`.
+- **`tsan-nightly`** (TSan, 90 min) — `if: schedule || dispatch`; TSan cannot compose with ASan/UBSan, hence a separate job running the **full** suite under the `linux-release-tsan` preset. Note: despite the name, **no `schedule:` cron is configured in the file today** — this job only actually runs via `workflow_dispatch`.
+
+### 3.9 `coverage.yml` — Coverage
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**` (the PR leg additionally watches `scripts/measure_coverage.py`, `cmake/Coverage.cmake`, `CMakePresets.json`, and the workflow itself).
+
+Linux gcov leg (`linux-coverage` preset, Debug, Postgres+Redis active, 60 min):
+
+1. Build with `FULLA_TEST_COVERAGE` instrumentation, run the full ctest suite split into two passes (non-`OAuth2Tests`, then `OAuth2Tests`) with `FULLA_TEST_HTTP_TIMEOUT=180`.
+2. **Gate**: the explicit `gcov -j -p` JSON pass fails hard if zero `.gcda` or zero `.gcov.json.gz` files were produced (a false-green report is itself a failure — an empty baseline was seeded exactly this way once).
+3. Per-library summary appended to the run's step summary via `scripts/measure_coverage.py`.
+4. **Ratchet gate** — `measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` compares each library against the committed baseline (see the [Testing Guide §7](testing-guide.md) for the baseline table and the ratchet mechanism).
+5. Raw gcov JSON + test logs uploaded as artifacts.
+
+**Gate vs. reference (v1.6.0)**: the ctest run and the ratchet comparison are `continue-on-error: true` — the gcov-instrumented server cannot finish the full suite inside practical ceilings, so a partial `.gcda` set would read as false regressions. Correctness stays gated by the Build&Test matrix and the ASan/UBSan leg; gating is to be restored once the coverage leg can run the suite to completion (dedicated runner or suite sharding).
+
+### 3.10 `website.yml` — Website
+
+**Trigger**: push master / PR on **any branch** (paths: `docs/**`, `blog/**`, `website/**`, `scripts/gen-llms-txt.mjs`, the workflow) / dispatch (manual deploy from a branch before merge). Concurrency group `pages` does **not** cancel in progress.
+
+- **`build`** (gate) —
+  1. **llms.txt freshness gate**: regenerate `website/static/llms.txt` + `llms-full.txt` from `docs/` via `scripts/gen-llms-txt.mjs` and `git diff --exit-code` them, so the committed AI-native artifacts can never drift stale;
+  2. Docusaurus build (`npm ci && npm run build`) with **`onBrokenLinks: 'throw'`** in `website/docusaurus.config.js` — broken links fail the build, replacing manual link checking;
+  3. upload the Pages artifact.
+- **`deploy`** — only on master push or dispatch; publishes to GitHub Pages (requires Pages Source = GitHub Actions).
+
+### 3.11 `interop.yml` — RP Interop Smoke
+
+Per the workflow's own header: the **v1.5.0 P0 exit gate** ("three libraries, zero warnings"). Four drivers — three standard RP libraries (`openid-client` v6 / `authlib` / `go-oidc` + `x/oauth2`) drive the authorization-code + PKCE → token → userinfo → refresh → end-session chain **in strict mode** against a real fulla stack, plus the P1-5 **nextjs-demo Playwright smoke**, a fourth driver that drives a **real browser** through the first-party `fulla-oauth2` TS SDK (landing → fulla login form → callback with state+PKCE verified → profile/userinfo → protected API → RP-initiated logout) — a different recipe from the three json-mode drivers.
+
+**Trigger**: push to `master` or `release/**` + workflow_dispatch. Deliberately **not** on the per-PR hot path (runtime cost); it is the post-merge/release-branch interop gate. Single job (45 min): build only the `fulla-server` target (linux-release), boot Postgres 17 + Redis 7, apply migrations + seeds, boot the server and poll `/health`, then run the four drivers in order (Node, Python, Go from inside `tests/interop/go`, then the demo: build `clients/ts`, `npm ci`, Playwright chromium, `next start -p 8080`, `npx playwright test`). On failure the server log's tail is printed. See `tests/interop/README.md`.
+
+### 3.12 `release.yml` — Release
+
+**Trigger**: push of a **strict SemVer tag** (`v1.2.3` pattern; suffixed tags such as `v1.0.0-something` intentionally do NOT release) + workflow_dispatch as a **dry run** (everything builds; nothing is pushed; manifest/release skipped). Concurrency never cancels a half-pushed release. Jobs:
+
+- **`version-check`** — tag must equal `cmake/Version.cmake`; re-runs the OpenAPI spec governance check and the api-diff frozen-surface check (which also cross-checks cmake vs CMakeLists vs conanfile).
+- **`sdk-package`** — Linux x86_64 SDK tarball (8 static libs + headers + CMake package configs via `cmake --install`), validated by configuring + building `examples/full-stack-host` against the **installed** prefix; sha256 attached.
+- **`images`** — backend / frontend / admin images, amd64 + arm64, each on a **native** runner (no QEMU — the C++ build is impractical under emulation), pushed to GHCR as `<version>-<arch>` (tag runs only).
+- **`manifest`** (tag only) — multi-arch manifests `<version>` + `latest` via imagetools, then cosign **keyless** signatures on the manifest digests and per-image SPDX SBOMs (syft).
+- **`github-release`** (tag only) — Release notes from git-cliff (conventional commits) with a CHANGELOG fallback + spliced breaking-change entries + verification instructions; SDK tarball and SBOMs attached; also pushes the nested `clients/go/v<version>` tag the Go module proxy needs.
+- **`sdk-python`** — version-linkage check + sdist/wheel build always; PyPI publish only on tag and only once `PYPI_API_TOKEN` is configured (plain twine — see the workflow comment for why not `pypa/gh-action-pypublish`).
+
+### 3.13 `npm-publish.yml` — npm publish (fulla-oauth2)
+
+**Trigger**: `workflow_dispatch` **only** (decision D7): the npm package publishes by manual dispatch, never on push, and never blocks a release. Steps: `npm ci` (Node 22) → version linkage (`--version-only`) → generated-tree drift gate (`--check --ts-only`) → `npm run check` (tsc + vitest) → `npm pack` (inspect the tarball that would ship) → `npm publish --access public` **only if the `NPM_TOKEN` secret exists**; otherwise a notice (build+pack-only verification — the expected pre-token state, which keeps the publish path exercised and reviewed).
+
+### 3.14 What is deliberately NOT a GitHub Actions workflow
+
+- **HTTP performance benchmarks** — `benchmarks/` (setup via `benchmarks/fulla/setup.sh`, scenarios via `benchmarks/fulla/run-scenario.sh`) is a **manual, out-of-band release gate** (five-scenario regression vs the prior release, same-machine back-to-back arms). CI shared runners give non-credible absolute numbers, so no benchmark workflow exists; a future relative-delta `benchmarks-regression.yml` is only a design item (`benchmarks/README.md` "Known limitations"). The `Performance_P1_Benchmark_*` cases run by `_build-test.yml` are in-process ctest entries, not throughput gates.
+
+---
+
+## 4. Frontend Gate (`_frontend.yml`)
 
 The frontend gate runs for every CI run (it is part of the FAST gate, so it fails cheap and early). One Node job plus one Docker job:
 
@@ -74,11 +206,11 @@ The frontend gate runs for every CI run (it is part of the FAST gate, so it fail
 
 Budget baselines live in `scripts/check-frontend-size.mjs` (raw JS bytes: total + entry chunk per app, +10% headroom). Raise a baseline only with written justification in the PR — the entry-chunk cap doubles as the i18n AOT guard: the vue-i18n message compiler re-entering the bundle costs ~90 KB on the main chunk and trips the gate mechanically.
 
-## 4. Core Job in Depth: `build-test`
+## 5. Core Job in Depth: `build-test`
 
 `build-test` is a reusable workflow (`_build-test.yml`) invoked by `ci.yml` as a `{linux, windows, macos}` matrix. All three platforms run the same Conan + `cmake --preset` build and CTest suite; the database is enabled via matrix inputs only where needed.
 
-### 4.1 Service Containers (linux matrix leg only)
+### 5.1 Service Containers (linux matrix leg only)
 
 In the Linux matrix leg, CI starts Postgres and Redis in Docker containers and confirms readiness with real queries (not just `pg_isready`):
 
@@ -92,7 +224,7 @@ In the Linux matrix leg, CI starts Postgres and Redis in Docker containers and c
 
 > **WARNING**: Redis runs without a password in CI, so the test configuration overrides it with the environment variable `FULLA_REDIS_PASSWORD=""`. The Windows/macOS matrix legs use `use_database=false` and fall back to the in-memory storage configuration (`config.ci.json`).
 
-### 4.2 Build Cache Strategy
+### 5.2 Build Cache Strategy
 
 To speed up CI builds, Conan dependencies are cached:
 
@@ -102,7 +234,7 @@ To speed up CI builds, Conan dependencies are cached:
 
 A cold build takes roughly **15-20 minutes**; with a cache hit this drops to **3-5 minutes**.
 
-### 4.3 Database Initialization
+### 5.3 Database Initialization
 
 Before testing, migration scripts initialize the database:
 
@@ -120,32 +252,33 @@ done
 
 > **Note**: the legacy `sql/001_*.sql` through `sql/004_*.sql` files are deprecated and removed; all schema definitions are now managed centrally under `apps/server/migrations/`.
 
-### 4.4 Test Execution
+### 5.4 Test Execution
 
 ```bash
-ctest -V -C Release --output-on-failure --timeout 120
+ctest -C Release --output-on-failure --timeout 1200
 ```
 
-- `-V` : verbose output
 - `--output-on-failure` : print test stdout on failure
-- `--timeout 120` : each test gets at most 2 minutes
+- `--timeout 1200` : the ceiling accounts for `OAuth2Tests` being the whole 61k-assertion binary (a 120 s ceiling used to report the suite as `(Timeout)`)
 
-### 4.5 Failure Log Upload
+After the full ctest pass, the linux/windows legs re-run the headline **named test gates** individually (Error-Standardization Req 12.x properties, `Performance_P1_Benchmark_*`, E2E, RedirectUri integration) so a failure is attributable to the gated requirement.
+
+### 5.5 Failure Log Upload
 
 When tests fail, CI automatically packages and uploads the following as artifacts (retained for 7 days):
 
-- `build/Testing/` — CTest test reports
+- `build/<preset>/Testing/` — CTest test reports
 - `apps/server/logs/` — application runtime logs
 
 ---
 
-## 5. Image Build and Signing
+## 6. Image Build and Signing
 
-The CI pipeline itself does not build Docker images. Multi-arch container image builds, GHCR pushes, cosign signing, and syft SBOMs are handled by `release.yml` when a SemVer tag (`vX.Y.Z`) is pushed. See [Releases & Supply Chain Security](https://github.com/voidvec/fulla#releases--supply-chain-security).
+The CI pipeline itself does not build Docker images (except the frontend image *smoke* builds of §4). Multi-arch container image builds, GHCR pushes, cosign signing, and syft SBOMs are handled by `release.yml` when a SemVer tag (`vX.Y.Z`) is pushed — see §3.12. See also [Releases & Supply Chain Security](https://github.com/voidvec/fulla#releases--supply-chain-security).
 
 ---
 
-## 6. Reproducing the CI Environment Locally
+## 7. Reproducing the CI Environment Locally
 
 To simulate CI behavior locally:
 
@@ -172,7 +305,7 @@ ctest -V -C Release --output-on-failure
 
 ---
 
-## 7. Multi-Platform Matrix
+## 8. Multi-Platform Matrix
 
 Multi-platform CI has been consolidated into the `build-test` job in `ci.yml`; an `include` matrix runs all three platforms on the same reusable workflow (`_build-test.yml`).
 

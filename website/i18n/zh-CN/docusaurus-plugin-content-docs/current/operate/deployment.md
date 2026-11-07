@@ -398,7 +398,6 @@ FULLA_SMTP_SSL=true
 VITE_API_BASE_URL=
 VITE_CLIENT_ID=fulla-portal
 VITE_REDIRECT_URI=https://your-domain.com/callback
-VITE_GITHUB_CLIENT_ID=
 ```
 
 #### 启用 GitHub 登录（可选）
@@ -407,11 +406,15 @@ VITE_GITHUB_CLIENT_ID=
    **OAuth Apps** → *New OAuth App*。Homepage URL：`https://your-domain.com`；
    Authorization callback URL：`https://your-domain.com/callback/github`。
 2. 在 `.env.docker` 填入 client ID 与 client secret：
-   `FULLA_GITHUB_CLIENT_ID`、`FULLA_GITHUB_CLIENT_SECRET`，以及登录页按钮所需的
-   `VITE_GITHUB_CLIENT_ID`（同一 ID；它会在构建期编译进 SPA 产物）。
-3. 重建并重启：`docker compose build frontend && docker compose up -d`
-   （后端凭据重启即可生效，但登录页按钮需要重建前端镜像）。
-4. 账号绑定与按钮无关：已登录用户随时可在门户 → 安全设置里关联 GitHub。
+   `FULLA_GITHUB_CLIENT_ID` 与 `FULLA_GITHUB_CLIENT_SECRET`。无需任何前端
+   变量——自 v1.4.0 起，登录页在运行时发现外部登录提供方
+   （`GET /api/auth/providers`），后端报告 GitHub 已启用时即渲染按钮。
+3. 重启后端：`docker compose up -d`（按钮随后端配置出现/消失，无需重建前端）。
+4. 提供方分级：`custom_config.external_auth.tiers.domestic` 控制微信，
+   `external_auth.tiers.international` 控制 GitHub/Google（可写在配置中，也可用
+   `FULLA_EXTERNAL_TIER_DOMESTIC` / `FULLA_EXTERNAL_TIER_INTERNATIONAL` 环境变量
+   别名；默认 `true` = 提供所有已配置的提供方）。
+5. 账号绑定与按钮无关：已登录用户随时可在门户 → 安全设置里关联 GitHub。
 
 #### 启用通行密钥（WebAuthn，可选）
 
@@ -577,7 +580,7 @@ curl -k https://localhost/admin/
 | `FULLA_GITHUB_CLIENT_ID` / `FULLA_GITHUB_CLIENT_SECRET` | GitHub OAuth（可选） | (空) |
 | `FULLA_GOOGLE_CLIENT_ID` / `FULLA_GOOGLE_CLIENT_SECRET` | Google OAuth（可选） | (空) |
 | `FULLA_WECHAT_APPID` / `FULLA_WECHAT_SECRET` | 微信 OAuth（可选） | (空) |
-| `FULLA_SMTP_HOST` | SMTP 服务器主機（未设置则邮件走 Console 模式） | (可选) |
+| `FULLA_SMTP_HOST` | SMTP 服务器主机（未设置则邮件走 Console 模式） | (可选) |
 | `FULLA_SMTP_PORT` | SMTP 端口 | 465 |
 | `FULLA_SMTP_USER` | SMTP 用户名（完整邮箱地址） | (可选) |
 | `FULLA_SMTP_PASSWORD` | SMTP 授权码（非邮箱登录密码） | (可选) |
@@ -596,6 +599,13 @@ curl -k https://localhost/admin/
 - 限流规则（登录 5次/分钟/IP，API 30次/秒/IP）
 - `/metrics` 端点限制内网访问
 - HSTS 头
+- 运行时 DNS 解析（`resolver 127.0.0.11 valid=10s ipv6=off` + 变量形式的
+  `proxy_pass` 目标）：上游主机名（`fulla-backend`、`fulla-frontend`、
+  `fulla-admin`）最多滞后 10s 即会重新解析，因此重建任一上游容器后不再需要重启
+  `oauth2-nginx`。若没有这项配置，nginx 在加载配置时对每个主机名只解析一次，
+  背后的容器重建后仍持续代理到旧 IP——而 Docker 可能把这个释放出的 IP 分配给
+  另一个容器（实际观察到的现象：SPA 镜像升级后 `/` 被 302 重定向到 `/admin/`，
+  管理后台白屏）。
 
 ### 前端配置
 
@@ -606,7 +616,10 @@ curl -k https://localhost/admin/
 | `VITE_API_BASE_URL` | API 基础 URL | **(空)** — SPA 同域走相对路径，填值会破坏 nginx 反代路由 |
 | `VITE_CLIENT_ID` | OAuth2 Client ID | fulla-portal |
 | `VITE_REDIRECT_URI` | OAuth2 回调 URI | https://your-domain.com/callback |
-| `VITE_GITHUB_CLIENT_ID` | GitHub "Sign in with GitHub" 按钮（可选） | (空则不显示按钮) |
+
+> 自 v1.4.0 起，外部登录提供方（GitHub / Google / 微信）**不再**是前端
+> 变量——它们在服务端配置（`custom_config.external_auth.*` + 分级开关），
+> 登录页在运行时通过 `GET /api/auth/providers` 发现它们。
 
 > **管理后台（OAuth2Admin）无需配置**：源码不读取任何 `import.meta.env`，所有 API 调用走相对路径 `/api/admin/*`，由 nginx 反代到后端。改域名时只需保证 nginx `/admin/` 路由正确，无需重建 admin 镜像。
 >
@@ -616,7 +629,7 @@ curl -k https://localhost/admin/
 
 ## 数据库初始化
 
-首次部署时，由一次性 `migrate` 服务创建所有必要的表（compose 栈保持 `FULLA_AUTO_MIGRATE=false`；在启动 postgres/redis 服务后执行 `docker compose -f docker-compose.prod.yml --env-file <your-env> --profile migrate run --rm --build migrate`——干净环境**必须带 `--build`**，否则 compose 会拉取已发布镜像，其中可能缺少你本地的新迁移）。但**不会自动创建种子数据**——需要手动创建管理员用户和 OAuth2 客户端。
+首次部署时，由一次性 `migrate` 服务创建所有必要的表（compose 栈保持 `FULLA_AUTO_MIGRATE=false`；在启动 postgres/redis 服务后执行 `docker compose -f docker-compose.prod.yml --env-file <your-env> --profile migrate run --rm --build migrate`——干净环境**必须带 `--build`**，否则 compose 会拉取已发布镜像，其中可能缺少你本地的新迁移）。**管理员账号在首次启动时自动 bootstrap**（见下一步）；OAuth2 客户端则不会——需手动创建。
 
 > `apps/server/seed/` 下的 `dev_*.sql` 文件使用硬编码密码和 localhost 回调地址，**不要在生产环境使用**。请按以下步骤操作。
 
@@ -629,15 +642,26 @@ curl -k https://localhost/admin/
 ADMIN_PASSWORD=$(openssl rand -base64 24)
 echo "Admin 密码: $ADMIN_PASSWORD"
 echo "请保存此密码——登录管理后台时需要。"
+# 账号带 must_change_password 标记（#145）：首次登录会先经管理台的修改密码表单
+# 强制改密，之后才会授予任何授权——因此打印出的初始密码不会长期留存。
 
-# 生成密码哈希（SHA-256 + 随机盐）
-ADMIN_SALT=$(openssl rand -hex 16)
-ADMIN_HASH=$(echo -n "${ADMIN_PASSWORD}${ADMIN_SALT}" | sha256sum | cut -d' ' -f1)
+# 首选：让服务器在首次启动时 bootstrap 管理员（随机 PBKDF2 密码仅
+# 打印一次到容器日志）：
+#   docker compose logs backend | grep Bootstrap
+# 或在首次启动前显式设置：FULLA_BOOTSTRAP_ADMIN_PASSWORD=...
+# 还可为管理员设置真实邮箱：
+#   FULLA_BOOTSTRAP_ADMIN_EMAIL=admin@your-domain.com
+# 当真实邮箱与可用 SMTP 投递都配置时，bootstrap 管理员以未验证状态创建——
+# 完成首次登录的强制改密会发出验证邮件，点开链接前无法登录。二者缺一时，
+# 账号使用占位邮箱并 email_verified=true（没有可验证的邮箱）。
+# 手动兜底（PBKDF2-SHA256、310k 轮、与服务器同格式）。注意 users.salt 列
+# 留空——它只服务于已退役的旧版 SHA-256 验证路径；PBKDF2 的盐内嵌在哈希串里：
+ADMIN_HASH=$(python3 -c "import hashlib,os;pw=os.environ['ADMIN_PASSWORD'];salt=os.urandom(16);print('\$pbkdf2-sha256\$310000\$'+salt.hex()+'\$'+hashlib.pbkdf2_hmac('sha256',pw.encode(),salt,310000,32).hex())")
 
-# 创建 admin 用户
+# 创建 admin 用户（must_change_password=true 与 bootstrap 行为一致：首登强制改密，#145）
 docker exec -i fulla-postgres psql -U fulla_user -d fulla_db <<EOF
-INSERT INTO users (username, password_hash, salt, email)
-VALUES ('admin', '${ADMIN_HASH}', '${ADMIN_SALT}', 'admin@your-domain.com')
+INSERT INTO users (username, password_hash, salt, email, must_change_password)
+VALUES ('admin', '${ADMIN_HASH}', '', 'admin@your-domain.com', true)
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO user_roles (user_id, role_id)
@@ -857,6 +881,40 @@ sudo systemctl start certbot.timer
 - 后端指标: `https://your-domain.com/metrics`（仅内网可访问）
 - 健康检查: `https://your-domain.com/health`
 
+### audit_logs 分区维护（#83）
+
+`audit_logs` 自 V025 起按月分区（`[当前月-12, 当前月+25]` 的窗口 + 一个 DEFAULT 兜底分区）。
+**分区窗口不再需要手工 cron**：postgres 存储部署下，后端的清理服务
+（`cleanup_interval_seconds`，默认 3600s）每个周期会在分布式锁内调用
+`ensure_audit_partitions()`，自动创建缺失的月分区并把落入 DEFAULT 分区的行迁出。
+
+排查命令：
+
+```sql
+-- 窗口内各分区的行量与 DEFAULT 分区是否在堆积（堆积 = 维护没在跑）
+SELECT tableoid::regclass AS partition, count(*) FROM audit_logs GROUP BY 1 ORDER BY 1;
+
+-- 手工触发一次维护（与自动路径相同的幂等函数；ahead/behind 可调）
+SELECT ensure_audit_partitions();          -- 默认 ahead 24 / behind 12
+SELECT ensure_audit_partitions(36, 12);    -- 扩大预建窗口
+```
+
+注意：
+
+- 该函数幂等但非并发安全——自动路径已在清理锁内串行化；手工调用请避开定时清理的执行时刻。
+- memory/redis 存储模式没有 audit 分区（该功能仅 postgres）。
+- 维护失败只会打 `LOG_ERROR` 并在下个清理周期重试，不影响清理主流程。
+
+### 社交账号绑定（#71）：Redis 依赖
+
+社交账号绑定功能的 link state（绑定流程的临时状态）存储在 Redis 中（`SET NX EX 600` / `GETDEL`，TTL 10 分钟）。
+
+- **有 Redis 时**：绑定发起端点正常工作，link state 存入 Redis 并在回调时校验。
+- **无 Redis 时**：绑定发起端点 fail-closed，返回 `NotConfigured` 类错误（HTTP 503）。
+- **登录不受影响**：社交登录（已绑定账号的直接登录）不依赖 Redis link state，无需 Redis 也可正常工作。
+
+生产部署确保 `fulla-redis` 容器运行即可（默认 compose 已包含）。
+
 ---
 
 ## 故障排除
@@ -890,6 +948,29 @@ ls -la deploy/nginx/ssl/
 # 检查证书有效期
 openssl x509 -in deploy/nginx/ssl/fullchain.pem -noout -dates
 ```
+
+### 重建容器后路由陈旧
+
+**现象**：重建 `fulla-frontend`/`fulla-admin`/`fulla-backend`（镜像升级）后，
+根 URL 被 302 重定向到 `/admin/`、管理后台白屏，或 API 路由打到了错误的服务。
+
+**机制**：nginx 在加载配置时对 `proxy_pass` 主机名只解析一次，并在 worker
+整个生命周期内缓存该 IP；Docker 可能把释放出的 IP 复用给另一个容器，于是缓存
+的地址此时指向的是另一个服务。
+
+**当前状态**：已修复——nginx.conf 让所有上游都经过运行时解析器
+（`resolver 127.0.0.11 valid=10s ipv6=off`），容器重建后 10s 内即会重新解析，
+无需重启 nginx。
+
+```bash
+# 升级一个仍在运行旧版（尚无 resolver）nginx.conf 的栈后，
+# 重启一次 nginx 以丢弃缓存的 IP：
+docker compose -f deploy/docker/docker-compose.prod.yml restart nginx
+```
+
+> 注意：开发 compose 文件（`docker-compose.yml`）没有边缘 nginx——SPA 镜像
+> 内置的 nginx 直接代理到 `fulla-backend:5555`，在那里仍会表现出加载时解析的
+> 行为。
 
 ### 前端 404
 

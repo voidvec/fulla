@@ -92,6 +92,37 @@ OAuth2 插件的 `config.storage_type` 决定持久化后端：
 - 生产部署**必须**配置 `https://` issuer；非回环主机上使用明文 http issuer 会有启动告警。
 - 内省 `iss` 与发现文档 `issuer` 保证逐字节一致（OIDC Discovery §3 要求）。
 
+## 4a. 管理后台 Origin 与设备验证 URI（#146）
+
+`config.admin_console.url`（custom config）是管理后台 SPA 的 ORIGIN（scheme + host
+[+ port]，不含 path）——生产环境如 `https://admin.example.com`，默认
+`http://localhost:5174`（开发用 vite 服务器）。目前它只有一个消费方：RFC 8628
+设备授权响应的 `verification_uri`/`verification_uri_complete`，二者默认为
+`{admin_console.url}/admin/devices`——即真正的设备批准页面。#146 之前的默认值
+指向 `/oauth2/device`，该路径背后并没有页面。
+
+- 显式覆盖：`config.device_authorization.verification_uri`（完整 URL）优先于
+  推导出的默认值；`verification_uri_complete` 始终由推导得出
+  （`verification_uri` + `?user_code=<code>`）。
+- `admin_console.url` 的末尾斜杠会被自动规范化掉。
+
+## 4b. 首次登录强制改密（#145）
+
+以 `users.must_change_password = true` 创建的账号——引导创建的 admin（随机密码与
+`FULLA_BOOTSTRAP_ADMIN_PASSWORD` 两种变体皆是）以及经管理 API 以
+`must_change_password: true` 创建/更新的用户——必须先修改密码，之后才会签发
+任何授权码：
+
+- `/oauth2/login` 返回 `200 {"password_change_required": true, ...}`，而不签发
+  code；
+- `/oauth2/authorize` 重定向到前端登录页（由其渲染改密表单）；`prompt=none`
+  返回 `error=login_required`；
+- `POST /oauth2/consent` 返回 403 `AUTH_PASSWORD_CHANGE_REQUIRED`。
+
+改密路径为 `POST /oauth2/password/change`（会话认证，要求 `old_password`，强制
+`auth.min_password_length`，撤销全部令牌，清除该标志）。`PUT /api/me/password`
+同样会清除该标志。管理员对存量账号设置的该标志在该用户下次登录时生效。
+
 ## 5. 客户端令牌端点认证方式（F-017）
 
 每个客户端通过 `oauth2_clients.token_endpoint_auth_method` 列声明其在
@@ -213,6 +244,72 @@ token / introspect / revoke / device-code 轮询四个端点共享一个进程�
 密钥生成用标准工具即可，例如
 `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out 2026-12.pem`。
 像保护任何私钥材料一样保护该目录（文件权限 / secret 挂载）。
+
+## 10. 旧版密码哈希迁移窗口（#103）
+
+fulla 只通过 PBKDF2-SHA256（`$pbkdf2-sha256$310000$<salt>$<hash>`）校验密码。
+1.0 之前的无盐 SHA256 格式**已退役，且在所有路径上默认拒绝**：
+
+- 所有发行配置中 `auth.allow_legacy_hash` 均为 `false`，且*缺失*该键同样视为
+  `false`（装配层默认值）。为 `false` 时，针对旧格式哈希的登录尝试会在任何
+  密码校验之前被拒绝——即使密码**正确**也一样。
+- 该拒绝是**策略拒绝，而非密码错误**：它不推进账号锁定计数器（仅凭一个用户名
+  不应让攻击者锁死旧格式用户，之后重开窗口也不应被 `locked_until` 阻挡）。
+- 每次拒绝都会记录 `AUTH_LEGACY_HASH_REJECTED`（WARN）并附内部用户 id——这是
+  面向运维、指出谁仍需迁移的信号。客户端始终收到通用的
+  `AUTH_INVALID_CREDENTIALS`；从外部无法区分"旧格式被拒"与"密码错误"。
+
+**哪些部署受影响？** 仅限 v1.0.1 之前播种、且仍持有旧格式行的数据库。盘点 SQL：
+
+```sql
+SELECT count(*) FROM users WHERE password_hash NOT LIKE '$pbkdf2-sha256$%';
+```
+
+**无需开窗口的迁移路径：**
+
+- **邮件密码重置**——重置流程总是写入 PBKDF2，因此旧格式用户完成重置即透明迁移。
+- **管理员触发的重置**——效果相同。
+
+**修改密码不会迁移旧格式用户**：它通过同一条已退役的分支校验旧密码，因而必然
+失败；请改用重置。
+
+**重开窗口（临时，仅限登录）：** 设置 `auth.allow_legacy_hash: true` 并重启。
+旧格式用户随后即可登录，并在首次成功登录时被透明地重新哈希为 PBKDF2（仅限
+identity 登录路径）。由于策略拒绝从不推进锁定计数器，重开前无需解锁。盘点查询
+返回 `0` 后即可再次关闭窗口；该窗口（以及 identity 侧的重新哈希代码）计划在
+v1.1 移除。
+
+## 11. WebAuthn / 通行密钥（#142）
+
+通行密钥的注册与认证执行真实的密码学校验（W3C WebAuthn Level 2 §7.1/§6.1）：
+仅支持 ES256，仅接受 `fmt="none"` 的 attestation，断言签名以注册时存储的 COSE
+公钥校验。配置：
+
+```json
+"webauthn": {
+    "rp_id": "localhost",
+    "rp_name": "OAuth2 Server",
+    "rp_origins": ["http://localhost:5173"]
+}
+```
+
+- `rp_id` —— Relying Party id（凭据所绑定的可注册域名；本地开发用 `localhost`）。
+- `rp_origins` —— 可接受的 `clientDataJSON` origin 的严格允许列表。
+  **finish 端点接受任何请求之前必须先配置**：列表为空（或缺少该键）时，注册/认证
+  的 finish 一律 fail-closed。生产环境必须列出门户的确切 origin，例如
+  `["https://auth.example.com"]`。
+- challenge 有效期 300 秒（代码强制）。注册 challenge 绑定到 Bearer subject
+  （注册端点位于令牌过滤器之后；SPA 不发送会话 cookie）；认证 challenge 绑定到
+  调用方的会话——登录流程需要携带 cookie（`credentials: 'include'`）。
+- 两个 begin 响应中的 `userVerification` 均为 `required`，并在认证时强制校验
+  （`UV=1`）——不具备用户验证能力的认证器无法在此注册凭据（否则它们永远无法
+  通过认证）。签名计数回退按认证器克隆处理：拒绝该断言并记录
+  `webauthn_clone_detected` 审计动作。
+- **V028 清空了所有既有凭据行**：此前存储的每一行都是客户端自行声明、从未通过
+  attestation 校验的材料（且 authenticateFinish 过去会把一个裸凭据 id 当作持有
+  证明接受）。用户升级后需重新注册通行密钥。
+- 单实例部署：绑定 subject 的注册 challenge 存储在进程内（与 consent_csrf nonce
+  属同一类局限）。多实例部署需要共享的 challenge 存储（后续工作）。
 
 ## 12. 邮件模板（P1-2，#278）
 

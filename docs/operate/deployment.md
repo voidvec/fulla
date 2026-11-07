@@ -856,39 +856,39 @@ sudo systemctl start certbot.timer
 - Backend metrics: `https://your-domain.com/metrics` (internal network only)
 - Health check: `https://your-domain.com/health`
 
-### audit_logs 分区维护（#83）
+### audit_logs partition maintenance (#83)
 
-`audit_logs` 自 V025 起按月分区（`[当前月-12, 当前月+25]` 的窗口 + 一个 DEFAULT 兜底分区）。
-**分区窗口不再需要手工 cron**：postgres 存储部署下，后端的清理服务
-（`cleanup_interval_seconds`，默认 3600s）每个周期会在分布式锁内调用
-`ensure_audit_partitions()`，自动创建缺失的月分区并把落入 DEFAULT 分区的行迁出。
+Since V025, `audit_logs` is partitioned by month (a `[current month-12, current month+25]` window plus a DEFAULT catch-all partition).
+**The partition window no longer needs a manual cron job**: in postgres-storage deployments, the backend's cleanup service
+(`cleanup_interval_seconds`, default 3600s) calls `ensure_audit_partitions()` inside the distributed lock on every cycle,
+which creates any missing monthly partitions and evacuates rows that landed in the DEFAULT partition.
 
-排查命令：
+Diagnostic commands:
 
 ```sql
--- 窗口内各分区的行量与 DEFAULT 分区是否在堆积（堆积 = 维护没在跑）
+-- Row count per partition in the window, and whether the DEFAULT partition is piling up (a pile-up = maintenance is not running)
 SELECT tableoid::regclass AS partition, count(*) FROM audit_logs GROUP BY 1 ORDER BY 1;
 
--- 手工触发一次维护（与自动路径相同的幂等函数；ahead/behind 可调）
-SELECT ensure_audit_partitions();          -- 默认 ahead 24 / behind 12
-SELECT ensure_audit_partitions(36, 12);    -- 扩大预建窗口
+-- Trigger one maintenance run manually (the same idempotent function as the automatic path; ahead/behind are tunable)
+SELECT ensure_audit_partitions();          -- default ahead 24 / behind 12
+SELECT ensure_audit_partitions(36, 12);    -- widen the pre-created window
 ```
 
-注意：
+Notes:
 
-- 该函数幂等但非并发安全——自动路径已在清理锁内串行化；手工调用请避开整点清理时刻。
-- memory/redis 存储模式没有 audit 分区（该功能仅 postgres）。
-- 维护失败只会 `LOG_ERROR` 并在下个清理周期重试，不影响清理主流程。
+- The function is idempotent but not concurrency-safe — the automatic path is already serialized inside the cleanup lock; keep manual calls clear of the scheduled cleanup run.
+- The memory/redis storage modes have no audit partitions (the feature is postgres-only).
+- A maintenance failure only emits a `LOG_ERROR` and is retried on the next cleanup cycle; it does not affect the main cleanup flow.
 
-### 社交账号绑定（#71）Redis 依赖
+### Social account linking (#71): Redis dependency
 
-社交账号绑定功能的 link state（绑定流程的临时状态）存储在 Redis 中（`SET NX EX 600` / `GETDEL`，TTL 10 分钟）。
+The social account linking feature keeps its link state (the transient state of the linking flow) in Redis (`SET NX EX 600` / `GETDEL`, 10-minute TTL).
 
-- **有 Redis 时**：绑定发起端点正常工作，link state 存入 Redis 并在回调时校验。
-- **无 Redis 时**：绑定发起端点 fail-closed，返回 `NotConfigured` 类错误（HTTP 503）。
-- **登录不受影响**：社交登录（已绑定账号的直接登录）不依赖 Redis link state，无需 Redis 也可正常工作。
+- **With Redis**: the link-initiation endpoint works normally; the link state is stored in Redis and verified on the callback.
+- **Without Redis**: the link-initiation endpoint fails closed, returning a `NotConfigured`-class error (HTTP 503).
+- **Login is unaffected**: social login (direct sign-in with an already-linked account) does not depend on the Redis link state and works without Redis.
 
-生产部署确保 `fulla-redis` 容器运行即可（默认 compose 已包含）。
+For production deployments, simply make sure the `fulla-redis` container is running (the default compose file already includes it).
 
 ---
 

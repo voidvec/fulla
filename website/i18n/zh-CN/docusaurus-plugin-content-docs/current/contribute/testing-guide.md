@@ -223,20 +223,27 @@ In test case SomeTestName
 
 ### 代码覆盖率
 
-实测行覆盖率（gcov，gcc 13.3 Debug 构建，WSL Ubuntu 24.04，Postgres+Redis 激活；排除 ORM 自动生成的 `models/`；测量于 7ba8068，全部 5 个测试二进制均已执行）：
+下表是 **CI ratchet 基线**：即 `Coverage` 工作流每次运行比对的逐库地板（`.github/workflows/coverage.yml` → `scripts/measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json`）。数字逐项抄自 `tools/coverage/ratchet-baseline.json`——它是被强制的参照物，不是一次性的本地实测。数据来源：**2026-09-05** 由 PR #176 自己的绿色 CI 运行播种（gcov，Linux Debug `linux-coverage` preset，Postgres+Redis 激活，全部 5 个测试二进制均已执行，排除 ORM 自动生成的 `models/`）。
 
-| 库 | 行覆盖 | 备注 |
+| 库 | 基线行覆盖率 | 备注 |
 |---|---|---|
-| libs/common | 69.4% (318/458) | ErrorCatalog/ErrorTypes/ErrorContext/ConfigManager（由 per-lib gtest 二进制 `fulla-common-test` 驱动）；ConfigManager 环境相关分支与 ErrorCatalog 部分分支未覆盖 |
-| libs/identity | **96.9%** (590/609) | Auth/Mfa/WebAuthn/Social/Totp/Session |
-| libs/storage-memory | **97.1%** (431/444) | Memory 后端全方法覆盖（CI 必跑路径） |
-| libs/oauth2 | **92.1%** (627/681) | TokenService/AuthService/ClientService/JwkManager/Pkce |
-| libs/storage-redis | 46.2% (306/663) | 契约测试覆盖 getClient/validate/grant/token/consent 主路径；Lua 脚本与 transaction CRUD 待补 |
-| libs/storage-postgres | 43.9% (727/1657) | 契约测试覆盖主路径；剩余盲区为事务/错误回退分支（需注入故障才能触发） |
-| libs/drogon | **53.5%** (4807/8978) | admin 0%→55-69%、admin 控制器 0%→91-100%；authorize/health/discovery/mfa/deviceauth/userselfservice/apidoc 控制器补强；社交 OAuth 控制器经 mock 注入补强（Google 38.3%、WeChat 30.6%、GitHub 32.5%）；WebAuthn 39.2%（非加密 stub，无需 authenticator） |
-| **整体** | **57.9%** (7806/13490) | 上表逐库求和（`scripts/measure_coverage.py` 的 OVERALL 即逐库之和）；从 48.5% 基线提升 +9.4pp |
+| libs/common | 74.3% (364/490) | ErrorCatalog/ErrorTypes/ErrorContext/ConfigManager（由 per-lib gtest 二进制 `fulla-common-test` 驱动） |
+| libs/identity | 87.1% (1294/1485) | Auth/Mfa/WebAuthn/Social/Totp/Session |
+| libs/storage-memory | 97.0% (421/434) | Memory 后端全方法覆盖（CI 必跑路径） |
+| libs/oauth2 | 88.8% (936/1054) | TokenService/AuthService/ClientService/JwkManager/Pkce |
+| libs/storage-redis | 62.2% (705/1134) | 契约测试覆盖主路径；Lua 脚本与 transaction CRUD 待补 |
+| libs/storage-postgres | 54.1% (1047/1936) | 契约测试覆盖主路径；剩余盲区为事务/错误回退分支（需注入故障才能触发） |
+| libs/drogon | 57.8% (6967/12056) | 控制器、admin 层与适配器（分母远大于其他库） |
+| **整体（推导值）** | **63.1%** (11734/18589) | 上表逐库求和。基线 JSON 只存逐库条目；ratchet 逐库比对，从不比对整体 |
 
-> 上一轮基线为 48.5% (7091/14631)；本轮通过 admin 层 HTTP 集成测试 + 控制器补强 + 社交 OAuth/WebAuthn 的 mock 注入测试（`tests/common/SocialMockFixture.h` + `libs/identity/include/fulla/identity/testing/` 的共享 Fake）将整体提升到 57.9%。社交 OAuth 的 Google/WeChat/GitHub 均可经 mock 注入在 memory 模式下跑（注入路径不写 DB）；其中 GitHub happy-path 最初因 `issueTokensForUser` 直连 `getDbClient()` 无法在 memory 模式覆盖，随后已重构为经 `OAuth2Plugin::saveTokenPair` 存储抽象持久化（见 `SocialLoginHttpTest.cc` 的 `Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens`），happy-path 现已可测（GitHubController 从 5.9% 提升到 32.5%）；WebAuthn 为非加密 stub，Postgres 模式下完整可测。注：此前文档的 58.8% 系旧逐库数字求和（其中 common 的 98.8% 为陈旧数据，现 `libs/common/src` 仅 4 个源文件 458 行，实测 69.4%）；本表已全部替换为 7ba8068 的实测值。剩余盲区：storage-postgres 事务/错误回退分支（需故障注入）。
+> 演进史：48.5%（2026-08 初基线）→ 57.9% 整体（2026-08-07 实测于 7ba8068，本地 WSL gcov，即本表原先展示的数字）→ 63.1% 推导整体（2026-09-05 基线）。与旧表相比的逐库变化（storage-redis 46.2% → 62.2%、storage-postgres 43.9% → 54.1%、drogon 53.5% → 57.8%、common 69.4% → 74.3%，同时 identity 96.9% → 87.1%、oauth2 92.1% → 88.8%）伴随着大得多的分母（identity 609 → 1485、oauth2 681 → 1054 条插桩行）：CI 覆盖腿对全栈插桩并执行到本地 WSL 实测从未触达的路径，因此双向变化都是分母效应，不是覆盖率损失。支撑社交 OAuth/WebAuthn 数字的 memory 模式技术不变（`tests/common/SocialMockFixture.h` 的 Fake 注入；GitHub happy-path 经 `OAuth2Plugin::saveTokenPair` 存储抽象重构后不再依赖 `getDbClient()`）。
+
+#### 覆盖率 ratchet 机制如何运作
+
+- **基线是地板，不是目标。** `tools/coverage/ratchet-baseline.json` 逐库记录 `covered / total / pct`。每次 Coverage 运行，`measure_coverage.py --ratchet` 把每库当前百分比（截断到 0.1pp）与 `基线 pct - 0.5pp`（`RATCHET_TOLERANCE_PP`）比对；跌破地板即门禁失败（exit 1）。基线中插桩行数少于 200（`MIN_LINES`）的库豁免——目前没有库豁免。基线里的库在本次运行中消失、或插桩行数塌缩到 `MIN_LINES` 以下，同样失败：丢失插桩永远不算通过。本次运行新增的库通过，直到被写入基线。
+- **没有自动上调。** 覆盖率提升后要抬高地板，须刻意重定基线：取工作流打印的逐库数字（本地 `measure_coverage.py --json` 输出的正是基线的格式），在经过评审的 PR 中修改 `tools/coverage/ratchet-baseline.json`，并说明是哪些测试抬高了数字。下调基线是同样的编辑，也需要同样的理由。
+- **Seed 模式**：基线文件缺失时，脚本打印应提交的 JSON 并退出 0——现行基线正是这样产出的（PR #176）。
+- **门禁状态（v1.6.0）**：`coverage.yml` 中的 ctest 运行与 ratchet 步骤目前带 `continue-on-error: true`——gcov 插桩后的服务端无法在合理时限内跑完全量套件，`.gcda` 不全会被读成假回归。构建/插桩步骤仍然硬失败；待覆盖率腿能跑完全量套件后恢复门禁。在此之前，ratchet 步骤变红是需要排查的信号，不是噪音。见 [CI/CD 指南 §3.9](ci-cd-guide.md)。
 
 #### ⚠ 实测覆盖率必须跑全部 5 个测试二进制
 
@@ -271,7 +278,7 @@ gcovr 仍可用于生成逐文件 HTML 报告（`--html-details`），但**汇�
 
 - `cmake/Coverage.cmake`（`oauth2_apply_gcov(target)`）给每个 first-party 库 + 测试可执行文件加 `-fprofile-arcs -ftest-coverage`，并显式链接 libgcov（仅 GCC；Clang 的 profile 运行时由 `-fprofile-arcs` 链接选项自动提供，无 libgcov）。
 - `tests/test_main.cc` 在两处 `std::_Exit()` 前显式调用 `__gcov_dump()`：因为 `_Exit` 绕过 `atexit`，libgcov 的计数器 flush 不会自动执行（否则 gcov 读到全 0 计数）。这是 Drogon 测试框架 fast-exit 与 gcov 的已知交互，需在测试 main 里手动补 flush。（注：4 个 per-lib gtest 二进制正常退出，不走 `_Exit`，因此它们不需要手动 flush。）
-- 覆盖率当前阶段性目标：60%（7ba8068 实测 57.9%）。剩余盲区集中在难以 HTTP 测试的分支：WebAuthn 典礼/加密深分支、UserSelfService（需逆向 auth 前置 filter）、storage-postgres 事务/错误回退分支（需故障注入）。社交 OAuth 控制器已可通过 `SocialMockFixture.h` 的 Fake 注入在 memory 模式下覆盖（GitHub happy-path 经 `saveTokenPair` 存储抽象重构后不再依赖 `getDbClient()`）。ORM 自动生成的 `libs/storage-postgres/src/models/*.cc` 已从分母排除。
+- 覆盖率政策：强制地板是上面的 ratchet 基线（推导整体 63.1%，2026-09-05）——7ba8068 时定的 60% 阶段性目标已经达成；此后的推进意味着刻意上调基线（见“覆盖率 ratchet 机制如何运作”）。剩余盲区集中在难以 HTTP 测试的分支：WebAuthn 典礼/加密深分支、UserSelfService（需逆向 auth 前置 filter）、storage-postgres 事务/错误回退分支（需故障注入）。社交 OAuth 控制器已可通过 `SocialMockFixture.h` 的 Fake 注入在 memory 模式下覆盖（GitHub happy-path 经 `saveTokenPair` 存储抽象重构后不再依赖 `getDbClient()`）。ORM 自动生成的 `libs/storage-postgres/src/models/*.cc` 已从分母排除。
 
 ---
 

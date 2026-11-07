@@ -256,33 +256,60 @@ This page summarizes the overall architecture of fulla from four perspectives: t
 
 ## 2. Module Layout
 
-To keep the system genuinely pluggable, the project is structured as two tiers: a core plugin library plus a demo server:
+The backend is split into **8 CMake packages** with an enforced dependency direction — the Domain layer (`common` / `oauth2` / `identity`) never depends on Drogon (verified by `tools/arch-guard` in CI). Arrows read "depends on":
+
+```mermaid
+graph TD
+    server["fulla-server<br/>(apps/server)"] --> drogon
+    drogon["fulla::drogon<br/>plugin · controllers · filters · services"] --> oauth2
+    drogon --> identity
+    drogon --> memory
+    drogon --> redis
+    drogon --> postgres
+    memory["fulla::storage::memory"] --> oauth2
+    redis["fulla::storage::redis"] --> oauth2
+    postgres["fulla::storage::postgres<br/>(ORM models)"] --> identity
+    oauth2["fulla::oauth2<br/>OAuth2/OIDC engine"] --> common
+    identity["fulla::identity<br/>auth · MFA · WebAuthn · RBAC"] --> common
+    common["fulla::common<br/>shared kernel · ports"]
+```
+
+How a request flows through those packages:
 
 ```text
-HTTP 请求
+HTTP request
   |
-  |-- fulla-server（apps/server —— 演示服务器二进制）
-  |   `-- AuthService：本地应用认证（libs/drogon/src/AuthService.cc）
+  |-- fulla-server (apps/server -- authorization-server binary; pure
+  |   assembly: bootstrap, config, migrations, OpenAPI)
+  |   `-- AuthService: local application login/registration
+  |       (libs/drogon/src/AuthService.cc)
   |
-  `-- fulla::drogon（libs/drogon —— 独立 SDK 包，target fulla::drogon）
-      |-- 插件核心
-      |   `-- OAuth2Plugin：初始化与生命周期管理
+  `-- fulla::drogon (libs/drogon -- Drogon adapter/SDK package, target fulla::drogon)
+      |-- OAuth2Plugin: initialization & lifecycle management
       |
-      |-- 协议控制器与过滤器（自动注册）
-      |   |-- AuthorizationEndpointController / TokenEndpointController / DiscoveryController：
-      |   |     处理 /oauth2/authorize、/oauth2/token、/.well-known/*、/userinfo
-      |   `-- 过滤器：AuthorizationFilter、OAuth2AuthFilter
+      |-- Protocol controllers & filters (auto-registered)
+      |   |-- AuthorizationEndpointController / TokenEndpointController / DiscoveryController:
+      |   |     /oauth2/authorize, /oauth2/token, /.well-known/*, /userinfo
+      |   `-- Filters: AuthorizationFilter (admin API: scope gate + RBAC
+      |         role/permission gate), OAuth2AuthFilter (user routes)
       |
-      |-- 服务层（核心业务逻辑，libs/oauth2）
-      |   |-- TokenService：PKCE、授权码/令牌的生成与交换
-      |   |-- ClientService：客户端凭据与 redirect URI 校验
-      |   `-- IdentityService：RBAC、subject 映射与用户同意
+      |-- Services (HTTP-facing business orchestration)
+      |   |-- TokenService (libs/oauth2): PKCE, authorization-code/token
+      |   |     generation & exchange
+      |   |-- ClientService (libs/oauth2): client credentials & redirect URI checks
+      |   `-- IdentityService (libs/drogon/src/services/IdentityService.cc,
+      |         namespace fulla::identity): RBAC/scope tiering, subject
+      |         mapping, user consent — lives in the adapter layer because it
+      |         orchestrates HTTP flows; the identity domain logic and its
+      |         repository interfaces (IUserRepository / IRoleRepository /
+      |         ISubjectMappingRepository) live in libs/identity
       |
-      `-- 存储层（按仓储定义端口，按后端装配 Bundle）
-          |-- I{Client,Grant,Token,Consent,UserInfo}Repository：存储端口（libs/oauth2）
-          |-- MemoryRepositoryBundle：进程内测试存储（libs/storage-memory）
-          |-- PostgresRepositoryBundle：持久化存储（libs/storage-postgres）
-          `-- RedisRepositoryBundle：Redis 存储（libs/storage-redis）
+      `-- Storage (repository ports per aggregate, one bundle per backend)
+          |-- I{Client,Grant,Token,Consent}Repository: storage ports (libs/oauth2)
+          |-- MemoryRepositoryBundle: in-process test storage (libs/storage-memory)
+          |-- PostgresRepositoryBundle: persistent storage (libs/storage-postgres;
+          |     identity-side persistence in PostgresIdentityRepository)
+          `-- RedisRepositoryBundle: Redis storage (libs/storage-redis) — deprecated
 ```
 
 ## 3. Authorization-Code Flow
@@ -297,7 +324,7 @@ sequenceDiagram
     SPA->>Core: GET /oauth2/authorize
     Core->>Store: validate client
     Core-->>SPA: 302 → App /login
-    SPA->>App: POST /api/login
+    SPA->>App: POST /oauth2/login
     App->>Store: AuthService::validateUser
     App-->>SPA: 302 /callback?code=...
     SPA->>Core: POST /oauth2/token
@@ -319,7 +346,7 @@ sequenceDiagram
 | redis | `RedisRepositoryBundle` | **Deprecated** — logs an ERROR at startup and rejects the `refresh_token` grant with `unsupported_grant_type`; do not use. Redis now serves only as an optional cache layer in front of Postgres (see [Configuration Guide §3](../operate/configuration-guide.md)) |
 | postgres | `PostgresRepositoryBundle` | Production persistent storage |
 
-> Each `*RepositoryBundle` assembles all five repository implementations for its backend — client / grant / token / consent / userinfo (see the headers under each `libs/storage-*/include`).
+> Each `*RepositoryBundle` assembles the four OAuth2 repository implementations for its backend — client / grant / token / consent (see the headers under each `libs/storage-*/include`). Identity-side persistence (users, roles, subject mappings) lives outside the bundles in `PostgresIdentityRepository` (libs/storage-postgres), consumed through the `libs/identity` repository interfaces.
 
 ## 5. Frontend–Backend Integration
 
@@ -330,20 +357,23 @@ code for tokens, and then calls `/oauth2/userinfo`.
 For third-party social login, the frontend receives the external authorization code
 and submits it to backend endpoints:
 
+- `/api/github/login`
 - `/api/google/login`
 - `/api/wechat/login`
+
+The enabled set is discoverable via `GET /api/auth/providers` (the login page renders its provider buttons from it).
 
 Token exchange with the provider happens on the server side; provider secrets are never exposed to the browser.
 
 ## 6. Deployment Topology
 
-Docker Compose starts the following by default:
+Docker Compose (`deploy/docker/docker-compose.yml`) starts the following by default:
 
 - `fulla-frontend`: port `8080`
 - `fulla-admin` (admin console): port `8081`
 - `fulla-backend`: port `5555`
-- PostgreSQL: host port `5433`
-- Redis: host port `6380`
+- PostgreSQL: host port `5433` (bound to `127.0.0.1`)
+- Redis: host port `6380` (bound to `127.0.0.1`)
 - Prometheus: port `9090`
 
 For production, terminate TLS at a reverse proxy and proxy API requests to the Drogon
@@ -2247,92 +2277,288 @@ A: Yes. PKCE (RFC 7636) is implemented and enforced by default for PUBLIC client
 
 ---
 
-# RBAC Access Control System (Role-Based Access Control)
+# RBAC Access Control (Role-Based Access Control)
 
 Source: https://fulla.dev/docs/domains/rbac-guide
 
-# RBAC Access Control System (Role-Based Access Control)
+# RBAC Access Control (Role-Based Access Control)
 
-This document details the design and usage of the system's role-based access control (RBAC).
+fulla's access control is a **three-layer model** enforced by **three gates**
+(since v1.6.0, P1-8, [ADR-0014](../adr/ADR-0014-rbac-permission-enforcement.md)
+including its Erratum 2): roles are the coarse layer, OAuth2 resource scopes
+are the fine layer, and a role's **permission set** — the bridge — is the
+subset of resource scopes that ride on the role. This page documents the
+model, the schema, the management APIs, how each gate decides, and how to
+configure and operate it.
+
+> **Read this first**: a role no longer just "is admin or isn't". The `admin`
+> role still passes everything, but any custom role can be granted a subset
+> of resource-scope permissions (delegated administration — e.g. a helpdesk
+> role that may only read users). Conversely, holding a role never bypasses
+> the token-scope or consent tiers: a permission grants the *right to hold a
+> scope*, the token must still carry it.
 
 ## 1. Core Concepts
 
-The system adopts the standard RBAC model:
+| Layer | What it is | Examples | Lives in |
+|---|---|---|---|
+| **Role** (coarse) | A named principal grouping attached to users (M:N) | `admin`, `user`, `helpdesk` | `roles` / `user_roles` |
+| **Resource scope** (fine) | The OAuth2 scope vocabulary; the fine-grained authorization surface | `users:read`, `clients:write`, `audit:read` | `oauth2_scopes` (V023 family) + `ResourceScopeRegistry` |
+| **Permission** (the bridge) | A role's right to hold one resource scope — a permission's name IS a resource-scope name | `users:read` on the `helpdesk` role | `permissions` / `role_permissions` |
 
-- **User**: the acting subject of the system.
-- **Role**: a collection of permissions (e.g., `admin`, `user`).
-- **Permission**: a specific access capability (e.g., `user:delete`, `sys:monitor`) - *Note: currently simplified to role-based URL interception*.
+Relationship model:
 
-### Relationship Model
+- `User <-> Role`: many-to-many (`user_roles`); assigned at registration
+  (default `user` role) and via `PUT /api/admin/users/{userId}/roles`.
+- `Role <-> Permission`: many-to-many (`role_permissions`); the role's
+  resource-scope set, managed via `PUT /api/admin/roles/{roleId}/permissions`.
+- The special permission **`admin`** is a super-permission: the `admin` role
+  is seeded with it plus every resource scope, and the literal `admin` role
+  passes all three gates regardless of any grant (chain ① keeps
+  `hasAdminRole` as a separate bypass).
 
-- `User <-> Role`: many-to-many
-- `Role <-> Permission`: many-to-many
+## 2. Database Schema (V005 + V043)
 
-## 2. Database Design
-
-Relevant table structures (PostgreSQL):
+`V005__rbac_schema.sql` creates the four RBAC tables:
 
 ```sql
--- Users table
-CREATE TABLE users (...);
-
--- Roles table
-CREATE TABLE roles (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'admin', 'user'
-    description TEXT
-);
-
--- User-role association table
-CREATE TABLE user_roles (
-    user_id INT REFERENCES users(id),
-    role_id INT REFERENCES roles(id),
-    PRIMARY KEY (user_id, role_id)
-);
+roles              (id, name UNIQUE, description, ...)          -- seeded: 'admin', 'user'
+permissions        (id, name UNIQUE, description, ...)
+user_roles         (user_id FK users,  role_id FK roles,  PK(user_id, role_id))
+role_permissions   (role_id FK roles, permission_id FK permissions, PK(role_id, permission_id))
 ```
 
-## 3. Configuration Rules (rbac_rules)
+`V043__rbac_permissions_seed.sql` (v1.6.0) seeds the permission catalog with
+the nine V023 resource-scope names plus `admin`, and grants the `admin` role
+the full set:
 
-Configure the mapping between URL paths and required roles in `config.json`:
+| Permission | Description (seed) |
+|---|---|
+| `users:read` | Read user accounts and roles |
+| `users:write` | Create, update, and delete users; assign roles |
+| `clients:read` | View OAuth2 client registrations |
+| `clients:write` | Create, update, and delete OAuth2 clients |
+| `tokens:read` | View issued tokens |
+| `tokens:write` | Revoke and manage tokens |
+| `roles:read` | View roles and the scope catalog |
+| `roles:write` | Create and update roles, scopes, and their mappings |
+| `audit:read` | Read and export audit logs |
+| `admin` | Administrative super-permission (implies the full set) |
+
+Notes:
+
+- The four legacy V005 names (`user:read`, `user:write`, `user:delete`,
+  `admin:access`) are **retired in place** — V043 rewrites their
+  descriptions with a `[LEGACY: ...]` marker (UPDATE, no DELETE). The
+  enforcement layer reads only V023-shaped names, so a legacy row (e.g. the
+  old `user`-role `user:read` grant) is inert by design; re-grant with the
+  new names.
+- **Memory mode** (`storage_type: memory`) holds no `role_permissions` rows;
+  `RolePermissionResolver` falls back to a compile-time default map that
+  mirrors the V043 seed: `admin` → the full ten-permission set, every other
+  role → none.
+
+## 3. Management APIs
+
+All routes below are admin-gated (`roles:read` / `roles:write` /
+`users:write` scope, each with `impliedBy: admin`) —
+[API Reference](api-reference.md):
+
+| Method & path | Purpose |
+|---|---|
+| `GET /api/admin/roles` | List roles with user counts (`roles:read`) |
+| `POST /api/admin/roles` | Create a role — built-ins (`admin`, `user`) cannot be duplicated (`roles:write`) |
+| `PUT /api/admin/roles/{roleId}` | Update a role's description (`roles:write`) |
+| `DELETE /api/admin/roles/{roleId}` | Delete a role — built-ins cannot be deleted (`roles:write`) |
+| `GET /api/admin/roles/{roleId}/permissions` | The role's permission-name list (`roles:read`) |
+| `PUT /api/admin/roles/{roleId}/permissions` | **Full-replace** the role's permission set (`roles:write`) |
+| `GET /api/admin/users/{userId}/roles` | Roles assigned to a user (`users:read`) |
+| `PUT /api/admin/users/{userId}/roles` | Assign a user's roles — 409 if it would strip the last active admin (`users:write`) |
+| `GET /api/admin/scopes` | The OAuth2 scope catalog (`roles:read`) |
+| `GET /api/admin/scopes/resources` | The (path, method) → required-scopes matrix (see §5) |
+
+**PUT permissions semantics**: the body's `permissions` array becomes the
+role's entire grant set. Every listed name must exist in the permissions
+catalog — one unknown name fails the whole replace with 400 (no partial
+grants). The change is transactional, audited as `role_permissions_updated`,
+and the role-permission cache entry is invalidated on commit (single-instance
+deployments are immediately consistent; multi-instance drift is a known
+limitation until shared-storage P3).
+
+**First admin**: with `auth.bootstrap_admin.enabled` (default `true`) the
+server creates the `admin` user at startup when no user holds the admin role
+— password from `FULLA_BOOTSTRAP_ADMIN_PASSWORD` or a random one printed to
+the log exactly once (see
+[Configuration Guide §2](../operate/configuration-guide.md)). Manual SQL is
+no longer needed for either the first admin or permission grants.
+
+Example — grant a helpdesk role read-only user access:
+
+```bash
+# 1. Create the role (token: admin scope)
+curl -X POST http://localhost:5555/api/admin/roles \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"helpdesk","description":"Read-only user support"}'
+
+# 2. Grant exactly one permission (full replace)
+curl -X PUT http://localhost:5555/api/admin/roles/3/permissions \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"permissions":["users:read"]}'
+
+# 3. Attach it to a user (full role-list replace)
+curl -X PUT http://localhost:5555/api/admin/users/5/roles \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"roles":["user","helpdesk"]}'
+```
+
+## 4. Enforcement — the Three Gates
+
+Authorization decisions are made in three independent places. All three were
+re-pointed to the permission lookup in v1.6.0; skipping any one of them
+would give delegated admins inconsistent verdicts depending on the request
+path.
+
+| Gate | Component | Decides |
+|---|---|---|
+| ① Scope tiering | `ScopeDecisionEngine` predicate chain (libs/oauth2) | Whether a **requested scope** may be issued / used by this user |
+| ② Identity checks | `IdentityService::validateUserRolesForScopes` (libs/drogon services) | Same question on the login/2-step path (and any direct callers) |
+| ③ HTTP role gate | `AuthorizationFilter::checkAccess` (libs/drogon filters) | Whether this **HTTP request** may proceed at all |
+
+**Gate ① — scope tiering (issuance)**. At `/oauth2/authorize` (and token
+exchange), each requested scope walks three tiers: client allowlist →
+admin-tier check → consent. Which scopes are *admin-class* comes from the
+DB (`oauth2_scopes.requires_admin_role`, loaded at startup by `OAuth2Plugin`
+into `AuthorizationService` and `IdentityService` — deprecated column, read
+through v2.0). Whether the user *passes* is permission-based: an admin-class
+scope passes when the user's role→permission union covers it, **or** the
+user holds the literal `admin` role. Classification and determination are
+deliberately decoupled — granting a permission never de-classifies a scope.
+
+**Gate ② — IdentityService**. The login path (`/oauth2/login` and the
+2-step portal flow) tiers requested scopes through the same logic before
+minting an authorization code: admin-class scopes require the literal
+`admin` role or a permission union that covers **every** requested
+admin-class scope.
+
+**Gate ③ — AuthorizationFilter (per request)**. On every admin route the
+filter:
+
+1. Extracts the token from the `Authorization: Bearer` header **only** (the
+   query/form fallback was removed in v1.6.0 — RFC 9700 forbids it).
+2. Validates the access token (opaque reference tokens are introspected
+   against storage) and pins the principal (`userId`, `scope`, `clientId`,
+   `orgId`) onto the request.
+3. **Scope gate first**: looks the route up in
+   `ResourceScopeRegistry` — the central (path, method) → required-scopes
+   matrix — and rejects with `403 insufficient_scope` (+ RFC 6750
+   `WWW-Authenticate` challenge) unless the token's scope set satisfies it.
+4. **Role/permission gate**: re-resolves the user's roles from the DB
+   (roles in the token response are informational — never trusted for
+   access decisions), resolves the role→permission union via
+   `RolePermissionResolver`, and matches the request path against
+   `rbac_rules` (§5). Failure → `403` `AUTHZ_INSUFFICIENT_PERMISSIONS`;
+   no rule matched and not a public path → **DEFAULT DENY**.
+
+## 5. The Scope System: OIDC Scopes vs Resource Scopes
+
+Two scope families coexist in `oauth2_scopes`:
+
+- **OIDC / identity scopes** — `openid`, `profile`, `email` (plus `org`,
+  v1.4.0): describe what identity data a client may see. Granted by user
+  consent; never admin-class.
+- **Resource scopes** — the V023 family (`users:read` … `audit:read`,
+  all `requires_admin_role = TRUE`): gate the admin API surface, one
+  (path, method) entry per route in `ResourceScopeRegistry`.
+
+Implication rules that matter in practice:
+
+- A token carrying **`admin`** satisfies any resource-scope requirement —
+  every admin route declares `impliedBy: ["admin"]` (implication is
+  per-route, not a global graph).
+- `admin` **never** implies `openid` / `profile` / `email` — those
+  requirements carry an empty `impliedBy`, so a userinfo call always needs
+  an actual user token with `openid`. Likewise the `/api/me` family
+  requires `profile` with **no** impliedBy: an admin token does not satisfy
+  user self-service.
+- A role's permission set says which resource scopes a user **may be
+  issued**; the token must still carry the scope (client requests it,
+  gates ①/② validate it, consent is recorded).
+
+Discover the live matrix (read-only, no DB access) with:
+
+```bash
+curl http://localhost:5555/api/admin/scopes/resources \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+# → {"resources":[{"path":"/api/admin/users","method":"GET",
+#    "required_scopes":["users:read"],"implied_by":["admin"]}, ...]}
+```
+
+The registry is built once at startup from every controller's OpenAPI
+endpoint declarations; a startup consistency check aborts the process if an
+admin-gated route lacks an entry (silent-gap protection).
+
+## 6. Delegated Administrators (v1.6.0)
+
+The three-gate model unlocks what the pre-v1.6 "literal admin role" gates
+could not express: **custom roles with a limited permission subset**.
+Worked example — the `helpdesk` role from §3, holding only `users:read`:
+
+- `GET /api/admin/users` works: gate ③'s `/api/admin/users.*` rule
+  (`{"permissions":["users:read"]}`) matches before the `/api/admin/.*`
+  catch-all; gate ① lets helpdesk users be issued `users:read` (the token
+  must carry it and consent must be recorded).
+- Everything else admin-side is denied: the catch-all
+  `"/api/admin/.*": ["admin"]` requires the literal role, and gates ①/②
+  reject other admin-class scopes (no permission covers them).
+- Red line (security review H2): a helpdesk grant never *de-classifies* a
+  scope — `users:write` stays admin-class; helpdesk simply fails the
+  permission check for it.
+
+Operational notes:
+
+- Permission and role-permission writes route through the admin API, which
+  invalidates the in-process role-permission cache on commit — single-node
+  deployments see changes immediately; on multi-instance deployments other
+  nodes serve stale grants until restarted (known limitation, resolved by
+  the P3 shared-storage work package).
+- Memory-mode deployments use the compile-time default map (§2) and cannot
+  express delegated roles.
+
+## 7. Configuration Quick Reference
+
+`rbac_rules` lives in `config.json` under `custom_config` and maps **regex
+path patterns** to requirements. The shipped default
+(`apps/server/config.json`) shows both forms:
 
 ```json
 "rbac_rules": {
-    "/api/admin/.*": ["admin"],       // admin only
-    "/api/user/.*": ["user", "admin"] // user or admin
+    "/api/admin/users.*": { "permissions": ["users:read"] },
+    "/api/admin/.*": ["admin"],
+    "/api/user/.*": ["user", "admin"],
+    "/oauth2/register": ["admin"],
+    "/oauth2/device/approve": ["admin"]
 }
 ```
 
-- **Logic**: OR logic (possessing any single role in the list is sufficient to pass).
-- **Matching**: URL paths are matched by regular expression.
+- **Array form** (legacy, unchanged): OR over role names — any one listed
+  role passes.
+- **Object form** `{"roles": [...], "permissions": [...]}` (v1.6.0): the
+  caller's role→permission union must cover **every** listed permission
+  name; a permissions-only entry is the delegated-administration shape.
+- **Matching**: most-specific-first — rules are sorted by descending
+  pattern length at load, and the **first** path match decides. Put
+  specific rules before catch-alls (the loader enforces this, but keep the
+  JSON readable in that order too).
+- **DEFAULT DENY**: a path that matches no rule and is not in
+  `public_paths` (optional regex array, unset by default) is rejected.
+- The shipped `/api/user/.*` entry is a legacy remnant — no registered
+  route lives under `/api/user/` (the user-facing family is `/api/me/*`,
+  which is scope-gated by `profile` via `OAuth2AuthFilter`, not by
+  rbac_rules). Harmless, but don't copy it as a template.
 
-## 4. Authentication Flow
-
-1. **Login/Registration**:
-   - On registration, users are automatically assigned the default `user` role.
-   - On login, the system queries the `user_roles` table to load all of the user's roles.
-2. **Token Issuance**:
-   - The `roles` list is included in the token response (JSON body).
-   - `roles` are also issued into the JWT claims along with the access token (written by TokenService at issuance).
-3. **Request Interception (AuthorizationFilter)**:
-   - Parse the access token to obtain the `userId`.
-   - Query the cache/database by `userId` to fetch the current roles.
-   - Match the request URL against `rbac_rules`.
-   - Verify that the user holds a required role.
-   - **Pass**: continue processing.
-   - **Deny**: return `403 Forbidden`.
-
-## 5. Management Endpoints
-
-- **Dashboard**: `/api/admin/dashboard` (requires the `admin` role)
-
-## 6. How to Grant Admin Privileges
-
-Currently this must be granted manually via SQL (in production it is usually done through the SuperAdmin UI):
-
-```sql
--- Assume the target user ID is 5 and the Admin role ID is 1
-INSERT INTO user_roles (user_id, role_id) VALUES (5, 1);
-```
+Related reading: [Configuration Guide §15](../operate/configuration-guide.md)
+(RBAC enforcement knobs), [Multi-Tenancy](multi-tenancy.md) (why roles are
+global, not per-org), [Architecture Overview](../architecture/architecture-overview.md).
 
 
 ---
@@ -5323,39 +5549,39 @@ sudo systemctl start certbot.timer
 - Backend metrics: `https://your-domain.com/metrics` (internal network only)
 - Health check: `https://your-domain.com/health`
 
-### audit_logs 分区维护（#83）
+### audit_logs partition maintenance (#83)
 
-`audit_logs` 自 V025 起按月分区（`[当前月-12, 当前月+25]` 的窗口 + 一个 DEFAULT 兜底分区）。
-**分区窗口不再需要手工 cron**：postgres 存储部署下，后端的清理服务
-（`cleanup_interval_seconds`，默认 3600s）每个周期会在分布式锁内调用
-`ensure_audit_partitions()`，自动创建缺失的月分区并把落入 DEFAULT 分区的行迁出。
+Since V025, `audit_logs` is partitioned by month (a `[current month-12, current month+25]` window plus a DEFAULT catch-all partition).
+**The partition window no longer needs a manual cron job**: in postgres-storage deployments, the backend's cleanup service
+(`cleanup_interval_seconds`, default 3600s) calls `ensure_audit_partitions()` inside the distributed lock on every cycle,
+which creates any missing monthly partitions and evacuates rows that landed in the DEFAULT partition.
 
-排查命令：
+Diagnostic commands:
 
 ```sql
--- 窗口内各分区的行量与 DEFAULT 分区是否在堆积（堆积 = 维护没在跑）
+-- Row count per partition in the window, and whether the DEFAULT partition is piling up (a pile-up = maintenance is not running)
 SELECT tableoid::regclass AS partition, count(*) FROM audit_logs GROUP BY 1 ORDER BY 1;
 
--- 手工触发一次维护（与自动路径相同的幂等函数；ahead/behind 可调）
-SELECT ensure_audit_partitions();          -- 默认 ahead 24 / behind 12
-SELECT ensure_audit_partitions(36, 12);    -- 扩大预建窗口
+-- Trigger one maintenance run manually (the same idempotent function as the automatic path; ahead/behind are tunable)
+SELECT ensure_audit_partitions();          -- default ahead 24 / behind 12
+SELECT ensure_audit_partitions(36, 12);    -- widen the pre-created window
 ```
 
-注意：
+Notes:
 
-- 该函数幂等但非并发安全——自动路径已在清理锁内串行化；手工调用请避开整点清理时刻。
-- memory/redis 存储模式没有 audit 分区（该功能仅 postgres）。
-- 维护失败只会 `LOG_ERROR` 并在下个清理周期重试，不影响清理主流程。
+- The function is idempotent but not concurrency-safe — the automatic path is already serialized inside the cleanup lock; keep manual calls clear of the scheduled cleanup run.
+- The memory/redis storage modes have no audit partitions (the feature is postgres-only).
+- A maintenance failure only emits a `LOG_ERROR` and is retried on the next cleanup cycle; it does not affect the main cleanup flow.
 
-### 社交账号绑定（#71）Redis 依赖
+### Social account linking (#71): Redis dependency
 
-社交账号绑定功能的 link state（绑定流程的临时状态）存储在 Redis 中（`SET NX EX 600` / `GETDEL`，TTL 10 分钟）。
+The social account linking feature keeps its link state (the transient state of the linking flow) in Redis (`SET NX EX 600` / `GETDEL`, 10-minute TTL).
 
-- **有 Redis 时**：绑定发起端点正常工作，link state 存入 Redis 并在回调时校验。
-- **无 Redis 时**：绑定发起端点 fail-closed，返回 `NotConfigured` 类错误（HTTP 503）。
-- **登录不受影响**：社交登录（已绑定账号的直接登录）不依赖 Redis link state，无需 Redis 也可正常工作。
+- **With Redis**: the link-initiation endpoint works normally; the link state is stored in Redis and verified on the callback.
+- **Without Redis**: the link-initiation endpoint fails closed, returning a `NotConfigured`-class error (HTTP 503).
+- **Login is unaffected**: social login (direct sign-in with an already-linked account) does not depend on the Redis link state and works without Redis.
 
-生产部署确保 `fulla-redis` 容器运行即可（默认 compose 已包含）。
+For production deployments, simply make sure the `fulla-redis` container is running (the default compose file already includes it).
 
 ---
 
@@ -8099,10 +8325,6 @@ Push/PR to master (and workflow_dispatch)
         │           Playwright e2e, and the frontend Docker image build smoke
         │           (#160, path-filtered to frontends/** + deploy/docker/**)
         │
-        ├── openapi-governance (openapi-governance.yml, PR-triggered) —
-        │     oasdiff breaking-change gate (base vs PR openapi.yaml;
-        │     exemption list tools/openapi-governance/oasdiff-breaking-ignore.md)
-        │
         ├── MAIN gate
         │     └── build-test (_build-test.yml × {linux, windows, macos} matrix)
         │           ├── install system dependencies / Conan
@@ -8115,6 +8337,8 @@ Push/PR to master (and workflow_dispatch)
         └── RELEASE gate
               └── sdk-smoke (_sdk-smoke.yml) — full-stack find_package smoke test
 ```
+
+> `ci.yml` is only the **per-PR entry point**. `.github/workflows/` holds **13 workflow files** in total; the rest run on their own triggers (path-filtered PR gates, schedules, tags, or manual dispatch). Section 3 covers all of them.
 
 ---
 
@@ -8140,7 +8364,141 @@ concurrency:
 
 ---
 
-## 3. Frontend Gate (`_frontend.yml`)
+## 3. Workflow Inventory (all 13 files under `.github/workflows/`)
+
+Three of the 13 files are **reusable workflows** (`_build-test.yml`, `_frontend.yml`, `_sdk-smoke.yml`, all `on: workflow_call`) — they run only when `ci.yml` calls them. The other ten are independent top-level workflows with their own triggers and path filters.
+
+Classification used below:
+
+- **Gate** — no `continue-on-error`; a failure turns the run red, and for `pull_request`-triggered workflows blocks the merge.
+- **Reference** — the step carries `continue-on-error: true`: it reports (step summary, annotations, artifacts) but cannot fail the run by itself.
+- **Post-merge / release-only / manual** — never fires on a PR; runs on `master`/`release/**` pushes, tags, or `workflow_dispatch` only.
+
+### 3.0 Summary table
+
+| File | Trigger (+ path filter) | What it does | Classification |
+|---|---|---|---|
+| `ci.yml` | push master / PR master / dispatch (no paths) | FAST → MAIN → RELEASE gates: static checks, frontend, 3-platform build+test, SDK smoke | Gate |
+| `_build-test.yml` | `workflow_call` (from `ci.yml`) | Conan + `cmake --preset` build, full ctest, named test gates, log artifacts | Gate |
+| `_frontend.yml` | `workflow_call` (from `ci.yml`) | UI-kit sync, vitest, ESLint, tsc builds, bundle budget, Playwright e2e, frontend image smoke | Gate |
+| `_sdk-smoke.yml` | `workflow_call` (from `ci.yml`) | Full-stack build + `SdkSmoke.FullStack` external `find_package` consumer | Gate |
+| `openapi-governance.yml` | PR master / dispatch (paths: `apps/server/openapi.yaml`, `tools/openapi-governance/**`, self) | oasdiff breaking-change gate, base vs PR spec | Gate |
+| `clients-sdk.yml` | PR master / push master / dispatch (paths: `clients/**`, `tools/clients/**`, `apps/server/openapi.yaml`, self) | Python/Go/TS clients: generated-tree drift gate + version linkage + unit tests | Gate |
+| `security.yml` | push master / PR master / weekly cron (Mon 03:00 UTC) / dispatch (no paths) | Dependency EOL scan over `conan.lock` + secret/sensitive-file hygiene | Gate (cron leg: alert for newly-EOL'd deps) |
+| `sanitizer.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json`, self on PR) | `asan-ubsan`: full ctest under ASan+UBSan vs real Postgres+Redis; `tsan-nightly`: full ctest under TSan | `asan-ubsan`: Gate; `tsan-nightly`: dispatch-only today |
+| `coverage.yml` | PR master / push master / dispatch (paths: `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**`, + script/cmake/self on PR) | gcov instrumented build, per-library coverage report, ratchet vs baseline | Build/report: Gate; ctest run + ratchet: **Reference** (v1.6.0, `continue-on-error`) |
+| `website.yml` | push master / PR (any branch, paths: `docs/**`, `blog/**`, `website/**`, `scripts/gen-llms-txt.mjs`, self) / dispatch | llms.txt freshness gate + Docusaurus build (`onBrokenLinks: 'throw'`); Pages deploy on master/dispatch | Gate (build); deploy: master push / dispatch only |
+| `interop.yml` | push master / push `release/**` / dispatch (no paths) | RP interop smoke: three RP libraries + nextjs-demo browser driver vs a real fulla stack | Post-merge / release-branch gate (deliberately off the PR hot path) |
+| `release.yml` | push tag `vX.Y.Z` (strict SemVer) / dispatch (dry run) | Version check, SDK tarball, multi-arch images, cosign + SBOM, GitHub Release, PyPI | Release gate (tag only) |
+| `npm-publish.yml` | dispatch only | `fulla-oauth2` npm package: verify, pack, publish (needs `NPM_TOKEN`) | Manual; never blocks a release |
+
+### 3.1 `ci.yml` — CI
+
+**Trigger**: push master / PR master / workflow_dispatch; concurrency cancels superseded runs per ref.
+
+The single entry point that chains the three gates via `needs` (see the tree in §1):
+
+- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
+- **`frontend`** — calls `_frontend.yml` (see §3.3 and §4).
+- **`build-test`** — calls `_build-test.yml` as a `{linux, windows, macos}` matrix (`fail-fast: false`; each leg 60 min, `-DFULLA_WERROR=ON` everywhere; see §3.2 and §5).
+- **`sdk-smoke`** — calls `_sdk-smoke.yml` after build-test (see §3.4).
+
+### 3.2 `_build-test.yml` — Reusable Build & Test (MAIN gate)
+
+One parameterized job body shared by all three platforms (differences only via inputs). Steps: system deps / Conan install → Conan cache → configure + build → (linux) Postgres/Redis containers, readiness probes, schema + seed init → full ctest → named test gates (`run_named_test_gates`, linux+windows only): Error-Standardization Req 12.x tests, `Performance_P1_Benchmark_*` in-process cases, E2E and RedirectUri integration entries → upload test logs on failure (7-day retention). Detailed behavior: §5.
+
+### 3.3 `_frontend.yml` — Reusable Frontend Quality Gate (FAST gate)
+
+Two jobs: `frontend` (Node 20) and `frontend-image-smoke` (#160, Docker, path-filtered via `dorny/paths-filter` to `frontends/**` + `deploy/docker/**`). Detailed behavior: §4.
+
+### 3.4 `_sdk-smoke.yml` — Reusable SDK Smoke (RELEASE gate)
+
+Linux-only (single authoritative SDK-consumability proof), 60 min. Builds the full stack with `BUILD_EXAMPLES=ON` (build-tree package configs) and runs `ctest -L SdkSmoke`: `SdkSmoke.FullStack` uses `ctest --build-and-test` to configure, build, and run `examples/full-stack-host` as a real external `find_package` consumer. The smoke host runs with memory storage (`config/smoke.json`) — no database. Gate: yes.
+
+### 3.5 `openapi-governance.yml` — OpenAPI Governance
+
+**Trigger**: PR master (paths: `apps/server/openapi.yaml`, `tools/openapi-governance/**`, the workflow itself) + workflow_dispatch; 5 min; needs `fetch-depth: 0` to extract the base spec from `origin/master`.
+
+Runs pinned **oasdiff v1.29.1** `breaking` between the base-branch spec and the PR spec; any breaking change (path removal, request-body tightening, response narrowing, ...) fails **unless** the change ships with a major version bump or is explicitly exempted with justification in `tools/openapi-governance/oasdiff-breaking-ignore.md`. Gate: yes. Reproducible locally with the same `oasdiff` command.
+
+### 3.6 `clients-sdk.yml` — Client SDKs
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `clients/**`, `tools/clients/**`, `apps/server/openapi.yaml`, and the workflow itself — unrelated PRs are not affected. Kept outside `ci.yml`'s static-checks on purpose (needs Python + Go + Node toolchains and the pinned generators).
+
+Three 15-min jobs:
+
+- **`python`** — pinned `openapi-python-client==0.29.0`; **drift gate** (`regen_clients.py --check --python-only`: the committed generated tree must match `openapi.yaml`) + pytest unit tests (MockTransport; integration auto-skips).
+- **`go`** — build + vet + gofmt; **drift gate** (`--go-only`) + `go test ./...` (httptest; integration behind `-tags integration`).
+- **`ts`** — Node 22; **drift gate** (`--ts-only`) + **version linkage** (`--version-only`: `package.json` == `pyproject.toml` == `cmake/Version.cmake`) + `npm run check` (tsc emit + vitest red lines).
+
+Gate: yes, all three jobs. Local equivalents are listed in the workflow header comment.
+
+### 3.7 `security.yml` — Security
+
+**Trigger**: push master / PR master / **weekly cron Mondays 03:00 UTC** / dispatch — the schedule exists so newly-EOL'd dependencies get flagged even when no commits land. Two 5-min jobs, both gates on push/PR:
+
+- **`dependency-eol`** — `tools/security/dependency_eol_check.py` over `conan.lock` (policy floors: openssl >= 3.0, zlib >= 1.2.13, libcurl >= 8.4.0).
+- **`secret-hygiene`** — `scripts/security-check.sh`: tracked `.env` files, hardcoded key patterns, `.gitignore` coverage, config permissions.
+
+### 3.8 `sanitizer.yml` — Sanitizers
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `cmake/**`, `CMakePresets.json` (the workflow file itself only on PR).
+
+- **`asan-ubsan`** (gate, 60 min) — GCC Debug build via the `linux-asan-ubsan` preset (UBSan with `-fno-sanitize-recover` behavior via `halt_on_error=1`, ASan with leak detection), full ctest (900 s per test) against real Postgres 17 + Redis 7 containers, so integration suites are covered. Logs uploaded on failure. Triage policy: real defects are fixed in the same PR; third-party/system-call false positives get a documented suppression file under `tools/sanitizers/`.
+- **`tsan-nightly`** (TSan, 90 min) — `if: schedule || dispatch`; TSan cannot compose with ASan/UBSan, hence a separate job running the **full** suite under the `linux-release-tsan` preset. Note: despite the name, **no `schedule:` cron is configured in the file today** — this job only actually runs via `workflow_dispatch`.
+
+### 3.9 `coverage.yml` — Coverage
+
+**Trigger**: PR master / push master / dispatch, path-filtered to `libs/**`, `apps/server/**`, `tests/**`, `tools/coverage/**` (the PR leg additionally watches `scripts/measure_coverage.py`, `cmake/Coverage.cmake`, `CMakePresets.json`, and the workflow itself).
+
+Linux gcov leg (`linux-coverage` preset, Debug, Postgres+Redis active, 60 min):
+
+1. Build with `FULLA_TEST_COVERAGE` instrumentation, run the full ctest suite split into two passes (non-`OAuth2Tests`, then `OAuth2Tests`) with `FULLA_TEST_HTTP_TIMEOUT=180`.
+2. **Gate**: the explicit `gcov -j -p` JSON pass fails hard if zero `.gcda` or zero `.gcov.json.gz` files were produced (a false-green report is itself a failure — an empty baseline was seeded exactly this way once).
+3. Per-library summary appended to the run's step summary via `scripts/measure_coverage.py`.
+4. **Ratchet gate** — `measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json` compares each library against the committed baseline (see the [Testing Guide §7](testing-guide.md) for the baseline table and the ratchet mechanism).
+5. Raw gcov JSON + test logs uploaded as artifacts.
+
+**Gate vs. reference (v1.6.0)**: the ctest run and the ratchet comparison are `continue-on-error: true` — the gcov-instrumented server cannot finish the full suite inside practical ceilings, so a partial `.gcda` set would read as false regressions. Correctness stays gated by the Build&Test matrix and the ASan/UBSan leg; gating is to be restored once the coverage leg can run the suite to completion (dedicated runner or suite sharding).
+
+### 3.10 `website.yml` — Website
+
+**Trigger**: push master / PR on **any branch** (paths: `docs/**`, `blog/**`, `website/**`, `scripts/gen-llms-txt.mjs`, the workflow) / dispatch (manual deploy from a branch before merge). Concurrency group `pages` does **not** cancel in progress.
+
+- **`build`** (gate) —
+  1. **llms.txt freshness gate**: regenerate `website/static/llms.txt` + `llms-full.txt` from `docs/` via `scripts/gen-llms-txt.mjs` and `git diff --exit-code` them, so the committed AI-native artifacts can never drift stale;
+  2. Docusaurus build (`npm ci && npm run build`) with **`onBrokenLinks: 'throw'`** in `website/docusaurus.config.js` — broken links fail the build, replacing manual link checking;
+  3. upload the Pages artifact.
+- **`deploy`** — only on master push or dispatch; publishes to GitHub Pages (requires Pages Source = GitHub Actions).
+
+### 3.11 `interop.yml` — RP Interop Smoke
+
+Per the workflow's own header: the **v1.5.0 P0 exit gate** ("three libraries, zero warnings"). Four drivers — three standard RP libraries (`openid-client` v6 / `authlib` / `go-oidc` + `x/oauth2`) drive the authorization-code + PKCE → token → userinfo → refresh → end-session chain **in strict mode** against a real fulla stack, plus the P1-5 **nextjs-demo Playwright smoke**, a fourth driver that drives a **real browser** through the first-party `fulla-oauth2` TS SDK (landing → fulla login form → callback with state+PKCE verified → profile/userinfo → protected API → RP-initiated logout) — a different recipe from the three json-mode drivers.
+
+**Trigger**: push to `master` or `release/**` + workflow_dispatch. Deliberately **not** on the per-PR hot path (runtime cost); it is the post-merge/release-branch interop gate. Single job (45 min): build only the `fulla-server` target (linux-release), boot Postgres 17 + Redis 7, apply migrations + seeds, boot the server and poll `/health`, then run the four drivers in order (Node, Python, Go from inside `tests/interop/go`, then the demo: build `clients/ts`, `npm ci`, Playwright chromium, `next start -p 8080`, `npx playwright test`). On failure the server log's tail is printed. See `tests/interop/README.md`.
+
+### 3.12 `release.yml` — Release
+
+**Trigger**: push of a **strict SemVer tag** (`v1.2.3` pattern; suffixed tags such as `v1.0.0-something` intentionally do NOT release) + workflow_dispatch as a **dry run** (everything builds; nothing is pushed; manifest/release skipped). Concurrency never cancels a half-pushed release. Jobs:
+
+- **`version-check`** — tag must equal `cmake/Version.cmake`; re-runs the OpenAPI spec governance check and the api-diff frozen-surface check (which also cross-checks cmake vs CMakeLists vs conanfile).
+- **`sdk-package`** — Linux x86_64 SDK tarball (8 static libs + headers + CMake package configs via `cmake --install`), validated by configuring + building `examples/full-stack-host` against the **installed** prefix; sha256 attached.
+- **`images`** — backend / frontend / admin images, amd64 + arm64, each on a **native** runner (no QEMU — the C++ build is impractical under emulation), pushed to GHCR as `<version>-<arch>` (tag runs only).
+- **`manifest`** (tag only) — multi-arch manifests `<version>` + `latest` via imagetools, then cosign **keyless** signatures on the manifest digests and per-image SPDX SBOMs (syft).
+- **`github-release`** (tag only) — Release notes from git-cliff (conventional commits) with a CHANGELOG fallback + spliced breaking-change entries + verification instructions; SDK tarball and SBOMs attached; also pushes the nested `clients/go/v<version>` tag the Go module proxy needs.
+- **`sdk-python`** — version-linkage check + sdist/wheel build always; PyPI publish only on tag and only once `PYPI_API_TOKEN` is configured (plain twine — see the workflow comment for why not `pypa/gh-action-pypublish`).
+
+### 3.13 `npm-publish.yml` — npm publish (fulla-oauth2)
+
+**Trigger**: `workflow_dispatch` **only** (decision D7): the npm package publishes by manual dispatch, never on push, and never blocks a release. Steps: `npm ci` (Node 22) → version linkage (`--version-only`) → generated-tree drift gate (`--check --ts-only`) → `npm run check` (tsc + vitest) → `npm pack` (inspect the tarball that would ship) → `npm publish --access public` **only if the `NPM_TOKEN` secret exists**; otherwise a notice (build+pack-only verification — the expected pre-token state, which keeps the publish path exercised and reviewed).
+
+### 3.14 What is deliberately NOT a GitHub Actions workflow
+
+- **HTTP performance benchmarks** — `benchmarks/` (setup via `benchmarks/fulla/setup.sh`, scenarios via `benchmarks/fulla/run-scenario.sh`) is a **manual, out-of-band release gate** (five-scenario regression vs the prior release, same-machine back-to-back arms). CI shared runners give non-credible absolute numbers, so no benchmark workflow exists; a future relative-delta `benchmarks-regression.yml` is only a design item (`benchmarks/README.md` "Known limitations"). The `Performance_P1_Benchmark_*` cases run by `_build-test.yml` are in-process ctest entries, not throughput gates.
+
+---
+
+## 4. Frontend Gate (`_frontend.yml`)
 
 The frontend gate runs for every CI run (it is part of the FAST gate, so it fails cheap and early). One Node job plus one Docker job:
 
@@ -8151,11 +8509,11 @@ The frontend gate runs for every CI run (it is part of the FAST gate, so it fail
 
 Budget baselines live in `scripts/check-frontend-size.mjs` (raw JS bytes: total + entry chunk per app, +10% headroom). Raise a baseline only with written justification in the PR — the entry-chunk cap doubles as the i18n AOT guard: the vue-i18n message compiler re-entering the bundle costs ~90 KB on the main chunk and trips the gate mechanically.
 
-## 4. Core Job in Depth: `build-test`
+## 5. Core Job in Depth: `build-test`
 
 `build-test` is a reusable workflow (`_build-test.yml`) invoked by `ci.yml` as a `{linux, windows, macos}` matrix. All three platforms run the same Conan + `cmake --preset` build and CTest suite; the database is enabled via matrix inputs only where needed.
 
-### 4.1 Service Containers (linux matrix leg only)
+### 5.1 Service Containers (linux matrix leg only)
 
 In the Linux matrix leg, CI starts Postgres and Redis in Docker containers and confirms readiness with real queries (not just `pg_isready`):
 
@@ -8169,7 +8527,7 @@ In the Linux matrix leg, CI starts Postgres and Redis in Docker containers and c
 
 > **WARNING**: Redis runs without a password in CI, so the test configuration overrides it with the environment variable `FULLA_REDIS_PASSWORD=""`. The Windows/macOS matrix legs use `use_database=false` and fall back to the in-memory storage configuration (`config.ci.json`).
 
-### 4.2 Build Cache Strategy
+### 5.2 Build Cache Strategy
 
 To speed up CI builds, Conan dependencies are cached:
 
@@ -8179,7 +8537,7 @@ To speed up CI builds, Conan dependencies are cached:
 
 A cold build takes roughly **15-20 minutes**; with a cache hit this drops to **3-5 minutes**.
 
-### 4.3 Database Initialization
+### 5.3 Database Initialization
 
 Before testing, migration scripts initialize the database:
 
@@ -8197,32 +8555,33 @@ done
 
 > **Note**: the legacy `sql/001_*.sql` through `sql/004_*.sql` files are deprecated and removed; all schema definitions are now managed centrally under `apps/server/migrations/`.
 
-### 4.4 Test Execution
+### 5.4 Test Execution
 
 ```bash
-ctest -V -C Release --output-on-failure --timeout 120
+ctest -C Release --output-on-failure --timeout 1200
 ```
 
-- `-V` : verbose output
 - `--output-on-failure` : print test stdout on failure
-- `--timeout 120` : each test gets at most 2 minutes
+- `--timeout 1200` : the ceiling accounts for `OAuth2Tests` being the whole 61k-assertion binary (a 120 s ceiling used to report the suite as `(Timeout)`)
 
-### 4.5 Failure Log Upload
+After the full ctest pass, the linux/windows legs re-run the headline **named test gates** individually (Error-Standardization Req 12.x properties, `Performance_P1_Benchmark_*`, E2E, RedirectUri integration) so a failure is attributable to the gated requirement.
+
+### 5.5 Failure Log Upload
 
 When tests fail, CI automatically packages and uploads the following as artifacts (retained for 7 days):
 
-- `build/Testing/` — CTest test reports
+- `build/<preset>/Testing/` — CTest test reports
 - `apps/server/logs/` — application runtime logs
 
 ---
 
-## 5. Image Build and Signing
+## 6. Image Build and Signing
 
-The CI pipeline itself does not build Docker images. Multi-arch container image builds, GHCR pushes, cosign signing, and syft SBOMs are handled by `release.yml` when a SemVer tag (`vX.Y.Z`) is pushed. See [Releases & Supply Chain Security](https://github.com/voidvec/fulla#releases--supply-chain-security).
+The CI pipeline itself does not build Docker images (except the frontend image *smoke* builds of §4). Multi-arch container image builds, GHCR pushes, cosign signing, and syft SBOMs are handled by `release.yml` when a SemVer tag (`vX.Y.Z`) is pushed — see §3.12. See also [Releases & Supply Chain Security](https://github.com/voidvec/fulla#releases--supply-chain-security).
 
 ---
 
-## 6. Reproducing the CI Environment Locally
+## 7. Reproducing the CI Environment Locally
 
 To simulate CI behavior locally:
 
@@ -8249,7 +8608,7 @@ ctest -V -C Release --output-on-failure
 
 ---
 
-## 7. Multi-Platform Matrix
+## 8. Multi-Platform Matrix
 
 Multi-platform CI has been consolidated into the `build-test` job in `ci.yml`; an `include` matrix runs all three platforms on the same reusable workflow (`_build-test.yml`).
 
@@ -8645,20 +9004,27 @@ Historical security/functional test reports, bug status analyses, and connection
 
 ### Code coverage
 
-Measured line coverage (gcov, gcc 13.3 Debug build, WSL Ubuntu 24.04, Postgres+Redis active; ORM-generated `models/` excluded; measured at 7ba8068 with all 5 test binaries executed):
+The table below is the **CI ratchet baseline**: the per-library floor that the `Coverage` workflow checks on every run (`.github/workflows/coverage.yml` → `scripts/measure_coverage.py --ratchet tools/coverage/ratchet-baseline.json`). The numbers are copied verbatim from `tools/coverage/ratchet-baseline.json` — the enforced reference, not a one-off local measurement. Data provenance: seeded **2026-09-05** from PR #176's own green CI run (gcov, Linux Debug `linux-coverage` preset, Postgres+Redis active, all 5 test binaries executed, ORM-generated `models/` excluded).
 
-| Library | Line coverage | Notes |
+| Library | Baseline line coverage | Notes |
 |---|---|---|
-| libs/common | 69.4% (318/458) | ErrorCatalog/ErrorTypes/ErrorContext/ConfigManager (driven by the per-lib gtest binary `fulla-common-test`); ConfigManager environment-related branches and some ErrorCatalog branches uncovered |
-| libs/identity | **96.9%** (590/609) | Auth/Mfa/WebAuthn/Social/Totp/Session |
-| libs/storage-memory | **97.1%** (431/444) | All methods of the Memory backend covered (the mandatory CI path) |
-| libs/oauth2 | **92.1%** (627/681) | TokenService/AuthService/ClientService/JwkManager/Pkce |
-| libs/storage-redis | 46.2% (306/663) | Contract tests cover the getClient/validate/grant/token/consent main paths; Lua scripts and transaction CRUD still to be covered |
-| libs/storage-postgres | 43.9% (727/1657) | Contract tests cover the main paths; the remaining blind spots are transaction/error-fallback branches (require fault injection to trigger) |
-| libs/drogon | **53.5%** (4807/8978) | admin 0%→55-69%, admin controllers 0%→91-100%; authorize/health/discovery/mfa/deviceauth/userselfservice/apidoc controllers reinforced; social OAuth controllers reinforced via mock injection (Google 38.3%, WeChat 30.6%, GitHub 32.5%); WebAuthn 39.2% (non-crypto stub, no authenticator needed) |
-| **Overall** | **57.9%** (7806/13490) | Sum of the per-library rows above (the OVERALL of `scripts/measure_coverage.py` is exactly that per-library sum); +9.4pp improvement over the 48.5% baseline |
+| libs/common | 74.3% (364/490) | ErrorCatalog/ErrorTypes/ErrorContext/ConfigManager (driven by the per-lib gtest binary `fulla-common-test`) |
+| libs/identity | 87.1% (1294/1485) | Auth/Mfa/WebAuthn/Social/Totp/Session |
+| libs/storage-memory | 97.0% (421/434) | All methods of the Memory backend covered (the mandatory CI path) |
+| libs/oauth2 | 88.8% (936/1054) | TokenService/AuthService/ClientService/JwkManager/Pkce |
+| libs/storage-redis | 62.2% (705/1134) | Contract tests cover the main paths; Lua scripts and transaction CRUD still to be covered |
+| libs/storage-postgres | 54.1% (1047/1936) | Contract tests cover the main paths; the remaining blind spots are transaction/error-fallback branches (require fault injection to trigger) |
+| libs/drogon | 57.8% (6967/12056) | Controllers, admin layer and adapters (by far the largest denominator) |
+| **Overall (derived)** | **63.1%** (11734/18589) | Sum of the rows above. The baseline JSON holds only per-library entries; the ratchet compares per library, never the overall |
 
-> The previous-round baseline was 48.5% (7091/14631); this round raised the overall figure to 57.9% through admin-layer HTTP integration tests + controller reinforcement + mock-injection tests for social OAuth/WebAuthn (`tests/common/SocialMockFixture.h` + the shared Fakes in `libs/identity/include/fulla/identity/testing/`). All of social OAuth's Google/WeChat/GitHub can run in memory mode via mock injection (the injection path writes no DB); the GitHub happy-path initially could not be covered in memory mode because `issueTokensForUser` called `getDbClient()` directly, and was subsequently refactored to persist through the `OAuth2Plugin::saveTokenPair` storage abstraction (see `Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens` in `SocialLoginHttpTest.cc`), so the happy-path is now testable (GitHubController improved from 5.9% to 32.5%); WebAuthn is a non-crypto stub, fully testable in Postgres mode. Note: the 58.8% quoted by an earlier version of this document was a sum of stale per-library numbers (the 98.8% for common was outdated data — `libs/common/src` now has only 4 source files totaling 458 lines, measured at 69.4%); this table has been fully replaced with the values measured at 7ba8068. Remaining blind spots: storage-postgres transaction/error-fallback branches (require fault injection).
+> History: 48.5% (early 2026-08 baseline) → 57.9% overall measured 2026-08-07 at 7ba8068 (local WSL gcov; the numbers this table used to show) → 63.1% derived overall in the 2026-09-05 baseline. The per-library changes vs the old table (storage-redis 46.2% → 62.2%, storage-postgres 43.9% → 54.1%, drogon 53.5% → 57.8%, common 69.4% → 74.3%, while identity 96.9% → 87.1% and oauth2 92.1% → 88.8%) come with much larger denominators (identity 609 → 1485, oauth2 681 → 1054 instrumented lines): the CI coverage leg instruments the full stack and executes paths the local WSL measurement never reached, so both directions of movement are denominator effects, not coverage losses. The memory-mode techniques behind the social-OAuth/WebAuthn numbers are unchanged (`tests/common/SocialMockFixture.h` fake injection; the GitHub happy-path freed from `getDbClient()` by the `OAuth2Plugin::saveTokenPair` storage-abstraction refactor).
+
+#### How the coverage ratchet works
+
+- **The baseline is a floor, not a target.** `tools/coverage/ratchet-baseline.json` records `covered / total / pct` per library. On every Coverage run, `measure_coverage.py --ratchet` compares each library's current percentage (truncated to 0.1pp) against `baseline pct - 0.5pp` (`RATCHET_TOLERANCE_PP`); falling below that floor fails the gate (exit 1). Libraries with fewer than 200 instrumented lines *in the baseline* (`MIN_LINES`) are exempt — currently none are. A baseline library missing from the run, or whose instrumented line count collapses below `MIN_LINES`, also fails: lost instrumentation is never a pass. A library new to the run passes until it is baselined.
+- **There is no automatic upward ratchet.** To raise the floor after coverage improves, re-baseline deliberately: take the per-library numbers the workflow prints (locally, `measure_coverage.py --json` emits exactly the baseline shape) and edit `tools/coverage/ratchet-baseline.json` in a reviewed PR that states which tests raised the numbers. Lowering a baseline is the same edit and needs the same justification.
+- **Seed mode**: with the baseline file absent, the script prints the JSON to commit and exits 0 — that is how the current baseline was produced (PR #176).
+- **Gating status (v1.6.0)**: the ctest run and the ratchet step in `coverage.yml` currently carry `continue-on-error: true` — the gcov-instrumented server cannot finish the full suite inside practical ceilings, so a partial `.gcda` set would read as false regressions. The build/instrumentation steps still fail hard, and gating is to be restored once the coverage leg can run the suite to completion. Until then, treat a red ratchet step as a signal to investigate, not noise. See the [CI/CD Guide §3.9](ci-cd-guide.md).
 
 #### ⚠ Measured coverage requires running all 5 test binaries
 
@@ -8693,7 +9059,7 @@ gcovr is still usable for per-file HTML reports (`--html-details`), but **for su
 
 - `cmake/Coverage.cmake` (`oauth2_apply_gcov(target)`) adds `-fprofile-arcs -ftest-coverage` to every first-party library + test executable and explicitly links libgcov (GCC only; on Clang the profile runtime is provided automatically by the `-fprofile-arcs` link option, no libgcov).
 - `tests/test_main.cc` explicitly calls `__gcov_dump()` before both `std::_Exit()` sites: because `_Exit` bypasses `atexit`, libgcov's counter flush does not run automatically (otherwise gcov reads all-zero counts). This is a known interaction between the Drogon test framework's fast exit and gcov, requiring a manual flush in the test main. (Note: the 4 per-lib gtest binaries exit normally without `_Exit`, so they need no manual flush.)
-- Current phase target for coverage: 60% (57.9% measured at 7ba8068). The remaining blind spots concentrate in branches that are hard to test over HTTP: deep WebAuthn ceremony/crypto branches, UserSelfService (requires driving the auth pre-filter in reverse), storage-postgres transaction/error-fallback branches (require fault injection). Social OAuth controllers can now be covered in memory mode via the Fake injection of `SocialMockFixture.h` (the GitHub happy-path no longer depends on `getDbClient()` after the `saveTokenPair` storage-abstraction refactor). The ORM-generated `libs/storage-postgres/src/models/*.cc` files are excluded from the denominator.
+- Coverage policy: the enforced floor is the ratchet baseline above (63.1% derived overall, 2026-09-05) — the 60% phase target set at 7ba8068 has been passed; further movement means raising the baseline deliberately (see "How the coverage ratchet works"). The remaining blind spots concentrate in branches that are hard to test over HTTP: deep WebAuthn ceremony/crypto branches, UserSelfService (requires driving the auth pre-filter in reverse), storage-postgres transaction/error-fallback branches (require fault injection). Social OAuth controllers can now be covered in memory mode via the Fake injection of `SocialMockFixture.h` (the GitHub happy-path no longer depends on `getDbClient()` after the `saveTokenPair` storage-abstraction refactor). The ORM-generated `libs/storage-postgres/src/models/*.cc` files are excluded from the denominator.
 
 ---
 
