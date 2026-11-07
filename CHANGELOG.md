@@ -13,6 +13,12 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 <!-- new entries go here -->
 
+## [Unreleased]
+
+### Fixed
+
+- **Race in the consent fan-out could produce wrong authorization decisions under load**: `AuthorizationService::evaluateScopes` fanned one DB lookup out per requested scope, and the per-scope finishers ran unsynchronized on whatever IO thread their DbClient callback landed on — with multiple IO threads the shared consent map and the outstanding-scope counter were mutated concurrently. Observed as an ASan heap-buffer-overflow inside the `unordered_map` buckets plus a torn counter that fired the completion callback early (incomplete consent summary → authorize bounced back to the consent screen) or never (request hung). Latent since the v1.5.0-M2 organization-consent union fan-out; first caught by the ASan CI leg on 2026-11-07. The finishers are now serialized by a per-request mutex; the summary evaluation and completion callback fire exactly once, outside the lock.
+
 ## [1.6.0] - 2026-10-30
 
 The P1 platform release: eight packages from the 2026-10 improvement
