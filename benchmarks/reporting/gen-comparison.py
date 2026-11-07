@@ -269,10 +269,10 @@ def resolve_common_batch(explicit: str | None):
         pin = (date, sha)
         missing = [p for p in with_data if pin not in batches[p]]
         if missing:
-            avail = sorted(set().union(*batches.values()))
+            avail = sorted(set().union(*(batches[p] for p in missing)))
             raise SystemExit(
                 f"[gen-comparison] ERROR: --batch {explicit} missing for: "
-                f"{', '.join(missing)}. Available batches: "
+                f"{', '.join(missing)}. Batches available for those products: "
                 + ", ".join(f"{d}-{s}" for d, s in avail))
         return pin, None
     common = set.intersection(*(batches[p] for p in with_data)) if len(with_data) > 1 else set()
