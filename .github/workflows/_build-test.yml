@@ -140,9 +140,9 @@ jobs:
 
       - name: Install Conan (macOS)
         if: inputs.platform == 'macos'
-        # macos-14 ships a PEP 668 "externally-managed-environment" Python that
-        # blocks a plain pip3 install. --break-system-packages is safe on an
-        # ephemeral CI VM.
+        # macOS runner images (macos-14 and later) ship a PEP 668
+        # "externally-managed-environment" Python that blocks a plain pip3
+        # install. --break-system-packages is safe on an ephemeral CI VM.
         run: |
           pip3 install --break-system-packages conan
           conan profile detect --force
