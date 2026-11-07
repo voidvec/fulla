@@ -95,9 +95,13 @@ profile 与 email 类 claims（`name`、`preferred_username`、`email`、`email_
 | Scope | 返回的 Claims |
 |-------|---------------|
 | `openid` | `sub` (必需 scope，启用 OIDC) |
-| `profile` | `name`, `preferred_username`（经 userinfo 端点返回；旧 `username` key 同时下发至 v1.6.0 移除） |
+| `profile` | `name`, `preferred_username`（经 userinfo 端点返回；非标准旧 `username` key 已于 v1.6.0 移除） |
 | `email` | `email`, `email_verified`（经 userinfo 端点返回） |
 | `org` | `org_ctx`（`{org_id, org_name, roles[]}`）—— id_token 与 userinfo；仅当授权携带有效组织上下文（v1.4.0） |
+
+按用户的**自定义声明**（v1.6.0）：管理员可将用户的 `custom_attributes.<key>`
+（或 `display_name`）映射为按任意触发 scope 门控的已发布声明——并进入
+`claims_supported` 广告。见[自定义声明（Claims Mapping）](claims-mapping.md)。
 
 ## 6. 集成示例
 
