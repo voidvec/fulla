@@ -22,19 +22,15 @@
 
 ### 异步编程规范
 
-> 完整规则见 [`.claude/rules/db-operations.md`](.claude/rules/db-operations.md)（权威源头），本节不重复。
-
-要点：async callback 优先（`Mapper::findOne` / `execSqlAsync`）、`Mapper::findBy`-with-future 受限、`CoroMapper` 禁止；Callback 用 `std::make_shared<CallbackType>(std::move(cb))` 管理生命周期；每个 `Mapper<...>(dbClient)` 构造独立 try-catch。
-
-**关于 `[this]` 捕获**：分层级 —— Domain 服务层禁止 `[this]`，须用 `shared_from_this()`；Controller 层允许 `[this]`（`HttpController` 是进程级单例，见 `TokenEndpointController.cc:1306`）。旧版本文件把 `[this]` 列为全局禁令，与 controller 层实践冲突，已移除该条。详见 `AGENTS.md`。
+> 规则正文只在 [`.claude/rules/db-operations.md`](.claude/rules/db-operations.md)（权威源头）与 [`.claude/rules/async-cpp-gotchas.md`](.claude/rules/async-cpp-gotchas.md)；速查与 `[this]` 捕获的分层约定见 [AGENTS.md](AGENTS.md)。本节不复述。
 
 ---
 
 ## 二、数据访问规范
 
-> 完整规则见 [`.claude/rules/db-operations.md`](.claude/rules/db-operations.md)（权威源头），本节不重复。
+> 规则正文只在 [`.claude/rules/db-operations.md`](.claude/rules/db-operations.md)（存储层触发器：[`.claude/rules/data-access.md`](.claude/rules/data-access.md)）；索引见 [AGENTS.md](AGENTS.md)。本节不复述。
 
-要点：DB 操作必须 async callback + Mapper + Criteria 三件套；raw SQL 仅 6 种豁免（DDL / `UPDATE ... RETURNING` / 文档化批量 / `INSERT ... ON CONFLICT` / `SELECT 1` 探活 / 显式事务 `COMMIT`）；JOIN 禁用，拆查询或 `Criteria::In`；读写分离 `dbClientMaster_`（写）/ `dbClientReader_`（读），连接池配置在 `config.json`。
+读写分离：Postgres 存储层用 `dbClientMaster_`（写）/ `dbClientReader_`（读），见 `PostgresRepositoryBase.h`；连接池在服务端配置的 `db_clients` 段。
 
 ---
 

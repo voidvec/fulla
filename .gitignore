@@ -125,21 +125,13 @@ clients/python/.venv/
 .zcode/plans/
 
 # AI-tool workspaces (local-only; .claude/ stays tracked as the single source
-# of truth for rules/skills — see docs/branding/repo-professionalization-audit.md)
+# of truth for rules/skills — see docs/adr/repo-professionalization-audit.md)
 .qoder/
 .codebuddy/
 .kiro/
 .zcode/
 .workbuddy/
 frontends/user/scratch/scratch-output/
-
-# Internal docs (governance: docs/documentation-governance.md) — local-only;
-# the compliance audit stays tracked (CHANGELOG-linked trust artifact)
-docs/productization-evolution/*
-!docs/productization-evolution/done/
-docs/productization-evolution/done/*
-!docs/productization-evolution/done/oauth-oidc-compliance-audit.md
-docs/branding/rename-candidates.md
 
 # Maintainer-local docs (out of repo & out of site source; governance §2.4)
 docs-local/

@@ -8,7 +8,7 @@ Thanks for using Fulla! This page routes you to the right channel.
 | Report a bug or request a feature | [open an issue](https://github.com/voidvec/fulla/issues/new/choose) (bug report or feature request template) |
 | Report a security vulnerability | **privately** — see [SECURITY.md](SECURITY.md); do not open a public issue |
 | Read the docs | [fulla.dev](https://fulla.dev) (rendered site) or the [`docs/`](docs/) tree in this repo |
-| Use the Python / Go client SDKs | [`clients/python`](clients/python) / [`clients/go`](clients/go) READMEs + the [API reference](https://fulla.dev) — install issues go to GitHub issues with the `clients` label |
+| Use the Python / Go / TypeScript client SDKs | [`clients/python`](clients/python) / [`clients/go`](clients/go) / [`clients/ts`](clients/ts) (npm `fulla-oauth2`, since v1.6.0) READMEs + the [API reference](https://fulla.dev) — install issues go to GitHub issues with the `clients` label |
 | Embed the C++ SDK | [SDK integration guide](docs/sdk/) in the docs tree |
 | Contribute code | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
@@ -28,7 +28,12 @@ Fulla is maintained by a small team (see
 triaged as maintainer time allows. Security reports follow the timeline in
 [SECURITY.md](SECURITY.md) and take priority.
 
-## Commercial support
+## Commercial licensing & support
 
-Not offered at this time. The project is licensed under AGPL-3.0 (core) — see
-[LICENSE](LICENSE) and [CLA.md](CLA.md).
+The open-source core is licensed under AGPL-3.0 — see [LICENSE](LICENSE) and
+[CLA.md](CLA.md). A commercial license is available for closed-source
+integration or OEM redistribution that AGPL-3.0 does not permit; a paid
+enterprise subscription (directory sync, policy management, audit compliance,
+support) is planned but not yet available. See
+[Commercial Licensing](https://fulla.dev/commercial) for details, or open an
+issue with the `commercial` label.

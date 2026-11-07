@@ -9,8 +9,7 @@ C++ OAuth2/OIDC authorization server.
 - **API surface:** generated from the server's single-source OpenAPI spec
   (`apps/server/openapi.yaml`) with [openapi-python-client](https://github.com/openapi-generators/openapi-python-client)
   0.29.0 — 78 operations, fully typed (`py.typed`), `attrs`-based models over `httpx`
-- **Auth layer:** handwritten (token lifecycle is too sensitive to template — see the
-  [design doc](../../docs/productization-evolution/in-progress/client-sdk-facility-design.md))
+- **Auth layer:** handwritten (token lifecycle is too sensitive to template)
 
 ```bash
 pip install fulla-oauth2

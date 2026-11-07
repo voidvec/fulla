@@ -752,9 +752,13 @@ responses are returned via the error envelope `VALIDATION_RATE_LIMITED` (429).
 Secret Hygiene CI gate); all `.env*` files ignored; frontend production builds contain no
 embedded credentials.
 
-**Key rotation**: JWKS currently uses a single static `kid` (F-029 is a follow-up operations
-task; the rotation procedure is not automated); rotating DB/SMTP/social credentials = change
-env vars + rolling restart.
+**Key rotation**: signing keys rotate through the keystore directory
+(`oidc.signing_keystore_dir`, #110 — see [Configuration Guide §9](../operate/configuration-guide.md)):
+`<kid>.pem` files plus an `active_kid` marker; the JWKS endpoint publishes every loaded key
+and verification routes on the token's `kid`, so outstanding tokens survive a switch. Rotation
+is a documented manual three-restart procedure (publish → switch → retire), not automated;
+`GET /api/admin/oidc/keys` reports the live key set. Rotating DB/SMTP/social credentials =
+change env vars + rolling restart.
 
 **Incident response**: suspected leak → immediately rotate the affected credentials → if
 historical commits are involved, rewrite them with `git filter-repo` (not the deprecated
@@ -1378,24 +1382,30 @@ Authorization: `Bearer {access_token}`
 }
 ```
 
-### 3.x Path → required-scope mapping (F-010 minimal resource-scope model)
+### 3.x Path → required-scope mapping (#43 resource-scope model)
 
 After an access token passes validation, `OAuth2AuthFilter` / `AuthorizationFilter`
-enforce a minimal required scope based on the request path (RFC 6750 §3.1). When the
-token's scope is insufficient, a 403 is returned with `WWW-Authenticate: Bearer
-realm="fulla", error="insufficient_scope", scope="<required>"`, where the `scope`
-attribute names the scope required to unlock the resource.
+enforce the route's required scope (RFC 6750 §3.1). Requirements are declared per
+`(path, method)` on each controller's endpoint metadata and folded into the central
+`ResourceScopeRegistry` at startup; both filters consult that registry at request
+time. When the token's scope is insufficient, a 403 is returned with
+`WWW-Authenticate: Bearer realm="fulla", error="insufficient_scope", scope="<required>"`,
+where the `scope` attribute names the scope(s) that would unlock the resource.
 
 | Path | Required Scope | Notes |
 |---|---|---|
 | `/oauth2/userinfo` | `openid` | Coexists with the F-023 check inside the userinfo handler (defense-in-depth) |
-| `/api/me`, `/api/me/*` | `profile` | Enforced via `OAuth2AuthFilter` |
-| `/api/admin/*` | `admin` | Enforced via `AuthorizationFilter`, **layered on top of the existing RBAC role check** (the scope gate runs first, then the role gate; both must pass) |
+| `/api/me`, `/api/me/*` | `profile` | Enforced via `OAuth2AuthFilter` (exact-template entries plus a `/api/me` prefix catch-all; NOT implied by `admin`) |
+| `/api/admin/*` | resource scope per route (V023 family: `users:read`/`users:write`, `clients:read`/`clients:write`, `tokens:read`/`tokens:write`, `roles:read`/`roles:write`, `audit:read`), satisfied by the exact scope or by `admin` via `impliedBy` | Enforced via `AuthorizationFilter`, **layered on top of the RBAC role/permission gate** (the scope gate runs first, then the role gate; both must pass) |
 
-> **A complete resource-scope authorization model is future work** (separate issue
-> "Complete resource-scope authorization model"). Only the minimal mapping above
-> applies today; all other `/api/*` paths remain guarded solely by the existing RBAC
-> rules (`rbac_rules`), with no additional scope requirement. Scope matching is exact
+> The complete resource-scope authorization model (#43) is **live**: route-level
+> required scopes, the V023 resource-scope family, and the V043 permission catalog
+> (roles resolve to their resource-scope permission set, ADR-0014 delegated
+> administration — see the [Configuration Guide §15](../operate/configuration-guide.md)).
+> OIDC standard scopes (`openid`/`profile`/`email`) are never implied by `admin` —
+> a userinfo request always needs a user token actually carrying `openid`. The full
+> `(path, method) → scopes` matrix is discoverable at
+> `GET /api/admin/scopes/resources`. Scope matching is exact
 > matching against space-separated tokens (`fulla::drogon::utils::hasScope()`),
 > preventing `openidprofile` from erroneously passing `openid`/`profile`.
 
@@ -1535,7 +1545,7 @@ OIDC RP-Initiated Logout 1.0 §2 — terminates the user's server-side session a
 
 > **Language note**: the `Default Message` / `Description` columns quote the **exact strings the server emits** (registered in `ErrorCatalog`); they are kept verbatim — currently Chinese — because a client matching on `error_description` must see precisely what the catalog defines. A CI test (`Unit_P0_ErrorCatalogDoc_*`) fails if these tables drift from the catalog.
 
-Business endpoints (Application_Endpoint) return a uniform error envelope whose `error.code` values belong to the Error_Code set registered in the table below; `numeric_code` and `category` likewise come from the table, and the HTTP status code maps consistently by Error_Category (the NETWORK category distinguishes 502/504 by numeric_code). A few resource-semantics VALIDATION codes retain their pre-migration HTTP status codes via entry-level explicit overrides (Option A / requirement 11.4): `VALIDATION_RESOURCE_NOT_FOUND` → 404, resource-already-exists/conflict codes (`VALIDATION_RESOURCE_CONFLICT`, `VALIDATION_USERNAME_TAKEN`, `VALIDATION_EMAIL_TAKEN`, `VALIDATION_CREDENTIAL_ALREADY_REGISTERED`) → 409, `VALIDATION_RATE_LIMITED` → 429; all other VALIDATION codes remain 400.
+Business endpoints (Application_Endpoint) return a uniform error envelope whose `error.code` values belong to the Error_Code set registered in the table below; `numeric_code` and `category` likewise come from the table, and the HTTP status code maps consistently by Error_Category (the NETWORK category distinguishes 502/504 by numeric_code). A few resource-semantics VALIDATION codes retain their pre-migration HTTP status codes via entry-level explicit overrides (Option A / requirement 11.4): `VALIDATION_RESOURCE_NOT_FOUND` → 404, resource-already-exists/conflict codes (`VALIDATION_RESOURCE_CONFLICT`, `VALIDATION_USERNAME_TAKEN`, `VALIDATION_EMAIL_TAKEN`, `VALIDATION_CREDENTIAL_ALREADY_REGISTERED`) → 409, `VALIDATION_RATE_LIMITED` → 429, `EMAIL_TEMPLATE_NOT_FOUND` → 404, `EMAIL_TEST_RECIPIENT_DENIED` → 403, `EMAIL_TEST_QUOTA_EXCEEDED` → 429; all other VALIDATION codes remain 400.
 
 | Error_Code | numeric_code | Error_Category | HTTP Status | Default Message (Client_Safe_Message) |
 |---|---|---|---|---|
@@ -1553,7 +1563,6 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `VALIDATION_USERNAME_TAKEN` | 3006 | VALIDATION | 409 | 该用户名已被注册 |
 | `VALIDATION_EMAIL_TAKEN` | 3007 | VALIDATION | 409 | 该邮箱已被注册 |
 | `VALIDATION_CREDENTIAL_ALREADY_REGISTERED` | 3008 | VALIDATION | 409 | 该安全密钥已注册，无需重复添加 |
-
 | `WEBAUTHN_INVALID_ATTESTATION` | 3015 | VALIDATION | 400 | 注册声明无法通过验证 |
 | `WEBAUTHN_CHALLENGE_MISMATCH` | 3016 | VALIDATION | 400 | 注册挑战校验失败 |
 | `VALIDATION_RESET_TOKEN_INVALID` | 3009 | VALIDATION | 400 | 重置链接已失效，请重新申请 |
@@ -1879,14 +1888,15 @@ do yet, and how to use it without over-assuming isolation.
 > (see [RBAC Guide](rbac-guide.md)); today an org-scoped principal is not
 > automatically fenced off from other orgs' data.
 
-## 1. Model (V017 + V034/V036–V038)
+## 1. Model (V017 + V034/V036–V038 + V042)
 
-The core `organizations` table is V017; the organization layer now spans four
+The core `organizations` table is V017; the organization layer now spans five
 more migrations — `organization_members` + `organization_invitations` (V034),
 `organization_consents` (V036; the same migration adds
 `organizations.require_mfa`, org columns on codes/tokens, `audit_logs.org_id`,
 and seeds the `org` scope), `organization_succession_nominations` (V037),
-and `organization_consent_requests` (V038):
+`organization_consent_requests` (V038), and the `organizations.deleted_at`
+soft-delete marker (V042):
 
 ```sql
 organizations (
@@ -1922,6 +1932,10 @@ All routes require an admin-scope token (`AuthorizationFilter`;
 | `GET /api/admin/organizations` | List organizations (id, slug, name, branding) |
 | `POST /api/admin/organizations` | Create (slug: 3–50 lowercase chars, unique) |
 | `GET /api/admin/organizations/{slug}` | Fetch one |
+| `PATCH /api/admin/organizations/{slug}` | Update name / `logo_uri` / `primary_color` (v1.6.0, P1-4 #281; slug is immutable; brand fields use the P1-1 validation rules; audited `org_updated`) |
+| `DELETE /api/admin/organizations/{slug}` | Soft delete with a closed cascade (v1.6.0, P1-4 #281; V042 `deleted_at` + `#del-<id>` slug placeholder): pending invitations and succession nominations voided, org consents revoked, owned clients suspended (their tokens introspect inactive), memberships detached — one transaction; audited `org_deleted` |
+| `GET /api/admin/organizations/{slug}/members` | Read-only member roster (user_id, username, role, joined_at) (v1.6.0, #281) |
+| `DELETE /api/admin/organizations/{slug}/members/{userId}` | Remove a membership — removing the last owner is rejected with 409 (transfer ownership first); audited `org_member_removed` (v1.6.0, #281) |
 | `POST /api/admin/organizations/{slug}/transfer-ownership` | Reassign the owner seat to another live user (rescues the soft-deleted-owner deadlock; the old owner is demoted to admin) |
 
 Additionally:
@@ -1987,9 +2001,7 @@ Be explicit with stakeholders — these are **not** implemented:
 2. **No org-scoped filtering/isolation** on user or client listings; an
    admin sees across orgs.
 3. **No org-scoped roles**: roles are global (RBAC), not per-org.
-4. **No update/delete** endpoints for organizations (create/list/get +
-   ownership transfer only; updates go through the database or future API).
-5. **Per-org rate limits and API keys don't exist yet** — but creation
+4. **Per-org rate limits and API keys don't exist yet** — but creation
    *quotas* do: self-service org creation is quota'd per user
    (`max_orgs_per_user`), org-owned client counts are quota'd
    (`max_org_apps`), and self-service *application* creation is rate limited
@@ -2011,6 +2023,7 @@ in [`apps/server/migrations/`](https://github.com/voidvec/fulla/tree/master/apps
 | `V036` | `organization_consents` + `organizations.require_mfa` + org columns on the authorization chain + dropped the dead `oauth2_clients.org_id` |
 | `V037` | `organization_succession_nominations` |
 | `V038` | `organization_consent_requests` |
+| `V042` | `organizations.deleted_at` soft-delete marker + live-slug partial index (backs the admin DELETE cascade) |
 
 `users.org_id` is a legacy read-only column slated for v2.0 physical removal.
 Storage-layer details: [Data Persistence](../architecture/data-persistence.md).
@@ -2733,7 +2746,7 @@ The three images correspond one-to-one to the build targets in `deploy/docker/do
 2. (Optional) Refresh CHANGELOG.md locally:
    `git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md`
    (configuration lives in the root `cliff.toml`; the release workflow only generates the Release notes and never back-fills commits from the tag ref).
-3. Create a strict SemVer tag: `git tag v1.4.0 && git push origin v1.3.2`. Tags with a suffix (e.g. `v1.0.0-rc1`) do **not** trigger a release.
+3. Create a strict SemVer tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. Tags with a suffix (e.g. `v1.0.0-rc1`) do **not** trigger a release.
 4. `release.yml` then runs automatically: tag/version consistency checks → SDK packaging + install-tree consumption smoke test → native builds of the three images for amd64/arm64 → multi-arch manifest (`<ver>` + `latest`) → cosign keyless signing of the three images by digest + syft-generated SPDX SBOMs (three images + source tree) → GitHub Release (notes generated by git-cliff, with the SDK attachment and all SBOMs attached).
 5. A manual `workflow_dispatch` trigger = dry run (full build, but nothing is pushed and no Release is published).
 
@@ -2829,7 +2842,7 @@ This document is the single source of truth for external commitments; wherever S
 ## 5. Dependency Declarations
 
 - Feature-surface dependencies are **explicitly gated by the root `conanfile.py`'s `with_webauthn` / `with_identity` / `with_social` options**, not smuggled in as transitive surprises.
-  NOTE: the CBOR decoding dependency (`libcbor`) required by real WebAuthn (FIDO2) used to be declared here, but the current WebAuthn controller is a non-cryptographic stub (it consumes no CBOR), so `libcbor` has been removed as a dead dependency; it must be re-added once real WebAuthn cryptography lands (see the corresponding comment in `conanfile.py`).
+  NOTE: WebAuthn performs real W3C Level 2 cryptographic verification since v1.1.0 (#142 — `libs/identity/src/webauthn/WebAuthnCrypto.cc`), and its CBOR decoding dependency (`libcbor`, backing the typed read-only `CborReader` in `libs/identity/src/webauthn/`) is declared explicitly in `conanfile.py`.
 - Disabling an option (e.g. `-o with_webauthn=False`) maps through to the CMake-side `WITH_*` variables and prunes the corresponding compiled surface, so consumers can shrink their dependency footprint accordingly.
 
 ## 6. Plugin Registration and Configuration Contract (Host Integration)
@@ -3293,7 +3306,6 @@ explicitly):
   "auth": {
     "require_pkce_for_public": true,
     "allow_http_redirect_uri": true,
-    "allow_pkce_plain": false,
     "rate_limit": {
       "max_failures": 30,
       "window_seconds": 60
@@ -3302,13 +3314,15 @@ explicitly):
 }
 ```
 
-`allow_pkce_plain` (P0-5, default `false`): authorize is S256-only per RFC 9700
-§2.1.1 — a `code_challenge_method=plain` request (or an omitted method, which
-RFC 7636 §4.3 would default to plain) is rejected with `invalid_request`. The
-key is a one-release escape hatch for legacy PUBLIC clients still on plain
-PKCE; it will be removed in a later minor.
+PKCE at the authorize endpoint is **S256-only** (P0-5, RFC 9700 §2.1.1): a
+`code_challenge_method=plain` request (or an omitted method, which RFC 7636
+§4.3 would default to plain) is rejected with `invalid_request`. The
+`auth.allow_pkce_plain` escape hatch that shipped in v1.5.0 as a one-release
+transition for legacy PUBLIC clients was **removed in v1.6.0** (see §14) — the
+config key no longer exists, and `code_challenge_method=plain` is rejected
+regardless of configuration.
 
-Both keys may be omitted; when the `rate_limit` object is missing, built-in defaults are used
+The `rate_limit` object may be omitted; when it is missing, built-in defaults are used
 (30 / 60). The limiter is a function-local singleton (`RateLimiter::instance()` from
 `libs/common/include/fulla/common/utils/RateLimiter.h`); the four protected endpoints share
 one counter table within the same process. This is minimal brute-force / token-probing
@@ -5730,8 +5744,8 @@ Critical security operations (such as token issuance) emit logs tagged with `[AU
 **Example**:
 
 ```
-2026-01-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
-2026-01-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
+2026-10-18 10:00:00 INFO [AUDIT] Action=IssueToken User=admin Client=fulla-portal Success=True
+2026-10-18 10:05:00 WARN [AUDIT] Action=ExchangeCode User=admin Client=fulla-portal Success=False Reason="Replay Detected"
 ```
 
 Security-relevant policy denials and social-login issuance use stable action keywords:
@@ -5740,10 +5754,23 @@ Security-relevant policy denials and social-login issuance use stable action key
   hash is legacy-format and `auth.allow_legacy_hash=false` (#103). WARN
   with the internal user id; migrate the account via password reset or a
   temporary window reopen (docs/operate/configuration-guide.md §10).
-- `SOCIAL_LOGIN_TOKEN_ISSUED` — a social login endpoint (GitHub/Google/WeChat)- `webauthn_clone_detected` — an assertion presented a non-increasing signCount
+- `SOCIAL_LOGIN_TOKEN_ISSUED` — a social login endpoint (GitHub/Google/WeChat)
+  issued a first-party token pair (#70). Details carry provider/client/scope/internal id.
+- `webauthn_clone_detected` — an assertion presented a non-increasing signCount
   (#142): rejected as a possible cloned authenticator; the credential should be
   de-registered and re-registered.
-  issued a first-party token pair (#70). Details carry provider/client/scope/internal id.
+- `mfa_backup_code_used` — a failed TOTP attempt was rescued by an MFA backup
+  code (v1.5.0); the token response carries `backup_codes_remaining`.
+- `webauthn_credential_deleted` — a passkey removed via
+  `DELETE /api/me/webauthn/credentials/{credentialId}` (v1.5.0; the delete
+  predicate binds ownership, so foreign and unknown ids answer the same 404).
+
+Since v1.6.0 the audit trail is also exportable as CSV:
+`GET /api/admin/logs/export` (admin role + `audit:read` scope; same filters as
+the list endpoint plus a mandatory time window unless `all=true`; cells are
+formula-injection hardened; every export is itself audited as `audit_exported`).
+Retention and the export row cap are configurable — see
+[Configuration Guide §13](configuration-guide.md).
 
 ### 2.2 Contextual Logs
 
@@ -9068,12 +9095,23 @@ MAJOR.MINOR.PATCH[-prerelease]
 | Component | Version source | Sync validation |
 |---|---|---|
 | C++ libraries + server | `MAJOR/MINOR/PATCH` in [`cmake/Version.cmake`](https://github.com/voidvec/fulla/blob/master/cmake/Version.cmake) | ✅ `tools/api-diff/api_diff.py` cross-checks `Version.cmake` / `CMakeLists.txt project(VERSION)` / `conanfile.py version` |
+| Frontend SPAs | `frontends/admin/package.json` + `frontends/user/package.json` | Six-point sync list (see below) |
+| OpenAPI spec | `apps/server/openapi.yaml` `info.version` | ✅ OpenAPI governance gate checks it equals `Version.cmake` |
+| Python client | `clients/python/pyproject.toml` `version` | ✅ `regen_clients` drift gate checks it equals `Version.cmake` |
+| TypeScript client | `clients/ts/package.json` `version` | Joins the `pyproject` == cmake linkage since v1.6.0 |
 | Docker images | Read from `Version.cmake` by `release.yml` | GHCR tag = `<version>` |
+| Chinese doc mirrors | `website/i18n/zh-CN/**` pages that embed concrete versions (e.g. `sdk-integration-guide` carries the tarball name / `CMAKE_PREFIX_PATH` / GHCR tag examples) | Same-PR dual-write duty; **explicitly on the carrier list** — the v1.5.0 and v1.6.0 bumps both missed these pages |
 | DB schema | The numbering of `apps/server/migrations/V0NN_*.sql` | **Not coupled to the product version** (see §6) |
 
 **The first step of any release is editing `cmake/Version.cmake`**; version drift
-across the three locations is intercepted by `api-diff` in the `version-check`
-job of `release.yml`.
+is intercepted by `api-diff` in the `version-check` job of `release.yml`.
+
+> The authoritative **six-point version sync list** (the minimum set that fails
+> the tag gate) plus the ~15 additional version carriers lives in the maintainer
+> **release-engineering skill** at
+> [`.claude/skills/release-engineering/SKILL.md`](https://github.com/voidvec/fulla/blob/master/.claude/skills/release-engineering/SKILL.md)
+> — this table summarizes it; the skill is the checklist to walk when cutting a
+> release.
 
 ---
 
@@ -9345,14 +9383,12 @@ git checkout -b release/2.0 v2.0.0 && git push origin release/2.0
 
 | # | Item | Problem it solves |
 |---|---|---|
-| **T1** | Write this document (✅ this file) | No written bump rules before |
-| **T2** | Execute the first official release since v1.0.0 (v1.0.1 or v1.1.0) | 840 commits piled up after v1.0.0, unreleased |
 | **T3** | Extend the `release.yml` tag trigger pattern + `latest` skip logic, enabling the pre-release channel | Prerelease tags currently do not trigger a release |
 | **T4** | Add a `latest` warning cross-reference to the prod deployment doc (`docker-deployment.md`) | The `latest` default poses a rolling-update risk in production |
 | **T5** | Define the release branch naming convention and add a pointer in the README (create the branch when first actually needed) | The patch release process is not yet instantiated |
 
-T1 is this file; T2 is the immediate priority; T3–T5 can land when their
-scenarios first occur.
+T1 (this document) and T2 (the first release after v1.0.0, shipped as v1.0.1)
+are done and no longer listed; T3–T5 can land when their scenarios first occur.
 
 
 ---
@@ -10979,7 +11015,7 @@ now executed):
 | sdk | sdk-integration-guide + sdk-runtime-contract + official Python/Go clients | done |
 | operate | deployment, docker-deployment, deployment-windows-docker-desktop, configuration-guide, observability, account-lockout, postgresql-major-upgrade, verification-checklist | done |
 | benchmark | COMPARISON.md (repo) + competitor-benchmark-design.md (docs/benchmark/) | done |
-| adr | ADR-0001..0012 + three trust archives | done |
+| adr | ADR-0001..0014 + three trust archives | done |
 | API | openapi.yaml rendered at runtime by the server (swagger-ui static assets are server-hosted, not site content) | n/a |
 
 Bilingual policy (v4): **English is the primary site language** (fulla.dev
@@ -11019,7 +11055,7 @@ docs/ (English) and website/i18n/zh-CN/.../current/ (Chinese), mirrored:
 ├── contribute/     # contributing: testing-guide / ci-cd-guide / versioning-and-release /
 │                  #               admin-test-cases / user-frontend-test-cases / admin-e2e-testing-guide
 ├── benchmark/      # competitor-benchmark methodology (results live in the repo's benchmarks/)
-└── adr/            # ADR-0001..0012 + three historical archives (Chinese body, bilingual note)
+└── adr/            # ADR-0001..0014 + three historical archives (Chinese body, bilingual note)
 ```
 
 **Layer 2: in-repo non-docs assets (tracked, not site content)** — referenced

@@ -111,7 +111,7 @@ counterpart in the same PR** (and vice versa). Full rules:
 
 ## CI Gates
 
-A PR runs `ci.yml` + `security.yml`:
+Every PR to `master` runs `ci.yml` + `security.yml`:
 
 | Gate | What it checks |
 |------|----------------|
@@ -120,6 +120,17 @@ A PR runs `ci.yml` + `security.yml`:
 | SDK Smoke | `examples/full-stack-host` consumed via real `find_package` |
 | Frontend | Vitest property tests |
 | Security | secret & sensitive-file hygiene, dependency EOL check |
+
+Five more workflows are path-filtered — they run on a PR only when it touches
+their paths (or the workflow file itself):
+
+| Workflow | Runs when the PR touches | What it checks |
+|----------|--------------------------|----------------|
+| `sanitizer.yml` | `libs/`, `apps/server/`, `tests/`, `cmake/`, `CMakePresets.json` | ASan + UBSan over the full suite (Linux) |
+| `coverage.yml` | `libs/`, `apps/server/`, `tests/`, coverage tooling, `CMakePresets.json` | gcov line coverage + ratchet (informational: the test and ratchet steps are `continue-on-error`) |
+| `clients-sdk.yml` | `clients/`, `tools/clients/`, `apps/server/openapi.yaml` | Python / Go / TypeScript clients: generated-code drift + build + unit tests |
+| `openapi-governance.yml` | `apps/server/openapi.yaml`, `tools/openapi-governance/` | oasdiff breaking-change check (base vs PR) |
+| `website.yml` | `docs/`, `blog/`, `website/`, `scripts/gen-llms-txt.mjs` | docs site build (deploy runs only from `master`) |
 
 If you change public SDK headers (`include/fulla/**`) intentionally,
 update `tools/api-diff/api-baseline.txt` in the same PR and call it out in

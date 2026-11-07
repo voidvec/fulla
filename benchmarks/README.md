@@ -1,15 +1,13 @@
 # Fulla HTTP performance benchmarks
 
 This directory holds the **reproducible, out-of-process** HTTP benchmarks for
-Fulla — the Phase 0 "credibility baseline" of the
-[productization evolution plan](../docs/productization-evolution/productization-evolution-plan.md).
-Its purpose is to turn the load-bearing performance claims in the
-[research report §3.1](../docs/productization-evolution/productization-research.md)
-(QPS / latency / memory / cold-start) from **assertions into measurements**.
+Fulla — the Phase 0 "credibility baseline" of the productization plan. Its
+purpose is to turn the load-bearing performance claims (QPS / latency /
+memory / cold-start) from **assertions into measurements**.
 
-> Full design (scenario matrix, methodology, acceptance criteria): see
-> [benchmark-facility-design.md](../docs/productization-evolution/in-progress/benchmark-facility-design.md).
-> This README is the **how-to-run** companion; the design doc is the **why**.
+> This README is the **how-to-run** guide. The methodology behind the numbers
+> (fairness rules, scenario matrix, metrics, acceptance criteria) is in
+> [competitor-benchmark-design.md](../docs/benchmark/competitor-benchmark-design.md).
 
 ## Scope (M1–M3)
 
@@ -88,7 +86,7 @@ bash benchmarks/fulla/teardown.sh
 `benchmarks/competitors/` extends this facility to same-environment
 competitor benchmarks (Keycloak / Ory Hydra / Zitadel) — same machine, same
 wrk staircase, same PostgreSQL backend, official recommended configs. Full
-methodology: [competitor-benchmark-design.md](../docs/productization-evolution/in-progress/competitor-benchmark-design.md).
+methodology: [competitor-benchmark-design.md](../docs/benchmark/competitor-benchmark-design.md).
 
 ```bash
 # One command, four products, serial with full teardown between products:
