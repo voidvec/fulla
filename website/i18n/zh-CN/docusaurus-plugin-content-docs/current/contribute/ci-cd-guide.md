@@ -99,7 +99,7 @@ concurrency:
 - **`build-test`**——以 `{linux, windows, macos}` 矩阵调用 `_build-test.yml`（`fail-fast: false`；每腿 60 分钟，全部 `-DFULLA_WERROR=ON`；见 §3.2 与 §5）。
 - **`sdk-smoke`**——build-test 之后调用 `_sdk-smoke.yml`（见 §3.4）。
 
-**编译缓存（2026-11-07）**：所有走编译的工作流（`_build-test` 的 Linux+macOS 腿、`_coverage-run`、`sanitizer`、`_sdk-smoke`）统一经 **ccache** 构建（`CMAKE_{C,CXX}_COMPILER_LAUNCHER`，上限 2 GB，经 `actions/cache` 缓存——键为 `conan.lock` + SHA，前缀回退）。实测动因：linux 腿约 33 分钟里 ~29 分钟在编译约 360 个第一方编译单元（依赖早已缓存）。单个缓存目录可安全服务 release/debug/asan/tsan/gcov 各变体——ccache 按预处理输出做键，不同 flag 集合哈希为不同条目。Windows 暂不接入（托管 runner 上 MSVC + ccache 不稳）。每腿构建后打印 `ccache -s` 命中率；首次运行为冷缓存，PR 迭代预热后构建预期降至个位数分钟。
+**编译缓存（2026-11-07）**：所有走编译的工作流（`_build-test` 的 Linux+macOS 腿、`_coverage-run`、`sanitizer`、`_sdk-smoke`）统一经 **ccache** 构建（`CMAKE_{C,CXX}_COMPILER_LAUNCHER`，上限 2 GB，经 `actions/cache` 缓存——键为 `conan.lock` + SHA，前缀回退）。实测动因：linux 腿约 33 分钟里 ~29 分钟在编译约 360 个第一方编译单元（依赖早已缓存）。单个缓存目录可安全服务 release/debug/asan/tsan/gcov 各变体——ccache 按预处理输出做键，不同 flag 集合哈希为不同条目。Windows 暂不接入（托管 runner 上 MSVC + ccache 不稳）。每腿构建后打印 `ccache -s` 命中率。**缓存作用域注意**：`actions/cache` 按运行所在 ref 存取——PR 存的缓存只有该 PR 自己可见，跨 PR 共享池只由 master 分支的运行播种。因此：首次合并后的 master 运行把 `ccache-*` 存进 `refs/heads/master` 之前都是冷构建；同一 PR 的后续推送立即变热；**新** PR 要等 master 播种后才热。
 
 ### 3.2 `_build-test.yml` — 可复用 Build & Test（MAIN 门）
 
