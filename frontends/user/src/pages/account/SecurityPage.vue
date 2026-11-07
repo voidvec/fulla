@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isSocialProvider, rememberSocialFlow } from '../../services/socialFlowContext'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -86,10 +87,12 @@ async function beginSocialLink(provider: string) {
   if (linkingProvider.value) return
   linkingProvider.value = provider
   try {
-    const { authorize_url: authorizeUrl } = await userService.beginSocialLink(provider)
-    // Flow marker for the callback page (survives the full-page round trip
-    // within this tab); the non-empty state in the callback is the backstop.
-    sessionStorage.setItem('social_link_flow', provider)
+    const { authorize_url: authorizeUrl, state } = await userService.beginSocialLink(provider)
+    // Preserve explicit purpose and provider across the full-page round trip.
+    if (!isSocialProvider(provider)) throw new Error('Unsupported provider')
+    const redirectUri = new URL(authorizeUrl).searchParams.get('redirect_uri')
+    if (!redirectUri) throw new Error('Missing callback URI')
+    rememberSocialFlow(state, { purpose: 'link', provider, redirectUri })
     window.location.href = authorizeUrl
   } catch (e: unknown) {
     // Show the failure inline instead of leaving the card silently inert.

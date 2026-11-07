@@ -85,15 +85,14 @@ void DrogonOAuthHttpClient::postForm(
           }
         );
     }
-    catch (const std::exception &e)
+    catch (const std::exception &)
     {
-        LOG_ERROR << "DrogonOAuthHttpClient::postForm: transport setup failed for " << url
-                  << ": " << e.what();
+        LOG_ERROR << "DrogonOAuthHttpClient::postForm: transport setup failed";
         (*sharedCb)(transportFailureResult());
     }
     catch (...)
     {
-        LOG_ERROR << "DrogonOAuthHttpClient::postForm: unknown transport failure for " << url;
+        LOG_ERROR << "DrogonOAuthHttpClient::postForm: unknown transport failure";
         (*sharedCb)(transportFailureResult());
     }
 }
@@ -132,16 +131,14 @@ void DrogonOAuthHttpClient::getWithBearerToken(
           }
         );
     }
-    catch (const std::exception &e)
+    catch (const std::exception &)
     {
-        LOG_ERROR << "DrogonOAuthHttpClient::getWithBearerToken: transport setup failed for "
-                  << url << ": " << e.what();
+        LOG_ERROR << "DrogonOAuthHttpClient::getWithBearerToken: transport setup failed";
         (*sharedCb)(transportFailureResult());
     }
     catch (...)
     {
-        LOG_ERROR << "DrogonOAuthHttpClient::getWithBearerToken: unknown transport failure for "
-                  << url;
+        LOG_ERROR << "DrogonOAuthHttpClient::getWithBearerToken: unknown transport failure";
         (*sharedCb)(transportFailureResult());
     }
 }

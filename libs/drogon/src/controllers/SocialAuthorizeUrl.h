@@ -5,10 +5,8 @@
 // 1. The #71 social LINK flow (UserSelfServiceController's
 //    /api/me/social/links/{provider}/authorize): state = the one-time
 //    Redis-backed link-state token; the link-back POST must present it.
-// 2. The v1.4.0 LOGIN discovery payload (AuthProvidersController,
-//    GET /api/auth/providers): state = "" — the login flow is stateless
-//    today (the SPA posts the provider code straight back), so no state
-//    parameter is emitted.
+// 2. The browser-bound LOGIN issuance endpoint. Both callers must provide
+//    a one-time transaction state; discovery never returns an authorize URL.
 //
 // Client ids come from custom_config external_auth.{provider}; the redirect
 // target is external_auth.{provider}.redirect_uri when set, else the
@@ -20,40 +18,49 @@
 // surface, so the api-diff SemVer baseline is untouched.
 
 #include <drogon/drogon.h>
+#include <fulla/common/utils/SocialAuthConfig.h>
 #include <string>
 
 namespace fulla::drogon::controllers::social_detail
 {
 
-inline std::string buildSocialAuthorizeUrl(const std::string &provider, const std::string &state)
+inline Json::Value socialLoginRequestBody()
 {
-    auto config = ::drogon::app().getCustomConfig();
-    if (!config.isMember("external_auth"))
+    Json::Value schema;
+    schema["type"] = "object";
+    schema["required"].append("code");
+    schema["required"].append("state");
+    schema["properties"]["code"]["type"] = "string";
+    schema["properties"]["code"]["minLength"] = 1;
+    schema["properties"]["state"]["type"] = "string";
+    schema["properties"]["state"]["pattern"] = "^[0-9a-f]{64}$";
+    Json::Value body;
+    body["required"] = true;
+    body["content"]["application/json"]["schema"] = schema;
+    body["content"]["application/x-www-form-urlencoded"]["schema"] = schema;
+    return body;
+}
+
+inline std::string socialRedirectUri(const Json::Value &config, const std::string &provider)
+{
+    return common::utils::socialRedirectUri(config, provider);
+}
+
+inline std::string buildSocialAuthorizeUrl(const Json::Value &config,
+                                          const std::string &provider, const std::string &state)
+{
+    if (state.empty())
         return "";
     const auto &externalAuth = config["external_auth"];
     if (!externalAuth.isMember(provider) || !externalAuth[provider].isObject())
         return "";
-
-    std::string frontendUrl = "http://localhost:5173";
-    if (config.isMember("frontend") && config["frontend"].isMember("url"))
-        frontendUrl = config["frontend"]["url"].asString();
-    // Trim a trailing slash once so the fallback never doubles it.
-    if (!frontendUrl.empty() && frontendUrl.back() == '/')
-        frontendUrl.pop_back();
-
     const auto credentialConfigured = [](const std::string &v) {
-        return !v.empty() && v.rfind("YOUR_", 0) != 0;
+        return common::utils::socialCredentialConfigured(v);
     };
-    const std::string redirectUri = externalAuth[provider].get("redirect_uri", "").asString() !=
-                                        ""
-                                      ? externalAuth[provider].get("redirect_uri", "").asString()
-                                      : frontendUrl + "/callback/" + provider;
+    const std::string redirectUri = socialRedirectUri(config, provider);
     const std::string encodedRedirect = ::drogon::utils::urlEncode(redirectUri);
     const std::string encodedState = ::drogon::utils::urlEncode(state);
-    // Link flow passes a one-time state (#71); the login discovery passes ""
-    // and gets no state parameter at all (stateless login is the status quo).
-    const std::string stateParam =
-      state.empty() ? "" : "&state=" + encodedState;
+    const std::string stateParam = "&state=" + encodedState;
 
     if (provider == "github")
     {
@@ -61,7 +68,7 @@ inline std::string buildSocialAuthorizeUrl(const std::string &provider, const st
         const std::string clientSecret = externalAuth["github"].get("client_secret", "").asString();
         if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
             return "";
-        return "https://github.com/login/oauth/authorize?client_id=" + clientId +
+        return "https://github.com/login/oauth/authorize?client_id=" + ::drogon::utils::urlEncode(clientId) +
                "&scope=user%3Aemail" + stateParam +
                "&redirect_uri=" + encodedRedirect;
     }
@@ -72,7 +79,7 @@ inline std::string buildSocialAuthorizeUrl(const std::string &provider, const st
           externalAuth["google"].get("client_secret", "").asString();
         if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
             return "";
-        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientId +
+        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + ::drogon::utils::urlEncode(clientId) +
                "&response_type=code&scope=openid%20email%20profile" + stateParam +
                "&redirect_uri=" + encodedRedirect;
     }
@@ -82,12 +89,17 @@ inline std::string buildSocialAuthorizeUrl(const std::string &provider, const st
         const std::string secret = externalAuth["wechat"].get("secret", "").asString();
         if (!credentialConfigured(appId) || !credentialConfigured(secret))
             return "";
-        return "https://open.weixin.qq.com/connect/qrconnect?appid=" + appId +
+        return "https://open.weixin.qq.com/connect/qrconnect?appid=" + ::drogon::utils::urlEncode(appId) +
                "&redirect_uri=" + encodedRedirect +
                "&response_type=code&scope=snsapi_login" + stateParam +
                "#wechat_redirect";
     }
     return "";
+}
+
+inline std::string buildSocialAuthorizeUrl(const std::string &provider, const std::string &state)
+{
+    return buildSocialAuthorizeUrl(::drogon::app().getCustomConfig(), provider, state);
 }
 
 }  // namespace fulla::drogon::controllers::social_detail

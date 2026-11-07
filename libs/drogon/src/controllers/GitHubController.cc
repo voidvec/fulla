@@ -29,6 +29,8 @@
 using namespace ::drogon::orm;
 using namespace drogon_model::fulla_db;
 
+#include "SocialAuthorizeUrl.h"
+
 namespace fulla::drogon::controllers
 {
 
@@ -102,17 +104,14 @@ struct GitHubControllerDocs
         ep.tags = {"External Auth", "GitHub"};
         ep.requiresAuth = false;
 
-        ::fulla::drogon::observability::openapi::ParameterInfo codeParam;
-        codeParam.name = "code";
-        codeParam.description = "Authorization code from GitHub OAuth2 callback";
-        codeParam.type = ::fulla::drogon::observability::openapi::ParameterType::STRING;
-        codeParam.location = ::fulla::drogon::observability::openapi::ParameterLocation::QUERY;
-        codeParam.required = true;
-        ep.parameters = {codeParam};
+        ep.requestBody = social_detail::socialLoginRequestBody();
+        ep.description += " Requires code and one-time state in a JSON or form body, "
+          "an allowed Origin and the browser binding cookie; query credentials are rejected.";
 
         ep.responses =
           {{200, "First-party token pair for the GitHub-linked account"},
-           {400, "Invalid request (missing or invalid code)"},
+           {400, "Missing, expired, mismatched or replayed transaction"},
+           {404, "Provider unavailable"}, {500, "State service unavailable"},
            {403, "Not linked to a local account and auto-create disabled"},
            {502, "Failed to contact GitHub API"}};
 
@@ -139,35 +138,32 @@ void GitHubController::login(
         callback(::drogon::HttpResponse::newHttpResponse());
         return;
     }
-
-    // Extract code from POST body or query
-    std::string code;
-    auto jsonBody = req->getJsonObject();
-    // isString guard: a non-string "code" (object/array/number) is a
-    // validation error, not a 500-class jsoncpp LogicError from asString().
-    if (jsonBody && (*jsonBody)["code"].isString())
+    if (!loginGuard_)
     {
-        code = (*jsonBody)["code"].asString();
-    }
-    if (code.empty())
-    {
-        code = req->getParameter("code");
-    }
-
-    if (code.empty())
-    {
-        ::fulla::common::error::ErrorResponder::respond(
-          req,
-          std::move(callback),
-          "VALIDATION_MISSING_REQUIRED_FIELD",
-          "github login: missing code parameter"
-        );
+        services::SocialLoginGuard::error(req, std::move(callback), "INTERNAL_ERROR");
         return;
     }
+    auto sharedCb = std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
+      services::SocialLoginGuard::noStore(std::move(callback)));
+    loginGuard_->validate(req, "github",
+      [this, req, sharedCb](const std::string &code, const std::string &error) {
+          if (!error.empty())
+          {
+              services::SocialLoginGuard::error(req,
+                [sharedCb](const auto &response) { (*sharedCb)(response); }, error);
+              return;
+          }
+          loginValidated(req, [sharedCb](const auto &response) { (*sharedCb)(response); }, code);
+      });
+}
 
+void GitHubController::loginValidated(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &code)
+{
     auto callbackPtr = CallbackPtr(std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
-      std::move(callback)
-    ));
+      std::move(callback)));
 
 #ifdef WITH_SOCIAL
     // Task 24 slice 5: prefer the injected GitHubAuthService for the
@@ -291,11 +287,6 @@ void GitHubController::exchangeCodeForToken(
               if (!json || !json->isMember("access_token") || !(*json)["access_token"].isString())
               {
                   std::string detail = "github login: GitHub returned invalid token response";
-                  if (
-                    json && json->isMember("error_description") &&
-                    (*json)["error_description"].isString()
-                  )
-                      detail += ": " + (*json)["error_description"].asString();
                   respondError(req, callbackPtr, "VALIDATION_INVALID_INPUT", detail);
                   return;
               }

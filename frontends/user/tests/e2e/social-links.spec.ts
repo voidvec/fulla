@@ -2,9 +2,17 @@
 // Covers the list rendering, the unlink confirm+refresh interaction, and the
 // last-credential guard error surfacing. The link button's outbound redirect
 // to github.com is out of e2e scope (same gap as the GitHub login e2e); the
-// callback page's link branch is exercised via a direct visit with state=link.
+// callback pages validate an explicit per-state transaction context.
 import { test, expect } from '@playwright/test'
 import { setupMocks, loginUser, mockApiError } from './helpers/mock-api'
+
+async function seedFlow(page: import('@playwright/test').Page, provider: 'github' | 'google', purpose: 'login' | 'link', state: string) {
+  await page.addInitScript(({ provider, purpose, state }) => {
+    sessionStorage.setItem('fulla_social_flow:' + state, JSON.stringify({
+      provider, purpose, redirectUri: location.origin + '/callback/' + provider, createdAt: Date.now(),
+    }))
+  }, { provider, purpose, state })
+}
 
 test.describe('Connected Accounts (social links)', () => {
   test('card renders linked provider with Unlink action', async ({ page }) => {
@@ -88,6 +96,7 @@ test.describe('Connected Accounts (social links)', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
     })
 
+    await seedFlow(page, 'github', 'link', 'link')
     await page.goto('/callback/github?code=e2e-code&state=link')
     await page.waitForTimeout(1000)
 
@@ -119,6 +128,7 @@ test.describe('Connected Accounts (social links)', () => {
       await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'AUTH_INVALID_GRANT', category: 'AUTHENTICATION', message: 'invalid' } }) })
     })
 
+    await seedFlow(page, 'github', 'link', 'link')
     await page.goto('/callback/github?code=e2e-code&state=link')
     await page.waitForTimeout(1000)
 
@@ -159,7 +169,9 @@ test.describe('Connected Accounts (social links)', () => {
       })
     })
 
-    await page.goto('/callback/google?code=e2e-google-code')
+    const state = 'a'.repeat(64)
+    await seedFlow(page, 'google', 'login', state)
+    await page.goto('/callback/google?code=e2e-google-code&state=' + state)
 
     // setTokens keeps the access token IN MEMORY (http.ts) and persists
     // only the refresh_token — assert the persisted half, the redirect,

@@ -87,6 +87,12 @@ file(GLOB_RECURSE PERFORMANCE_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/performance/*.c
 # design §6 target location tests/contract/.
 file(GLOB_RECURSE CONTRACT_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/contract/*.cc")
 
+if(NOT WITH_SOCIAL)
+    # These fixtures inject provider services that do not exist in this build.
+    list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "SocialLoginHttpTest\\.cc$")
+    list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "SocialLinkEndpointHttpTest\\.cc$")
+endif()
+
 # Root test sources
 set(ROOT_TEST_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cc"
@@ -136,7 +142,7 @@ find_package(OpenSSL REQUIRED)
 # the old OAuth2Plugin OBJECT lib and PUBLIC-provides CURL::libcurl +
 # CURL_STATICLIB transitively). Plain link, no whole-archive
 # (AutoCreation=false + explicit registration in test_main.cc).
-target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon OpenSSL::Crypto fulla::common fulla::oauth2 fulla::storage::postgres fulla::storage::memory fulla::drogon fulla::identity)
+target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon OpenSSL::Crypto fulla::common fulla::common::testing fulla::oauth2 fulla::storage::postgres fulla::storage::memory fulla::drogon fulla::identity)
 
 # Platform compatibility (shared module)
 oauth2_apply_compat(${PROJECT_NAME})
@@ -398,4 +404,19 @@ if(_ENDPOINT_TEST_REGISTERED)
         RUN_SERIAL TRUE
         SKIP_RETURN_CODE 77  # wrapper returns 77 when PG/Redis/DB unavailable -> SKIPPED, not FAILED
     )
+endif()
+
+# Real executable protocol checks use a separate cookie jar per browser and
+# never contact an external provider. Match the endpoint suite's prerequisites.
+if(WITH_SOCIAL)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME SocialLoginState_OutOfProcess
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/scripts/backend/test-social-login-state.py"
+                --server-exe "${_SERVER_BIN}"
+                --config "${CMAKE_SOURCE_DIR}/apps/server/config/config.json")
+        set_tests_properties(SocialLoginState_OutOfProcess PROPERTIES
+            LABELS "Endpoint" RUN_SERIAL TRUE SKIP_RETURN_CODE 77 TIMEOUT 60)
+    endif()
 endif()

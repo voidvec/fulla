@@ -149,6 +149,9 @@ export default {
     },
   },
   oauth: {
+    invalidFlow: 'This sign-in request is invalid or expired. Please start again.',
+    cookiesRequired: 'Allow cookies for this site, then restart sign-in.',
+    providerDenied: 'Sign-in was cancelled or refused. Please start again.',
     consent: {
       title: 'Authorize Access',
       subtitle: 'This application is asking to access your account.',

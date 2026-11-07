@@ -372,6 +372,7 @@ int main(int argc, char **argv)
     if (!std::filesystem::exists(configPath))
         configPath = "../../../config.json";
 
+    Json::Value identityRuntimeConfig;
     std::string runtimeConfigPath;
     if (std::filesystem::exists(configPath))
     {
@@ -381,6 +382,8 @@ int main(int argc, char **argv)
         // In database storage modes, apply environment variable overrides
         runtimeConfigPath = loadConfigWithEnv(configPath);
         drogon::app().loadConfigFile(runtimeConfigPath);
+        std::ifstream identityConfigFile(runtimeConfigPath);
+        parseJsonString(identityConfigFile, identityRuntimeConfig);
     }
     else
     {
@@ -530,7 +533,7 @@ int main(int argc, char **argv)
                 bootstrap::wireControllerPluginDependencies();
                 // Task 24 slice 4: same wiring as OAuth2Server/main.cc --
                 // see bootstrap::wireIdentityServices()'s header comment.
-                bootstrap::wireIdentityServices();
+                bootstrap::wireIdentityServices(identityRuntimeConfig);
                 std::cout << "Drogon app ready, signaling tests to start..." << std::endl;
                 // Add a small delay on macOS to ensure EventLoop and ThreadPool
                 // are fully initialized before tests start hitting the server.

@@ -1,4 +1,6 @@
 #include <fulla/common/config/ConfigManager.h>
+#include <fulla/common/utils/SocialAuthConfig.h>
+#include <set>
 #include <fstream>
 #include <iostream>
 #include <cstdlib>
@@ -351,6 +353,35 @@ bool ConfigManager::validate(const Json::Value &config, std::string &errorMessag
     // Production-mode validation
     const char *env = getEnvValue("FULLA_ENV");
     bool isProd = (env && std::string(env) == "production");
+
+    // Validate configured browser callbacks before any event loop starts.
+    const auto &custom = config["custom_config"];
+    const auto &external = custom["external_auth"];
+    std::set<std::pair<std::string, std::string>> socialCallbacks;
+    for (const std::string provider : {"github", "google", "wechat"})
+    {
+        const auto &providerConfig = external[provider];
+        const bool domestic = provider == "wechat";
+        const bool tierEnabled = external["tiers"].get(domestic ? "domestic" : "international", true).asBool();
+        const auto client = providerConfig.get(domestic ? "appid" : "client_id", "").asString();
+        const auto secret = providerConfig.get(domestic ? "secret" : "client_secret", "").asString();
+        if (!tierEnabled || !utils::socialCredentialConfigured(client) || !utils::socialCredentialConfigured(secret))
+            continue;
+        try
+        {
+            const auto callback = utils::socialOriginAndPath(utils::socialRedirectUri(custom, provider));
+            if (!socialCallbacks.insert(callback).second || (isProd && callback.first.rfind("https://", 0) != 0))
+            {
+                errorMessage = "Enabled social providers require distinct callback paths and production HTTPS";
+                return false;
+            }
+        }
+        catch (const std::exception &)
+        {
+            errorMessage = "Invalid social provider redirect URI";
+            return false;
+        }
+    }
 
     if (isProd)
     {

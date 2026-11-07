@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.5.0
+// version: 1.6.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>
@@ -757,6 +757,24 @@ RateLimiterConfig config_{RateLimiterConfig::defaults()};
 std::unordered_map<std::string, std::deque<TimePoint>> buckets_;
 };
 }
+=== libs/common/include/fulla/common/utils/SocialAuthConfig.h
+#pragma once
+#include <json/json.h>
+#include <algorithm>
+#include <cctype>
+#include <regex>
+#include <stdexcept>
+#include <string>
+#include <utility>
+namespace fulla::common::utils
+{
+inline bool socialCredentialConfigured(const std::string &value)
+;
+inline std::string socialRedirectUri(const Json::Value &config, const std::string &provider)
+;
+inline std::pair<std::string, std::string> socialOriginAndPath(const std::string &uri)
+;
+}
 === libs/drogon/include/fulla/drogon/AuthService.h
 #pragma once
 #include <drogon/drogon.h>
@@ -1015,6 +1033,26 @@ private:
 ::drogon::nosql::RedisClientPtr redisClient_;
 std::shared_ptr<fulla::common::ports::ICryptoProvider> cryptoProvider_;
 int ttlSeconds_;
+};
+}
+#endif
+=== libs/drogon/include/fulla/drogon/adapters/RedisSocialLoginStateStore.h
+#pragma once
+#ifdef WITH_SOCIAL
+#include <fulla/identity/ISocialLoginStateStore.h>
+#include <drogon/nosql/RedisClient.h>
+namespace fulla::drogon::adapters
+{
+class RedisSocialLoginStateStore : public identity::ISocialLoginStateStore
+{
+public:
+explicit RedisSocialLoginStateStore(::drogon::nosql::RedisClientPtr redis);
+void reserve(const std::string &key, const identity::SocialLoginContext &context,
+Callback &&callback) override;
+void consume(const std::string &key, const identity::SocialLoginContext &expected,
+Callback &&callback) override;
+private:
+::drogon::nosql::RedisClientPtr redis_;
 };
 }
 #endif
@@ -1647,6 +1685,7 @@ static void initApiDocsImpl();
 === libs/drogon/include/fulla/drogon/controllers/AuthProvidersController.h
 #pragma once
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 #include <json/json.h>
 #include <string>
 #include <vector>
@@ -1655,17 +1694,24 @@ namespace fulla::drogon::controllers
 class AuthProvidersController : public ::drogon::HttpController<AuthProvidersController, false>
 {
 public:
+void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+;
 void setProviders(std::vector<std::string> providerNames)
 ;
 METHOD_LIST_BEGIN
 ADD_METHOD_TO(AuthProvidersController::list, "/api/auth/providers", ::drogon::Get);
+ADD_METHOD_TO(AuthProvidersController::authorize, "/api/auth/providers/{provider}/authorize", ::drogon::Post);
 METHOD_LIST_END
 void list(
 const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 static void initApiDocs();
+void authorize(const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &provider);
 private:
+std::shared_ptr<services::SocialLoginGuard> loginGuard_;
 std::vector<std::string> providerNames_;
 Json::Value cachedBody_{Json::objectValue};
 void buildBody();
@@ -2049,6 +2095,7 @@ std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 === libs/drogon/include/fulla/drogon/controllers/GitHubController.h
 #pragma once
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 #include <functional>
 #include <memory>
 #include <string>
@@ -2064,6 +2111,8 @@ namespace fulla::drogon::controllers
 class GitHubController : public ::drogon::HttpController<GitHubController, false>
 {
 public:
+void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+;
 void setPlugin(OAuth2Plugin *plugin)
 ;
 #ifdef WITH_SOCIAL
@@ -2078,6 +2127,10 @@ const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 private:
+std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+void loginValidated(const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &code);
 using CallbackPtr = std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
 OAuth2Plugin *plugin_ = nullptr;
 OAuth2Plugin *resolvePlugin() const;
@@ -2127,6 +2180,7 @@ const std::string &subject
 === libs/drogon/include/fulla/drogon/controllers/GoogleController.h
 #pragma once
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 class OAuth2Plugin;
 #ifdef WITH_SOCIAL
 namespace fulla::identity
@@ -2139,6 +2193,8 @@ namespace fulla::drogon::controllers
 class GoogleController : public ::drogon::HttpController<GoogleController, false>
 {
 public:
+void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+;
 #ifdef WITH_SOCIAL
 void setGoogleAuthService(fulla::identity::GoogleAuthService *service)
 ;
@@ -2151,6 +2207,10 @@ const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 private:
+std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+void loginValidated(const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &code);
 OAuth2Plugin *plugin_ = nullptr;
 OAuth2Plugin *resolvePlugin() const;
 #ifdef WITH_SOCIAL
@@ -2957,6 +3017,7 @@ static void initApiDocsImpl();
 === libs/drogon/include/fulla/drogon/controllers/WeChatController.h
 #pragma once
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 class OAuth2Plugin;
 #ifdef WITH_SOCIAL
 namespace fulla::identity
@@ -2969,6 +3030,8 @@ namespace fulla::drogon::controllers
 class WeChatController : public ::drogon::HttpController<WeChatController, false>
 {
 public:
+void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+;
 #ifdef WITH_SOCIAL
 void setWeChatAuthService(fulla::identity::WeChatAuthService *service)
 ;
@@ -2981,6 +3044,10 @@ const ::drogon::HttpRequestPtr &req,
 std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 );
 private:
+std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+void loginValidated(const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &code);
 OAuth2Plugin *plugin_ = nullptr;
 OAuth2Plugin *resolvePlugin() const;
 #ifdef WITH_SOCIAL
@@ -3387,6 +3454,7 @@ bool requiresAuth;
 AuthType authType = AuthType::Bearer;
 std::vector<std::string> requiredScopes;
 std::vector<std::string> impliedBy;
+Json::Value requestBody;
 };
 class OpenApiGenerator
 {
@@ -3953,6 +4021,47 @@ using ResponseCallback =
 std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
 static void requestReset(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
 static void confirmReset(const ::drogon::HttpRequestPtr &req, ResponseCallback cb);
+};
+}
+=== libs/drogon/include/fulla/drogon/services/SocialLoginGuard.h
+#pragma once
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <fulla/identity/SocialLoginStateService.h>
+#include <json/json.h>
+#include <map>
+#include <set>
+#include <vector>
+namespace fulla::drogon::services
+{
+class SocialLoginGuard : public std::enable_shared_from_this<SocialLoginGuard>
+{
+public:
+using ResponseCallback = std::function<void(const ::drogon::HttpResponsePtr &)>;
+using ValidationCallback = std::function<void(const std::string &, const std::string &)>;
+SocialLoginGuard(std::shared_ptr<identity::SocialLoginStateService> states,
+Json::Value config, const std::vector<std::string> &providers,
+bool allowInsecureLoopback);
+void authorize(const ::drogon::HttpRequestPtr &req, const std::string &provider,
+ResponseCallback &&callback);
+void validate(const ::drogon::HttpRequestPtr &req, const std::string &provider,
+ValidationCallback &&callback);
+static ResponseCallback noStore(ResponseCallback &&callback);
+static void error(const ::drogon::HttpRequestPtr &req, ResponseCallback &&callback,
+const std::string &code);
+private:
+std::string requestError(const ::drogon::HttpRequestPtr &req,
+const std::string &provider) const;
+identity::SocialLoginContext context(const std::string &provider,
+const std::string &binding) const;
+void setBinding(const ::drogon::HttpResponsePtr &response,
+const std::string &binding, int maxAge = 600) const;
+std::shared_ptr<identity::SocialLoginStateService> states_;
+Json::Value config_;
+std::map<std::string, std::pair<std::string, std::string>> providers_;
+std::set<std::string> origins_;
+bool secure_ = true;
+std::string cookieName_ = "__Host-fulla-social-binding";
 };
 }
 === libs/drogon/include/fulla/drogon/utils/BrandValidator.h
@@ -4741,6 +4850,34 @@ virtual void consume(const std::string &state, ConsumeCallback &&cb) = 0;
 };
 }
 #endif
+=== libs/identity/include/fulla/identity/ISocialLoginStateStore.h
+#pragma once
+#include <functional>
+#include <string>
+namespace fulla::identity
+{
+enum class SocialLoginStateStatus { Ok, Invalid, Unavailable, Collision };
+struct SocialLoginContext
+{
+std::string provider;
+std::string clientId;
+std::string redirectUri;
+std::string bindingHash;
+std::string purpose = "login";
+bool operator==(const SocialLoginContext &other) const
+;
+};
+class ISocialLoginStateStore
+{
+public:
+using Callback = std::function<void(SocialLoginStateStatus)>;
+virtual ~ISocialLoginStateStore() = default;
+virtual void reserve(const std::string &key, const SocialLoginContext &context,
+Callback &&callback) = 0;
+virtual void consume(const std::string &key, const SocialLoginContext &expected,
+Callback &&callback) = 0;
+};
+}
 === libs/identity/include/fulla/identity/ISubjectMappingRepository.h
 #pragma once
 #include <cstdint>
@@ -5228,6 +5365,33 @@ std::shared_ptr<ISocialLinkStateStore> stateStore_;
 };
 }
 #endif
+=== libs/identity/include/fulla/identity/SocialLoginStateService.h
+#pragma once
+#include <fulla/common/ports/ICryptoProvider.h>
+#include <fulla/identity/ISocialLoginStateStore.h>
+#include <memory>
+#include <optional>
+namespace fulla::identity
+{
+class SocialLoginStateService : public std::enable_shared_from_this<SocialLoginStateService>
+{
+public:
+using IssueCallback = std::function<void(SocialLoginStateStatus, const std::string &)>;
+SocialLoginStateService(std::shared_ptr<ISocialLoginStateStore> store,
+std::shared_ptr<common::ports::ICryptoProvider> crypto);
+static bool validHandle(const std::string &handle);
+std::optional<std::string> newBinding() const;
+std::string digest(const std::string &handle) const;
+void issue(const SocialLoginContext &context, IssueCallback &&callback);
+void consume(const std::string &handle, const SocialLoginContext &expected,
+ISocialLoginStateStore::Callback &&callback);
+private:
+void issueAttempt(const SocialLoginContext &context,
+const std::shared_ptr<IssueCallback> &callback, int attempts);
+std::shared_ptr<ISocialLoginStateStore> store_;
+std::shared_ptr<common::ports::ICryptoProvider> crypto_;
+};
+}
 === libs/identity/include/fulla/identity/SubjectResolver.h
 #pragma once
 #include <fulla/common/ports/ISubjectResolver.h>
@@ -5594,6 +5758,33 @@ std::map<std::string, SocialLinkStateData> states_;
 };
 }
 #endif
+=== libs/identity/include/fulla/identity/testing/MemorySocialLoginStateStore.h
+#pragma once
+#include <fulla/common/ports/IClock.h>
+#include <fulla/identity/ISocialLoginStateStore.h>
+#include <atomic>
+#include <map>
+#include <memory>
+#include <mutex>
+namespace fulla::identity::testing
+{
+class MemorySocialLoginStateStore : public ISocialLoginStateStore
+{
+public:
+explicit MemorySocialLoginStateStore(std::shared_ptr<common::ports::IClock> clock)
+: clock_(std::move(clock)) ;
+std::atomic<bool> available{true};
+void reserve(const std::string &key, const SocialLoginContext &context, Callback &&cb) override
+;
+void consume(const std::string &key, const SocialLoginContext &expected, Callback &&cb) override
+;
+private:
+struct Entry { SocialLoginContext context; int64_t expires; };
+std::shared_ptr<common::ports::IClock> clock_;
+std::mutex mutex_;
+std::map<std::string, Entry> entries_;
+};
+}
 === libs/identity/include/fulla/identity/testing/WebAuthnTestBuilders.h
 #pragma once
 #include <openssl/core_names.h>

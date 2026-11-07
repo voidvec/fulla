@@ -12,6 +12,8 @@
 #include <fulla/identity/SocialAuthService.h>
 #endif  // WITH_SOCIAL
 
+#include "SocialAuthorizeUrl.h"
+
 namespace fulla::drogon::controllers
 {
 
@@ -59,12 +61,13 @@ struct WeChatControllerDocs
         using namespace ::fulla::drogon::observability::openapi;
 
         Json::Value successExample;
-        successExample["openid"] = "oXXXXXXXXXXXXXXXXXXXXXXXXXX";
-        successExample["nickname"] = "WeChat User";
-        successExample["headimgurl"] = "https://thirdwx.qlogo.cn/...";
+        successExample["access_token"] = "opaque-access-token";
+        successExample["refresh_token"] = "opaque-refresh-token";
+        successExample["token_type"] = "Bearer";
+        successExample["expires_in"] = 3600;
 
         Json::Value errorExample;
-        errorExample["error"] = "Missing code parameter";
+        errorExample["error"]["code"] = "VALIDATION_MISSING_REQUIRED_FIELD";
 
         // C++17 compatible initialization (avoid designated initializers)
         ::fulla::drogon::observability::openapi::EndpointInfo weChatEndpoint;
@@ -81,19 +84,15 @@ struct WeChatControllerDocs
           "issuance.";
         weChatEndpoint.tags = {"External Auth", "WeChat"};
 
-        // Initialize parameters
-        ::fulla::drogon::observability::openapi::ParameterInfo codeParam;
-        codeParam.name = "code";
-        codeParam.description = "Authorization code from WeChat OAuth2 callback (required)";
-        codeParam.type = ::fulla::drogon::observability::openapi::ParameterType::STRING;
-        codeParam.location = ::fulla::drogon::observability::openapi::ParameterLocation::QUERY;
-        codeParam.required = true;
-        weChatEndpoint.parameters = {codeParam};
+        weChatEndpoint.requestBody = social_detail::socialLoginRequestBody();
+        weChatEndpoint.description += " Requires code and one-time state in a JSON or form body, "
+          "an allowed Origin and the browser binding cookie; query credentials are rejected.";
 
         // Initialize responses
         weChatEndpoint.responses =
           {{200, "First-party token pair for the WeChat-linked account"},
-           {400, "Invalid request (missing or invalid code)"},
+           {400, "Missing, expired, mismatched or replayed transaction"},
+           {404, "Provider unavailable"}, {500, "State service unavailable"},
            {403, "Not linked to a local account and auto-create disabled"},
            {502, "Failed to contact WeChat API"}};
 
@@ -120,49 +119,37 @@ void WeChatController::login(
   std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 )
 {
-    // Handle OPTIONS for CORS
     if (req->method() == ::drogon::Options)
     {
-        auto resp = ::drogon::HttpResponse::newHttpResponse();
-        callback(resp);
+        callback(::drogon::HttpResponse::newHttpResponse());
         return;
     }
+    if (!loginGuard_)
+    {
+        services::SocialLoginGuard::error(req, std::move(callback), "INTERNAL_ERROR");
+        return;
+    }
+    auto sharedCb = std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
+      services::SocialLoginGuard::noStore(std::move(callback)));
+    loginGuard_->validate(req, "wechat",
+      [this, req, sharedCb](const std::string &code, const std::string &error) {
+          if (!error.empty())
+          {
+              services::SocialLoginGuard::error(req,
+                [sharedCb](const auto &response) { (*sharedCb)(response); }, error);
+              return;
+          }
+          loginValidated(req, [sharedCb](const auto &response) { (*sharedCb)(response); }, code);
+      });
+}
 
+void WeChatController::loginValidated(
+  const ::drogon::HttpRequestPtr &req,
+  std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+  const std::string &code)
+{
     try
     {
-        // Extract the authorization code. The generalized SocialCallbackPage
-        // (the /callback/wechat route) posts {"code": "..."} as JSON -- the
-        // same contract GitHubController::login serves -- so read the JSON
-        // body first; query parameters and form-urlencoded bodies (Drogon
-        // parses those into getParameter automatically) stay supported.
-        // The previous hand-rolled body.find("code=") parser was buggy: it
-        // matched the substring anywhere (so "notcode=xyz" parsed as
-        // code="xyz") and did not URL-decode. Drogon's getParameter handles
-        // both correctly. See GoogleController.cc for the same fix.
-        std::string code;
-        auto jsonBody = req->getJsonObject();
-        // isString guard: a non-string "code" is a validation error, not a
-        // 500-class jsoncpp LogicError from asString().
-        if (jsonBody && (*jsonBody)["code"].isString())
-        {
-            code = (*jsonBody)["code"].asString();
-        }
-        if (code.empty())
-        {
-            code = req->getParameter("code");
-        }
-
-        if (code.empty())
-        {
-            ::fulla::common::error::ErrorResponder::respond(
-              req,
-              std::move(callback),
-              "VALIDATION_MISSING_REQUIRED_FIELD",
-              "wechat login: missing code parameter"
-            );
-            return;
-        }
-
 #ifdef WITH_SOCIAL
         // Task 24 slice 5: prefer the injected WeChatAuthService, falling
         // back to the pre-Task-24 drogon::HttpClient-direct path when
@@ -291,14 +278,11 @@ void WeChatController::login(
                     json["errcode"].asInt() != 0
                   )
                   {
-                      std::string errMsg = json.isMember("errmsg") && json["errmsg"].isString()
-                                             ? json["errmsg"].asString()
-                                             : "unknown";
                       respondError(
                         req,
                         callbackPtr,
                         "VALIDATION_INVALID_INPUT",
-                        "wechat login: WeChat error: " + errMsg
+                        "wechat login: WeChat rejected token response"
                       );
                       return;
                   }

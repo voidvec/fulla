@@ -11,17 +11,15 @@
 // from the exact same enablement gate (#111 credential check ANDed with the
 // tier flags) that injects or withholds the provider services, so the
 // buttons can never advertise a provider the login endpoints would refuse.
-// The authorize URLs themselves are built here per response via the shared
-// src-local builder (SocialAuthorizeUrl.h — the same redirect resolution
-// the link flow uses), statelessly: the login flow posts the provider code
-// straight back and carries no state today. An empty list means external
-// login is fully disabled.
+// Discovery retains an empty deprecated authorize_url field. A separate POST
+// initializes the browser binding and issues a one-time login transaction.
 //
 // AutoCreation=false process-wide singleton — see GitHubController.h's
 // [this]-capture note for the lifetime contract (raw-pointer wiring via
 // DrClassMap::getSingleInstance, no shared_from_this).
 
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 #include <json/json.h>
 
 #include <string>
@@ -33,6 +31,10 @@ namespace fulla::drogon::controllers
 class AuthProvidersController : public ::drogon::HttpController<AuthProvidersController, false>
 {
   public:
+    void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+    {
+        loginGuard_ = std::move(guard);
+    }
     // Called once at startup by IdentityAssembly (before any request can be
     // dispatched — registerBeginningAdvice ordering, see wireController-
     // PluginDependencies' comment on the same mechanism). Builds the response
@@ -46,6 +48,7 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
 
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(AuthProvidersController::list, "/api/auth/providers", ::drogon::Get);
+    ADD_METHOD_TO(AuthProvidersController::authorize, "/api/auth/providers/{provider}/authorize", ::drogon::Post);
     METHOD_LIST_END
 
     void list(
@@ -57,7 +60,12 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
     // controllers — see main.cc's "Initializing API documentation" block).
     static void initApiDocs();
 
+    void authorize(const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &provider);
+
   private:
+    std::shared_ptr<services::SocialLoginGuard> loginGuard_;
     std::vector<std::string> providerNames_;
     // Default body is the schema-valid empty answer: when wireIdentityServices
     // early-returns (memory storage / no DB client), setProviders never runs,

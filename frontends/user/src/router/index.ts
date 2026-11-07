@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { captureSocialCallback } from '../services/socialFlowContext'
+
+// createWebHistory snapshots the current URL during router construction.
+captureSocialCallback()
 
 const router = createRouter({
   history: createWebHistory(),

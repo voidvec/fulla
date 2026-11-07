@@ -39,6 +39,11 @@
 
 #pragma once
 
+#include <fulla/drogon/controllers/AuthProvidersController.h>
+#include <fulla/identity/testing/MemorySocialLoginStateStore.h>
+#include <fulla/common/testing/FakeClock.h>
+#include <fulla/common/testing/FakeCryptoProvider.h>
+#include "HttpTestClient.h"
 #include <fulla/drogon/controllers/GitHubController.h>
 #include <fulla/drogon/controllers/GoogleController.h>
 #include <fulla/drogon/controllers/WeChatController.h>
@@ -61,6 +66,91 @@ namespace fulla::test::social
 
 using fulla::identity::testing::FakeOAuthHttpClient;
 using fulla::identity::testing::FakeSocialAccountRepository;
+
+// Install the same guard on every public social entry. Tests use the real
+// HTTP initialization/issuance protocol below; they never mint login state
+// directly or bypass Origin/cookie validation.
+inline void injectLoginGuard()
+{
+    Json::Value config;
+    config["frontend"]["url"] = "http://localhost:5173";
+    config["cors"]["allow_origins"].append("http://localhost:5173");
+    for (const auto *provider : {"github", "google", "wechat"})
+    {
+        config["external_auth"][provider]["client_id"] = "test-client-id";
+        config["external_auth"][provider]["appid"] = "test-appid";
+        config["external_auth"][provider]["client_secret"] = "test-client-secret";
+        config["external_auth"][provider]["secret"] = "test-secret";
+    }
+    auto store = std::make_shared<fulla::identity::testing::MemorySocialLoginStateStore>(
+      std::make_shared<fulla::common::testing::FakeClock>());
+    auto states = std::make_shared<fulla::identity::SocialLoginStateService>(
+      store, std::make_shared<fulla::common::testing::FakeCryptoProvider>(123));
+    auto guard = std::make_shared<fulla::drogon::services::SocialLoginGuard>(
+      states, config, std::vector<std::string>{"github", "google", "wechat"}, true);
+    ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::AuthProvidersController>()
+      ->setSocialLoginGuard(guard);
+    ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
+      ->setSocialLoginGuard(guard);
+    ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>()
+      ->setSocialLoginGuard(guard);
+    ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
+      ->setSocialLoginGuard(guard);
+}
+
+struct LoginBrowser
+{
+    std::string cookie;
+    std::string state;
+    ::drogon::HttpResponsePtr send(const std::string &path, const std::string &body = "",
+      const std::string &type = "application/json", const std::string &origin = "http://localhost:5173")
+    {
+        auto request = ::drogon::HttpRequest::newHttpRequest();
+        request->setMethod(::drogon::Post);
+        request->setPath(path);
+        request->setBody(body);
+        request->setContentTypeString(type);
+        if (!origin.empty()) request->addHeader("Origin", origin);
+        if (!cookie.empty()) request->addHeader("Cookie", cookie);
+        // One-time operations must never be retried after a transport failure.
+        auto result = fulla::test::http::sharedTestHttpClient()->sendRequest(
+          request, fulla::test::http::fullaTestHttpTimeout());
+        return result.first == ::drogon::ReqResult::Ok ? result.second : nullptr;
+    }
+    bool begin(const std::string &provider)
+    {
+        const auto path = "/api/auth/providers/" + provider + "/authorize";
+        auto response = send(path);
+        if (!response || response->statusCode() != ::drogon::k204NoContent) return false;
+        const auto binding = response->getCookie("fulla-social-binding-dev");
+        if (binding.value().empty()) return false;
+        cookie = "fulla-social-binding-dev=" + binding.value();
+        response = send(path);
+        if (!response || response->statusCode() != ::drogon::k200OK) return false;
+        auto json = response->getJsonObject();
+        if (!json) return false;
+        state = (*json)["state"].asString();
+        return state.size() == 64;
+    }
+};
+
+inline ::drogon::HttpResponsePtr sendLoginForm(const std::string &path, const std::string &body)
+{
+    LoginBrowser browser;
+    const auto end = path.find('/', 5);
+    if (!browser.begin(path.substr(5, end - 5))) return nullptr;
+    return browser.send(path, body + "&state=" + browser.state, "application/x-www-form-urlencoded");
+}
+
+inline ::drogon::HttpResponsePtr sendLoginJson(const std::string &path, Json::Value body)
+{
+    LoginBrowser browser;
+    const auto end = path.find('/', 5);
+    if (!browser.begin(path.substr(5, end - 5))) return nullptr;
+    body["state"] = browser.state;
+    Json::StreamWriterBuilder writer;
+    return browser.send(path, Json::writeString(writer, body));
+}
 
 // ---------------------------------------------------------------------------
 // Per-provider injection helpers. Each returns a shared_ptr to the FakeOAuthHttpClient
@@ -95,6 +185,7 @@ struct GoogleFakeHandle
 
 inline GoogleFakeHandle injectGoogleFake()
 {
+    injectLoginGuard();
     GoogleFakeHandle h;
     h.http = std::make_shared<FakeOAuthHttpClient>();
     h.accountRepo = std::make_shared<FakeSocialAccountRepository>();
@@ -121,6 +212,7 @@ struct WeChatFakeHandle
 
 inline WeChatFakeHandle injectWeChatFake()
 {
+    injectLoginGuard();
     WeChatFakeHandle h;
     h.http = std::make_shared<FakeOAuthHttpClient>();
     h.accountRepo = std::make_shared<FakeSocialAccountRepository>();
@@ -157,6 +249,7 @@ struct GitHubFakeHandle
 
 inline GitHubFakeHandle injectGitHubFake()
 {
+    injectLoginGuard();
     GitHubFakeHandle h;
     h.http = std::make_shared<FakeOAuthHttpClient>();
     h.accountRepo = std::make_shared<FakeSocialAccountRepository>();
