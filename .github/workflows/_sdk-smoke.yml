@@ -42,6 +42,7 @@ jobs:
             g++ \
             cmake \
             ccache \
+            mold \
             uuid-dev
 
       - name: Install Conan
@@ -104,7 +105,7 @@ jobs:
           cp apps/server/config/config.ci.json apps/server/config/config.json
           ccache -M 2G
           ccache -z
-          cmake --preset "$CMAKE_PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --preset "$CMAKE_PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold
 
       - name: Build (full stack -> build-tree package configs)
         run: cmake --build --preset "$CMAKE_PRESET"

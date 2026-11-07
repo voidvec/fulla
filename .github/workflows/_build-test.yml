@@ -123,6 +123,7 @@ jobs:
             g++ \
             cmake \
             ccache \
+            mold \
             uuid-dev \
             redis-tools
 
@@ -178,12 +179,21 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-v1-${{ hashFiles('conan.lock') }}-
             ccache-${{ runner.os }}-v1-
-      - name: Configure ccache
+      - name: Configure ccache + mold
         if: inputs.platform != 'windows'
+        # ccache shortens COMPILATION; mold shortens LINKING (ccache does not
+        # cache link steps, and the monolithic fulla-tests binary is a heavy
+        # link) — the two compose. mold is Linux-only here: the macOS arm64
+        # image already links with the platform's fast ld-prime. $LINKER_FLAGS
+        # stays empty on macOS via the branch below.
         run: |
           ccache -M 2G
           ccache -z
           echo "CCACHE_LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          if [ "${{ inputs.platform }}" = "linux" ]; then
+            mold --version
+            echo "LINKER_FLAGS=-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold" >> "$GITHUB_ENV"
+          fi
 
       - name: Configure CMake using Conan
         # Drogon (with_orm/with_postgres/with_redis/with_ctl/with_sqlite/with_brotli)
@@ -228,8 +238,9 @@ jobs:
         # The preset carries CMAKE_BUILD_TYPE, C++ standard, generator, and the
         # Conan toolchain (build/<preset>/conan_toolchain.cmake). Platform-only
         # flags (e.g. FULLA_MEMORY_TESTS_ONLY on macOS) come via configure_extra_args.
-        # $CCACHE_LAUNCHER is empty on Windows (see the ccache prep step).
-        run: cmake --preset "$CMAKE_PRESET" ${{ inputs.configure_extra_args }} $CCACHE_LAUNCHER
+        # $CCACHE_LAUNCHER is empty on Windows and $LINKER_FLAGS is empty on
+        # Windows+macOS (see the ccache+mold prep step).
+        run: cmake --preset "$CMAKE_PRESET" ${{ inputs.configure_extra_args }} $CCACHE_LAUNCHER $LINKER_FLAGS
 
       - name: Build
         run: cmake --build --preset "$CMAKE_PRESET"

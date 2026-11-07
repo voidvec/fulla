@@ -64,7 +64,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc g++ cmake ccache uuid-dev redis-tools
+          sudo apt-get install -y gcc g++ cmake ccache mold uuid-dev redis-tools
           pip install conan
           conan profile detect --force
 
@@ -117,7 +117,7 @@ jobs:
           echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
           ccache -M 2G
           ccache -z
-          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold
 
       - name: Build
         run: cmake --build --preset "$PRESET"
@@ -190,7 +190,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc g++ cmake ccache uuid-dev redis-tools
+          sudo apt-get install -y gcc g++ cmake ccache mold uuid-dev redis-tools
           pip install conan
           conan profile detect --force
 
@@ -234,7 +234,7 @@ jobs:
           echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
           ccache -M 2G
           ccache -z
-          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=mold
 
       - name: Build
         run: cmake --build --preset "$PRESET"
