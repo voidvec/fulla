@@ -4,16 +4,18 @@
 import argparse
 import concurrent.futures
 import datetime
+import gzip
 import http.client
 import json
 import math
-from pathlib import Path
 import platform
 import time
+from pathlib import Path
 
 
 def utc_now():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Standalone tooling also supports Python 3.10, before datetime.UTC existed.
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()  # noqa: UP017
 
 
 def percentile(values, quantile):
@@ -23,16 +25,20 @@ def percentile(values, quantile):
     return ordered[max(0, math.ceil(len(ordered) * quantile) - 1)]
 
 
-def worker(worker_id, args, deadline, start):
+def worker(worker_id, args, deadline, start, on_failure=None, on_attempt=None, cancel_event=None):
     connection = None
     records = []
     next_start = start
     for sequence in range(args.max_requests_per_worker):
         now = time.monotonic()
-        if now >= deadline:
+        if now >= deadline or (cancel_event is not None and cancel_event.is_set()):
             break
         if now < next_start:
-            time.sleep(min(next_start - now, max(0, deadline - now)))
+            delay = min(next_start - now, max(0, deadline - now))
+            if cancel_event is None:
+                time.sleep(delay)
+            elif cancel_event.wait(delay):
+                break
         if time.monotonic() >= deadline:
             break
         began = time.monotonic()
@@ -46,10 +52,12 @@ def worker(worker_id, args, deadline, start):
             "stage": "connect",
             "new_connection": False,
         }
-        request_deadline = min(deadline, began + args.timeout)
+        # Stop launching at the experiment deadline; allow the last in-flight
+        # request its normal budget to avoid manufacturing end-of-run timeouts.
+        request_deadline = began + args.timeout
 
-        def remaining():
-            budget = request_deadline - time.monotonic()
+        def remaining(request_budget_end=request_deadline):
+            budget = request_budget_end - time.monotonic()
             if budget <= 0:
                 raise TimeoutError("request deadline reached")
             return budget
@@ -61,6 +69,8 @@ def worker(worker_id, args, deadline, start):
             if connection.sock is None:
                 record["new_connection"] = True
                 connection.connect()
+            record["local_endpoint"] = connection.sock.getsockname()
+            record["peer_endpoint"] = connection.sock.getpeername()
             connection.sock.settimeout(remaining())
             record["stage"] = "send"
             connection.request("GET", "/ping", headers={
@@ -99,16 +109,21 @@ def worker(worker_id, args, deadline, start):
             connection = None
         record["latency_ms"] = (time.monotonic() - began) * 1000
         records.append(record)
+        if on_attempt is not None:
+            on_attempt(record)
+        if record["error"] and on_failure is not None:
+            on_failure(record)
         next_start = max(next_start + 1 / args.rate_per_worker, time.monotonic())
     if connection is not None:
         connection.close()
     return records
 
 
-def run(args):
+def run(args, on_failure=None, on_attempt=None, cancel_event=None):
     start = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-        futures = [executor.submit(worker, index, args, start + args.duration, start)
+        futures = [executor.submit(worker, index, args, start + args.duration, start,
+                                   on_failure, on_attempt, cancel_event)
                    for index in range(args.concurrency)]
         records = [record for future in futures for record in future.result()]
     records.sort(key=lambda record: (record["elapsed_s"], record["worker"]))
@@ -123,6 +138,7 @@ def run(args):
         "summary": {
             "attempts": len(records), "failures": len(failures),
             "duration_s": time.monotonic() - start,
+            "new_connections": sum(record["new_connection"] for record in records),
             "p50_ms": percentile(latency, .5), "p95_ms": percentile(latency, .95),
             "p99_ms": percentile(latency, .99),
             "first_failure": failures[0] if failures else None,
@@ -159,7 +175,8 @@ def parse_args():
 def main():
     args = parse_args()
     # Open exclusively before sending traffic; never overwrite evidence.
-    with args.output.open("x", encoding="utf-8") as output:
+    opener = gzip.open if args.output.suffix == ".gz" else open
+    with opener(args.output, "xt", encoding="utf-8") as output:
         report = run(args)
         json.dump(report, output, indent=2, ensure_ascii=False, allow_nan=False)
         output.write("\n")

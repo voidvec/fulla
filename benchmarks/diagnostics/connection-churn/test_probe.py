@@ -1,16 +1,19 @@
 """Black-box transport checks for the diagnostic client, using only stdlib."""
 
 import contextlib
+import gzip
 import http.server
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
+import probe
 
 PROBE = Path(__file__).with_name("probe.py")
 
@@ -62,7 +65,7 @@ class ProbeTransportTest(unittest.TestCase):
             [sys.executable, str(PROBE), "--port", str(port), "--mode", mode,
              "--duration", "2", "--concurrency", "1", "--rate-per-worker", "100",
              "--max-requests-per-worker", str(count), "--output", str(output), *extra],
-            capture_output=True, text=True, timeout=8,
+            check=False, capture_output=True, text=True, timeout=8,
         )
 
     def test_fresh_opens_one_connection_per_attempt(self):
@@ -104,6 +107,16 @@ class ProbeTransportTest(unittest.TestCase):
             self.assertEqual(report["summary"]["first_failure"]["stage"], "response_headers")
             self.assertEqual(report["summary"]["failures"], 1)
 
+    def test_inflight_request_keeps_its_timeout_at_experiment_end(self):
+        with fixture(delay=.2) as (port, _), tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "tail.json"
+            result = self.invoke(port, output, count=1,
+                                 extra=("--duration", ".1", "--timeout", ".5"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(output.read_text())
+            self.assertEqual(report["summary"]["failures"], 0)
+            self.assertGreater(report["summary"]["duration_s"], .19)
+
     def test_existing_evidence_is_never_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "existing.json"
@@ -112,12 +125,41 @@ class ProbeTransportTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(output.read_text(), "existing evidence")
 
+    def test_compressed_evidence_retains_attempts_and_is_exclusive(self):
+        with fixture() as (port, counts), tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "fresh.json.gz"
+            result = self.invoke(port, output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with gzip.open(output, "rt") as stream:
+                report = json.load(stream)
+            self.assertEqual(len(report["attempts"]), 3)
+            self.assertEqual(report["summary"]["new_connections"], 3)
+            original = output.read_bytes()
+            result = self.invoke(port, output)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(output.read_bytes(), original)
+            self.assertEqual(counts["requests"], 3)
+
     def test_invalid_rate_fails_before_opening_output(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "invalid.json"
             result = self.invoke(18080, output, extra=("--rate-per-worker", "nan"))
             self.assertEqual(result.returncode, 2)
             self.assertFalse(output.exists())
+
+    def test_live_hooks_keep_endpoint_and_original_failure_without_retry(self):
+        with fixture(body=b"wrong") as (port, counts):
+            attempts, failures = [], []
+            args = SimpleNamespace(port=port, mode="fresh", duration=1, concurrency=1,
+                                   rate_per_worker=100, max_requests_per_worker=3, timeout=.5)
+            report = probe.run(args, on_failure=lambda row: failures.append(dict(row)),
+                               on_attempt=lambda row: attempts.append(dict(row)))
+            self.assertEqual(counts["requests"], 3)
+            self.assertEqual(len(attempts), 3)
+            self.assertEqual(len(failures), 3)
+            self.assertEqual(report["summary"]["failures"], 3)
+            self.assertTrue(all(row["local_endpoint"][0] == "127.0.0.1" for row in failures))
+            self.assertTrue(all(row["peer_endpoint"] == ("127.0.0.1", port) for row in failures))
 
 
 if __name__ == "__main__":

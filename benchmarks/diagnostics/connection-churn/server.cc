@@ -6,6 +6,9 @@
 #include <cstdio>
 #include <stdexcept>
 #include <string>
+#ifdef __linux__
+#include <sys/socket.h>
+#endif
 
 int main(int argc, char **argv)
 {
@@ -41,14 +44,30 @@ int main(int argc, char **argv)
     config["listeners"][0]["port"] = static_cast<unsigned>(port);
     std::atomic<unsigned long long> handled{0};
     drogon::app().loadConfigJson(config);
+    // Record the effective setting rather than trusting the input alone.
+    const auto effectiveThreads = drogon::app().getThreadNum();
+    const bool reusePort = std::string(argv[3]) == "true";
+    std::fprintf(stderr, "diagnostic threads=%zu reuse_port=%s port=%lu\n",
+                 effectiveThreads, reusePort ? "true" : "false", port);
+#ifdef __linux__
+    drogon::app().setBeforeListenSockOptCallback([](int fd) {
+        int value = -1;
+        socklen_t length = sizeof(value);
+        const int rc = getsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &value, &length);
+        std::fprintf(stderr, "diagnostic listener_fd=%d so_reuseport=%d rc=%d\n",
+                     fd, value, rc);
+    });
+#endif
     drogon::app().registerHandler(
       "/ping",
-      [&handled](const drogon::HttpRequestPtr &,
+      [&handled, effectiveThreads, reusePort](const drogon::HttpRequestPtr &,
                  std::function<void(const drogon::HttpResponsePtr &)> &&cb) {
           const auto count = handled.fetch_add(1, std::memory_order_relaxed) + 1;
           auto response = drogon::HttpResponse::newHttpResponse();
           response->setBody("pong");
           response->addHeader("X-Diagnostic-Handled", std::to_string(count));
+          response->addHeader("X-Diagnostic-Threads", std::to_string(effectiveThreads));
+          response->addHeader("X-Diagnostic-Reuse-Port", reusePort ? "true" : "false");
           cb(response);
       },
       {drogon::Get});
