@@ -26,10 +26,9 @@ const zhDir = path.join(
   'docusaurus-plugin-content-docs', 'current');
 
 // EN pages deliberately without a zh mirror (yet). Keep this list SHORT and
-// dated — every entry is translation debt.
+// dated — every entry is translation debt; the goal is always zero.
+// (2026-11-08: emptied — ADR-0014's zh translation landed; 50 EN / 50 zh.)
 const MIRROR_ALLOWLIST = new Map([
-  ['adr/ADR-0014-rbac-permission-enforcement.md',
-   'zh translation pending; Docusaurus falls back to the EN page'],
 ]);
 
 async function walkMarkdown(dir, prefix = '') {
