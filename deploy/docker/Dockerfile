@@ -89,6 +89,28 @@ RUN mkdir -p logs uploads
 EXPOSE 5555
 CMD ["./fulla-server"]
 
+# --- Stage 4b: Backend Runtime from PREBUILT artifacts (release pipeline) ---
+# The release workflow compiles on the RUNNER (scripts/backend/build.sh with
+# the repo's ccache pattern) and stages the binary into
+# deploy/docker/prebuilt/ before building this target: ephemeral CI runners
+# cannot export BuildKit cache mounts, so an in-image compile would be cold
+# on every tag. Keep this COPY set in lockstep with backend-runtime above;
+# context paths (not --from) because the artifacts come from the runner.
+FROM ubuntu:24.04 AS backend-runtime-prebuilt
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY deploy/docker/prebuilt/fulla-server .
+COPY apps/server/config/config.prod.json ./config.json
+COPY apps/server/views ./views
+COPY apps/server/migrations ./sql/migrations
+COPY apps/server/seed ./sql/seed
+RUN mkdir -p logs uploads
+EXPOSE 5555
+CMD ["./fulla-server"]
+
 # --- Stage 5: Frontend Builder ---
 # Only proxy Node as it was the one failing
 FROM node:${NODE_VERSION} AS frontend-builder

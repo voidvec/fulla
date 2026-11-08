@@ -142,6 +142,10 @@ website/.docusaurus/
 # Local deliverables (session outputs, not for the repo)
 deliverables/
 
+# Release pipeline staging: the runner-built backend binary destined for the
+# backend-runtime-prebuilt image target (transient, never committed)
+deploy/docker/prebuilt/
+
 # Runtime config copy & local issue drafts
 apps/server/config.json
 .gh-issues/

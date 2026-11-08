@@ -100,7 +100,7 @@ jobs:
         # uuid-dev because Drogon's recipe does not wrap libuuid on Linux.
         run: |
           sudo apt-get update
-          sudo apt-get install -y git gcc g++ cmake uuid-dev
+          sudo apt-get install -y git gcc g++ cmake ccache uuid-dev
 
       - name: Install Conan
         run: |
@@ -116,6 +116,19 @@ jobs:
           key: conan-${{ runner.os }}-${{ runner.arch }}-v1-cpp17-${{ hashFiles('conanfile.py', 'conan.lock') }}
           restore-keys: |
             conan-${{ runner.os }}-${{ runner.arch }}-v1-cpp17-
+
+      - name: Prepare ccache (compile cache)
+        # Same rationale as _build-test.yml (#314): the compile dominates the
+        # job. The key carries runner.arch — the images job runs the same
+        # pattern on the arm64 runner, and ccache's default compiler_check
+        # (mtime) could otherwise cross-match x86-64 and arm64 objects.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ runner.arch }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-${{ runner.arch }}-v1-
 
       - name: Configure CMake using Conan
         run: |
@@ -140,8 +153,11 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake --preset linux-release
+          ccache -M 2G
+          ccache -z
+          cmake --preset linux-release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           cmake --build --preset linux-release
+          ccache -s
 
       - name: Install SDK to staging prefix
         # Install rules live in the libs/ layer only (fulla_package()):
@@ -200,6 +216,60 @@ jobs:
 
       - uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 
+      - name: Install build dependencies (runner-side compile)
+        # The backend now compiles ON THE RUNNER (see the next steps) to ride
+        # the repo's ccache pattern — ephemeral CI runners cannot export
+        # BuildKit cache mounts, so an in-image compile was cold on every tag.
+        # Both matrix runners (ubuntu-24.04 / ubuntu-24.04-arm) are apt-based.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git gcc g++ cmake ccache uuid-dev pipx
+          pipx install conan
+          pipx ensurepath
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          conan profile detect --force
+
+      - name: Cache Conan packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.conan2
+          # runner.arch separates the arm64 native cache (runner.os is
+          # "Linux" on both) — same key shape as the sdk-package job.
+          key: conan-${{ runner.os }}-${{ runner.arch }}-v1-cpp17-${{ hashFiles('conanfile.py', 'conan.lock') }}
+          restore-keys: |
+            conan-${{ runner.os }}-${{ runner.arch }}-v1-cpp17-
+
+      - name: Prepare ccache (compile cache)
+        # Same rationale as _build-test.yml (#314); the runner.arch in the
+        # key is MANDATORY here — this job runs natively on both x86-64 and
+        # arm64 runners, and ccache's default compiler_check (mtime) could
+        # otherwise cross-match objects across architectures.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-v1-${{ hashFiles('conan.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ runner.arch }}-v1-${{ hashFiles('conan.lock') }}-
+            ccache-${{ runner.os }}-${{ runner.arch }}-v1-
+
+      - name: Build backend on the runner (ccache-warm)
+        # Canonical build path (same script the in-image build used), with
+        # the ccache launchers injected via the EXTRA_CMAKE_ARGS env hook.
+        run: |
+          ccache -M 2G
+          ccache -z
+          EXTRA_CMAKE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache" \
+            bash scripts/backend/build.sh Release
+          ccache -s
+
+      - name: Stage the binary for backend-runtime-prebuilt
+        # build.sh resolves the linux-release preset on Linux, matching the
+        # backend-runtime-prebuilt COPY path. deploy/docker/prebuilt/ is
+        # gitignored staging for exactly this handoff.
+        run: |
+          mkdir -p deploy/docker/prebuilt
+          cp build/linux-release/apps/server/fulla-server deploy/docker/prebuilt/
+
       - name: Log in to GHCR
         if: env.PUSH == 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -209,16 +279,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build backend image
-        # Same context/target as deploy/docker/docker-compose.yml fulla-backend.
+        # backend-runtime-prebuilt: packs the runner-built binary (the
+        # backend-runtime target — the in-image compile — stays the path for
+        # local `docker compose build`). gha layer cache covers the apt layer.
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: deploy/docker/Dockerfile
-          target: backend-runtime
+          target: backend-runtime-prebuilt
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ env.IMAGE_PREFIX }}-backend:${{ env.VERSION }}-${{ env.ARCH }}
+          cache-from: type=gha,scope=backend-${{ matrix.arch }}
+          cache-to: type=gha,scope=backend-${{ matrix.arch }},mode=max
 
       - name: Build frontend image
+        # gha layer cache: the package.json + npm layers before `COPY . .`
+        # are reusable across releases once the lockfile is unchanged.
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -226,6 +302,8 @@ jobs:
           target: frontend-runtime
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ env.VERSION }}-${{ env.ARCH }}
+          cache-from: type=gha,scope=frontend-${{ matrix.arch }}
+          cache-to: type=gha,scope=frontend-${{ matrix.arch }},mode=max
 
       - name: Build admin image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -234,6 +312,8 @@ jobs:
           file: frontends/admin/Dockerfile
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ env.IMAGE_PREFIX }}-admin:${{ env.VERSION }}-${{ env.ARCH }}
+          cache-from: type=gha,scope=admin-${{ matrix.arch }}
+          cache-to: type=gha,scope=admin-${{ matrix.arch }},mode=max
 
   manifest:
     name: Multi-Arch Manifests

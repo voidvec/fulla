@@ -154,8 +154,12 @@ if [ -n "$data_file" ]; then
 fi
 
 echo -e "${YELLOW}[INFO] Configuring (cmake --preset $PRESET)...${NC}"
+# EXTRA_CMAKE_ARGS (optional env, unquoted by design): extra -D flags for the
+# configure step. Used by the release pipeline to inject the ccache compiler
+# launchers (CMAKE_{C,CXX}_COMPILER_LAUNCHER) so runner-side builds share the
+# repo's warm compile cache; harmless (empty) everywhere else.
 set +e
-cmake --preset "$PRESET"
+cmake --preset "$PRESET" ${EXTRA_CMAKE_ARGS:-}
 CMAKE_CONFIG_RC=$?
 set -e
 if [ $CMAKE_CONFIG_RC -ne 0 ]; then

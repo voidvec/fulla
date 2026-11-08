@@ -177,8 +177,8 @@ concurrency:
 **触发**：push **严格 SemVer Tag**（`v1.2.3` 模式；`v1.0.0-xxx` 之类带后缀的 Tag 刻意**不**发布）+ workflow_dispatch 作为 **dry run**（全部构建但不推送；manifest/release 跳过）。并发配置永不取消发布到一半的运行。Job：
 
 - **`version-check`**——Tag 必须等于 `cmake/Version.cmake`；重跑 OpenAPI 规范治理检查与 api-diff 冻结面检查（后者还交叉校验 cmake vs CMakeLists vs conanfile）。
-- **`sdk-package`**——Linux x86_64 SDK tar 包（8 个静态库 + 头文件 + CMake 包配置，经 `cmake --install`），并通过在**已安装**前缀下配置 + 构建 `examples/full-stack-host` 验证可消费性；附 sha256。
-- **`images`**——backend / frontend / admin 镜像，amd64 + arm64，各自在**原生** runner 上构建（不用 QEMU——C++ 构建在模拟下不现实），以 `<version>-<arch>` 推 GHCR（仅 Tag 运行时推）。
+- **`sdk-package`**——Linux x86_64 SDK tar 包（8 个静态库 + 头文件 + CMake 包配置，经 `cmake --install`），并通过在**已安装**前缀下配置 + 构建 `examples/full-stack-host` 验证可消费性；附 sha256。经 ccache 编译（缓存键带架构后缀）。
+- **`images`**——backend / frontend / admin 镜像，amd64 + arm64，各自在**原生** runner 上构建（不用 QEMU——C++ 构建在模拟下不现实），以 `<version>-<arch>` 推 GHCR（仅 Tag 运行时推）。自 2026-11-08 起 backend 在 **runner 上编译**（`scripts/backend/build.sh`，经 `EXTRA_CMAKE_ARGS` 钩子注入 ccache launcher），镜像走薄打包目标 `backend-runtime-prebuilt`（打包 `deploy/docker/prebuilt/` 里的工件）——临时 CI runner 无法导出 BuildKit 缓存挂载，旧的镜像内编译每次 Tag 都是冷启动；`backend-runtime`（镜像内编译）仍是本地 `docker compose build` 的路径。ccache 键带 `runner.arch`，因为本作业在两种架构上原生运行。前端/admin 镜像走 GHA 层缓存（lockfile 不变时 `COPY . .` 之前的 npm 层可复用）。
 - **`manifest`**（仅 Tag）——imagetools 合并多架构 manifest `<version>` + `latest`，随后对 manifest digest 做 cosign **keyless** 签名并生成逐镜像 SPDX SBOM（syft）。
 - **`github-release`**（仅 Tag）——git-cliff（约定式提交）生成 Release notes，带 CHANGELOG 回退 + 拼接破坏性变更条目 + 验证说明；附 SDK tar 包与 SBOM；同时推送 Go module proxy 需要的嵌套 `clients/go/v<version>` Tag。
 - **`sdk-python`**——版本联动检查 + sdist/wheel 构建（总是执行）；仅 Tag 且配置了 `PYPI_API_TOKEN` 时发布 PyPI（普通 twine——为何不用 `pypa/gh-action-pypublish` 见工作流注释）。
