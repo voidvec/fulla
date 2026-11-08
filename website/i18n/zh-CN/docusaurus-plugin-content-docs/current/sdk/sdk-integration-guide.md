@@ -85,14 +85,16 @@ target_link_libraries(my-engine PRIVATE fulla::oauth2 fulla::storage::memory)
 
 ## 4. 插件注册与 whole-archive（H1/F1/H5 口径）
 
-- 插件本体当前以 **OBJECT 库**链入宿主，目标文件逐个直接链接，自注册符号
-  不会被裁剪——**当前不需要 whole-archive**。
-- 发布的 SDK 包中 `fulla::drogon` 是常规静态库，但插件注册走
-  `config.json` `plugins[].name = "OAuth2Plugin"` 反射 + 显式
-  `registerAllControllers()`（见 full-stack-host 的 main.cc），同样不依赖
-  链接器保留未引用符号。若消费方自建**依赖静态初始化自注册**的封装，须
-  自行 `-Wl,--whole-archive` 包裹对应库。
-- 类名 / config schema 稳定性承诺见契约 §6。
+`fulla::drogon` 当前是包含插件、Controller 与适配器的 STATIC 库；
+原来的独立 OBJECT 库已被合并。
+
+参考 `examples/full-stack-host/`：编译产品 bootstrap 源文件，
+调用 `registerAllControllers()`，并在启动时装配插件依赖。
+配置中的 `plugins[].name = "OAuth2Plugin"` 在链接完成后选择反射类，
+JSON 字符串本身不能保留未引用的静态库目标文件。仅靠静态自注册的封装
+必须通过 whole-archive 或平台等价机制保留相关目标文件，并运行注册冒烟测试。
+
+配置兼容承诺见 [SDK 运行时契约](sdk-runtime-contract.md)。
 
 ## 5. 镜像使用
 
@@ -139,9 +141,10 @@ sha256sum -c fulla-sdk-<ver>-linux-x86_64.tar.gz.sha256
 
 ## Quickstart：嵌入你自己的 Drogon 宿主
 
-除 `find_package` 外只需两步（详见上文第 3 节的包引入）：
+宿主 bootstrap 与视图编译参考 `examples/full-stack-host/`（包引入见上文第3节）。
+下面片段展示完成宿主注册后的配置与 Filter 接入：
 
-**1. 在宿主 `config.json` 激活插件**（自动注册协议路由与 Filter）：
+**1. 在宿主 `config.json` 激活插件**（通过宿主 bootstrap 在 Drogon 启动前注册产品 Controller）：
 
 ```json
 {
@@ -168,6 +171,8 @@ ADD_METHOD_TO(UserApi::getProfile, "/api/me", drogon::Get,
 METHOD_LIST_END
 ```
 
-注意：链接 `fulla::drogon` 后 Controller/Filter 由 Drogon 启动时自动注册，勿手动调用初始化宏；PostgreSQL 存储需先执行 `apps/server/migrations/`（或 `FULLA_AUTO_MIGRATE=true`）。
+注意：`AutoCreation=false` 的 Controller 必须在 Drogon 启动前显式注册，
+参考 `examples/full-stack-host/`；只链接静态库并不足够。勿手动调用注册宏。
+PostgreSQL 存储需先执行 `apps/server/migrations/`（或 `FULLA_AUTO_MIGRATE=true`）。
 
 > 本节合并自已退役的 plugin-integration.md（docs 治理 A2）。

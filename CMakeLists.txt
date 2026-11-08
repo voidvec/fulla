@@ -58,6 +58,15 @@ option(WITH_IDENTITY "Build the fulla::identity SDK module" ON)
 option(WITH_SOCIAL "Build social-login (Google/WeChat/GitHub) controllers + services" ON)
 option(WITH_WEBAUTHN "Build the WebAuthn/FIDO2 controller + service" ON)
 
+# The Postgres adapter and product controllers still consume fulla::identity.
+# Reject this unsupported combination before resolving any SDK dependencies.
+if(NOT WITH_IDENTITY)
+    message(FATAL_ERROR
+        "WITH_IDENTITY=OFF is not supported: the product and Postgres adapter "
+        "require fulla::identity. Keep WITH_IDENTITY=ON; use WITH_SOCIAL and "
+        "WITH_WEBAUTHN to disable their corresponding compiled surfaces.")
+endif()
+
 # libs/common (fulla::common, M2a Task 13): Domain-layer shared kernel.
 # Added before OAuth2Plugin/OAuth2Server since it has no dependency on
 # either (design.md §4.1: Domain layer must not depend on Drogon) -- this

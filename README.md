@@ -51,15 +51,14 @@ and where its public headers live (`libs/<name>/include/fulla/…`):
 |---------|------|-------|
 | `fulla::common` | Shared kernel: value objects, Result, error catalog, ports (clock, crypto, metrics, email, audit) | Zero Drogon dependency |
 | `fulla::oauth2` | OAuth2/OIDC engine: grant flows, token service, PKCE, JWK manager, scope decision engine | Protocol core, storage-agnostic |
-| `fulla::identity` | Authentication domain: users, sessions, MFA, WebAuthn, social accounts, role provider | Optional at build time |
+| `fulla::identity` | Authentication domain: users, sessions, MFA, WebAuthn, social accounts, role provider | Required by the current product build |
 | `fulla::drogon` | Drogon adapters: HTTP controllers, filters, views, OAuth2 plugin, admin services | What a server host links |
 | `fulla::storage::memory` | In-memory repositories (tests, embedded single-process use) | Zero external deps |
 | `fulla::storage::postgres` | PostgreSQL repositories + Drogon ORM models, schema manager | PostgreSQL 14+ |
 | `fulla::storage::redis` | Redis cache-aside layer with delayed double-delete invalidation | Wraps any repository tier |
 | `fulla::storage` concepts | `IClientRepository` / `IGrantRepository` / `ITokenRepository` / `IConsentRepository` contracts | Verified cross-tier by the contract test suite |
 
-Feature surface shrinks via Conan/CMake options (`with_identity` / `with_social` /
-`with_webauthn`) so SDK consumers only pull what they use.
+Conan/CMake options (`with_social` / `with_webauthn`) remove the corresponding services and controllers. Dependency limitations are documented below.
 
 ---
 
@@ -98,7 +97,7 @@ graph TD
     common["fulla::common<br/>shared kernel · ports"]
 ```
 
-Optional feature areas are gated by Conan/CMake options (`with_identity` / `with_social` / `with_webauthn`) so SDK consumers can shrink the dependency surface.
+Conan/CMake options `with_social` / `with_webauthn` disable their corresponding compiled surfaces. Identity must remain enabled; `with_identity=False` is unsupported. Disabling WebAuthn currently retains libcbor for the crypto helper and its tests; see the [SDK runtime contract](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations).
 
 ### Tech Stack
 

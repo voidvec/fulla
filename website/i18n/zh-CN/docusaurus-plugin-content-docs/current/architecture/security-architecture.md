@@ -9,7 +9,15 @@
 | **Replay Attack** (重放攻击) | 攻击者截获 Auth Code 并在合法客户端之前或之后尝试兑换。 | **Atomic Consume** (原子消费) + **One-Time Use Enforcement**。 | [Data Consistency](data-persistence.md) |
 | **Credential Leakage** (凭据泄露) | 数据库被拖库导致 Client Secret 泄露。 | **SHA256 Salted Hash**。数据库仅存 Hash 值，绝不存明文。 | [Data Persistence](data-persistence.md) |
 | **Token Theft** (令牌窃取) | Access Token 被截获。 | **Short-lived Token** (1小时) + **Refresh Token Rotation** (轮转机制)。 | 本文档 |
-| **CSRF** | 攻击者诱导用户进行非预期的授权。 | 强制校验 **state** 参数 (推荐客户端实现)。 | [API Reference](../domains/api-reference.md) |
+| **CSRF** | 攻击者诱导用户进行非预期的授权。 | OAuth 客户端必须校验返回的 **state**；第三方登录当前另有限制，见下文。 | [API Reference](../domains/api-reference.md) |
+
+### 当前第三方登录限制
+
+GitHub/Google/微信登录发现流程当前生成的地址不含绑定浏览器的 state，
+不能把上表的 OAuth 客户端 state 要求理解为这些扩展端点已具备同等保护。
+加固工作见 [issue #249](https://github.com/voidvec/fulla/issues/249)；
+需要登录 CSRF 防护的部署应先关闭这些提供方，直到绑定 state 的流程完成并验证。
+账号绑定采用独立的一次性 state 流程。
 
 ## 2. Token 生命周期管理
 
@@ -33,7 +41,7 @@
 ### 3.1 Client Secrets
 
 - **存储**: `sha256(secret + salt)`
-- **传输**: 仅在 POST body 中通过 HTTPS 传输。
+- **传输**: 仅通过 HTTPS，使用客户端配置的认证方式（HTTP Basic 或支持时的 POST body secret）。
 
 ### 3.2 配置文件
 
@@ -65,11 +73,18 @@
 
 ### 6.2 遗留密码迁移
 
-系统支持从旧版 SHA-256 单次哈希渐进式迁移到 PBKDF2：
+旧版 SHA-256 哈希**默认拒绝**，密码正确也不能登录。全部发行配置及缺省的
+`auth.allow_legacy_hash` 都关闭迁移窗口。策略拒绝不增加账号锁定计数，
+客户端仍收到通用认证失败。
 
-1. 用户登录时，系统检测密码哈希格式
-2. 若为旧格式（SHA-256），验证通过后自动升级为 PBKDF2
-3. 迁移对用户透明，无需重置密码
+可使用现有邮箱重置或管理员触发的密码重置流程写入 PBKDF2；需要验证旧密码的
+改密路径不能用于迁移。Bootstrap 会复用已有管理员记录，
+`FULLA_BOOTSTRAP_ADMIN_PASSWORD` 不会重置该记录。
+
+运维可显式开启临时的 `auth.allow_legacy_hash` 窗口，**仅身份域登录路径**
+会在旧格式验证成功后尝试 PBKDF2 重哈希。Drogon 的 `PasswordHasher` 辅助类
+始终拒绝旧格式，不能认为窗口适用于全部密码校验路径。关闭窗口前应确认旧记录
+已全部迁移。详见[遗留密码迁移](../operate/configuration-guide.md)。
 
 ## 7. Refresh Token 轮转与家族追踪 (Refresh Token Rotation)
 
@@ -104,6 +119,14 @@ sequenceDiagram
     S->>S: 级联撤销 family 下所有 Token
     U--xA: 下次请求失败，需重新登录
 ```
+
+## WebAuthn 验证范围
+
+WebAuthn 已实现 CBOR 证明对象解析、COSE ES256 公钥及认证签名验证。
+注册支持 `fmt="none"` 且证明语句为空的模式，不验证认证器厂商证明链。
+注册和认证都要求用户在场、用户验证、允许的 origin 和配置的 RP ID；
+检查 challenge，并在适用时通过条件更新推进签名计数器。旧的不验证完成接口
+失败关闭；超出支持范围的认证器会被拒绝。
 
 ## 8. Subject 隐私保护 (Subject Privacy)
 
@@ -141,11 +164,13 @@ sequenceDiagram
 **例行验证**：密钥不入库（`git grep` 抽查 + Secret Hygiene CI 门）；`.env*` 均被 ignore；
 前端生产构建无内嵌凭据。
 
-**密钥轮换**：签名密钥经 keystore 目录轮换（`oidc.signing_keystore_dir`，#110——见
-[配置指南 §9](../operate/configuration-guide.md)）：目录内为 `<kid>.pem` 文件 + `active_kid`
-标记；JWKS 端点发布全部已加载密钥，验签按令牌 `kid` 路由，切换期间存量令牌不受影响。
-轮换是文档化的手动三次重启流程（发布 → 切换 → 退役），未自动化；`GET /api/admin/oidc/keys`
-上报实时密钥状态。DB/SMTP/社交凭据轮换 = 改 env + 滚动重启。
+**密钥轮换**：`oidc.signing_keystore_dir` 在启动时加载多个 RSA 密钥
+（#110；见[配置指南 §9](../operate/configuration-guide.md)）。
+每个 `<kid>.pem` 发布到 JWKS，`active_kid` 选择签名密钥，验签按令牌的 `kid` 路由。
+运行期不热加载，配置变化需要重启。手动“发布 → 切换 → 退役”流程尚未自动化：
+先在全部副本发布新 key，再切换签名；旧 key 至少保留到其签发的全部 JWT 过期，
+并考虑时钟偏差和 RP 缓存窗口。`GET /api/admin/oidc/keys` 上报实时密钥状态。
+DB/SMTP/社交凭据通过环境配置及滚动重启轮换。
 
 **事件响应**：泄漏怀疑 → 立即轮换受影响凭据 → 如涉历史提交，用 `git filter-repo`
 （勿用已弃用的 filter-branch）重写并强推 → 通报。

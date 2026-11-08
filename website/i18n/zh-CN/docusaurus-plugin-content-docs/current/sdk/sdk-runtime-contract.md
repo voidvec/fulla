@@ -47,14 +47,15 @@
 
 ## 5. 依赖声明
 
-- 特性面依赖由根 `conanfile.py` 的 **`with_webauthn` / `with_identity` /
-  `with_social` option 显式 gate**，不作为传递依赖的隐式惊喜。
-  NOTE: WebAuthn 自 v1.1.0 起执行真实的 W3C Level 2 加密验签（#142——
-  `libs/identity/src/webauthn/WebAuthnCrypto.cc`），其 CBOR 解码依赖
-  （`libcbor`，支撑 `libs/identity/src/webauthn/` 下只读强类型 CborReader）
-  已在 `conanfile.py` 显式声明。
-- 关闭选项（如 `-o with_webauthn=False`）会同步映射到 CMake 侧
-  `WITH_*` 变量并裁剪对应编译面，消费者可据此收缩依赖表面。
+- `with_social` / `with_webauthn` 映射到 CMake 的 `WITH_SOCIAL` /
+  `WITH_WEBAUTHN`，裁剪对应服务与 Controller 的编译面。
+- `with_identity=False` / `WITH_IDENTITY=OFF` **不受支持**：产品与
+  Postgres 适配器仍需要 `fulla::identity`，配置阶段会明确报错；
+  配置仓库时应保持 identity 启用。
+- WebAuthn 自 v1.1.0（#142）起实现真实 W3C Level 2 CBOR/COSE 和 ES256 验证，
+  只读强类型 CborReader 消费 libcbor。`libcbor` 当前仍是
+  **无条件依赖**，关闭 WebAuthn 后也保留，因为 `WebAuthnCrypto.cc`
+  及其测试仍会构建。关闭特性不代表已经移除其全部第三方依赖。
 
 ## 6. 插件注册与配置契约（宿主集成）
 
@@ -62,11 +63,13 @@
   （方案 A）：各 config（`config.{json,dev,ci,prod,bench}.json`）中
   `"plugins":[{"name":"OAuth2Plugin","config":{...}}]` 的类名字符串与
   `config{}` 块 schema 是产品配置契约的一部分，v1.x 不改名。
-- 插件本体以 CMake **OBJECT 库**形态链接进宿主：目标文件逐个直接链入，
-  不存在静态库按需抽取丢弃自注册符号的问题，因此**当前不需要
-  whole-archive**。
-- 若未来改为**静态库形态分发**插件本体，链接器可能裁剪插件自注册符号导致
-  Drogon 反射 "plugin not found"——届时必须引入 whole-archive（或等价
-  强制链接方案）；`OAuth2Plugin` 无 `AutoCreation` 参数可用，不适用免
-  whole-archive 方案。
-- 第三方宿主集成示例见 `examples/third-party-host/`。
+- `fulla::drogon` 当前是包含插件源文件的 **STATIC 库**；原独立
+  OBJECT 库已被合并。
+- 宿主必须保留实际使用的 Controller/插件注册代码。参考
+  `examples/full-stack-host/`：编译产品 bootstrap 源文件、显式注册
+  Controller 并装配插件依赖。配置中的类名字符串本身不能强制链接器
+  抽取静态库目标文件。
+- 仅依赖未引用静态自注册的封装须显式保留相关目标文件（如在适用链接器上
+  使用 whole-archive），并自行验证注册冒烟测试。
+- HTTP 宿主集成见 `examples/full-stack-host/`；仅引擎集成见
+  `examples/third-party-host/`。
