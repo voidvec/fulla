@@ -328,3 +328,26 @@ DROGON_TEST(Unit_P0_ConfigManager_Production_PublicClientSecretNotEnforced)
     std::string errMsg;
     CHECK(fulla::common::config::ConfigManager::validate(config, errMsg) == true);
 }
+
+DROGON_TEST(Unit_P0_ConfigManager_SocialCallbackCollisionFailsBeforeStartup)
+{
+    auto config = productionBaseConfig();
+    auto &custom = config["custom_config"];
+    custom["frontend"]["url"] = "https://portal.test";
+    for (const auto *provider : {"github", "google"})
+    {
+        custom["external_auth"][provider]["client_id"] = "configured-client";
+        custom["external_auth"][provider]["client_secret"] = "configured-secret";
+    }
+    custom["external_auth"]["github"]["redirect_uri"] = "https://PORTAL.test:443/callback/shared?provider=github";
+    custom["external_auth"]["google"]["redirect_uri"] = "https://portal.test/callback/shared/?provider=google";
+    std::string error;
+    CHECK(fulla::common::config::ConfigManager::validate(config, error) == false);
+    CHECK(error.find("distinct callback") != std::string::npos);
+    custom["external_auth"]["google"]["redirect_uri"] = "https://portal.test/callback/google";
+    CHECK(fulla::common::config::ConfigManager::validate(config, error) == true);
+    custom["external_auth"]["github"]["redirect_uri"] = "https://portal.test/a/../callback/github";
+    CHECK(fulla::common::config::ConfigManager::validate(config, error) == false);
+    custom["external_auth"]["tiers"]["international"] = false;
+    CHECK(fulla::common::config::ConfigManager::validate(config, error) == true);
+}

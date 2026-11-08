@@ -145,6 +145,9 @@ export default {
     },
   },
   oauth: {
+    invalidFlow: '登录请求无效或已过期，请重新发起。',
+    cookiesRequired: '请允许此站点使用 Cookie，然后重新登录。',
+    providerDenied: '登录已取消或被拒绝，请重新发起。',
     consent: {
       title: '授权访问',
       subtitle: '该应用正在请求访问您的账户。',

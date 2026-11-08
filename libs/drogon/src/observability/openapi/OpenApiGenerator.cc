@@ -189,6 +189,9 @@ Json::Value OpenApiGenerator::generatePathItem(const EndpointInfo &endpoint)
         pathItem["parameters"] = parameters;
     }
 
+    if (!endpoint.requestBody.isNull())
+        pathItem["requestBody"] = endpoint.requestBody;
+
     // Responses
     Json::Value responses;
     for (const auto &[code, desc] : endpoint.responses)

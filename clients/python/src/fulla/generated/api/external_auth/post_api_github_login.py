@@ -5,34 +5,29 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.post_api_github_login_body import PostApiGithubLoginBody
+from ...models.social_login_request import SocialLoginRequest
 from ...models.social_login_token_response import SocialLoginTokenResponse
-from ...types import UNSET, Response, Unset
+from ...types import UNSET, Response
 
 
 def _get_kwargs(
     *,
-    body: PostApiGithubLoginBody | Unset = UNSET,
-    code: str,
+    body: SocialLoginRequest | SocialLoginRequest | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
-
-    params: dict[str, Any] = {}
-
-    params["code"] = code
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/github/login",
-        "params": params,
     }
 
-    if not isinstance(body, Unset):
+    if isinstance(body, SocialLoginRequest):
         _kwargs["json"] = body.to_dict()
 
-    headers["Content-Type"] = "application/json"
+        headers["Content-Type"] = "application/json"
+    if isinstance(body, SocialLoginRequest):
+        _kwargs["data"] = body.to_dict()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
 
     _kwargs["headers"] = headers
     return _kwargs
@@ -53,6 +48,14 @@ def _parse_response(
     if response.status_code == 403:
         response_403 = cast(Any, None)
         return response_403
+
+    if response.status_code == 404:
+        response_404 = cast(Any, None)
+        return response_404
+
+    if response.status_code == 500:
+        response_500 = cast(Any, None)
+        return response_500
 
     if response.status_code == 502:
         response_502 = cast(Any, None)
@@ -78,17 +81,19 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    body: PostApiGithubLoginBody | Unset = UNSET,
-    code: str,
+    body: SocialLoginRequest | SocialLoginRequest | Unset = UNSET,
 ) -> Response[Any | SocialLoginTokenResponse]:
     """GitHub OAuth2 Login
 
-     Exchange GitHub authorization code for user information. This endpoint handles the server-side
-    OAuth2 flow with GitHub.
+     Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and
+    the issuing browser binding cookie. Only JSON or form body credentials are accepted; query
+    credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed
+    state is rejected before any upstream exchange or account write. A consumed transaction must be
+    restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 
     Args:
-        code (str):
-        body (PostApiGithubLoginBody | Unset): Optional empty body (action-style operation).
+        body (SocialLoginRequest):
+        body (SocialLoginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -100,7 +105,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        code=code,
     )
 
     response = client.get_httpx_client().request(
@@ -113,17 +117,19 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    body: PostApiGithubLoginBody | Unset = UNSET,
-    code: str,
+    body: SocialLoginRequest | SocialLoginRequest | Unset = UNSET,
 ) -> Any | SocialLoginTokenResponse | None:
     """GitHub OAuth2 Login
 
-     Exchange GitHub authorization code for user information. This endpoint handles the server-side
-    OAuth2 flow with GitHub.
+     Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and
+    the issuing browser binding cookie. Only JSON or form body credentials are accepted; query
+    credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed
+    state is rejected before any upstream exchange or account write. A consumed transaction must be
+    restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 
     Args:
-        code (str):
-        body (PostApiGithubLoginBody | Unset): Optional empty body (action-style operation).
+        body (SocialLoginRequest):
+        body (SocialLoginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -136,24 +142,25 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
-        code=code,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    body: PostApiGithubLoginBody | Unset = UNSET,
-    code: str,
+    body: SocialLoginRequest | SocialLoginRequest | Unset = UNSET,
 ) -> Response[Any | SocialLoginTokenResponse]:
     """GitHub OAuth2 Login
 
-     Exchange GitHub authorization code for user information. This endpoint handles the server-side
-    OAuth2 flow with GitHub.
+     Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and
+    the issuing browser binding cookie. Only JSON or form body credentials are accepted; query
+    credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed
+    state is rejected before any upstream exchange or account write. A consumed transaction must be
+    restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 
     Args:
-        code (str):
-        body (PostApiGithubLoginBody | Unset): Optional empty body (action-style operation).
+        body (SocialLoginRequest):
+        body (SocialLoginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -165,7 +172,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        code=code,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -176,17 +182,19 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    body: PostApiGithubLoginBody | Unset = UNSET,
-    code: str,
+    body: SocialLoginRequest | SocialLoginRequest | Unset = UNSET,
 ) -> Any | SocialLoginTokenResponse | None:
     """GitHub OAuth2 Login
 
-     Exchange GitHub authorization code for user information. This endpoint handles the server-side
-    OAuth2 flow with GitHub.
+     Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and
+    the issuing browser binding cookie. Only JSON or form body credentials are accepted; query
+    credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed
+    state is rejected before any upstream exchange or account write. A consumed transaction must be
+    restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 
     Args:
-        code (str):
-        body (PostApiGithubLoginBody | Unset): Optional empty body (action-style operation).
+        body (SocialLoginRequest):
+        body (SocialLoginRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -200,6 +208,5 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
-            code=code,
         )
     ).parsed

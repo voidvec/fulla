@@ -100,6 +100,8 @@ struct EndpointInfo
     // "admin" super-scope satisfies "users:read"). Per-requirement, NOT a
     // global graph -- avoids the hardcoded implication list.
     std::vector<std::string> impliedBy;
+    // Optional explicit body contract for JSON/form operations.
+    Json::Value requestBody;
 };
 
 class OpenApiGenerator

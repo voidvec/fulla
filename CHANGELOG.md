@@ -11,9 +11,24 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ## [Unreleased]
 
-<!-- new entries go here -->
+### Breaking changes (security hardening; next MINOR)
 
-## [Unreleased]
+- Bind GitHub/Google/WeChat login to one-time, browser-bound Redis state before
+  upstream exchange or account writes. Discovery retains an empty deprecated
+  `authorize_url`; use the new provider authorize POST (204 cookie initialization,
+  then 200 transaction) and submit JSON/form code + state with Origin and cookies.
+  Query credentials and unsolicited/replayed callbacks are rejected. Deploy the
+  backend and user SPA together; restart in-flight flows and regenerate SDK callers.
+  Failures must disable social providers or roll forward, never restore stateless
+  login. See [migration and deployment details](docs/domains/social-login.md).
+
+### Security
+
+- Sanitize bundled Nginx callback access/error logs and prevent caching/referrer
+  leakage of social authorization responses. External ingress/APM needs equivalent
+  redaction. OAuth HTTP adapter failures also omit URLs and exception text that
+  could contain upstream credentials. No database migration or release/tag is included.
+
 
 ### Fixed
 

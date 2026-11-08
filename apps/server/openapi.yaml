@@ -556,15 +556,40 @@ components:
       - provider
       - message
       type: object
-    AuthProvider:
-      description: An external login provider currently enabled on this
-        deployment (v1.4.0 provider tiers). authorize_url is the fully built
-        provider authorize URL — the SPA redirects to it as-is; the redirect
-        target resolves from the per-provider redirect_uri override, else
-        frontend.url + /callback/{provider}.
+    SocialLoginRequest:
+      type: object
+      required: [code, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+    SocialLoginAuthorization:
+      type: object
+      required: [authorize_url, state, redirect_uri, expires_in]
       properties:
         authorize_url:
           type: string
+          format: uri
+        state:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        redirect_uri:
+          type: string
+          format: uri
+        expires_in:
+          type: integer
+          enum: [600]
+    AuthProvider:
+      description: An enabled external login provider. The deprecated authorize_url
+        is always empty. Start a browser-bound transaction using the authorize POST.
+      properties:
+        authorize_url:
+          type: string
+          deprecated: true
+          example: ""
         provider:
           type: string
           enum: [github, google, wechat]
@@ -2843,13 +2868,8 @@ paths:
       - Users
   /api/auth/providers:
     get:
-      description: Public, unauthenticated discovery of the external login
-        providers this deployment currently offers (v1.4.0 provider tiers).
-        The login page renders its provider buttons from this response; an
-        empty list means external login is disabled. authorize_url is the
-        fully built provider authorize URL — the SPA redirects to it as-is;
-        the redirect target resolves from the per-provider redirect_uri
-        override, else frontend.url + /callback/{provider}.
+      description: Public discovery of enabled providers. authorize_url is deprecated
+        and empty; POST to the provider authorize endpoint to start login.
       operationId: get_api_auth_providers
       responses:
         '200':
@@ -2862,7 +2882,7 @@ paths:
       summary: List Enabled External Login Providers
       tags:
       - External Auth
-  /api/github/login:
+  /api/auth/providers/{provider}/authorize:
     post:
       requestBody:
         required: false
@@ -2870,17 +2890,65 @@ paths:
           application/json:
             schema:
               type: object
-              description: Optional empty body (action-style operation).
-      description: Exchange GitHub authorization code for user information. This endpoint
-        handles the server-side OAuth2 flow with GitHub.
-      operationId: post_api_github_login
+              description: Optional empty initialization body.
+      summary: Start Browser-Bound Social Login
+      operationId: post_api_auth_providers__provider__authorize
+      tags: [External Auth]
+      description: Requires an exact allowed Origin and credentials-enabled cookies.
+        The first call initializes an HttpOnly browser binding cookie and returns
+        204 without issuing state. Retry once with that cookie to receive a
+        transaction bound to the provider, client, redirect URI and browser.
+        State expires after 600 seconds and can be consumed once. All responses
+        use Cache-Control no-store. No bearer token is required.
       parameters:
-      - description: Authorization code from GitHub OAuth2 callback (required)
-        in: query
-        name: code
+      - name: provider
+        in: path
         required: true
         schema:
           type: string
+          enum: [github, google, wechat]
+      responses:
+        '200':
+          description: One-time browser-bound authorization transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialLoginAuthorization'
+        '204':
+          description: Binding cookie initialized; retry once with cookies enabled
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: HttpOnly SameSite=Lax Path=/ browser binding, Max-Age=600;
+                Secure __Host-fulla-social-binding in production
+        '400':
+          description: VALIDATION_INVALID_INPUT; malformed binding is cleared
+        '403':
+          description: AUTHZ_ACCESS_DENIED; missing or disallowed Origin or cross-site request
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND; unknown or disabled provider
+        '500':
+          description: INTERNAL_ERROR; random generation or state storage unavailable
+  /api/github/login:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      description: Exchange github code and one-time state for a first-party token
+        pair. Requires an allowed Origin and the issuing browser binding cookie.
+        Only JSON or form body credentials are accepted; query credentials and
+        duplicate code/state fields are rejected. Invalid, expired, mismatched or
+        replayed state is rejected before any upstream exchange or account write.
+        A consumed transaction must be restarted even if upstream exchange fails.
+        All responses use Cache-Control no-store.
+      operationId: post_api_github_login
       responses:
         '200':
           content:
@@ -2889,9 +2957,13 @@ paths:
                 $ref: '#/components/schemas/SocialLoginTokenResponse'
           description: First-party token pair issued for the GitHub-linked local account. (Spec correction #70 - the previously documented profile object was stale; the runtime has returned tokens since the account-linking flow landed.)
         '400':
-          description: Invalid request (missing or invalid code)
+          description: Missing required field or invalid, expired, mismatched or replayed transaction
         '403':
-          description: Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+          description: Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+        '500':
+          description: INTERNAL_ERROR; state storage unavailable
         '502':
           description: Failed to contact GitHub API
       summary: GitHub OAuth2 Login
@@ -2901,22 +2973,22 @@ paths:
   /api/google/login:
     post:
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              description: Optional empty body (action-style operation).
-      description: Exchange Google authorization code for user information. This endpoint
-        handles the server-side OAuth2 flow with Google Identity Platform.
+              $ref: '#/components/schemas/SocialLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      description: Exchange google code and one-time state for a first-party token
+        pair. Requires an allowed Origin and the issuing browser binding cookie.
+        Only JSON or form body credentials are accepted; query credentials and
+        duplicate code/state fields are rejected. Invalid, expired, mismatched or
+        replayed state is rejected before any upstream exchange or account write.
+        A consumed transaction must be restarted even if upstream exchange fails.
+        All responses use Cache-Control no-store.
       operationId: post_api_google_login
-      parameters:
-      - description: Authorization code from Google OAuth2 callback (required)
-        in: query
-        name: code
-        required: true
-        schema:
-          type: string
       responses:
         '200':
           content:
@@ -2933,10 +3005,15 @@ paths:
           content:
             application/json:
               example:
-                error: Missing code parameter
-          description: Invalid request (missing or invalid code)
+                error:
+                  code: VALIDATION_MISSING_REQUIRED_FIELD
+          description: Missing required field or invalid, expired, mismatched or replayed transaction
         '403':
-          description: Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+          description: Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+        '500':
+          description: INTERNAL_ERROR; state storage unavailable
         '502':
           description: Failed to contact Google API
       summary: Google OAuth2 Login
@@ -5353,22 +5430,22 @@ paths:
   /api/wechat/login:
     post:
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              description: Optional empty body (action-style operation).
-      description: Exchange WeChat authorization code for user information. This endpoint
-        handles the server-side OAuth2 flow with WeChat Open Platform.
+              $ref: '#/components/schemas/SocialLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      description: Exchange wechat code and one-time state for a first-party token
+        pair. Requires an allowed Origin and the issuing browser binding cookie.
+        Only JSON or form body credentials are accepted; query credentials and
+        duplicate code/state fields are rejected. Invalid, expired, mismatched or
+        replayed state is rejected before any upstream exchange or account write.
+        A consumed transaction must be restarted even if upstream exchange fails.
+        All responses use Cache-Control no-store.
       operationId: post_api_wechat_login
-      parameters:
-      - description: Authorization code from WeChat OAuth2 callback (required)
-        in: query
-        name: code
-        required: true
-        schema:
-          type: string
       responses:
         '200':
           content:
@@ -5385,10 +5462,15 @@ paths:
           content:
             application/json:
               example:
-                error: Missing code parameter
-          description: Invalid request (missing or invalid code)
+                error:
+                  code: VALIDATION_MISSING_REQUIRED_FIELD
+          description: Missing required field or invalid, expired, mismatched or replayed transaction
         '403':
-          description: Provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+          description: Origin denied (AUTHZ_ACCESS_DENIED), or provider identity is not linked to a local account and first-login auto-create is disabled (AUTH_SOCIAL_ACCOUNT_NOT_LINKED)
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+        '500':
+          description: INTERNAL_ERROR; state storage unavailable
         '502':
           description: Failed to contact WeChat API
       summary: WeChat OAuth2 Login

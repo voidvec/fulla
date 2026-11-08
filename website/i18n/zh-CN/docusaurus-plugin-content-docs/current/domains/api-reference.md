@@ -426,3 +426,12 @@ HTTP API 契约的**单一事实源是 [`apps/server/openapi.yaml`](https://gith
 *   **登记校验失败**：运行 `fulla-tests -r OpenApiGenerator` 单元测试，查看具体的注册错误。
 *   **治理门误报**：核对 `oasdiff breaking` 输出与豁免清单条目是否对应同一 path/operation。
 
+
+## 浏览器绑定社交登录
+
+`GET /api/auth/providers` 只返回 provider 名称与已弃用的空 authorize_url。
+POST `/api/auth/providers/{provider}/authorize` 先初始化绑定 Cookie（204），
+携带 Cookie 重试一次签发 600 秒一次性交易（200）。
+POST `/api/{github,google,wechat}/login` 必须在 JSON/表单正文提交 code/state，
+并携带准确允许的 Origin 和同一 Cookie；禁止查询参数凭据。
+错误码与升级边界见[社交登录指南](social-login.md)。

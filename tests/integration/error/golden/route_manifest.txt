@@ -88,6 +88,7 @@ POST /api/admin/tokens/revoke-by-client
 POST /api/admin/tokens/revoke-by-user
 POST /api/admin/users
 POST /api/admin/users/{userId}/enable
+POST /api/auth/providers/{provider}/authorize
 POST /api/github/login
 POST /api/google/login
 POST /api/me/applications

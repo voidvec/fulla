@@ -158,6 +158,21 @@ func (e SocialLinkResultProvider) Valid() bool {
 	}
 }
 
+// Defines values for SocialLoginAuthorizationExpiresIn.
+const (
+	N600 SocialLoginAuthorizationExpiresIn = 600
+)
+
+// Valid indicates whether the value is a known member of the SocialLoginAuthorizationExpiresIn enum.
+func (e SocialLoginAuthorizationExpiresIn) Valid() bool {
+	switch e {
+	case N600:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TokenRequestGrantType.
 const (
 	AuthorizationCode                     TokenRequestGrantType = "authorization_code"
@@ -251,6 +266,27 @@ func (e GetApiAdminUsersParamsLocked) Valid() bool {
 	case GetApiAdminUsersParamsLockedFalse:
 		return true
 	case GetApiAdminUsersParamsLockedTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostApiAuthProvidersProviderAuthorizeParamsProvider.
+const (
+	PostApiAuthProvidersProviderAuthorizeParamsProviderGithub PostApiAuthProvidersProviderAuthorizeParamsProvider = "github"
+	PostApiAuthProvidersProviderAuthorizeParamsProviderGoogle PostApiAuthProvidersProviderAuthorizeParamsProvider = "google"
+	PostApiAuthProvidersProviderAuthorizeParamsProviderWechat PostApiAuthProvidersProviderAuthorizeParamsProvider = "wechat"
+)
+
+// Valid indicates whether the value is a known member of the PostApiAuthProvidersProviderAuthorizeParamsProvider enum.
+func (e PostApiAuthProvidersProviderAuthorizeParamsProvider) Valid() bool {
+	switch e {
+	case PostApiAuthProvidersProviderAuthorizeParamsProviderGithub:
+		return true
+	case PostApiAuthProvidersProviderAuthorizeParamsProviderGoogle:
+		return true
+	case PostApiAuthProvidersProviderAuthorizeParamsProviderWechat:
 		return true
 	default:
 		return false
@@ -488,8 +524,10 @@ func (e PostOauth2RegisterJSONBodyClientType) Valid() bool {
 	}
 }
 
-// AuthProvider An external login provider currently enabled on this deployment (v1.4.0 provider tiers). authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// AuthProvider An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST.
 type AuthProvider struct {
+	// AuthorizeUrl Example:
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	AuthorizeUrl string               `json:"authorize_url"`
 	Provider     AuthProviderProvider `json:"provider"`
 }
@@ -777,6 +815,23 @@ type SocialLinkResultProvider string
 type SocialLinksList struct {
 	SocialLinks []SocialLinkEntry `json:"social_links"`
 	Total       int               `json:"total"`
+}
+
+// SocialLoginAuthorization defines model for SocialLoginAuthorization.
+type SocialLoginAuthorization struct {
+	AuthorizeUrl string                            `json:"authorize_url"`
+	ExpiresIn    SocialLoginAuthorizationExpiresIn `json:"expires_in"`
+	RedirectUri  string                            `json:"redirect_uri"`
+	State        string                            `json:"state"`
+}
+
+// SocialLoginAuthorizationExpiresIn defines model for SocialLoginAuthorization.ExpiresIn.
+type SocialLoginAuthorizationExpiresIn int
+
+// SocialLoginRequest defines model for SocialLoginRequest.
+type SocialLoginRequest struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
 }
 
 // SocialLoginTokenResponse First-party token pair issued by a social login endpoint (/api/{github,google,wechat}/login) once the provider identity is linked to a local account (or auto-created on first login). Issued for the configured first-party client (external_auth.social_token_client_id, default fulla-portal) with scope "openid profile email". Recorded as a SOCIAL_LOGIN_TOKEN_ISSUED audit event (NOT a consent row) — an explicit social-consent interaction is a registered follow-up.
@@ -1138,23 +1193,11 @@ type PutApiAdminUsersUserIdRolesJSONBody struct {
 	Roles []string `json:"roles"`
 }
 
-// PostApiGithubLoginJSONBody defines parameters for PostApiGithubLogin.
-type PostApiGithubLoginJSONBody = map[string]interface{}
+// PostApiAuthProvidersProviderAuthorizeJSONBody defines parameters for PostApiAuthProvidersProviderAuthorize.
+type PostApiAuthProvidersProviderAuthorizeJSONBody = map[string]interface{}
 
-// PostApiGithubLoginParams defines parameters for PostApiGithubLogin.
-type PostApiGithubLoginParams struct {
-	// Code Authorization code from GitHub OAuth2 callback (required)
-	Code string `form:"code" json:"code"`
-}
-
-// PostApiGoogleLoginJSONBody defines parameters for PostApiGoogleLogin.
-type PostApiGoogleLoginJSONBody = map[string]interface{}
-
-// PostApiGoogleLoginParams defines parameters for PostApiGoogleLogin.
-type PostApiGoogleLoginParams struct {
-	// Code Authorization code from Google OAuth2 callback (required)
-	Code string `form:"code" json:"code"`
-}
+// PostApiAuthProvidersProviderAuthorizeParamsProvider defines parameters for PostApiAuthProvidersProviderAuthorize.
+type PostApiAuthProvidersProviderAuthorizeParamsProvider string
 
 // GetApiMeApplications200JSONResponseBodyApplicationsClientType defines parameters for GetApiMeApplications.
 type GetApiMeApplications200JSONResponseBodyApplicationsClientType string
@@ -1332,15 +1375,6 @@ type PostApiVerifyEmailResendJSONBody = map[string]interface{}
 // PostApiVerifyEmailResendByEmailJSONBody defines parameters for PostApiVerifyEmailResendByEmail.
 type PostApiVerifyEmailResendByEmailJSONBody struct {
 	Email string `json:"email"`
-}
-
-// PostApiWechatLoginJSONBody defines parameters for PostApiWechatLogin.
-type PostApiWechatLoginJSONBody = map[string]interface{}
-
-// PostApiWechatLoginParams defines parameters for PostApiWechatLogin.
-type PostApiWechatLoginParams struct {
-	// Code Authorization code from WeChat OAuth2 callback (required)
-	Code string `form:"code" json:"code"`
 }
 
 // GetOauth2AuthorizeParams defines parameters for GetOauth2Authorize.
@@ -1620,11 +1654,20 @@ type PostApiAdminUsersUserIdEnableJSONRequestBody = PostApiAdminUsersUserIdEnabl
 // PutApiAdminUsersUserIdRolesJSONRequestBody defines body for PutApiAdminUsersUserIdRoles for application/json ContentType.
 type PutApiAdminUsersUserIdRolesJSONRequestBody PutApiAdminUsersUserIdRolesJSONBody
 
+// PostApiAuthProvidersProviderAuthorizeJSONRequestBody defines body for PostApiAuthProvidersProviderAuthorize for application/json ContentType.
+type PostApiAuthProvidersProviderAuthorizeJSONRequestBody = PostApiAuthProvidersProviderAuthorizeJSONBody
+
 // PostApiGithubLoginJSONRequestBody defines body for PostApiGithubLogin for application/json ContentType.
-type PostApiGithubLoginJSONRequestBody = PostApiGithubLoginJSONBody
+type PostApiGithubLoginJSONRequestBody = SocialLoginRequest
+
+// PostApiGithubLoginFormdataRequestBody defines body for PostApiGithubLogin for application/x-www-form-urlencoded ContentType.
+type PostApiGithubLoginFormdataRequestBody = SocialLoginRequest
 
 // PostApiGoogleLoginJSONRequestBody defines body for PostApiGoogleLogin for application/json ContentType.
-type PostApiGoogleLoginJSONRequestBody = PostApiGoogleLoginJSONBody
+type PostApiGoogleLoginJSONRequestBody = SocialLoginRequest
+
+// PostApiGoogleLoginFormdataRequestBody defines body for PostApiGoogleLogin for application/x-www-form-urlencoded ContentType.
+type PostApiGoogleLoginFormdataRequestBody = SocialLoginRequest
 
 // PostApiMeApplicationsJSONRequestBody defines body for PostApiMeApplications for application/json ContentType.
 type PostApiMeApplicationsJSONRequestBody PostApiMeApplicationsJSONBody
@@ -1711,7 +1754,10 @@ type PostApiVerifyEmailResendJSONRequestBody = PostApiVerifyEmailResendJSONBody
 type PostApiVerifyEmailResendByEmailJSONRequestBody PostApiVerifyEmailResendByEmailJSONBody
 
 // PostApiWechatLoginJSONRequestBody defines body for PostApiWechatLogin for application/json ContentType.
-type PostApiWechatLoginJSONRequestBody = PostApiWechatLoginJSONBody
+type PostApiWechatLoginJSONRequestBody = SocialLoginRequest
+
+// PostApiWechatLoginFormdataRequestBody defines body for PostApiWechatLogin for application/x-www-form-urlencoded ContentType.
+type PostApiWechatLoginFormdataRequestBody = SocialLoginRequest
 
 // PostOauth2DeviceApproveFormdataRequestBody defines body for PostOauth2DeviceApprove for application/x-www-form-urlencoded ContentType.
 type PostOauth2DeviceApproveFormdataRequestBody PostOauth2DeviceApproveFormdataBody
@@ -2597,46 +2643,82 @@ type ClientInterface interface {
 
 	// GetApiAuthProviders List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+	// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
 	//
 	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 	GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiAuthProvidersProviderAuthorizeWithBody Start Browser-Bound Social Login
+	//
+	// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+	PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAuthProvidersProviderAuthorize Start Browser-Bound Social Login
+	//
+	// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+	PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostApiGithubLoginWithBody GitHub OAuth2 Login
 	//
-	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLoginWithBody(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGithubLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGithubLogin GitHub OAuth2 Login
 	//
-	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGithubLogin(ctx context.Context, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiGithubLoginWithFormdataBody GitHub OAuth2 Login
+	//
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+	PostApiGithubLoginWithFormdataBody(ctx context.Context, body PostApiGithubLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGoogleLoginWithBody Google OAuth2 Login
 	//
-	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLoginWithBody(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGoogleLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGoogleLogin Google OAuth2 Login
 	//
-	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiGoogleLogin(ctx context.Context, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiGoogleLoginWithFormdataBody Google OAuth2 Login
+	//
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+	PostApiGoogleLoginWithFormdataBody(ctx context.Context, body PostApiGoogleLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteApiMe Delete Account
 	//
@@ -3289,21 +3371,30 @@ type ClientInterface interface {
 
 	// PostApiWechatLoginWithBody WeChat OAuth2 Login
 	//
-	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLoginWithBody(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiWechatLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiWechatLogin WeChat OAuth2 Login
 	//
-	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiWechatLogin(ctx context.Context, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiWechatLoginWithFormdataBody WeChat OAuth2 Login
+	//
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+	PostApiWechatLoginWithFormdataBody(ctx context.Context, body PostApiWechatLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Health check
 	//
@@ -5112,7 +5203,7 @@ func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, bo
 
 // GetApiAuthProviders List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
 //
 // Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5127,15 +5218,53 @@ func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestE
 	return c.Client.Do(req)
 }
 
+// PostApiAuthProvidersProviderAuthorizeWithBody Start Browser-Bound Social Login
+//
+// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+func (c *Client) PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(c.Server, provider, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAuthProvidersProviderAuthorize Start Browser-Bound Social Login
+//
+// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+func (c *Client) PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAuthProvidersProviderAuthorizeRequest(c.Server, provider, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostApiGithubLoginWithBody GitHub OAuth2 Login
 //
-// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *Client) PostApiGithubLoginWithBody(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGithubLoginRequestWithBody(c.Server, params, contentType, body)
+func (c *Client) PostApiGithubLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGithubLoginRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5148,13 +5277,32 @@ func (c *Client) PostApiGithubLoginWithBody(ctx context.Context, params *PostApi
 
 // PostApiGithubLogin GitHub OAuth2 Login
 //
-// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *Client) PostApiGithubLogin(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGithubLoginRequest(c.Server, params, body)
+func (c *Client) PostApiGithubLogin(ctx context.Context, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGithubLoginRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiGithubLoginWithFormdataBody GitHub OAuth2 Login
+//
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+func (c *Client) PostApiGithubLoginWithFormdataBody(ctx context.Context, body PostApiGithubLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGithubLoginRequestWithFormdataBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5167,13 +5315,13 @@ func (c *Client) PostApiGithubLogin(ctx context.Context, params *PostApiGithubLo
 
 // PostApiGoogleLoginWithBody Google OAuth2 Login
 //
-// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *Client) PostApiGoogleLoginWithBody(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGoogleLoginRequestWithBody(c.Server, params, contentType, body)
+func (c *Client) PostApiGoogleLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGoogleLoginRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5186,13 +5334,32 @@ func (c *Client) PostApiGoogleLoginWithBody(ctx context.Context, params *PostApi
 
 // PostApiGoogleLogin Google OAuth2 Login
 //
-// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *Client) PostApiGoogleLogin(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiGoogleLoginRequest(c.Server, params, body)
+func (c *Client) PostApiGoogleLogin(ctx context.Context, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGoogleLoginRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiGoogleLoginWithFormdataBody Google OAuth2 Login
+//
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+func (c *Client) PostApiGoogleLoginWithFormdataBody(ctx context.Context, body PostApiGoogleLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiGoogleLoginRequestWithFormdataBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6624,13 +6791,13 @@ func (c *Client) PostApiVerifyEmailResendByEmail(ctx context.Context, body PostA
 
 // PostApiWechatLoginWithBody WeChat OAuth2 Login
 //
-// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *Client) PostApiWechatLoginWithBody(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiWechatLoginRequestWithBody(c.Server, params, contentType, body)
+func (c *Client) PostApiWechatLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiWechatLoginRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6643,13 +6810,32 @@ func (c *Client) PostApiWechatLoginWithBody(ctx context.Context, params *PostApi
 
 // PostApiWechatLogin WeChat OAuth2 Login
 //
-// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *Client) PostApiWechatLogin(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostApiWechatLoginRequest(c.Server, params, body)
+func (c *Client) PostApiWechatLogin(ctx context.Context, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiWechatLoginRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiWechatLoginWithFormdataBody WeChat OAuth2 Login
+//
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+func (c *Client) PostApiWechatLoginWithFormdataBody(ctx context.Context, body PostApiWechatLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiWechatLoginRequestWithFormdataBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9654,19 +9840,77 @@ func NewGetApiAuthProvidersRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPostApiGithubLoginRequest calls the generic PostApiGithubLogin builder with application/json body
-func NewPostApiGithubLoginRequest(server string, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody) (*http.Request, error) {
+// NewPostApiAuthProvidersProviderAuthorizeRequest calls the generic PostApiAuthProvidersProviderAuthorize builder with application/json body
+func NewPostApiAuthProvidersProviderAuthorizeRequest(server string, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostApiGithubLoginRequestWithBody(server, params, "application/json", bodyReader)
+	return NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(server, provider, "application/json", bodyReader)
+}
+
+// NewPostApiAuthProvidersProviderAuthorizeRequestWithBody constructs an http.Request for the PostApiAuthProvidersProviderAuthorize method, with any body, and a specified content type
+func NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(server string, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/auth/providers/%s/authorize", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiGithubLoginRequest calls the generic PostApiGithubLogin builder with application/json body
+func NewPostApiGithubLoginRequest(server string, body PostApiGithubLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiGithubLoginRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiGithubLoginRequestWithFormdataBody calls the generic PostApiGithubLogin builder with application/x-www-form-urlencoded body
+func NewPostApiGithubLoginRequestWithFormdataBody(server string, body PostApiGithubLoginFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewPostApiGithubLoginRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
 }
 
 // NewPostApiGithubLoginRequestWithBody constructs an http.Request for the PostApiGithubLogin method, with any body, and a specified content type
-func NewPostApiGithubLoginRequestWithBody(server string, params *PostApiGithubLoginParams, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostApiGithubLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9684,29 +9928,6 @@ func NewPostApiGithubLoginRequestWithBody(server string, params *PostApiGithubLo
 		return nil, err
 	}
 
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
@@ -9718,18 +9939,29 @@ func NewPostApiGithubLoginRequestWithBody(server string, params *PostApiGithubLo
 }
 
 // NewPostApiGoogleLoginRequest calls the generic PostApiGoogleLogin builder with application/json body
-func NewPostApiGoogleLoginRequest(server string, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody) (*http.Request, error) {
+func NewPostApiGoogleLoginRequest(server string, body PostApiGoogleLoginJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostApiGoogleLoginRequestWithBody(server, params, "application/json", bodyReader)
+	return NewPostApiGoogleLoginRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiGoogleLoginRequestWithFormdataBody calls the generic PostApiGoogleLogin builder with application/x-www-form-urlencoded body
+func NewPostApiGoogleLoginRequestWithFormdataBody(server string, body PostApiGoogleLoginFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewPostApiGoogleLoginRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
 }
 
 // NewPostApiGoogleLoginRequestWithBody constructs an http.Request for the PostApiGoogleLogin method, with any body, and a specified content type
-func NewPostApiGoogleLoginRequestWithBody(server string, params *PostApiGoogleLoginParams, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostApiGoogleLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9745,29 +9977,6 @@ func NewPostApiGoogleLoginRequestWithBody(server string, params *PostApiGoogleLo
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
@@ -11719,18 +11928,29 @@ func NewPostApiVerifyEmailResendByEmailRequestWithBody(server string, contentTyp
 }
 
 // NewPostApiWechatLoginRequest calls the generic PostApiWechatLogin builder with application/json body
-func NewPostApiWechatLoginRequest(server string, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody) (*http.Request, error) {
+func NewPostApiWechatLoginRequest(server string, body PostApiWechatLoginJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPostApiWechatLoginRequestWithBody(server, params, "application/json", bodyReader)
+	return NewPostApiWechatLoginRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiWechatLoginRequestWithFormdataBody calls the generic PostApiWechatLogin builder with application/x-www-form-urlencoded body
+func NewPostApiWechatLoginRequestWithFormdataBody(server string, body PostApiWechatLoginFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewPostApiWechatLoginRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
 }
 
 // NewPostApiWechatLoginRequestWithBody constructs an http.Request for the PostApiWechatLogin method, with any body, and a specified content type
-func NewPostApiWechatLoginRequestWithBody(server string, params *PostApiWechatLoginParams, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostApiWechatLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11746,29 +11966,6 @@ func NewPostApiWechatLoginRequestWithBody(server string, params *PostApiWechatLo
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
@@ -13775,48 +13972,84 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiAuthProvidersWithResponse List Enabled External Login Providers
 	//
-	// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+	// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/auth/providers (the `GetApiAuthProviders` operationId).
 	GetApiAuthProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAuthProvidersResponse, error)
 
+	// PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse Start Browser-Bound Social Login
+	//
+	// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+	PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
+
+	// PostApiAuthProvidersProviderAuthorizeWithResponse Start Browser-Bound Social Login
+	//
+	// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+	PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
+
 	// PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 	//
-	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLoginWithBodyWithResponse(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+	PostApiGithubLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
 
 	// PostApiGithubLoginWithResponse GitHub OAuth2 Login
 	//
-	// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-	PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+	PostApiGithubLoginWithResponse(ctx context.Context, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
+
+	// PostApiGithubLoginWithFormdataBodyWithResponse GitHub OAuth2 Login
+	//
+	// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+	PostApiGithubLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiGithubLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error)
 
 	// PostApiGoogleLoginWithBodyWithResponse Google OAuth2 Login
 	//
-	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
+	PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
 
 	// PostApiGoogleLoginWithResponse Google OAuth2 Login
 	//
-	// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-	PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
+	PostApiGoogleLoginWithResponse(ctx context.Context, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
+
+	// PostApiGoogleLoginWithFormdataBodyWithResponse Google OAuth2 Login
+	//
+	// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+	PostApiGoogleLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiGoogleLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error)
 
 	// DeleteApiMeWithResponse Delete Account
 	//
@@ -14513,21 +14746,30 @@ type ClientWithResponsesInterface interface {
 
 	// PostApiWechatLoginWithBodyWithResponse WeChat OAuth2 Login
 	//
-	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLoginWithBodyWithResponse(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
+	PostApiWechatLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
 
 	// PostApiWechatLoginWithResponse WeChat OAuth2 Login
 	//
-	// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-	PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
+	PostApiWechatLoginWithResponse(ctx context.Context, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
+
+	// PostApiWechatLoginWithFormdataBodyWithResponse WeChat OAuth2 Login
+	//
+	// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+	PostApiWechatLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiWechatLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error)
 
 	// GetHealthWithResponse Health check
 	//
@@ -17262,6 +17504,54 @@ func (r GetApiAuthProvidersResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetApiAuthProvidersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PostApiAuthProvidersProviderAuthorizeResponse204Headers the declared response headers of an HTTP 204 response for PostApiAuthProvidersProviderAuthorize
+type PostApiAuthProvidersProviderAuthorizeResponse204Headers struct {
+	SetCookie *string
+}
+
+type PostApiAuthProvidersProviderAuthorizeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SocialLoginAuthorization
+	// Headers204 the parsed response headers for an HTTP 204 response
+	Headers204 *PostApiAuthProvidersProviderAuthorizeResponse204Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiAuthProvidersProviderAuthorizeResponse) GetJSON200() *SocialLoginAuthorization {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAuthProvidersProviderAuthorizeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAuthProvidersProviderAuthorizeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAuthProvidersProviderAuthorizeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAuthProvidersProviderAuthorizeResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -22924,7 +23214,7 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 
 // GetApiAuthProvidersWithResponse List Enabled External Login Providers
 //
-// Public, unauthenticated discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is the fully built provider authorize URL — the SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override, else frontend.url + /callback/{provider}.
+// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -22937,15 +23227,45 @@ func (c *ClientWithResponses) GetApiAuthProvidersWithResponse(ctx context.Contex
 	return ParseGetApiAuthProvidersResponse(rsp)
 }
 
+// PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse Start Browser-Bound Social Login
+//
+// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
+	rsp, err := c.PostApiAuthProvidersProviderAuthorizeWithBody(ctx, provider, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAuthProvidersProviderAuthorizeResponse(rsp)
+}
+
+// PostApiAuthProvidersProviderAuthorizeWithResponse Start Browser-Bound Social Login
+//
+// Requires an exact allowed Origin and credentials-enabled cookies. The first call initializes an HttpOnly browser binding cookie and returns 204 without issuing state. Retry once with that cookie to receive a transaction bound to the provider, client, redirect URI and browser. State expires after 600 seconds and can be consumed once. All responses use Cache-Control no-store. No bearer token is required.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
+func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
+	rsp, err := c.PostApiAuthProvidersProviderAuthorize(ctx, provider, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAuthProvidersProviderAuthorizeResponse(rsp)
+}
+
 // PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 //
-// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *ClientWithResponses) PostApiGithubLoginWithBodyWithResponse(ctx context.Context, params *PostApiGithubLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
-	rsp, err := c.PostApiGithubLoginWithBody(ctx, params, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostApiGithubLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
+	rsp, err := c.PostApiGithubLoginWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -22954,13 +23274,28 @@ func (c *ClientWithResponses) PostApiGithubLoginWithBodyWithResponse(ctx context
 
 // PostApiGithubLoginWithResponse GitHub OAuth2 Login
 //
-// Exchange GitHub authorization code for user information. This endpoint handles the server-side OAuth2 flow with GitHub.
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
-func (c *ClientWithResponses) PostApiGithubLoginWithResponse(ctx context.Context, params *PostApiGithubLoginParams, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
-	rsp, err := c.PostApiGithubLogin(ctx, params, body, reqEditors...)
+func (c *ClientWithResponses) PostApiGithubLoginWithResponse(ctx context.Context, body PostApiGithubLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
+	rsp, err := c.PostApiGithubLogin(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiGithubLoginResponse(rsp)
+}
+
+// PostApiGithubLoginWithFormdataBodyWithResponse GitHub OAuth2 Login
+//
+// Exchange github code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/github/login (the `PostApiGithubLogin` operationId).
+func (c *ClientWithResponses) PostApiGithubLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiGithubLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiGithubLoginResponse, error) {
+	rsp, err := c.PostApiGithubLoginWithFormdataBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -22969,13 +23304,13 @@ func (c *ClientWithResponses) PostApiGithubLoginWithResponse(ctx context.Context
 
 // PostApiGoogleLoginWithBodyWithResponse Google OAuth2 Login
 //
-// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *ClientWithResponses) PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
-	rsp, err := c.PostApiGoogleLoginWithBody(ctx, params, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostApiGoogleLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
+	rsp, err := c.PostApiGoogleLoginWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -22984,13 +23319,28 @@ func (c *ClientWithResponses) PostApiGoogleLoginWithBodyWithResponse(ctx context
 
 // PostApiGoogleLoginWithResponse Google OAuth2 Login
 //
-// Exchange Google authorization code for user information. This endpoint handles the server-side OAuth2 flow with Google Identity Platform.
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
-func (c *ClientWithResponses) PostApiGoogleLoginWithResponse(ctx context.Context, params *PostApiGoogleLoginParams, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
-	rsp, err := c.PostApiGoogleLogin(ctx, params, body, reqEditors...)
+func (c *ClientWithResponses) PostApiGoogleLoginWithResponse(ctx context.Context, body PostApiGoogleLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
+	rsp, err := c.PostApiGoogleLogin(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiGoogleLoginResponse(rsp)
+}
+
+// PostApiGoogleLoginWithFormdataBodyWithResponse Google OAuth2 Login
+//
+// Exchange google code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/google/login (the `PostApiGoogleLogin` operationId).
+func (c *ClientWithResponses) PostApiGoogleLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiGoogleLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiGoogleLoginResponse, error) {
+	rsp, err := c.PostApiGoogleLoginWithFormdataBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -24154,13 +24504,13 @@ func (c *ClientWithResponses) PostApiVerifyEmailResendByEmailWithResponse(ctx co
 
 // PostApiWechatLoginWithBodyWithResponse WeChat OAuth2 Login
 //
-// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *ClientWithResponses) PostApiWechatLoginWithBodyWithResponse(ctx context.Context, params *PostApiWechatLoginParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
-	rsp, err := c.PostApiWechatLoginWithBody(ctx, params, contentType, body, reqEditors...)
+func (c *ClientWithResponses) PostApiWechatLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
+	rsp, err := c.PostApiWechatLoginWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -24169,13 +24519,28 @@ func (c *ClientWithResponses) PostApiWechatLoginWithBodyWithResponse(ctx context
 
 // PostApiWechatLoginWithResponse WeChat OAuth2 Login
 //
-// Exchange WeChat authorization code for user information. This endpoint handles the server-side OAuth2 flow with WeChat Open Platform.
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
-func (c *ClientWithResponses) PostApiWechatLoginWithResponse(ctx context.Context, params *PostApiWechatLoginParams, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
-	rsp, err := c.PostApiWechatLogin(ctx, params, body, reqEditors...)
+func (c *ClientWithResponses) PostApiWechatLoginWithResponse(ctx context.Context, body PostApiWechatLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
+	rsp, err := c.PostApiWechatLogin(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiWechatLoginResponse(rsp)
+}
+
+// PostApiWechatLoginWithFormdataBodyWithResponse WeChat OAuth2 Login
+//
+// Exchange wechat code and one-time state for a first-party token pair. Requires an allowed Origin and the issuing browser binding cookie. Only JSON or form body credentials are accepted; query credentials and duplicate code/state fields are rejected. Invalid, expired, mismatched or replayed state is rejected before any upstream exchange or account write. A consumed transaction must be restarted even if upstream exchange fails. All responses use Cache-Control no-store.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/wechat/login (the `PostApiWechatLogin` operationId).
+func (c *ClientWithResponses) PostApiWechatLoginWithFormdataBodyWithResponse(ctx context.Context, body PostApiWechatLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiWechatLoginResponse, error) {
+	rsp, err := c.PostApiWechatLoginWithFormdataBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -26068,6 +26433,60 @@ func ParseGetApiAuthProvidersResponse(rsp *http.Response) (*GetApiAuthProvidersR
 	return response, nil
 }
 
+// ParsePostApiAuthProvidersProviderAuthorizeResponse parses an HTTP response from a PostApiAuthProvidersProviderAuthorizeWithResponse call
+func ParsePostApiAuthProvidersProviderAuthorizeResponse(rsp *http.Response) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAuthProvidersProviderAuthorizeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SocialLoginAuthorization
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 403:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
+		break // No content-type
+
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		var headers PostApiAuthProvidersProviderAuthorizeResponse204Headers
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
+		response.Headers204 = &headers
+	}
+
+	return response, nil
+}
+
 // ParsePostApiGithubLoginResponse parses an HTTP response from a PostApiGithubLoginWithResponse call
 func ParsePostApiGithubLoginResponse(rsp *http.Response) (*PostApiGithubLoginResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -26093,6 +26512,12 @@ func ParsePostApiGithubLoginResponse(rsp *http.Response) (*PostApiGithubLoginRes
 		break // No content-type
 
 	case rsp.StatusCode == 403:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
 		break // No content-type
 
 	case rsp.StatusCode == 502:
@@ -26125,6 +26550,12 @@ func ParsePostApiGoogleLoginResponse(rsp *http.Response) (*PostApiGoogleLoginRes
 		response.JSON200 = &dest
 
 	case rsp.StatusCode == 403:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
 		break // No content-type
 
 	case rsp.StatusCode == 502:
@@ -28256,6 +28687,12 @@ func ParsePostApiWechatLoginResponse(rsp *http.Response) (*PostApiWechatLoginRes
 		response.JSON200 = &dest
 
 	case rsp.StatusCode == 403:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
 		break // No content-type
 
 	case rsp.StatusCode == 502:
