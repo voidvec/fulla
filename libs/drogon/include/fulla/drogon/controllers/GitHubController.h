@@ -6,6 +6,7 @@
 // pattern verified in slice 3 (HealthController) -- see PROGRESS.md.
 
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 #include <functional>
 #include <memory>
 #include <string>
@@ -29,6 +30,11 @@ namespace fulla::drogon::controllers
 class GitHubController : public ::drogon::HttpController<GitHubController, false>
 {
   public:
+    void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+    {
+        loginGuard_ = std::move(guard);
+    }
+
     // M3 Task 23: see HealthController::setPlugin()'s comment.
     void setPlugin(OAuth2Plugin *plugin)
     {
@@ -59,6 +65,11 @@ class GitHubController : public ::drogon::HttpController<GitHubController, false
     );
 
   private:
+    std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+    void loginValidated(const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &code);
+
     // Intentional [this] capture: like every Drogon HttpController in this
     // codebase (see TokenEndpointController.cc:1306-1311 for the canonical
     // rationale), GitHubController is a process-wide singleton managed by

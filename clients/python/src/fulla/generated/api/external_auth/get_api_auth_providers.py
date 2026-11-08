@@ -48,11 +48,8 @@ def sync_detailed(
 ) -> Response[AuthProvidersResponse]:
     """List Enabled External Login Providers
 
-     Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
-    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
-    else frontend.url + /callback/{provider}.
+     Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider
+    authorize endpoint to start login.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -77,11 +74,8 @@ def sync(
 ) -> AuthProvidersResponse | None:
     """List Enabled External Login Providers
 
-     Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
-    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
-    else frontend.url + /callback/{provider}.
+     Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider
+    authorize endpoint to start login.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -102,11 +96,8 @@ async def asyncio_detailed(
 ) -> Response[AuthProvidersResponse]:
     """List Enabled External Login Providers
 
-     Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
-    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
-    else frontend.url + /callback/{provider}.
+     Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider
+    authorize endpoint to start login.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -129,11 +120,8 @@ async def asyncio(
 ) -> AuthProvidersResponse | None:
     """List Enabled External Login Providers
 
-     Public, unauthenticated discovery of the external login providers this deployment currently offers
-    (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty
-    list means external login is disabled. authorize_url is the fully built provider authorize URL — the
-    SPA redirects to it as-is; the redirect target resolves from the per-provider redirect_uri override,
-    else frontend.url + /callback/{provider}.
+     Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider
+    authorize endpoint to start login.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

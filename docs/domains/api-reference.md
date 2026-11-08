@@ -452,3 +452,12 @@ The same command can be reproduced locally (see the header comment in `.github/w
 *   **Swagger UI inaccessible**: check whether static assets are shipped with the server and confirm that static file serving is enabled.
 *   **Registration validation fails**: run the `fulla-tests -r OpenApiGenerator` unit test and inspect the specific registration errors.
 *   **Governance-gate false positive**: verify that the `oasdiff breaking` output and the exemption-list entry refer to the same path/operation.
+
+## Browser-bound social login
+
+`GET /api/auth/providers` returns enabled provider names with an empty deprecated
+`authorize_url`. POST `/api/auth/providers/{provider}/authorize` initializes a
+binding cookie (204), then issues a one-time 600-second transaction (200).
+POST `/api/{github,google,wechat}/login` requires code and state in a JSON/form
+body, an allowed Origin and the same cookie jar; query credentials are rejected.
+See [Social Login](social-login.md) for errors, SDK migration and deployment.

@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     // like it, must be a registerBeginningAdvice callback itself --
     // drogon::app().getDbClient() is only reliably available once app().run()
     // has processed the db_clients config block.
-    drogon::app().registerBeginningAdvice([]() { bootstrap::wireIdentityServices(); });
+    drogon::app().registerBeginningAdvice([config]() { bootstrap::wireIdentityServices(config); });
 
     // Report Hodor status after plugins have been initialized. Hodor is loaded
     // only by production configuration. When present, also wire its rejection

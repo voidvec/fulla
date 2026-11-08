@@ -19,6 +19,7 @@ endif()
 if(NOT WITH_SOCIAL)
     list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "SocialAuthServiceTest\\.cc$")
     list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "SocialLinkServiceTest\\.cc$")
+    list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "SocialLoginStateServiceTest\\.cc$")
 endif()
 
 add_executable(fulla-identity-test ${FULLA_IDENTITY_TEST_SOURCES})

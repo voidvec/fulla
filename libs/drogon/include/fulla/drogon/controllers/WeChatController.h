@@ -6,6 +6,7 @@
 // pattern verified in slice 3 (HealthController) -- see PROGRESS.md.
 
 #include <drogon/HttpController.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
 
 // #70: forward declaration for the token-issuance path (see the private
 // resolvePlugin() below), mirroring GitHubController.h's pattern.
@@ -26,6 +27,11 @@ namespace fulla::drogon::controllers
 class WeChatController : public ::drogon::HttpController<WeChatController, false>
 {
   public:
+    void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+    {
+        loginGuard_ = std::move(guard);
+    }
+
 #ifdef WITH_SOCIAL
     // Task 24 slice 5: identity-layer service injection, same pattern as
     // GoogleController::setGoogleAuthService(). Falls back to the
@@ -47,6 +53,11 @@ class WeChatController : public ::drogon::HttpController<WeChatController, false
     );
 
   private:
+    std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+    void loginValidated(const ::drogon::HttpRequestPtr &req,
+      std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+      const std::string &code);
+
     // #70: token issuance for the account-linked login path needs the
     // OAuth2Plugin (saveTokenPair/TTLs/issuer). Same seam as
     // GitHubController: overridable for tests, app plugin otherwise.

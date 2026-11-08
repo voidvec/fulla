@@ -60,6 +60,7 @@ set(IDENTITY_SOURCES
     $<$<BOOL:${WITH_SOCIAL}>:src/social/WeChatAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/GitHubAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/SocialLinkService.cc>
+    $<$<BOOL:${WITH_SOCIAL}>:src/social/SocialLoginStateService.cc>
     # Session
     src/session/SessionManager.cc
 )

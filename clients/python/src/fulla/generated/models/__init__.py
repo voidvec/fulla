@@ -147,8 +147,8 @@ from .post_api_admin_tokens_revoke_by_client_body import PostApiAdminTokensRevok
 from .post_api_admin_tokens_revoke_by_user_body import PostApiAdminTokensRevokeByUserBody
 from .post_api_admin_users_body import PostApiAdminUsersBody
 from .post_api_admin_users_user_id_enable_body import PostApiAdminUsersUserIdEnableBody
-from .post_api_github_login_body import PostApiGithubLoginBody
-from .post_api_google_login_body import PostApiGoogleLoginBody
+from .post_api_auth_providers_provider_authorize_body import PostApiAuthProvidersProviderAuthorizeBody
+from .post_api_auth_providers_provider_authorize_provider import PostApiAuthProvidersProviderAuthorizeProvider
 from .post_api_me_applications_body import PostApiMeApplicationsBody
 from .post_api_me_applications_body_client_type import PostApiMeApplicationsBodyClientType
 from .post_api_me_applications_client_id_rotate_secret_body import PostApiMeApplicationsClientIdRotateSecretBody
@@ -209,7 +209,6 @@ from .post_api_password_reset_request_body import PostApiPasswordResetRequestBod
 from .post_api_register_body import PostApiRegisterBody
 from .post_api_verify_email_resend_body import PostApiVerifyEmailResendBody
 from .post_api_verify_email_resend_by_email_body import PostApiVerifyEmailResendByEmailBody
-from .post_api_wechat_login_body import PostApiWechatLoginBody
 from .post_oauth_2_consent_action import PostOauth2ConsentAction
 from .post_oauth_2_device_approve_body import PostOauth2DeviceApproveBody
 from .post_oauth_2_device_approve_response_200 import PostOauth2DeviceApproveResponse200
@@ -238,6 +237,9 @@ from .social_link_entry_provider import SocialLinkEntryProvider
 from .social_link_result import SocialLinkResult
 from .social_link_result_provider import SocialLinkResultProvider
 from .social_links_list import SocialLinksList
+from .social_login_authorization import SocialLoginAuthorization
+from .social_login_authorization_expires_in import SocialLoginAuthorizationExpiresIn
+from .social_login_request import SocialLoginRequest
 from .social_login_token_response import SocialLoginTokenResponse
 from .token_request import TokenRequest
 from .token_request_grant_type import TokenRequestGrantType
@@ -351,8 +353,8 @@ __all__ = (
     "PostApiAdminTokensRevokeByUserBody",
     "PostApiAdminUsersBody",
     "PostApiAdminUsersUserIdEnableBody",
-    "PostApiGithubLoginBody",
-    "PostApiGoogleLoginBody",
+    "PostApiAuthProvidersProviderAuthorizeBody",
+    "PostApiAuthProvidersProviderAuthorizeProvider",
     "PostApiMeApplicationsBody",
     "PostApiMeApplicationsBodyClientType",
     "PostApiMeApplicationsClientIdRotateSecretBody",
@@ -395,7 +397,6 @@ __all__ = (
     "PostApiRegisterBody",
     "PostApiVerifyEmailResendBody",
     "PostApiVerifyEmailResendByEmailBody",
-    "PostApiWechatLoginBody",
     "PostOauth2ConsentAction",
     "PostOauth2DeviceApproveBody",
     "PostOauth2DeviceApproveResponse200",
@@ -424,6 +425,9 @@ __all__ = (
     "SocialLinkResult",
     "SocialLinkResultProvider",
     "SocialLinksList",
+    "SocialLoginAuthorization",
+    "SocialLoginAuthorizationExpiresIn",
+    "SocialLoginRequest",
     "SocialLoginTokenResponse",
     "TokenRequest",
     "TokenRequestGrantType",

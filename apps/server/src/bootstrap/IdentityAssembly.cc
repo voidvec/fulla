@@ -25,6 +25,10 @@
 #include <fulla/identity/SocialLinkService.h>
 #include <fulla/identity/WebAuthnService.h>
 #include <fulla/drogon/adapters/RedisSocialLinkStateStore.h>
+#include <fulla/drogon/adapters/RedisSocialLoginStateStore.h>
+#include <fulla/drogon/services/SocialLoginGuard.h>
+#include <fulla/common/utils/SocialAuthConfig.h>
+#include <fulla/common/config/ConfigManager.h>
 #include <fulla/storage/postgres/PostgresIdentityRepository.h>
 #include <fulla/storage/postgres/PostgresMfaRepository.h>
 #include <fulla/storage/postgres/PostgresSocialAccountRepository.h>
@@ -43,7 +47,7 @@
 namespace bootstrap
 {
 
-void wireIdentityServices()
+void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
 {
     // Memory-only config (e.g. config.ci.json: "storage_type":"memory",
     // "db_clients":[]) has NO default DbClient. Drogon's
@@ -217,7 +221,7 @@ void wireIdentityServices()
     // with a clear NotConfigured error instead of phoning an upstream that
     // can never accept them.
     const auto credentialConfigured = [](const std::string &value) {
-        return !value.empty() && value.rfind("YOUR_", 0) != 0;
+        return fulla::common::utils::socialCredentialConfigured(value);
     };
     std::string googleClientId, googleClientSecret, googleRedirectUri;
     std::string wechatAppId, wechatSecret;
@@ -268,6 +272,8 @@ void wireIdentityServices()
     const bool googleEnabled = googleConfigured && internationalTier;
     const bool wechatEnabled = wechatConfigured && domesticTier;
     const bool githubEnabled = githubConfigured && internationalTier;
+    // Resolve once with the same policy used by authorization URLs and state.
+    googleRedirectUri = fulla::common::utils::socialRedirectUri(customConfig, "google");
     if (!googleEnabled)
         LOG_INFO << "IdentityAssembly: social provider 'google' disabled ("
                  << (internationalTier ? "external_auth.google credentials not configured"
@@ -334,18 +340,22 @@ void wireIdentityServices()
     // #71: Redis-backed one-time link state (fail-closed when Redis is not
     // configured -- linking then answers NotConfigured rather than running
     // stateless, which is the exact surface this flow closes).
-    std::shared_ptr<fulla::identity::ISocialLinkStateStore> linkStateStore = nullptr;
-    try
+    // Drogon asserts when getRedisClient names an unconfigured client;
+    // inspect the loaded top-level configuration before accessing it.
+    ::drogon::nosql::RedisClientPtr socialRedis;
+    for (const auto &client : runtimeConfig["redis_clients"])
     {
-        auto redisClient = ::drogon::app().getRedisClient("default");
-        linkStateStore =
-          std::make_shared<fulla::drogon::adapters::RedisSocialLinkStateStore>(redisClient, crypto);
+        if (client.get("name", "default").asString() == "default")
+        {
+            socialRedis = ::drogon::app().getRedisClient("default");
+            break;
+        }
     }
-    catch (const std::exception &)
-    {
-        LOG_WARN << "IdentityAssembly: no Redis client configured -- social link "
-                    "authorization disabled (link endpoints fail closed, #71)";
-    }
+    std::shared_ptr<fulla::identity::ISocialLinkStateStore> linkStateStore;
+    if (socialRedis)
+        linkStateStore = std::make_shared<fulla::drogon::adapters::RedisSocialLinkStateStore>(socialRedis, crypto);
+    else
+        LOG_WARN << "Social state storage unconfigured; login and linking fail closed";
     static auto socialLinkService = std::make_shared<fulla::identity::SocialLinkService>(
       // #111: disabled providers enter as nullptr -> NotConfigured at the
       // link endpoints (same error surface as the login controllers). The
@@ -392,8 +402,8 @@ void wireIdentityServices()
     // buttons from GET /api/auth/providers instead of build-time VITE_* env
     // vars. Only the ENABLED provider names are pushed here — computed from
     // the SAME effective-enablement gate as the service injections above —
-    // and the controller builds the authorize URLs itself via the shared
-    // redirect resolution, so the buttons and the server-side enforcement
+    // and the transaction issuer uses the shared redirect resolution, so
+    // the buttons and the server-side enforcement
     // can never disagree (single source of truth). Wired unconditionally
     // (outside WITH_SOCIAL): without social support the list is simply
     // empty. Memory-storage deployments returned early at the top of this
@@ -407,6 +417,22 @@ void wireIdentityServices()
         enabledProviderNames.push_back("google");
     if (wechatEnabled)
         enabledProviderNames.push_back("wechat");
+    std::shared_ptr<fulla::identity::ISocialLoginStateStore> loginStateStore;
+    if (socialRedis)
+        loginStateStore = std::make_shared<fulla::drogon::adapters::RedisSocialLoginStateStore>(socialRedis);
+    auto loginStates = std::make_shared<fulla::identity::SocialLoginStateService>(loginStateStore, crypto);
+    const char *loginEnvironment = fulla::common::config::ConfigManager::getEnv("FULLA_ENV");
+    const bool allowInsecureLoopback = !loginEnvironment || std::string(loginEnvironment) != "production";
+    auto loginGuard = std::make_shared<fulla::drogon::services::SocialLoginGuard>(
+      loginStates, customConfig, enabledProviderNames, allowInsecureLoopback);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::AuthProvidersController>()
+      ->setSocialLoginGuard(loginGuard);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>()
+      ->setSocialLoginGuard(loginGuard);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
+      ->setSocialLoginGuard(loginGuard);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
+      ->setSocialLoginGuard(loginGuard);
 #else
     // No social support compiled in: no provider is ever offered.
     std::vector<std::string> enabledProviderNames;

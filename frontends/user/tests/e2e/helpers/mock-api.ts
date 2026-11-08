@@ -84,7 +84,7 @@ export async function setupMocks(page: Page) {
     }
     const providers = enabled
       .filter((p) => authorizeUrls[p])
-      .map((p) => ({ provider: p, authorize_url: authorizeUrls[p] }))
+      .map((p) => ({ provider: p, authorize_url: '' }))
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
