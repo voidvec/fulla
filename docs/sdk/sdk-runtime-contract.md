@@ -33,13 +33,28 @@ This document is the single source of truth for external commitments; wherever S
 
 ## 5. Dependency Declarations
 
-- Feature-surface dependencies are **explicitly gated by the root `conanfile.py`'s `with_webauthn` / `with_identity` / `with_social` options**, not smuggled in as transitive surprises.
-  NOTE: WebAuthn performs real W3C Level 2 cryptographic verification since v1.1.0 (#142 — `libs/identity/src/webauthn/WebAuthnCrypto.cc`), and its CBOR decoding dependency (`libcbor`, backing the typed read-only `CborReader` in `libs/identity/src/webauthn/`) is declared explicitly in `conanfile.py`.
-- Disabling an option (e.g. `-o with_webauthn=False`) maps through to the CMake-side `WITH_*` variables and prunes the corresponding compiled surface, so consumers can shrink their dependency footprint accordingly.
+- `with_social` / `with_webauthn` map to CMake's `WITH_SOCIAL` /
+  `WITH_WEBAUTHN` switches and remove the corresponding services/controllers
+  from the compiled surface.
+- `with_identity=False` / `WITH_IDENTITY=OFF` is **unsupported**. The product
+  and Postgres adapter still require `fulla::identity`; configuration fails
+  explicitly. Keep identity enabled when configuring the repository.
+- WebAuthn performs real W3C Level 2 CBOR/COSE and ES256 verification since
+  v1.1.0 (#142); its typed read-only CborReader consumes libcbor. `libcbor` remains
+  an **unconditional dependency**, including when WebAuthn is disabled,
+  because `WebAuthnCrypto.cc` and its tests are still compiled. Disabling a
+  feature does not currently guarantee removal of all of its dependencies.
 
 ## 6. Plugin Registration and Configuration Contract (Host Integration)
 
 - The `OAuth2Plugin` class name and the config `plugins[].name` reflective-loading contract **remain stable** (Option A): the class-name string in `"plugins":[{"name":"OAuth2Plugin","config":{...}}]` across the configs (`config.{json,dev,ci,prod,bench}.json`) and the schema of the `config{}` block are part of the product configuration contract and will not be renamed in v1.x.
-- The plugin itself is linked into the host as a CMake **OBJECT library**: object files are linked in directly, one by one, so there is no static-library on-demand extraction that could drop self-registration symbols — **whole-archive is not needed today**.
-- If the plugin is ever **distributed in static-library form**, the linker may strip its self-registration symbols and Drogon reflection will fail with "plugin not found" — at that point whole-archive (or an equivalent forced-linking scheme) becomes mandatory; `OAuth2Plugin` has no `AutoCreation` parameter available, so a whole-archive-free scheme is not applicable.
-- See `examples/third-party-host/` for a third-party host integration example.
+- `fulla::drogon` is a **STATIC library**, including the plugin sources;
+  the former separate OBJECT library has been absorbed into it.
+- A host must retain the controller/plugin registration code it uses. Follow
+  `examples/full-stack-host/`, which compiles the product bootstrap sources,
+  explicitly registers controllers and wires plugin dependencies. A config
+  class-name string alone does not force extraction of static-library objects.
+- A wrapper relying only on unreferenced static self-registration must force
+  the relevant objects into the executable (for example, whole-archive on
+  applicable linkers) and verify registration in its own smoke test.
+- See `examples/full-stack-host/` for HTTP host integration and `examples/third-party-host/` for engine-only integration.

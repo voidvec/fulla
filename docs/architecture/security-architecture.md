@@ -9,7 +9,17 @@ This document describes the system's security threat model and the corresponding
 | **Replay Attack** | An attacker intercepts an auth code and attempts to redeem it before or after the legitimate client. | **Atomic Consume** + **One-Time Use Enforcement**. | [Data Consistency](data-persistence.md) |
 | **Credential Leakage** | A database breach leaks client secrets. | **SHA256 Salted Hash**. The database stores only hashes, never plaintext. | [Data Persistence](data-persistence.md) |
 | **Token Theft** | An access token is intercepted. | **Short-lived Token** (1 hour) + **Refresh Token Rotation**. | This document |
-| **CSRF** | An attacker tricks a user into an unintended authorization. | Mandatory validation of the **state** parameter (recommended for clients to implement). | [API Reference](../domains/api-reference.md) |
+| **CSRF** | An attacker tricks a user into an unintended authorization. | OAuth clients must validate the returned **state**. Third-party login currently has a separate limitation (see below). | [API Reference](../domains/api-reference.md) |
+
+### Current third-party login limitation
+
+The GitHub/Google/WeChat login discovery flow currently emits authorize URLs
+without a browser-bound state. Do not interpret the OAuth-client state guidance
+above as protection for these extension endpoints. Track the hardening work in
+[issue #249](https://github.com/voidvec/fulla/issues/249); deployments requiring
+login-CSRF protection should disable these providers until the bound-state
+flow is implemented and verified. Account linking uses a separate one-time
+state flow.
 
 ## 2. Token Lifecycle Management
 
@@ -33,7 +43,7 @@ This document describes the system's security threat model and the corresponding
 ### 3.1 Client Secrets
 
 - **Storage**: `sha256(secret + salt)`
-- **Transport**: Only over HTTPS, in the POST body.
+- **Transport**: Only over HTTPS, using the client's configured authentication method (HTTP Basic or a POST-body secret where supported).
 
 ### 3.2 Configuration Files
 
@@ -65,11 +75,22 @@ All tokens (access tokens, refresh tokens) are stored in the database **as SHA-2
 
 ### 6.2 Legacy Password Migration
 
-The system supports gradual migration from the legacy single-iteration SHA-256 hashing to PBKDF2:
+Legacy SHA-256 hashes are **rejected by default**, even when the password is
+correct. All shipped configurations, and a missing `auth.allow_legacy_hash`,
+close the migration window. This policy rejection does not increment account
+lockout counters; clients receive the generic authentication failure.
 
-1. On login, the system detects the password hash format
-2. If it is the legacy format (SHA-256), the hash is automatically upgraded to PBKDF2 after successful verification
-3. The migration is transparent to users; no password reset is required
+Use the existing email or administrator-triggered password-reset flow to write
+a PBKDF2 hash. Changing the old password through a path that rejects legacy
+verification does not migrate the account. Bootstrap reuses an existing admin
+row; setting `FULLA_BOOTSTRAP_ADMIN_PASSWORD` does not reset that row.
+
+An operator may explicitly reopen `auth.allow_legacy_hash` for a temporary,
+identity-login-only migration window: successful legacy verification then
+attempts a PBKDF2 rehash. The Drogon `PasswordHasher` helper always rejects
+legacy hashes. Do not assume the window applies to every password-check path,
+and verify that no legacy rows remain before closing it.
+See [Legacy Password-Hash Migration](../operate/configuration-guide.md).
 
 ## 7. Refresh Token Rotation and Family Tracking
 
@@ -104,6 +125,17 @@ sequenceDiagram
     S->>S: 级联撤销 family 下所有 Token
     U--xA: 下次请求失败，需重新登录
 ```
+
+## WebAuthn Verification Scope
+
+WebAuthn is implemented with CBOR attestation parsing, COSE ES256 keys and
+cryptographic assertion verification. Registration supports `fmt="none"`
+with an empty attestation statement; it does not verify manufacturer
+attestation chains. Both registration and authentication require user presence
+and user verification, an allowed origin and the configured RP ID. Challenges
+are checked and assertion counters use a conditional update where applicable.
+The retired unverified completion methods fail closed. Authenticators outside
+this supported surface are rejected.
 
 ## 8. Subject Privacy
 
@@ -146,13 +178,16 @@ responses are returned via the error envelope `VALIDATION_RATE_LIMITED` (429).
 Secret Hygiene CI gate); all `.env*` files ignored; frontend production builds contain no
 embedded credentials.
 
-**Key rotation**: signing keys rotate through the keystore directory
-(`oidc.signing_keystore_dir`, #110 — see [Configuration Guide §9](../operate/configuration-guide.md)):
-`<kid>.pem` files plus an `active_kid` marker; the JWKS endpoint publishes every loaded key
-and verification routes on the token's `kid`, so outstanding tokens survive a switch. Rotation
-is a documented manual three-restart procedure (publish → switch → retire), not automated;
-`GET /api/admin/oidc/keys` reports the live key set. Rotating DB/SMTP/social credentials =
-change env vars + rolling restart.
+**Key rotation**: `oidc.signing_keystore_dir` loads multiple RSA keys at startup
+(#110; see [Configuration Guide §9](../operate/configuration-guide.md)).
+Each `<kid>.pem` is published in JWKS, `active_kid` selects the signing key,
+and verification uses the token's `kid`. This is init-once configuration, so
+changes require a restart. The manual publish → switch → retire procedure
+is not automated: publish the new key on every replica before switching
+signing, and retain the old key until all JWTs signed with it have expired,
+including clock skew and relying-party cache windows.
+`GET /api/admin/oidc/keys` reports the live key set. Rotate DB/SMTP/social
+credentials through environment configuration and a rolling restart.
 
 **Incident response**: suspected leak → immediately rotate the affected credentials → if
 historical commits are involved, rewrite them with `git filter-repo` (not the deprecated

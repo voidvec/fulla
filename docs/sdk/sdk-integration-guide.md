@@ -62,9 +62,19 @@ Reference consumers (continuously verified by the repository CI):
 
 ## 4. Plugin Registration and whole-archive (H1/F1/H5 Framing)
 
-- The plugin itself is currently linked into the host as an **OBJECT library**: the object files are linked in directly, one by one, so self-registration symbols cannot be stripped — **whole-archive is not needed today**.
-- In the published SDK package, `fulla::drogon` is a regular static library, but plugin registration goes through `config.json` `plugins[].name = "OAuth2Plugin"` reflection plus an explicit `registerAllControllers()` (see full-stack-host's main.cc); likewise, it does not rely on the linker retaining unreferenced symbols. If a consumer builds a wrapper that **depends on static-initialization self-registration**, they must wrap the corresponding library with `-Wl,--whole-archive` themselves.
-- For the class-name / config-schema stability guarantees, see Contract §6.
+`fulla::drogon` is a STATIC library containing the plugin, controllers and
+adapters. The old separate OBJECT target is no longer the linking model.
+
+Follow `examples/full-stack-host/`: compile the product bootstrap sources,
+call `registerAllControllers()`, and wire plugin dependencies at startup.
+The config entry `plugins[].name = "OAuth2Plugin"` selects the reflected
+class after linking; a string in JSON cannot retain an otherwise unreferenced
+static-library object. Wrappers relying only on static self-registration
+must force the required objects into the executable, using whole-archive or
+the platform's equivalent, and run a registration smoke test.
+
+See [SDK Runtime Contract](sdk-runtime-contract.md#6-plugin-registration-and-configuration-contract-host-integration)
+for configuration compatibility guarantees.
 
 ## 5. Using the Images
 
@@ -100,9 +110,11 @@ sha256sum -c fulla-sdk-<ver>-linux-x86_64.tar.gz.sha256
 
 ## Quickstart: Embedding fulla into Your Own Drogon Host
 
-Only two steps beyond `find_package` (for the package import, see Section 3 above):
+Use `examples/full-stack-host/` for bootstrap and view compilation (package imports
+are described in Section 3). The following fragments show configuration and
+filter integration after that host registration is in place:
 
-**1. Activate the plugin in the host's `config.json`** (protocol routes and Filters are registered automatically):
+**1. Activate the plugin in the host's `config.json`** (register product controllers through the host bootstrap before starting Drogon):
 
 ```json
 {
@@ -129,6 +141,10 @@ ADD_METHOD_TO(UserApi::getProfile, "/api/me", drogon::Get,
 METHOD_LIST_END
 ```
 
-Note: once `fulla::drogon` is linked, Controllers/Filters are registered automatically at Drogon startup — do not invoke the initialization macros manually; the PostgreSQL storage requires running `apps/server/migrations/` first (or setting `FULLA_AUTO_MIGRATE=true`).
+Note: controllers with `AutoCreation=false` require explicit registration before
+Drogon starts, as shown in `examples/full-stack-host/`; linking the static library
+alone is insufficient. Do not invoke registration macros manually. PostgreSQL
+storage requires running `apps/server/migrations/` first (or setting
+`FULLA_AUTO_MIGRATE=true`).
 
 > This section was merged in from the retired plugin-integration.md (docs governance A2).
