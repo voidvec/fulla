@@ -1,0 +1,2035 @@
+{
+  "schema_version": 1,
+  "status": "not reproduced in the bounded standalone experiment; issue #303 remains open",
+  "build": {
+    "source_baseline": "4b5a4f3f54b96d0f239e0b19786a316fde5ddcdf",
+    "branch": "investigation/connection-churn-s02",
+    "build_image_id": "sha256:a8d5b26e77ccea011feecec6bd0c8f2f2d92c2dcebb398ab691e306f11441365",
+    "build_os": "Ubuntu24.04",
+    "build_compiler": "GCC13.3.0",
+    "build_cmake": "4.4",
+    "build_type": "Release",
+    "cppstd": "17",
+    "flags": "-Wall -Wextra -Werror -fno-omit-frame-pointer -O3 -DNDEBUG -std=c++17",
+    "Drogon": {
+      "version": "1.9.13",
+      "rrev": "251680a44562cf10050d53c0259876d5",
+      "package_id": "c7354ba03c500f1871dd60115cc3d8234dadf3a0",
+      "prev": "bdb04cdf76a9aacdf5d9f65400726dfa"
+    },
+    "Trantor": {
+      "version": "1.5.26",
+      "rrev": "93b95558caf83407405ab7cf1bce0a46",
+      "package_id": "99112245a4c3fb57413541ed54a61d540b419acd",
+      "prev": "77cd6b55907854ee590db277641d4117"
+    },
+    "runtime": "native managed Linux environment; no DB/Redis/Fulla plugins",
+    "limitations": [
+      "gdb not installed; kernel stacks may be restricted",
+      "Release dependencies built without guaranteed frame pointers",
+      "400 target requests/s; not thousands/s from issue suggestion",
+      "Linux reuse_port input does not disable kernel SO_REUSEPORT",
+      "HTTP client is Python stdlib, not the in-process Drogon client from #299"
+    ],
+    "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+    "initial_manifest_source_sha256": {
+      "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa",
+      "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+      "run_matrix.py": "0d96be2bf3565617f1f3ae2aeaae4dd33397f49e4d1167c38954d079cd14cdda",
+      "test_probe.py": "de5a686b0f245d4607f0e57bb7378816eff52768bced0d390484e26d20fbb7ea",
+      "test_matrix.py": "134df17459d194b635efddb9cfeb513887dcdf1c2563a51237e128673c4befbf",
+      "CMakeLists.txt": "5339f23730a73da36a7e2ae03e17b8e3d7c11f835182ffbb22c499cb40815f76",
+      "README.md": "64de90be14b7bac876e0e1780e2ef65cb93bacdd8d6f1a4dd7e2a50fc4b336dd"
+    }
+  },
+  "runtime": {
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "python": "3.12.14",
+    "cgroup_cpu_max": "200000 100000\n",
+    "cgroup_memory_max": "8589934592\n",
+    "source_sha256": {
+      "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+      "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+      "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+    }
+  },
+  "totals": {
+    "primary_cells": 18,
+    "primary_attempts": 4131146,
+    "primary_failures": 0,
+    "preliminary_attempts": 1367892,
+    "preliminary_failures": 11,
+    "preliminary_failure_stages": {
+      "response_body": 8,
+      "connect": 1,
+      "send": 2
+    },
+    "primary_min_rate": 299.06370202807847,
+    "primary_max_rate": 395.3763769652938,
+    "primary_sampled_max_close_wait": 0
+  },
+  "primary_cells": [
+    {
+      "group": "primary-v3",
+      "cell": "round-1-1loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T07:03:45.050542+00:00",
+      "completed_at": "2026-11-07T07:13:58.141760+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 234588,
+        "failures": 0,
+        "duration_s": 600.3539219369995,
+        "new_connections": 234588,
+        "p50_ms": 0.5705869989469647,
+        "p95_ms": 2.82454500120366,
+        "p99_ms": 7.190983000327833,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 390.7495086283744,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 16,
+      "drained_fd": 11,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 1.8358999570009473,
+      "handler_delta": 234588,
+      "unique_handler_counters_received": 234588,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 2
+      },
+      "rss_kib": {
+        "baseline": 8248,
+        "drained": 27784
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.15130625600068
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-1-1loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T07:13:58.250149+00:00",
+      "completed_at": "2026-11-07T07:24:11.101977+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 235967,
+        "failures": 0,
+        "duration_s": 600.2967920499977,
+        "new_connections": 8,
+        "p50_ms": 0.32714600092731416,
+        "p95_ms": 1.6494679985044058,
+        "p99_ms": 5.0657639985729475,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 393.08389304260464,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 19,
+      "drained_fd": 11,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.040781694999168394,
+      "handler_delta": 235967,
+      "unique_handler_counters_received": 235967,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8492,
+        "drained": 4704
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.021162311997614
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-1-4loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T07:24:11.206690+00:00",
+      "completed_at": "2026-11-07T07:34:24.229976+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 236711,
+        "failures": 0,
+        "duration_s": 600.2794629749988,
+        "new_connections": 236711,
+        "p50_ms": 0.5542149992834311,
+        "p95_ms": 2.5397350000275765,
+        "p99_ms": 6.980802001635311,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 394.3346634363516,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 31,
+      "drained_fd": 26,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.16041696499814861,
+      "handler_delta": 236711,
+      "unique_handler_counters_received": 236711,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8632,
+        "drained": 28420
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.138669971998752
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-1-4loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T07:34:24.370879+00:00",
+      "completed_at": "2026-11-07T07:44:37.364234+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 230160,
+        "failures": 0,
+        "duration_s": 600.2946880260024,
+        "new_connections": 8,
+        "p50_ms": 0.29887699929531664,
+        "p95_ms": 1.4975759986555204,
+        "p99_ms": 5.556439999054419,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 383.41168861056184,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.05459934499958763,
+      "handler_delta": 230160,
+      "unique_handler_counters_received": 230160,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 24
+      },
+      "rss_kib": {
+        "baseline": 8436,
+        "drained": 6040
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.021384634001151
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-1-4loops-reuse-true-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T07:44:37.473451+00:00",
+      "completed_at": "2026-11-07T07:54:50.779162+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 179513,
+        "failures": 0,
+        "duration_s": 600.2500429930005,
+        "new_connections": 179513,
+        "p50_ms": 0.5278899989207275,
+        "p95_ms": 5.056472000433132,
+        "p99_ms": 110.52861899952404,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 299.06370202807847,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 33,
+      "drained_fd": 26,
+      "snapshot_count": 113,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 4.960298019999755,
+      "handler_delta": 179513,
+      "unique_handler_counters_received": 179513,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 16
+      },
+      "rss_kib": {
+        "baseline": 8368,
+        "drained": 26688
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.887295018997975
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-1-4loops-reuse-true-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T07:54:50.863832+00:00",
+      "completed_at": "2026-11-07T08:05:03.686056+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 228404,
+        "failures": 0,
+        "duration_s": 600.2807045139998,
+        "new_connections": 8,
+        "p50_ms": 0.31383000168716535,
+        "p95_ms": 1.6139799990924075,
+        "p99_ms": 6.776580998121062,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 380.4953220758958,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.048709082999266684,
+      "handler_delta": 228404,
+      "unique_handler_counters_received": 228404,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 20
+      },
+      "rss_kib": {
+        "baseline": 8516,
+        "drained": 7096
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.020652184997743
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-1loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T08:05:03.783852+00:00",
+      "completed_at": "2026-11-07T08:15:16.979073+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 234188,
+        "failures": 0,
+        "duration_s": 600.5303124480015,
+        "new_connections": 234188,
+        "p50_ms": 0.5255750002106652,
+        "p95_ms": 2.9691750023630448,
+        "p99_ms": 8.948054997745203,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 389.9686579439365,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 18,
+      "drained_fd": 11,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.10774988299817778,
+      "handler_delta": 234188,
+      "unique_handler_counters_received": 234188,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 2
+      },
+      "rss_kib": {
+        "baseline": 8152,
+        "drained": 27248
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.132456554998498
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-1loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T08:15:17.145534+00:00",
+      "completed_at": "2026-11-07T08:25:29.992041+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 235422,
+        "failures": 0,
+        "duration_s": 600.2935233179996,
+        "new_connections": 8,
+        "p50_ms": 0.31057999876793474,
+        "p95_ms": 1.3946219987701625,
+        "p99_ms": 4.376122000394389,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 392.17814428307184,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 19,
+      "drained_fd": 11,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.4581991660015774,
+      "handler_delta": 235422,
+      "unique_handler_counters_received": 235422,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 6
+      },
+      "rss_kib": {
+        "baseline": 8488,
+        "drained": 6848
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.023798031998012
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-4loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T08:25:30.139163+00:00",
+      "completed_at": "2026-11-07T08:35:43.217502+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 235966,
+        "failures": 0,
+        "duration_s": 600.2870427520029,
+        "new_connections": 235966,
+        "p50_ms": 0.5879520031157881,
+        "p95_ms": 3.2310389979102183,
+        "p99_ms": 8.341169999766862,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 393.0886112720658,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 31,
+      "drained_fd": 26,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.15254607799943187,
+      "handler_delta": 235966,
+      "unique_handler_counters_received": 235966,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 2
+      },
+      "rss_kib": {
+        "baseline": 8580,
+        "drained": 29060
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.145581983997545
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-4loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T08:35:43.371444+00:00",
+      "completed_at": "2026-11-07T08:45:56.317320+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 196369,
+        "failures": 0,
+        "duration_s": 600.3901226060007,
+        "new_connections": 8,
+        "p50_ms": 0.3679889996419661,
+        "p95_ms": 2.2094859996286687,
+        "p99_ms": 12.95394800035865,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 327.06900497905923,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 118,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.1887011930011795,
+      "handler_delta": 196369,
+      "unique_handler_counters_received": 196369,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 57
+      },
+      "rss_kib": {
+        "baseline": 8420,
+        "drained": 6380
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.575517343000683
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-4loops-reuse-true-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T08:45:56.434354+00:00",
+      "completed_at": "2026-11-07T08:56:09.418077+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 229472,
+        "failures": 0,
+        "duration_s": 600.2713784029984,
+        "new_connections": 229472,
+        "p50_ms": 0.544833001185907,
+        "p95_ms": 2.6343699973949697,
+        "p99_ms": 7.676157001696993,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 382.28042891284014,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 31,
+      "drained_fd": 26,
+      "snapshot_count": 120,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 1.270853559999523,
+      "handler_delta": 229472,
+      "unique_handler_counters_received": 229472,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 2
+      },
+      "rss_kib": {
+        "baseline": 8516,
+        "drained": 28456
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.151841751001484
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-2-4loops-reuse-true-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T08:56:09.524757+00:00",
+      "completed_at": "2026-11-07T09:06:22.738975+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 236924,
+        "failures": 0,
+        "duration_s": 600.5848374909983,
+        "new_connections": 8,
+        "p50_ms": 0.3218609999748878,
+        "p95_ms": 1.512955001089722,
+        "p99_ms": 4.235352000250714,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 394.48881358672503,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.04229569800008903,
+      "handler_delta": 236924,
+      "unique_handler_counters_received": 236924,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 6
+      },
+      "rss_kib": {
+        "baseline": 8580,
+        "drained": 7120
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.033150442999613
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-1loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T09:06:22.882778+00:00",
+      "completed_at": "2026-11-07T09:16:36.170116+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 236735,
+        "failures": 0,
+        "duration_s": 600.4499427899973,
+        "new_connections": 236735,
+        "p50_ms": 0.5092889987281524,
+        "p95_ms": 2.405772000201978,
+        "p99_ms": 6.755189002433326,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 394.2626739208404,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 14,
+      "drained_fd": 11,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.09404385800007731,
+      "handler_delta": 236735,
+      "unique_handler_counters_received": 236735,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 4
+      },
+      "rss_kib": {
+        "baseline": 8224,
+        "drained": 29512
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.22991016800006
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-1loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T09:16:36.291505+00:00",
+      "completed_at": "2026-11-07T09:26:49.177362+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 237335,
+        "failures": 0,
+        "duration_s": 600.276126312001,
+        "new_connections": 8,
+        "p50_ms": 0.32854800156201236,
+        "p95_ms": 1.6494310002599377,
+        "p99_ms": 4.466927999601467,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 395.3763769652938,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 19,
+      "drained_fd": 11,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.04212478499903227,
+      "handler_delta": 237335,
+      "unique_handler_counters_received": 237335,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8224,
+        "drained": 4748
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.021003507001296
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-4loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T09:26:49.283617+00:00",
+      "completed_at": "2026-11-07T09:37:02.721574+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 233692,
+        "failures": 0,
+        "duration_s": 600.6089009479983,
+        "new_connections": 233692,
+        "p50_ms": 0.5779080020147376,
+        "p95_ms": 3.3233329995709937,
+        "p99_ms": 11.027271000784822,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 389.0918027207749,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 32,
+      "drained_fd": 26,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.24453466500199283,
+      "handler_delta": 233692,
+      "unique_handler_counters_received": 233692,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8452,
+        "drained": 28504
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.186794364002708
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-4loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T09:37:02.910634+00:00",
+      "completed_at": "2026-11-07T09:47:15.867193+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 236876,
+        "failures": 0,
+        "duration_s": 600.3238507160022,
+        "new_connections": 8,
+        "p50_ms": 0.3552649977791589,
+        "p95_ms": 1.7858039973361883,
+        "p99_ms": 4.5172989994171076,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 394.58035811417386,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.04871973099943716,
+      "handler_delta": 236876,
+      "unique_handler_counters_received": 236876,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 4
+      },
+      "rss_kib": {
+        "baseline": 8516,
+        "drained": 6748
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.025916583999788
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-4loops-reuse-true-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T09:47:15.985974+00:00",
+      "completed_at": "2026-11-07T09:57:29.307018+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 236598,
+        "failures": 0,
+        "duration_s": 600.4554855280003,
+        "new_connections": 236598,
+        "p50_ms": 0.6618319966946729,
+        "p95_ms": 3.353145999426488,
+        "p99_ms": 8.235100001911633,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 394.03087439854363,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 32,
+      "drained_fd": 26,
+      "snapshot_count": 121,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.22497214200120652,
+      "handler_delta": 236598,
+      "unique_handler_counters_received": 236598,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 1
+      },
+      "rss_kib": {
+        "baseline": 8580,
+        "drained": 28160
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.176098026997352
+    },
+    {
+      "group": "primary-v3",
+      "cell": "round-3-4loops-reuse-true-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T09:57:29.464621+00:00",
+      "completed_at": "2026-11-07T10:07:42.690934+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 236226,
+        "failures": 0,
+        "duration_s": 600.6138572420023,
+        "new_connections": 8,
+        "p50_ms": 0.35451300209388137,
+        "p95_ms": 1.7758200046955608,
+        "p99_ms": 4.640953004127368,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 393.307608793346,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0.0523592420067871,
+      "handler_delta": 236226,
+      "unique_handler_counters_received": 236226,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 13
+      },
+      "rss_kib": {
+        "baseline": 8632,
+        "drained": 5072
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "85f4e4ab1470a2d6096a9105e80e0e8cd3de8ec6973e0a61d2f2b83bd1ff4943",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 10.021729100997618
+    }
+  ],
+  "preliminary_cells": [
+    {
+      "group": "matrix-20261107",
+      "cell": "round-1-1loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T05:55:54.295752+00:00",
+      "completed_at": "2026-11-07T06:06:07.195456+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 213701,
+        "failures": 3,
+        "duration_s": 600.2896846600015,
+        "new_connections": 213701,
+        "p50_ms": 0.5025629980082158,
+        "p95_ms": 3.541810001479462,
+        "p99_ms": 18.02820100056124,
+        "first_failure": {
+          "worker": 4,
+          "sequence": 20001,
+          "utc": "2026-11-07T06:03:18.797676+00:00",
+          "elapsed_s": 442.381499572999,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            36556
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "160004",
+          "latency_ms": 5201.96882700111
+        },
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 355.996455479721,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 18,
+      "drained_fd": 11,
+      "snapshot_count": 114,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 213701,
+      "unique_handler_counters_received": 213701,
+      "sample_errors": [],
+      "failures": [
+        {
+          "worker": 4,
+          "sequence": 20001,
+          "utc": "2026-11-07T06:03:18.797676+00:00",
+          "elapsed_s": 442.381499572999,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            36556
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "160004",
+          "latency_ms": 5201.96882700111
+        },
+        {
+          "worker": 3,
+          "sequence": 19991,
+          "utc": "2026-11-07T06:03:18.809889+00:00",
+          "elapsed_s": 442.39368919499975,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            36568
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "160009",
+          "latency_ms": 5959.809501000564
+        },
+        {
+          "worker": 5,
+          "sequence": 20008,
+          "utc": "2026-11-07T06:03:19.759883+00:00",
+          "elapsed_s": 443.34368127999915,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            36612
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "160010",
+          "latency_ms": 5497.108642000967
+        }
+      ],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 1,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 15
+      },
+      "rss_kib": {
+        "baseline": 8920,
+        "drained": 27132
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": null,
+      "max_snapshot_gap_seconds": 12.278703405001579
+    },
+    {
+      "group": "matrix-20261107",
+      "cell": "round-1-1loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T06:06:07.299331+00:00",
+      "completed_at": "2026-11-07T06:16:20.219346+00:00",
+      "threads": 1,
+      "app_reuse_port": "false",
+      "listeners": 1,
+      "listener_socket_options": [
+        [
+          "10",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 235490,
+        "failures": 0,
+        "duration_s": 600.3695353580006,
+        "new_connections": 8,
+        "p50_ms": 0.2997560004587285,
+        "p95_ms": 1.276661001611501,
+        "p99_ms": 3.988038999523269,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 392.24175467127463,
+      "baseline_fd": 11,
+      "sampled_peak_fd": 19,
+      "drained_fd": 11,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 235490,
+      "unique_handler_counters_received": 235490,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 28
+      },
+      "rss_kib": {
+        "baseline": 8564,
+        "drained": 5956
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": null,
+      "max_snapshot_gap_seconds": 10.01486528299938
+    },
+    {
+      "group": "matrix-20261107",
+      "cell": "round-1-4loops-reuse-false-fresh",
+      "valid": true,
+      "started_at": "2026-11-07T06:16:20.353765+00:00",
+      "completed_at": "2026-11-07T06:26:33.333011+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 237466,
+        "failures": 0,
+        "duration_s": 600.2587832130012,
+        "new_connections": 237466,
+        "p50_ms": 0.4753460016218014,
+        "p95_ms": 2.2340800023812335,
+        "p99_ms": 6.569203000253765,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 395.6060396632888,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 30,
+      "drained_fd": 26,
+      "snapshot_count": 120,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 237466,
+      "unique_handler_counters_received": 237466,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8416,
+        "drained": 28520
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": null,
+      "max_snapshot_gap_seconds": 10.102775391998875
+    },
+    {
+      "group": "matrix-20261107",
+      "cell": "round-1-4loops-reuse-false-keepalive",
+      "valid": true,
+      "started_at": "2026-11-07T06:26:33.436056+00:00",
+      "completed_at": "2026-11-07T06:36:46.492422+00:00",
+      "threads": 4,
+      "app_reuse_port": "false",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "25",
+          "1",
+          "0"
+        ],
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "keepalive",
+      "summary": {
+        "attempts": 236226,
+        "failures": 0,
+        "duration_s": 600.4043672010012,
+        "new_connections": 8,
+        "p50_ms": 0.2964189989143051,
+        "p95_ms": 1.3116869995428715,
+        "p99_ms": 4.684139999881154,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 393.44483968571325,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 34,
+      "drained_fd": 26,
+      "snapshot_count": 122,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 236226,
+      "unique_handler_counters_received": 236226,
+      "sample_errors": [],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 0
+      },
+      "rss_kib": {
+        "baseline": 8444,
+        "drained": 5080
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": null,
+      "max_snapshot_gap_seconds": 10.0220813119995
+    },
+    {
+      "group": "matrix-20261107",
+      "cell": "round-1-4loops-reuse-true-fresh",
+      "valid": false,
+      "started_at": "2026-11-07T06:36:46.593058+00:00",
+      "completed_at": "2026-11-07T06:47:32.743215+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 232513,
+        "failures": 0,
+        "duration_s": 620.3205781860015,
+        "new_connections": 232513,
+        "p50_ms": 0.5224279993853997,
+        "p95_ms": 3.0276830002549104,
+        "p99_ms": 10.792659999424359,
+        "first_failure": null,
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 374.8271590149982,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 33,
+      "drained_fd": 26,
+      "snapshot_count": 120,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 232513,
+      "unique_handler_counters_received": 232513,
+      "sample_errors": [
+        {
+          "argv": [
+            "ss",
+            "-Htanp",
+            "dport = :18080"
+          ],
+          "error": "Command '['ss', '-Htanp', 'dport = :18080']' timed out after 5 seconds",
+          "stdout": "",
+          "omitted_time_wait_rows": 0
+        }
+      ],
+      "failures": [],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 2
+      },
+      "rss_kib": {
+        "baseline": 8416,
+        "drained": 27836
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": null,
+      "max_snapshot_gap_seconds": 31.837105491998955
+    },
+    {
+      "group": "matrix-round1-replacement",
+      "cell": "round-1-4loops-reuse-true-fresh",
+      "valid": false,
+      "started_at": "2026-11-07T06:50:14.404966+00:00",
+      "completed_at": "2026-11-07T07:00:27.495829+00:00",
+      "threads": 4,
+      "app_reuse_port": "true",
+      "listeners": 4,
+      "listener_socket_options": [
+        [
+          "19",
+          "1",
+          "0"
+        ],
+        [
+          "21",
+          "1",
+          "0"
+        ],
+        [
+          "23",
+          "1",
+          "0"
+        ],
+        [
+          "25",
+          "1",
+          "0"
+        ]
+      ],
+      "mode": "fresh",
+      "summary": {
+        "attempts": 212496,
+        "failures": 8,
+        "duration_s": 600.4227468450008,
+        "new_connections": 212496,
+        "p50_ms": 0.6117739976616576,
+        "p95_ms": 4.367402998468606,
+        "p99_ms": 20.13275400167913,
+        "first_failure": {
+          "worker": 4,
+          "sequence": 918,
+          "utc": "2026-11-07T06:50:38.536624+00:00",
+          "elapsed_s": 22.00485050199859,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            54970
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "7362",
+          "latency_ms": 5015.198422999674
+        },
+        "interpretation": "observations only; absence of failure does not prove #303 fixed"
+      },
+      "actual_requests_per_second": 353.91064232091105,
+      "baseline_fd": 26,
+      "sampled_peak_fd": 32,
+      "drained_fd": 26,
+      "snapshot_count": 112,
+      "sampled_max_close_wait": 0,
+      "drained_close_wait": 0,
+      "max_periodic_socket_sample_seconds": 0,
+      "handler_delta": 212495,
+      "unique_handler_counters_received": 212493,
+      "sample_errors": [
+        {
+          "argv": [
+            "ss",
+            "-Htanp",
+            "sport = :18080"
+          ],
+          "error": "Command '['ss', '-Htanp', 'sport = :18080']' timed out after 5 seconds",
+          "stdout": "",
+          "omitted_time_wait_rows": 0
+        },
+        {
+          "argv": [
+            "ss",
+            "-Htanp",
+            "sport = :18080"
+          ],
+          "error": "Command '['ss', '-Htanp', 'sport = :18080']' timed out after 5 seconds",
+          "stdout": "",
+          "omitted_time_wait_rows": 0
+        }
+      ],
+      "failures": [
+        {
+          "worker": 4,
+          "sequence": 918,
+          "utc": "2026-11-07T06:50:38.536624+00:00",
+          "elapsed_s": 22.00485050199859,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            54970
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "7362",
+          "latency_ms": 5015.198422999674
+        },
+        {
+          "worker": 6,
+          "sequence": 922,
+          "utc": "2026-11-07T06:50:40.210080+00:00",
+          "elapsed_s": 23.678334568998253,
+          "status": null,
+          "error": "TimeoutError",
+          "stage": "connect",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            49434
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "latency_ms": 5163.459347000753
+        },
+        {
+          "worker": 3,
+          "sequence": 922,
+          "utc": "2026-11-07T06:50:40.133244+00:00",
+          "elapsed_s": 23.601499495998723,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            55106
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "7374",
+          "latency_ms": 5248.702652999782
+        },
+        {
+          "worker": 7,
+          "sequence": 921,
+          "utc": "2026-11-07T06:50:40.202851+00:00",
+          "elapsed_s": 23.670952738997585,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            55082
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "7371",
+          "latency_ms": 5180.350473001454
+        },
+        {
+          "worker": 4,
+          "sequence": 10157,
+          "utc": "2026-11-07T06:54:16.963044+00:00",
+          "elapsed_s": 240.43130076099987,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            44208
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "81322",
+          "latency_ms": 5045.8026390006125
+        },
+        {
+          "worker": 3,
+          "sequence": 18906,
+          "utc": "2026-11-07T06:57:27.155228+00:00",
+          "elapsed_s": 430.62348180299887,
+          "status": null,
+          "error": "TimeoutError",
+          "stage": "send",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            42840
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "latency_ms": 5746.061827998346
+        },
+        {
+          "worker": 4,
+          "sequence": 18912,
+          "utc": "2026-11-07T06:57:27.541610+00:00",
+          "elapsed_s": 431.0098593570001,
+          "status": 200,
+          "error": "TimeoutError",
+          "stage": "response_body",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            42860
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "handled_counter": "151363",
+          "latency_ms": 5369.152837000001
+        },
+        {
+          "worker": 0,
+          "sequence": 18909,
+          "utc": "2026-11-07T06:57:27.341173+00:00",
+          "elapsed_s": 430.80930972699935,
+          "status": null,
+          "error": "TimeoutError",
+          "stage": "send",
+          "new_connection": true,
+          "local_endpoint": [
+            "127.0.0.1",
+            42884
+          ],
+          "peer_endpoint": [
+            "127.0.0.1",
+            18080
+          ],
+          "latency_ms": 5569.752409999637
+        }
+      ],
+      "kernel_delta": {
+        "TcpExt:ListenOverflows": 0,
+        "TcpExt:ListenDrops": 0,
+        "TcpExt:TCPTimeouts": 0,
+        "TcpExt:TCPSynRetrans": 0,
+        "Tcp:RetransSegs": 17
+      },
+      "rss_kib": {
+        "baseline": 8344,
+        "drained": 28356
+      },
+      "shutdown_returncode": 0,
+      "binary_sha256": "95aa8527478b1e13fc1eeab74eaccbd3645bf136c81bbc5e5ac9cb80cf1d0697",
+      "execution_source_sha256": {
+        "run_matrix.py": "58fdc897be5ca5c89803c4fac6e73e9a76262bc993b5ca35caa323e6d972c2d4",
+        "probe.py": "051c218c858442cb131345c6b58717b6c7da923bc317353594d5d0efb63872fc",
+        "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa"
+      },
+      "max_snapshot_gap_seconds": 14.983237210002699
+    }
+  ],
+  "verification": "All gzip streams consumed to EOF; JSON/sequence/counter/summary/latency integrity checked.",
+  "final_candidate_source_sha256": {
+    "CMakeLists.txt": "5339f23730a73da36a7e2ae03e17b8e3d7c11f835182ffbb22c499cb40815f76",
+    "README.md": "632d4e9f941adf15818e407af3ccbc96ee90b868442c17ce8e02c2492a77e50a",
+    "probe.py": "5a3ab79b8c0fe45268e652d97c3699531a3fb9a8b6b85871d8f0e7bb969f2e78",
+    "run_matrix.py": "697886786ab7ba7e22fcee3171726b77b9dba8e48e193ddcbd09f232b35a38f5",
+    "server.cc": "ca2a7f5711ca86da0ea530271ec9286722e8110062ef17d1cc53ca798d875efa",
+    "test_probe.py": "f92ac61df963e547151012a425b82f497a5c5835e9c22a61e9a515e25755c6b5",
+    "test_matrix.py": "a4cfa3abc8e3603c9ed5ece83b1cb31b8f8d553393d7770a692c1b05770b52e4"
+  },
+  "source_hash_notes": "initial_manifest_source_sha256 is the initial build manifest snapshot; runtime/cell hashes identify the measured v3 execution, retained in the evidence archive; final_candidate_source_sha256 identifies delivery files after equivalent lint/cleanup changes."
+}
