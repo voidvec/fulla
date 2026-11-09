@@ -93,22 +93,6 @@ std::optional<int64_t> sqlInt(const std::string &sql)
     return done.get_future().get();
 }
 
-// Poll sqlInt until it yields `want` (or attempts run out). The approve
-// response returns after the FIRST scope's upsert commits; the remaining
-// scopes are fire-and-forget writes that may land milliseconds later (the
-// M2 consent-write shape this workflow mirrors).
-std::optional<int64_t> awaitSqlInt(const std::string &sql, int64_t want, int attempts = 20)
-{
-    for (int i = 0; i < attempts; ++i)
-    {
-        const auto v = sqlInt(sql);
-        if (v.has_value() && *v == want)
-            return v;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    return sqlInt(sql);
-}
-
 bool createVerifiedUser(const std::string &username,
                         const std::string &email,
                         const std::string &password)
@@ -588,6 +572,33 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_ApproveRejectWithdraw_FullCircle)
     REQUIRE(memberList != nullptr);
     CHECK(statusIs(memberList, drogon::k403Forbidden));
 
+    // Manager authorization must precede request lookup: the same 403
+    // covers existing, missing and another organization's request ids.
+    const std::string foreignSlug = "qa-orgreq-foreign-" + suffix;
+    Json::Value foreignOrg;
+    foreignOrg["slug"] = foreignSlug;
+    foreignOrg["name"] = "S04 foreign request";
+    auto foreignCreated = sendPostJson("/api/me/organizations", foreignOrg, *bearerA);
+    REQUIRE(statusIs(foreignCreated, drogon::k201Created));
+    auto foreignFile = sendPostJson(
+      "/api/me/organizations/" + foreignSlug + "/consent-requests", fileBody, *bearerA
+    );
+    Json::Value foreignBody;
+    REQUIRE(statusIs(foreignFile, drogon::k200OK));
+    REQUIRE(parseJsonBody(foreignFile, foreignBody));
+    for (Json::Int64 id : {requestB, Json::Int64{2147483647}, foreignBody["id"].asInt64()})
+        for (const char *action : {"approve", "reject"})
+        {
+            auto denied = sendPostJson(
+              "/api/me/organizations/" + slug + "/consent-requests/" + std::to_string(id) + "/" +
+                action,
+              Json::Value(Json::objectValue),
+              *bearerB
+            );
+            CHECK(statusIs(denied, drogon::k403Forbidden));
+        }
+    CHECK(sqlExec("DELETE FROM organizations WHERE slug='" + foreignSlug + "'"));
+
     // Manager list shows both requests with requester names.
     auto list = sendGet("/api/me/organizations/" + slug + "/consent-requests", *bearerA);
     REQUIRE(list != nullptr);
@@ -626,10 +637,10 @@ DROGON_TEST(Integration_P1_OrgConsentRequest_ApproveRejectWithdraw_FullCircle)
     // Consent rows exist for the (org, client) pair.
     const auto orgId = sqlInt("SELECT id FROM organizations WHERE slug = '" + slug + "'");
     REQUIRE(orgId.has_value());
-    const auto consentCount = awaitSqlInt(
+    const auto consentCount = sqlInt(
       "SELECT COUNT(*) FROM organization_consents WHERE organization_id = " +
-      std::to_string(*orgId) + " AND client_id = '" + appId +
-      "' AND revoked_at IS NULL", 3);
+      std::to_string(*orgId) + " AND client_id = '" + appId + "' AND revoked_at IS NULL"
+    );
     REQUIRE(consentCount.has_value());
     CHECK(*consentCount == 3);
 

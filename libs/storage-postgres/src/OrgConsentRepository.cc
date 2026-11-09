@@ -4,6 +4,7 @@
 // their exemption rationale inline.
 
 #include <fulla/storage/postgres/OrgConsentRepository.h>
+#include "OrgConsentTransaction.h"
 
 #include <fulla/storage/postgres/AdvisoryLock.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
@@ -11,6 +12,7 @@
 #include <drogon/drogon.h>
 
 #include <memory>
+#include <atomic>
 
 namespace fulla::storage::postgres
 {
@@ -200,22 +202,43 @@ void OrgConsentRepository::revokeClientConsents(
         return;
     }
 
-    // Documented batch-UPDATE exemption (R-M2-4: revoke the whole pair,
-    // never a physical delete -- O4 keeps history): the pair's rows are
-    // service-managed and the WHERE is fully scoped by org + client +
-    // active. revocation only affects FUTURE authorizations; issued
-    // tokens are not touched (O4/V9). affectedRows() (not size()) --
-    // an UPDATE result carries no rows on the PG driver.
-    dbClient_->execSqlAsync(
-      "UPDATE organization_consents SET revoked_at = CURRENT_TIMESTAMP "
-      "WHERE organization_id = $1 AND client_id = $2 AND revoked_at IS NULL",
-      [sharedCb](const Result &r) { (*sharedCb)(r.affectedRows()); },
-      [sharedCb](const DrogonDbException &e) {
-          LOG_ERROR << "revokeClientConsents failed: " << e.base().what();
-          (*sharedCb)(0);
+    auto completed = std::make_shared<std::atomic<bool>>(false);
+    auto finish = [sharedCb, completed](size_t count) {
+        if (completed->exchange(true))
+            return;
+        auto deliver = std::move(*sharedCb);
+        if (deliver)
+            deliver(count);
+    };
+    detail::withConsentTransaction(
+      dbClient_,
+      {"orgconsent:" + std::to_string(orgId) + ":" + clientId},
+      [finish, orgId, clientId](const detail::ConsentTransaction &txn) {
+          auto count = std::make_shared<std::atomic<size_t>>(0);
+          txn->setCommitCallback([finish, count](bool ok) { finish(ok ? count->load() : 0); });
+          // Documented pair-wide batch update. The same lock as grant and
+          // multi-scope approval prevents a statement snapshot from missing
+          // a concurrently inserted scope. Issued tokens remain unchanged.
+          txn->execSqlAsync(
+            "UPDATE organization_consents SET revoked_at = CURRENT_TIMESTAMP "
+            "WHERE organization_id = $1 AND client_id = $2 AND revoked_at IS NULL",
+            [txn, count](const Result &rows) { count->store(rows.affectedRows()); },
+            [txn, finish](const DrogonDbException &e) {
+                LOG_ERROR << "revokeClientConsents failed: " << e.base().what();
+                try
+                {
+                    txn->rollback();
+                }
+                catch (...)
+                {
+                }
+                finish(0);
+            },
+            orgId,
+            clientId
+          );
       },
-      orgId,
-      clientId
+      [finish]() { finish(0); }
     );
 }
 

@@ -10,19 +10,490 @@
 // rationale inline; everything else is Mapper + Criteria.
 
 #include <fulla/storage/postgres/OrgConsentRequestRepository.h>
+#include "OrgConsentTransaction.h"
 
 #include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
+#include <fulla/storage/postgres/models/Oauth2Clients.h>
+#include <fulla/storage/postgres/models/Organizations.h>
+#include <fulla/storage/postgres/models/OrganizationConsents.h>
 #include <fulla/storage/postgres/models/Users.h>
 
 #include <drogon/drogon.h>
 
 #include <memory>
+#include <algorithm>
+#include <atomic>
+#include <mutex>
 
 namespace fulla::storage::postgres
 {
 
 using namespace ::drogon::orm;
 using namespace ::drogon_model::fulla_db;
+
+namespace
+{
+using DecisionStatus = OrgConsentDecisionStatus;
+using DecisionResult = OrgConsentDecisionResult;
+
+struct DecisionCompletion
+{
+    OrgConsentRequestRepository::DecisionCallback callback;
+    std::atomic<bool> completed{false};
+    std::mutex mutex;
+    DecisionResult pending;
+
+    void finish(DecisionResult result)
+    {
+        if (completed.exchange(true))
+            return;
+        auto deliver = std::move(callback);
+        if (deliver)
+            deliver(std::move(result));
+    }
+
+    void stage(DecisionResult result)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        pending = std::move(result);
+    }
+
+    void commit(bool committed)
+    {
+        DecisionResult result;
+        if (committed)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            result = pending;
+        }
+        finish(std::move(result));
+    }
+};
+
+class ConsentDecision : public std::enable_shared_from_this<ConsentDecision>
+{
+  public:
+    ConsentDecision(
+      DbClientPtr db,
+      int32_t orgId,
+      int32_t requestId,
+      int32_t actorId,
+      bool approve,
+      std::string reason,
+      OrgConsentRequestRepository::DecisionCallback cb
+    )
+        : db_(std::move(db)),
+          orgId_(orgId),
+          requestId_(requestId),
+          actorId_(actorId),
+          approve_(approve),
+          reason_(std::move(reason)),
+          completion_(std::make_shared<DecisionCompletion>())
+    {
+        completion_->callback = std::move(cb);
+    }
+
+    void start()
+    {
+        if (!db_)
+        {
+            abort(DecisionStatus::StorageError);
+            return;
+        }
+        auto self = shared_from_this();
+        findRows<OrganizationConsentRequests>(
+          Criteria(OrganizationConsentRequests::Cols::_id, CompareOperator::EQ, requestId_) &&
+            Criteria(
+              OrganizationConsentRequests::Cols::_organization_id, CompareOperator::EQ, orgId_
+            ),
+          false,
+          [self](const std::vector<OrganizationConsentRequests> &rows) {
+              if (rows.empty())
+              {
+                  self->abort(DecisionStatus::NotFound);
+                  return;
+              }
+              self->clientId_ = rows.front().getValueOfClientId();
+              self->begin();
+          }
+        );
+    }
+
+  private:
+    DbClientPtr db_;
+    detail::ConsentTransaction txn_;
+    int32_t orgId_;
+    int32_t requestId_;
+    int32_t actorId_;
+    bool approve_;
+    bool alreadyApproved_ = false;
+    std::string reason_;
+    std::string clientId_;
+    std::vector<std::string> scopes_;
+    std::shared_ptr<DecisionCompletion> completion_;
+
+    void abort(DecisionStatus status)
+    {
+        if (txn_)
+        {
+            try
+            {
+                txn_->rollback();
+            }
+            catch (...)
+            {
+            }
+        }
+        DecisionResult result;
+        result.status = status;
+        completion_->finish(std::move(result));
+    }
+
+    template <typename Row, typename Success>
+    void findRows(const Criteria &criteria, bool rowLock, Success success)
+    {
+        auto self = shared_from_this();
+        try
+        {
+            DbClientPtr client = txn_ ? std::static_pointer_cast<DbClient>(txn_) : db_;
+            Mapper<Row> mapper(client);
+            if (rowLock)
+                mapper.forUpdate();
+            mapper.findBy(
+              criteria,
+              [self, success](const std::vector<Row> &rows) {
+                  if (self->completion_->completed.load())
+                      return;
+                  try
+                  {
+                      success(rows);
+                  }
+                  catch (const std::exception &)
+                  {
+                      self->abort(DecisionStatus::StorageError);
+                  }
+                  catch (...)
+                  {
+                      self->abort(DecisionStatus::StorageError);
+                  }
+              },
+              [self](const DrogonDbException &e) {
+                  LOG_ERROR << "organization decision query failed: " << e.base().what();
+                  self->abort(DecisionStatus::StorageError);
+              }
+            );
+        }
+        catch (const std::exception &)
+        {
+            abort(DecisionStatus::StorageError);
+        }
+        catch (...)
+        {
+            abort(DecisionStatus::StorageError);
+        }
+    }
+
+    template <typename Success, typename... Args>
+    void execute(const std::string &sql, Success success, const Args &...args)
+    {
+        auto self = shared_from_this();
+        try
+        {
+            txn_->execSqlAsync(
+              sql,
+              [self, success](const Result &rows) {
+                  if (self->completion_->completed.load())
+                      return;
+                  try
+                  {
+                      success(rows);
+                  }
+                  catch (const std::exception &)
+                  {
+                      self->abort(DecisionStatus::StorageError);
+                  }
+                  catch (...)
+                  {
+                      self->abort(DecisionStatus::StorageError);
+                  }
+              },
+              [self](const DrogonDbException &e) {
+                  LOG_ERROR << "organization decision write failed: " << e.base().what();
+                  self->abort(DecisionStatus::StorageError);
+              },
+              args...
+            );
+        }
+        catch (const std::exception &)
+        {
+            abort(DecisionStatus::StorageError);
+        }
+        catch (...)
+        {
+            abort(DecisionStatus::StorageError);
+        }
+    }
+
+    void begin()
+    {
+        auto self = shared_from_this();
+        // Match organization deletion first, then single-scope grant and
+        // pair revoke. No caller acquires these keys in reverse order.
+        detail::withConsentTransaction(
+          db_,
+          {"org:" + std::to_string(orgId_),
+           "orgconsent:" + std::to_string(orgId_) + ":" + clientId_},
+          [self](const detail::ConsentTransaction &txn) {
+              self->txn_ = txn;
+              // Never capture self/txn here: dropping the last transaction
+              // owner is what requests COMMIT in Drogon.
+              auto completion = self->completion_;
+              txn->setCommitCallback([completion](bool ok) { completion->commit(ok); });
+              self->readOrganization();
+          },
+          [self]() { self->abort(DecisionStatus::StorageError); }
+        );
+    }
+
+    void readOrganization()
+    {
+        auto self = shared_from_this();
+        findRows<Organizations>(
+          Criteria(Organizations::Cols::_id, CompareOperator::EQ, orgId_) &&
+            Criteria(Organizations::Cols::_deleted_at, CompareOperator::IsNull),
+          true,
+          [self](const std::vector<Organizations> &rows) {
+              if (rows.empty())
+                  self->abort(DecisionStatus::NotFound);
+              else
+                  self->readActor();
+          }
+        );
+    }
+
+    void readActor()
+    {
+        auto self = shared_from_this();
+        findRows<OrganizationMembers>(
+          Criteria(OrganizationMembers::Cols::_organization_id, CompareOperator::EQ, orgId_) &&
+            Criteria(OrganizationMembers::Cols::_user_id, CompareOperator::EQ, actorId_),
+          true,
+          [self](const std::vector<OrganizationMembers> &rows) {
+              if (
+                rows.empty() || (rows.front().getValueOfRole() != "owner" &&
+                                 rows.front().getValueOfRole() != "admin")
+              )
+                  self->abort(DecisionStatus::Forbidden);
+              else
+                  self->readRequest();
+          }
+        );
+    }
+
+    void readRequest()
+    {
+        auto self = shared_from_this();
+        findRows<OrganizationConsentRequests>(
+          Criteria(OrganizationConsentRequests::Cols::_id, CompareOperator::EQ, requestId_) &&
+            Criteria(
+              OrganizationConsentRequests::Cols::_organization_id, CompareOperator::EQ, orgId_
+            ),
+          true,
+          [self](const std::vector<OrganizationConsentRequests> &rows) {
+              if (rows.empty())
+              {
+                  self->abort(DecisionStatus::NotFound);
+                  return;
+              }
+              const auto &row = rows.front();
+              if (row.getValueOfClientId() != self->clientId_)
+              {
+                  self->abort(DecisionStatus::Conflict);
+                  return;
+              }
+              const auto &status = row.getValueOfStatus();
+              if (status != "pending" && !(self->approve_ && status == "approved"))
+              {
+                  self->abort(DecisionStatus::Conflict);
+                  return;
+              }
+              self->alreadyApproved_ = status == "approved";
+              if (!self->approve_)
+                  self->reject();
+              else
+                  self->readClient();
+          }
+        );
+    }
+
+    void readClient()
+    {
+        auto self = shared_from_this();
+        findRows<Oauth2Clients>(
+          Criteria(Oauth2Clients::Cols::_client_id, CompareOperator::EQ, clientId_) &&
+            Criteria(Oauth2Clients::Cols::_deleted_at, CompareOperator::IsNull),
+          false,
+          [self](const std::vector<Oauth2Clients> &rows) {
+              if (rows.empty())
+                  self->abort(DecisionStatus::NotFound);
+              else
+                  self->readActive();
+          }
+        );
+    }
+
+    void readActive()
+    {
+        auto self = shared_from_this();
+        findRows<OrganizationConsents>(
+          Criteria(OrganizationConsents::Cols::_organization_id, CompareOperator::EQ, orgId_) &&
+            Criteria(OrganizationConsents::Cols::_client_id, CompareOperator::EQ, clientId_) &&
+            Criteria(OrganizationConsents::Cols::_revoked_at, CompareOperator::IsNull),
+          false,
+          [self](const std::vector<OrganizationConsents> &rows) {
+              // F-2: an existing active approval is a no-op. Current client
+              // scope expansion is not authorization to extend an old grant.
+              if (self->alreadyApproved_ && !rows.empty())
+                  self->stage(DecisionStatus::AlreadyApproved);
+              else
+                  self->readScopes();
+          }
+        );
+    }
+
+    void readScopes()
+    {
+        auto self = shared_from_this();
+        findRows<Oauth2ClientScopes>(
+          Criteria(Oauth2ClientScopes::Cols::_client_id, CompareOperator::EQ, clientId_),
+          false,
+          [self](const std::vector<Oauth2ClientScopes> &rows) {
+              for (const auto &row : rows)
+                  self->scopes_.push_back(row.getValueOfScopeName());
+              std::sort(self->scopes_.begin(), self->scopes_.end());
+              self->scopes_.erase(
+                std::unique(self->scopes_.begin(), self->scopes_.end()), self->scopes_.end()
+              );
+              self->writeScope(0);
+          }
+        );
+    }
+
+    void writeScope(size_t index)
+    {
+        if (index == scopes_.size())
+        {
+            markApproved();
+            return;
+        }
+        auto self = shared_from_this();
+        // Parameter-bound INSERT ON CONFLICT: revive exactly the registered
+        // scope snapshot using V036's existing unique constraint.
+        execute(
+          "INSERT INTO organization_consents "
+          "(organization_id, client_id, scope_name, granted_by, granted_at, revoked_at) "
+          "VALUES ($1,$2,$3,$4,CURRENT_TIMESTAMP,NULL) "
+          "ON CONFLICT (organization_id,client_id,scope_name) DO UPDATE SET "
+          "revoked_at=NULL, granted_by=EXCLUDED.granted_by, granted_at=CURRENT_TIMESTAMP",
+          [self, index](const Result &) { self->writeScope(index + 1); },
+          orgId_,
+          clientId_,
+          scopes_[index],
+          actorId_
+        );
+    }
+
+    void markApproved()
+    {
+        if (alreadyApproved_)
+        {
+            resolveSiblings();
+            return;
+        }
+        auto self = shared_from_this();
+        // Conditional UPDATE RETURNING arbitrates any unexpected state
+        // change. A zero-row result rolls back every scope written above.
+        execute(
+          "UPDATE organization_consent_requests SET status='approved', decided_by=$3, "
+          "decided_at=CURRENT_TIMESTAMP, reject_reason='' "
+          "WHERE id=$1 AND organization_id=$2 AND status='pending' RETURNING id",
+          [self](const Result &rows) {
+              if (rows.size() != 1)
+                  self->abort(DecisionStatus::Conflict);
+              else
+                  self->resolveSiblings();
+          },
+          requestId_,
+          orgId_,
+          actorId_
+        );
+    }
+
+    void resolveSiblings()
+    {
+        auto self = shared_from_this();
+        // Documented batch update: resolve visible pending siblings of this
+        // exact org/client in the SAME transaction as all grant writes.
+        execute(
+          "UPDATE organization_consent_requests SET status='approved', decided_by=$3, "
+          "decided_at=CURRENT_TIMESTAMP WHERE organization_id=$1 AND client_id=$2 "
+          "AND status='pending' AND id<>$4",
+          [self](const Result &) { self->stage(DecisionStatus::Approved); },
+          orgId_,
+          clientId_,
+          actorId_,
+          requestId_
+        );
+    }
+
+    void reject()
+    {
+        auto self = shared_from_this();
+        execute(
+          "UPDATE organization_consent_requests SET status='rejected', decided_by=$3, "
+          "decided_at=CURRENT_TIMESTAMP, reject_reason=$4 "
+          "WHERE id=$1 AND organization_id=$2 AND status='pending' RETURNING id",
+          [self](const Result &rows) {
+              if (rows.size() != 1)
+                  self->abort(DecisionStatus::Conflict);
+              else
+                  self->stage(DecisionStatus::Rejected);
+          },
+          requestId_,
+          orgId_,
+          actorId_,
+          reason_
+        );
+    }
+
+    void stage(DecisionStatus status)
+    {
+        DecisionResult result;
+        result.status = status;
+        result.requestId = requestId_;
+        result.clientId = clientId_;
+        result.scopes = scopes_;
+        completion_->stage(std::move(result));
+        // No further query holds self after its current callback returns.
+        // Destruction releases txn_; its COMMIT callback owns completion only.
+    }
+};
+}  // namespace
+
+void OrgConsentRequestRepository::decideAtomically(
+  int32_t orgId,
+  int32_t requestId,
+  int32_t actorId,
+  bool approve,
+  const std::string &reason,
+  DecisionCallback &&cb
+)
+{
+    auto operation = std::make_shared<ConsentDecision>(
+      dbClient_, orgId, requestId, actorId, approve, reason, std::move(cb)
+    );
+    operation->start();
+}
 
 OrgConsentRequestRepository::OrgConsentRequestRepository(
   ::drogon::orm::DbClientPtr dbClient

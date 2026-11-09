@@ -19,6 +19,7 @@
 // stack-construction contract.
 
 #include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/OrgConsentDecisionResult.h>
 
 #include <fulla/storage/postgres/models/OrganizationConsentRequests.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
@@ -46,6 +47,21 @@ class OrgConsentRequestRepository
     /// contract as ClientOwnersRepository). Multi-hop methods keep
     /// themselves alive internally.
     explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient);
+
+    using DecisionCallback = std::function<void(OrgConsentDecisionResult)>;
+
+    /// Recheck the live organization and actor's manager membership under
+    /// row locks, then commit the complete decision and all scope/sibling
+    /// writes together. Only a confirmed commit returns a success status.
+    /// Callers retain their existing outer authentication/manager gates.
+    void decideAtomically(
+      int32_t orgId,
+      int32_t requestId,
+      int32_t actorId,
+      bool approve,
+      const std::string &reason,
+      DecisionCallback &&cb
+    );
 
     /// B3 filing: INSERT ... ON CONFLICT DO NOTHING (bare conflict target
     /// -- the partial unique index uq_org_consent_requests_pending cannot
