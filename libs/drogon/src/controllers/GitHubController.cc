@@ -207,8 +207,10 @@ void GitHubController::loginValidated(
         };
         if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
         {
-            ::fulla::common::error::ErrorResponder::respond(
-              req, std::move(callback), "INTERNAL_ERROR", "github login: GitHub OAuth not configured"
+            // callback was already moved into callbackPtr above; respond through
+            // it (std::move(callback) here would invoke an empty std::function).
+            respondError(
+              req, callbackPtr, "INTERNAL_ERROR", "github login: GitHub OAuth not configured"
             );
             return;
         }
