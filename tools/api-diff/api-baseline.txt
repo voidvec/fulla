@@ -3526,6 +3526,7 @@ void doPurge();
 }
 === libs/drogon/include/fulla/drogon/plugin/OAuth2Plugin.h
 #pragma once
+#include <fulla/drogon/plugin/OwnerStatusResult.h>
 #include <drogon/plugins/Plugin.h>
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
@@ -3731,6 +3732,10 @@ void lookupOwnerStatus(
 const std::string &clientId,
 std::function<void(std::optional<std::string>)> &&cb
 );
+void lookupOwnerStatusChecked(
+const std::string &clientId,
+std::function<void(fulla::drogon::OwnerStatusResult)> &&cb
+);
 void invalidateOwnerStatusCache();
 std::shared_ptr<fulla::common::ports::IMetrics> getMetrics() const
 ;
@@ -3760,11 +3765,15 @@ std::shared_ptr<fulla::drogon::authz::RolePermissionResolver> rolePermissionReso
 std::shared_ptr<fulla::common::ports::IClaimMappingsProvider> claimMappingsProvider_;
 std::shared_ptr<class fulla::drogon::adapters::CachedClaimMappingsProvider> claimMappingsCache_;
 std::vector<std::string> mappedClaimNames_;
+struct OwnerStatusMemo
+{
 std::mutex ownerStatusMutex_;
 std::unordered_map<
 std::string,
 std::pair<std::optional<std::string>, std::chrono::steady_clock::time_point>>
 ownerStatusCache_;
+};
+std::shared_ptr<OwnerStatusMemo> ownerStatusMemo_ = std::make_shared<OwnerStatusMemo>();
 std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
 std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::IMetrics> metrics_;
@@ -3791,6 +3800,30 @@ const std::string &provider,
 std::function<void(int32_t)> &&callback
 );
 };
+=== libs/drogon/include/fulla/drogon/plugin/OwnerStatusResult.h
+#pragma once
+#include <optional>
+#include <string>
+#include <utility>
+namespace fulla::drogon
+{
+enum class OwnerStatusCode
+{
+Active,
+Unmanaged,
+Suspended,
+Unavailable
+};
+struct OwnerStatusResult
+{
+OwnerStatusCode code = OwnerStatusCode::Unavailable;
+std::optional<std::string> value;
+static OwnerStatusResult fromStatus(std::optional<std::string> status)
+;
+bool permitsIntrospection() const
+;
+};
+}
 === libs/drogon/include/fulla/drogon/services/ClientRegistrationService.h
 #pragma once
 #include <drogon/HttpRequest.h>
@@ -6617,6 +6650,7 @@ virtual void purgeExpired() = 0;
 === libs/oauth2/include/fulla/oauth2/repository/ITokenRepository.h
 #pragma once
 #include <fulla/oauth2/model/Dto.h>
+#include <fulla/oauth2/repository/RefreshTokenResult.h>
 #include <functional>
 #include <optional>
 #include <string>
@@ -6634,6 +6668,22 @@ using VoidCallback = std::function<void()>;
 using TokenIntrospectionCallback =
 std::function<void(std::optional<fulla::oauth2::model::TokenIntrospection>)>;
 using SaveResultCallback = std::function<void(bool ok)>;
+using RefreshResultCallback = std::function<void(RefreshTokenResult)>;
+virtual void inspectRefreshToken(
+const std::string &,
+const std::string &,
+RefreshResultCallback &&cb
+)
+;
+virtual void rotateRefreshToken(
+const model::OAuth2RefreshToken &,
+const model::OAuth2AccessToken &,
+const model::OAuth2RefreshToken &,
+RefreshResultCallback &&cb
+)
+;
+virtual void revokeTokenFamilyChecked(const std::string &, SaveResultCallback &&cb)
+;
 virtual void saveAccessToken(
 const fulla::oauth2::model::OAuth2AccessToken &token,
 VoidCallback &&cb
@@ -6663,6 +6713,28 @@ VoidCallback &&cb
 virtual void purgeExpired() = 0;
 virtual bool supportsTransactions() const = 0;
 virtual bool supportsCas() const = 0;
+};
+}
+=== libs/oauth2/include/fulla/oauth2/repository/RefreshTokenResult.h
+#pragma once
+#include <fulla/oauth2/model/Dto.h>
+#include <optional>
+namespace fulla::oauth2::repository
+{
+enum class RefreshTokenStatus
+{
+Ready,
+Rotated,
+NotFound,
+AlreadyUsed,
+ClientMismatch,
+Expired,
+StorageError
+};
+struct RefreshTokenResult
+{
+RefreshTokenStatus status = RefreshTokenStatus::StorageError;
+std::optional<model::OAuth2RefreshToken> token;
 };
 }
 === libs/storage-memory/include/fulla/storage/memory/MemoryClientRepository.h
@@ -6897,6 +6969,18 @@ using ITokenRepositoryBase = ::fulla::oauth2::repository::ITokenRepository;
 class MemoryTokenRepository : public ITokenRepositoryBase
 {
 public:
+void inspectRefreshToken(
+const std::string &token,
+const std::string &clientId,
+RefreshResultCallback &&cb
+) override;
+void rotateRefreshToken(
+const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+const ::fulla::oauth2::model::OAuth2AccessToken &at,
+const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+RefreshResultCallback &&cb
+) override;
+void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override;
 void saveAccessToken(
 const ::fulla::oauth2::model::OAuth2AccessToken &token,
 VoidCallback &&cb
@@ -7491,6 +7575,18 @@ public PostgresRepositoryBase,
 public std::enable_shared_from_this<PostgresTokenRepository>
 {
 public:
+void inspectRefreshToken(
+const std::string &token,
+const std::string &clientId,
+RefreshResultCallback &&cb
+) override;
+void rotateRefreshToken(
+const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+const ::fulla::oauth2::model::OAuth2AccessToken &at,
+const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+RefreshResultCallback &&cb
+) override;
+void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override;
 PostgresTokenRepository() = default;
 void saveAccessToken(
 const ::fulla::oauth2::model::OAuth2AccessToken &token,
@@ -12088,6 +12184,21 @@ class RedisCachedTokenRepository : public RedisCachedTokenRepositoryBase,
 public std::enable_shared_from_this<RedisCachedTokenRepository>
 {
 public:
+void inspectRefreshToken(
+const std::string &token,
+const std::string &clientId,
+RefreshResultCallback &&cb
+) override
+;
+void rotateRefreshToken(
+const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+const ::fulla::oauth2::model::OAuth2AccessToken &at,
+const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+RefreshResultCallback &&cb
+) override
+;
+void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override
+;
 RedisCachedTokenRepository(
 std::shared_ptr<RedisCachedTokenRepositoryBase> impl,
 ::drogon::nosql::RedisClientPtr redisClient,

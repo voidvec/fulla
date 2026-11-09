@@ -21,6 +21,8 @@
 #include <fulla/storage/redis/RedisCachedTokenRepository.h>
 
 #include <atomic>
+#include <cstdarg>
+#include <mutex>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -103,6 +105,7 @@ class CountingFakeTokenRepo : public ITokenRepository
             }
             TokenIntrospection intro;
             intro.active = true;
+            intro.orgId = t.orgId;
             intro.clientId = t.clientId;
             intro.tokenType = "Bearer";
             intro.exp = t.expiresAt;
@@ -497,4 +500,378 @@ DROGON_TEST(Integration_P2_Storage_RedisCachedTokenRepository_SaveAccessToken_Wa
     CHECK(fake->getAccessTokenCalls.load() == 0);  // ← warmed, no impl call
 
     evictTokenKeys(hash);
+}
+
+namespace
+{
+class RevocationMetrics : public fulla::common::ports::IMetrics
+{
+  public:
+    std::atomic<int> invalidationFailures{0};
+    std::atomic<int> cacheErrors{0};
+
+    void incrementCounter(
+      const std::string &name,
+      const fulla::common::ports::MetricLabels &labels,
+      double
+    ) override
+    {
+        if (name == "fulla_cache_invalidation_failures_total")
+            ++invalidationFailures;
+        if (name == "fulla_cache_total" && labels.at("outcome") == "error")
+            ++cacheErrors;
+    }
+
+    void setGauge(const std::string &, const fulla::common::ports::MetricLabels &, double) override
+    {
+    }
+
+    void observeHistogram(
+      const std::string &,
+      const fulla::common::ports::MetricLabels &,
+      double
+    ) override
+    {
+    }
+};
+
+// Only used by writer A's invalidation path. Reader B talks to real Redis.
+class FailedInvalidationRedis : public ::drogon::nosql::RedisClient
+{
+  public:
+    void execCommandAsync(
+      ::drogon::nosql::RedisResultCallback &&,
+      ::drogon::nosql::RedisExceptionCallback &&error,
+      std::string_view,
+      ...
+    ) noexcept override
+    {
+        error(
+          ::drogon::nosql::RedisException(
+            ::drogon::nosql::RedisErrorCode::kConnectionBroken, "S03 invalidation fault"
+          )
+        );
+    }
+
+    std::shared_ptr<::drogon::nosql::RedisSubscriber> newSubscriber() noexcept override
+    {
+        return nullptr;
+    }
+
+    std::shared_ptr<::drogon::nosql::RedisTransaction> newTransaction() noexcept(false) override
+    {
+        throw std::runtime_error("S03 invalidation fault");
+    }
+
+    void newTransactionAsync(
+      const std::function<void(const std::shared_ptr<::drogon::nosql::RedisTransaction> &)> &cb
+    ) override
+    {
+        cb(nullptr);
+    }
+
+    void setTimeout(double) override
+    {
+    }
+
+    void closeAll() override
+    {
+    }
+};
+
+class DeferredTokenRepo : public CountingFakeTokenRepo
+{
+  public:
+    std::promise<void> reached;
+    std::mutex mutex;
+    AccessTokenCallback pending;
+    OAuth2AccessToken snapshot;
+
+    void getAccessToken(const std::string &token, AccessTokenCallback &&cb) override
+    {
+        ++getAccessTokenCalls;
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            snapshot = accessStore.at(token);
+            pending = std::move(cb);
+        }
+        reached.set_value();
+    }
+
+    void release()
+    {
+        AccessTokenCallback cb;
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            cb = std::move(pending);
+        }
+        cb(snapshot);
+    }
+};
+
+void redisDelete(const ::drogon::nosql::RedisClientPtr &redis, const std::string &key)
+{
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+    redis->execCommandAsync(
+      [promise](const auto &) { promise->set_value(); },
+      [promise](const auto &) {
+          promise->set_exception(std::make_exception_ptr(std::runtime_error("Redis DEL fault")));
+      },
+      "DEL %s",
+      key.c_str()
+    );
+    if (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+        throw std::runtime_error("Redis DEL timed out");
+    future.get();
+}
+}  // namespace
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_OrgBindingSurvivesBothCacheHits)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+        return;
+    auto fake = std::make_shared<CountingFakeTokenRepo>();
+    auto hash = uniqueHash();
+    auto token = makeAccessToken(hash);
+    token.orgId = 731;
+    fake->accessStore[hash] = token;
+    auto nodeA = std::make_shared<RedisCachedTokenRepository>(fake, redis);
+    auto nodeB = std::make_shared<RedisCachedTokenRepository>(fake, redis);
+    auto warm = waitForAccess([&](auto cb) { nodeA->getAccessToken(hash, std::move(cb)); });
+    REQUIRE(warm.has_value());
+    REQUIRE(waitForRedisKey(redis, "fulla:cache:token:access:" + hash));
+    auto hit = waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    REQUIRE(hit.has_value());
+    CHECK(hit->orgId == std::optional<int32_t>(731));
+    CHECK(fake->getAccessTokenCalls.load() == 1);
+    auto intro = waitForIntro([&](auto cb) { nodeA->introspectToken(hash, std::move(cb)); });
+    REQUIRE(intro.has_value());
+    REQUIRE(waitForRedisKey(redis, "fulla:cache:token:introspect:" + hash));
+    auto introHit = waitForIntro([&](auto cb) { nodeB->introspectToken(hash, std::move(cb)); });
+    REQUIRE(introHit.has_value());
+    CHECK(introHit->orgId == std::optional<int32_t>(731));
+    CHECK(fake->introspectTokenCalls.load() == 1);
+    evictTokenKeys(hash);
+}
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_TwoNodesFailedInvalidationExpiresWithinBudget)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+        return;
+    auto fake = std::make_shared<CountingFakeTokenRepo>();
+    auto hash = uniqueHash();
+    fake->accessStore[hash] = makeAccessToken(hash);
+    auto metrics = std::make_shared<RevocationMetrics>();
+    auto nodeA = std::make_shared<RedisCachedTokenRepository>(
+      fake, std::make_shared<FailedInvalidationRedis>(), metrics, 2
+    );
+    auto nodeB = std::make_shared<RedisCachedTokenRepository>(fake, redis, nullptr, 2);
+    const auto expires = std::time(nullptr) + 2;
+    auto warm = waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    REQUIRE(warm.has_value());
+    REQUIRE(waitForRedisKey(redis, "fulla:cache:token:access:" + hash));
+    waitForVoid([&](auto cb) { nodeA->revokeAccessToken(hash, "s03", std::move(cb)); });
+    auto stale = waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    REQUIRE(stale.has_value());
+    std::this_thread::sleep_until(std::chrono::system_clock::from_time_t(expires + 1));
+    auto denied = waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    CHECK(!denied.has_value());
+    CHECK(metrics->invalidationFailures.load() == 8);
+    CHECK(metrics->cacheErrors.load() == 1);
+    evictTokenKeys(hash);
+}
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_LateSnapshotCannotRestartBudgetAfterSecondDelete)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+        return;
+    auto fake = std::make_shared<DeferredTokenRepo>();
+    auto hash = uniqueHash();
+    fake->accessStore[hash] = makeAccessToken(hash);
+    auto nodeA = std::make_shared<RedisCachedTokenRepository>(fake, redis, nullptr, 1);
+    auto nodeB = std::make_shared<RedisCachedTokenRepository>(fake, redis, nullptr, 1);
+    auto reached = fake->reached.get_future();
+    auto pending = std::async(std::launch::async, [nodeB, hash]() {
+        return waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    });
+    if (reached.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+        throw std::runtime_error("deferred master lookup not reached");
+    waitForVoid([&](auto cb) { nodeA->revokeAccessToken(hash, "s03", std::move(cb)); });
+    // A loop barrier proves the delayed DEL timer has run, rather than
+    // relying on a short sleep. The stale master callback is still held.
+    auto timer = std::make_shared<std::promise<void>>();
+    auto fired = timer->get_future();
+    ::drogon::app().getLoop()->runAfter(1.2, [timer]() { timer->set_value(); });
+    if (fired.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+        throw std::runtime_error("second-delete timer did not run");
+    redisDelete(redis, "fulla:cache:token:revoked:" + hash);
+    fake->release();
+    auto result = pending.get();
+    CHECK(!result.has_value());
+    CHECK(
+      !waitForRedisKey(redis, "fulla:cache:token:access:" + hash, std::chrono::milliseconds(100))
+    );
+    evictTokenKeys(hash);
+}
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_RedisErrorFallsBackToAuthoritativeState)
+{
+    auto fake = std::make_shared<CountingFakeTokenRepo>();
+    auto hash = uniqueHash();
+    auto token = makeAccessToken(hash);
+    token.revoked = true;
+    fake->accessStore[hash] = token;
+    auto node = std::make_shared<RedisCachedTokenRepository>(
+      fake, std::make_shared<FailedInvalidationRedis>()
+    );
+    auto result = waitForAccess([&](auto cb) { node->getAccessToken(hash, std::move(cb)); });
+    REQUIRE(result.has_value());
+    CHECK(result->revoked);
+    CHECK(fake->getAccessTokenCalls.load() == 1);
+}
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_RechecksRevocationAfterDeferredMasterRead)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+        return;
+    auto fake = std::make_shared<DeferredTokenRepo>();
+    auto hash = uniqueHash();
+    fake->accessStore[hash] = makeAccessToken(hash);
+    auto nodeA = std::make_shared<RedisCachedTokenRepository>(fake, redis);
+    auto nodeB = std::make_shared<RedisCachedTokenRepository>(fake, redis);
+    auto reached = fake->reached.get_future();
+    auto pending = std::async(std::launch::async, [nodeB, hash]() {
+        return waitForAccess([&](auto cb) { nodeB->getAccessToken(hash, std::move(cb)); });
+    });
+    if (reached.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+        throw std::runtime_error("deferred master lookup not reached");
+    waitForVoid([&](auto cb) { nodeA->revokeAccessToken(hash, "s03", std::move(cb)); });
+    CHECK(waitForRedisKey(redis, "fulla:cache:token:revoked:" + hash));
+    fake->release();
+    CHECK(!pending.get().has_value());
+    CHECK(
+      !waitForRedisKey(redis, "fulla:cache:token:access:" + hash, std::chrono::milliseconds(100))
+    );
+    evictTokenKeys(hash);
+}
+
+namespace
+{
+class HungRedisStage : public FailedInvalidationRedis
+{
+  public:
+    HungRedisStage(::drogon::nosql::RedisClientPtr redis, bool first)
+        : redis_(std::move(redis)), first_(first)
+    {
+    }
+
+    std::promise<void> held;
+    std::mutex mutex;
+    ::drogon::nosql::RedisResultCallback success;
+    ::drogon::nosql::RedisExceptionCallback error;
+
+    void execCommandAsync(
+      ::drogon::nosql::RedisResultCallback &&ok,
+      ::drogon::nosql::RedisExceptionCallback &&failed,
+      std::string_view command,
+      ...
+    ) noexcept override
+    {
+        if (!first_ && command == "EVAL %s 2 %s %s")
+        {
+            va_list args;
+            va_start(args, command);
+            const auto script = va_arg(args, const char *);
+            const auto negative = va_arg(args, const char *);
+            const auto positive = va_arg(args, const char *);
+            va_end(args);
+            redis_->execCommandAsync(
+              std::move(ok), std::move(failed), "EVAL %s 2 %s %s", script, negative, positive
+            );
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            success = std::move(ok);
+            error = std::move(failed);
+        }
+        held.set_value();
+    }
+
+    void failLate()
+    {
+        ::drogon::nosql::RedisExceptionCallback cb;
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            success = {};
+            cb = std::move(error);
+        }
+        if (cb)
+            cb(
+              ::drogon::nosql::RedisException(
+                ::drogon::nosql::RedisErrorCode::kConnectionBroken, "late reconnect failure"
+              )
+            );
+    }
+
+  private:
+    ::drogon::nosql::RedisClientPtr redis_;
+    bool first_;
+};
+}  // namespace
+
+DROGON_TEST(Integration_P0_Storage_TokenCache_HungRedisStagesCompleteOnceAndReleaseCallback)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+        return;
+    for (int stage : {0, 1, 2})
+    {
+        auto fake = std::make_shared<CountingFakeTokenRepo>();
+        auto hash = uniqueHash();
+        fake->accessStore[hash] = makeAccessToken(hash);
+        auto hung = std::make_shared<HungRedisStage>(redis, stage == 0);
+        auto blocked = hung->held.get_future();
+        auto node = std::make_shared<RedisCachedTokenRepository>(fake, hung);
+        auto witness = std::make_shared<int>(1);
+        std::weak_ptr<int> lifetime = witness;
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto completed = promise->get_future();
+        auto calls = std::make_shared<std::atomic<int>>(0);
+        const auto started = std::chrono::steady_clock::now();
+        if (stage == 2)
+            node->introspectToken(
+              hash, [witness, promise, calls](std::optional<TokenIntrospection> r) {
+                  (void)witness;
+                  ++*calls;
+                  promise->set_value(r && r->active);
+              }
+            );
+        else
+            node
+              ->getAccessToken(hash, [witness, promise, calls](std::optional<OAuth2AccessToken> r) {
+                  (void)witness;
+                  ++*calls;
+                  promise->set_value(r.has_value());
+              });
+        witness.reset();
+        if (blocked.wait_for(std::chrono::seconds(3)) != std::future_status::ready)
+            throw std::runtime_error("Redis stage not held");
+        if (completed.wait_for(std::chrono::seconds(7)) != std::future_status::ready)
+            throw std::runtime_error("cache deadline did not complete");
+        CHECK(!completed.get());
+        CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds(7));
+        const auto releaseDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (!lifetime.expired() && std::chrono::steady_clock::now() < releaseDeadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        CHECK(lifetime.expired());
+        hung->failLate();
+        CHECK(calls->load() == 1);
+        evictTokenKeys(hash);
+    }
 }

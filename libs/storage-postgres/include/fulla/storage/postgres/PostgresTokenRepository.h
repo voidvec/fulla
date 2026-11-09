@@ -48,6 +48,18 @@ class PostgresTokenRepository : public ITokenRepositoryBase,
                                 public std::enable_shared_from_this<PostgresTokenRepository>
 {
   public:
+    void inspectRefreshToken(
+      const std::string &token,
+      const std::string &clientId,
+      RefreshResultCallback &&cb
+    ) override;
+    void rotateRefreshToken(
+      const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+      const ::fulla::oauth2::model::OAuth2AccessToken &at,
+      const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+      RefreshResultCallback &&cb
+    ) override;
+    void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override;
     PostgresTokenRepository() = default;
 
     void saveAccessToken(

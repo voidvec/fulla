@@ -4,6 +4,11 @@ External contract statement: the threading model, ABI, exceptions, logging, and 
 
 This document is the single source of truth for external commitments; wherever SDK header comments conflict with it, this document prevails and the headers are to be fixed.
 
+The unreleased S03 refresh hardening adds a repository migration requirement: see
+[Refresh Tokens and Revocation Boundaries](../domains/token-refresh-and-revocation.md).
+Old-only `ITokenRepository` implementations still compile, but refresh fails closed
+until the new inspect/atomic-rotation/checked-revocation ports are implemented.
+
 ---
 
 ## 1. Threading Model

@@ -16,6 +16,123 @@ using TokenIntrospectionCallback = ITokenRepositoryBase::TokenIntrospectionCallb
 using OAuth2AccessToken = ::fulla::oauth2::model::OAuth2AccessToken;
 using OAuth2RefreshToken = ::fulla::oauth2::model::OAuth2RefreshToken;
 using TokenIntrospection = ::fulla::oauth2::model::TokenIntrospection;
+using RefreshTokenResult = ::fulla::oauth2::repository::RefreshTokenResult;
+using RefreshTokenStatus = ::fulla::oauth2::repository::RefreshTokenStatus;
+
+namespace
+{
+RefreshTokenResult inspect(const OAuth2RefreshToken &rt, const std::string &clientId, int64_t now)
+{
+    if (rt.clientId != clientId)
+        return {RefreshTokenStatus::ClientMismatch, std::nullopt};
+    if (!rt.revoked && rt.expiresAt <= now)
+        return {RefreshTokenStatus::Expired, std::nullopt};
+    return {rt.revoked ? RefreshTokenStatus::AlreadyUsed : RefreshTokenStatus::Ready, rt};
+}
+}  // namespace
+
+void MemoryTokenRepository::inspectRefreshToken(
+  const std::string &token,
+  const std::string &clientId,
+  RefreshResultCallback &&cb
+)
+{
+    RefreshTokenResult result{RefreshTokenStatus::NotFound, std::nullopt};
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto found = refreshTokens_.find(token);
+        if (found != refreshTokens_.end())
+            result = inspect(found->second, clientId, getCurrentTimestamp());
+    }
+    cb(std::move(result));
+}
+
+void MemoryTokenRepository::rotateRefreshToken(
+  const OAuth2RefreshToken &expected,
+  const OAuth2AccessToken &at,
+  const OAuth2RefreshToken &rt,
+  RefreshResultCallback &&cb
+)
+{
+    RefreshTokenResult result{RefreshTokenStatus::NotFound, std::nullopt};
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto found = refreshTokens_.find(expected.token);
+        if (found != refreshTokens_.end())
+        {
+            result = inspect(found->second, expected.clientId, getCurrentTimestamp());
+            const auto &old = found->second;
+            if (
+              result.status == RefreshTokenStatus::Ready &&
+              (old.familyId != expected.familyId || old.scope != expected.scope ||
+               old.orgId != expected.orgId || old.userId != expected.userId ||
+               at.clientId != old.clientId || rt.clientId != old.clientId ||
+               at.scope != old.scope || rt.scope != old.scope || at.orgId != old.orgId ||
+               rt.orgId != old.orgId || rt.familyId != old.familyId || at.userId != rt.userId ||
+               rt.accessToken != at.token || at.token.empty() || rt.token.empty() || at.revoked ||
+               rt.revoked)
+            )
+                result = {RefreshTokenStatus::StorageError, std::nullopt};
+            if (result.status == RefreshTokenStatus::Ready)
+            {
+                bool accessInserted = false;
+                bool refreshInserted = false;
+                try
+                {
+                    accessInserted = accessTokens_.emplace(at.token, at).second;
+                    if (accessInserted)
+                        refreshInserted = refreshTokens_.emplace(rt.token, rt).second;
+                    if (accessInserted && refreshInserted)
+                    {
+                        // emplace may rehash the map: never reuse 'found' here.
+                        refreshTokens_.at(expected.token).revoked = true;
+                        result.status = RefreshTokenStatus::Rotated;
+                    }
+                    else
+                        result = {RefreshTokenStatus::StorageError, std::nullopt};
+                }
+                catch (...)
+                {
+                    result = {RefreshTokenStatus::StorageError, std::nullopt};
+                }
+                if (result.status != RefreshTokenStatus::Rotated)
+                {
+                    if (accessInserted)
+                        accessTokens_.erase(at.token);
+                    if (refreshInserted)
+                        refreshTokens_.erase(rt.token);
+                }
+            }
+        }
+    }
+    cb(std::move(result));
+}
+
+void MemoryTokenRepository::revokeTokenFamilyChecked(
+  const std::string &familyId,
+  SaveResultCallback &&cb
+)
+{
+    if (familyId.empty())
+    {
+        cb(false);
+        return;
+    }
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (auto &entry : refreshTokens_)
+        {
+            if (entry.second.familyId == familyId)
+            {
+                entry.second.revoked = true;
+                auto at = accessTokens_.find(entry.second.accessToken);
+                if (at != accessTokens_.end())
+                    at->second.revoked = true;
+            }
+        }
+    }
+    cb(true);
+}
 
 int64_t MemoryTokenRepository::getCurrentTimestamp() const
 {
@@ -117,23 +234,10 @@ void MemoryTokenRepository::atomicRevokeRefreshToken(
 
 void MemoryTokenRepository::revokeTokenFamily(const std::string &familyId, VoidCallback &&cb)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    // Revoke all refresh tokens in this family
-    for (auto &pair : refreshTokens_)
-    {
-        if (pair.second.familyId == familyId)
-        {
-            pair.second.revoked = true;
-            // Also revoke associated access token
-            auto atIt = accessTokens_.find(pair.second.accessToken);
-            if (atIt != accessTokens_.end())
-            {
-                atIt->second.revoked = true;
-            }
-        }
-    }
-    LOG_WARN << "[SECURITY] Token family revoked due to reuse detection: " << familyId;
-    cb();
+    revokeTokenFamilyChecked(familyId, [cb = std::move(cb)](bool) {
+        if (cb)
+            cb();
+    });
 }
 
 // ========== P1: Token Introspection (RFC 7662) ==========
@@ -153,7 +257,7 @@ void MemoryTokenRepository::introspectToken(
         const OAuth2AccessToken &accessToken = it->second;
 
         // Check if token is revoked or expired
-        if (accessToken.revoked || accessToken.expiresAt < now)
+        if (accessToken.revoked || accessToken.expiresAt <= now)
         {
             TokenIntrospection introspection;
             introspection.active = false;
@@ -187,7 +291,7 @@ void MemoryTokenRepository::introspectToken(
         const OAuth2RefreshToken &refreshToken = itRt->second;
 
         // Check if token is revoked or expired
-        if (refreshToken.revoked || refreshToken.expiresAt < now)
+        if (refreshToken.revoked || refreshToken.expiresAt <= now)
         {
             TokenIntrospection introspection;
             introspection.active = false;
@@ -291,7 +395,11 @@ void MemoryTokenRepository::purgeExpired()
 
     for (auto it = refreshTokens_.begin(); it != refreshTokens_.end();)
     {
-        if (it->second.expiresAt < now)
+        const auto at = accessTokens_.find(it->second.accessToken);
+        const bool activeAccess =
+          at != accessTokens_.end() && !at->second.revoked && at->second.expiresAt > now;
+        // Retain the family-to-access link without extending RT validity.
+        if (it->second.expiresAt < now && !activeAccess)
         {
             it = refreshTokens_.erase(it);
         }

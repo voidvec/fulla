@@ -10,6 +10,7 @@
 // carried over unchanged.
 
 #include <fulla/oauth2/model/Dto.h>
+#include <fulla/oauth2/repository/RefreshTokenResult.h>
 
 #include <functional>
 #include <optional>
@@ -51,6 +52,39 @@ class ITokenRepository
     /// (returning 200 + tokens that were never stored is a silent-failure
     /// defect: subsequent introspection/refresh lookups all miss).
     using SaveResultCallback = std::function<void(bool ok)>;
+    using RefreshResultCallback = std::function<void(RefreshTokenResult)>;
+
+    /// Authoritative refresh lookup, including used tokens. Implementations
+    /// must distinguish storage failure from absence and validate the client
+    /// before reporting reuse. Legacy implementations fail closed until migrated.
+    virtual void inspectRefreshToken(
+      const std::string &,
+      const std::string &,
+      RefreshResultCallback &&cb
+    )
+    {
+        cb({RefreshTokenStatus::StorageError, std::nullopt});
+    }
+
+    /// Consume the expected old RT and persist the new pair atomically.
+    /// Revalidate bindings and expiry under the same family lock as revocation.
+    /// Rotated is delivered only after confirmed commit. A StorageError can
+    /// represent an unknown COMMIT outcome; callers must never return tokens.
+    virtual void rotateRefreshToken(
+      const model::OAuth2RefreshToken &,
+      const model::OAuth2AccessToken &,
+      const model::OAuth2RefreshToken &,
+      RefreshResultCallback &&cb
+    )
+    {
+        cb({RefreshTokenStatus::StorageError, std::nullopt});
+    }
+
+    /// Revoke both token kinds under the rotation family lock, confirming commit.
+    virtual void revokeTokenFamilyChecked(const std::string &, SaveResultCallback &&cb)
+    {
+        cb(false);
+    }
 
     // ========== Access Token Operations ==========
 

@@ -28,6 +28,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <ctime>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
@@ -140,6 +141,84 @@ class FakeTokenRepo : public ITokenRepository
     std::unordered_map<std::string, OAuth2AccessToken> accessTokens;
     std::unordered_map<std::string, OAuth2RefreshToken> refreshTokens;
 
+    bool inspectFailure = false;
+    bool rotateFailure = false;
+    bool commitAcknowledgementLost = false;
+    bool revokeFailure = false;
+    int familyRevocations = 0;
+
+    void inspectRefreshToken(
+      const std::string &token,
+      const std::string &clientId,
+      RefreshResultCallback &&cb
+    ) override
+    {
+        if (inspectFailure)
+        {
+            cb({RefreshTokenStatus::StorageError, std::nullopt});
+            return;
+        }
+        auto it = refreshTokens.find(token);
+        if (it == refreshTokens.end())
+        {
+            cb({RefreshTokenStatus::NotFound, std::nullopt});
+            return;
+        }
+        if (it->second.clientId != clientId)
+            cb({RefreshTokenStatus::ClientMismatch, std::nullopt});
+        else if (!it->second.revoked && it->second.expiresAt <= std::time(nullptr))
+            cb({RefreshTokenStatus::Expired, std::nullopt});
+        else
+            cb(
+              {it->second.revoked ? RefreshTokenStatus::AlreadyUsed : RefreshTokenStatus::Ready,
+               it->second}
+            );
+    }
+
+    void rotateRefreshToken(
+      const OAuth2RefreshToken &expected,
+      const OAuth2AccessToken &at,
+      const OAuth2RefreshToken &rt,
+      RefreshResultCallback &&cb
+    ) override
+    {
+        if (rotateFailure)
+        {
+            cb({RefreshTokenStatus::StorageError, std::nullopt});
+            return;
+        }
+        inspectRefreshToken(
+          expected.token,
+          expected.clientId,
+          [this, expected, at, rt, cb = std::move(cb)](RefreshTokenResult result) {
+              if (result.status != RefreshTokenStatus::Ready)
+              {
+                  cb(result);
+                  return;
+              }
+              refreshTokens[expected.token].revoked = true;
+              accessTokens[at.token] = at;
+              refreshTokens[rt.token] = rt;
+              cb(
+                {commitAcknowledgementLost ? RefreshTokenStatus::StorageError
+                                           : RefreshTokenStatus::Rotated,
+                 std::nullopt}
+              );
+          }
+        );
+    }
+
+    void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override
+    {
+        ++familyRevocations;
+        if (revokeFailure)
+        {
+            cb(false);
+            return;
+        }
+        revokeTokenFamily(familyId, [cb = std::move(cb)]() { cb(true); });
+    }
+
     void saveAccessToken(const OAuth2AccessToken &token, VoidCallback &&cb) override
     {
         accessTokens[token.token] = token;
@@ -190,7 +269,12 @@ class FakeTokenRepo : public ITokenRepository
         for (auto &[key, rt] : refreshTokens)
         {
             if (rt.familyId == familyId)
+            {
                 rt.revoked = true;
+                auto access = accessTokens.find(rt.accessToken);
+                if (access != accessTokens.end())
+                    access->second.revoked = true;
+            }
         }
         for (auto &[key, at] : accessTokens)
         {
@@ -1476,4 +1560,294 @@ TEST(TokenServiceTest, RefreshToken_NonOpenIdScope_OmitsIdToken)
     svc->refreshAccessToken("raw-rt", "test-client", [&](const Json::Value &j) { r = j; });
     EXPECT_FALSE(r.isMember("error"));
     EXPECT_FALSE(r.isMember("id_token"));
+}
+
+namespace
+{
+OAuth2RefreshToken seedRefresh(
+  const std::shared_ptr<FakeTokenRepo> &repo,
+  fulla::common::ports::ICryptoProvider &crypto
+)
+{
+    OAuth2RefreshToken rt;
+    rt.token = hashToken(crypto, "s03-refresh");
+    rt.accessToken = "s03-access";
+    rt.clientId = "test-client";
+    rt.userId = "alice";
+    rt.scope = "profile";
+    rt.familyId = "s03-family";
+    rt.expiresAt = std::time(nullptr) + 3600;
+    repo->refreshTokens[rt.token] = rt;
+    return rt;
+}
+}  // namespace
+
+TEST(TokenServiceTest, RefreshWrongClientPreservesUnusedAndUsedFamily)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    for (bool used : {false, true})
+    {
+        repo->refreshTokens[rt.token].revoked = used;
+        Json::Value result;
+        svc->refreshAccessToken(
+          "s03-refresh", "another-client", [&result](const Json::Value &value) { result = value; }
+        );
+        EXPECT_EQ(result["error"], "invalid_grant");
+        EXPECT_EQ(repo->refreshTokens[rt.token].revoked, used);
+        EXPECT_EQ(repo->familyRevocations, 0);
+        EXPECT_TRUE(repo->accessTokens.empty());
+    }
+}
+
+TEST(TokenServiceTest, RefreshStorageFailureNeverBecomesReplayOrReturnsTokens)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    for (bool failLookup : {true, false})
+    {
+        repo->inspectFailure = failLookup;
+        repo->rotateFailure = !failLookup;
+        int completions = 0;
+        Json::Value result;
+        svc->refreshAccessToken(
+          "s03-refresh", "test-client", [&result, &completions](const Json::Value &value) {
+              result = value;
+              ++completions;
+          }
+        );
+        EXPECT_EQ(result["error"], "server_error");
+        EXPECT_FALSE(result.isMember("access_token"));
+        EXPECT_FALSE(result.isMember("refresh_token"));
+        EXPECT_FALSE(repo->refreshTokens[rt.token].revoked);
+        EXPECT_TRUE(repo->accessTokens.empty());
+        EXPECT_EQ(repo->familyRevocations, 0);
+        EXPECT_EQ(completions, 1);
+    }
+}
+
+TEST(TokenServiceTest, RefreshUnknownCommitOutcomeDoesNotReturnUnconfirmedTokens)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    repo->commitAcknowledgementLost = true;
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    Json::Value result;
+    svc->refreshAccessToken("s03-refresh", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "server_error");
+    EXPECT_FALSE(result.isMember("access_token"));
+    EXPECT_FALSE(result.isMember("refresh_token"));
+    EXPECT_TRUE(repo->refreshTokens[rt.token].revoked);
+    EXPECT_EQ(repo->refreshTokens.size(), 2u);
+    EXPECT_EQ(repo->accessTokens.size(), 1u);
+    svc->refreshAccessToken("s03-refresh", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "invalid_grant");
+    EXPECT_EQ(repo->familyRevocations, 1);
+    for (const auto &item : repo->accessTokens)
+        EXPECT_TRUE(item.second.revoked);
+}
+
+TEST(TokenServiceTest, RefreshFamilyRevokeFailureReportsServerError)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    repo->refreshTokens[rt.token].revoked = true;
+    repo->revokeFailure = true;
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    Json::Value result;
+    svc->refreshAccessToken("s03-refresh", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "server_error");
+    EXPECT_FALSE(result.isMember("access_token"));
+}
+
+TEST(TokenServiceTest, RefreshRandomFailurePreservesOldToken)
+{
+    class FailedRandom : public fulla::common::testing::FakeCryptoProvider
+    {
+      public:
+        bool secureRandomBytes(unsigned char *, size_t) override
+        {
+            return false;
+        }
+    };
+
+    auto crypto = std::make_shared<FailedRandom>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    Json::Value result;
+    svc->refreshAccessToken("s03-refresh", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "server_error");
+    EXPECT_FALSE(result.isMember("access_token"));
+    EXPECT_FALSE(repo->refreshTokens[rt.token].revoked);
+    EXPECT_TRUE(repo->accessTokens.empty());
+}
+
+// An existing SDK repository implementing only the original pure virtual
+// methods must continue to compile, while the new refresh path fails closed.
+namespace
+{
+class LegacyTokenRepository : public ITokenRepository
+{
+  public:
+    void saveAccessToken(const OAuth2AccessToken &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void getAccessToken(const std::string &, AccessTokenCallback &&cb) override
+    {
+        cb(std::nullopt);
+    }
+
+    void saveRefreshToken(const OAuth2RefreshToken &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void getRefreshToken(const std::string &, RefreshTokenCallback &&cb) override
+    {
+        cb(std::nullopt);
+    }
+
+    void revokeRefreshToken(const std::string &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void atomicRevokeRefreshToken(const std::string &, RefreshTokenCallback &&cb) override
+    {
+        cb(std::nullopt);
+    }
+
+    void revokeTokenFamily(const std::string &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void introspectToken(const std::string &, TokenIntrospectionCallback &&cb) override
+    {
+        cb(std::nullopt);
+    }
+
+    void incrementIntrospectCount(const std::string &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void revokeAccessToken(const std::string &, const std::string &, VoidCallback &&cb) override
+    {
+        cb();
+    }
+
+    void purgeExpired() override
+    {
+    }
+
+    bool supportsTransactions() const override
+    {
+        return false;
+    }
+
+    bool supportsCas() const override
+    {
+        return false;
+    }
+};
+}  // namespace
+
+TEST(TokenServiceTest, LegacySdkRepositoryCompilesAndRefreshFailsClosed)
+{
+    auto repo = std::make_shared<LegacyTokenRepository>();
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(),
+      std::make_shared<FakeGrantRepo>(),
+      repo,
+      std::make_shared<fulla::common::testing::FakeCryptoProvider>()
+    );
+    Json::Value result;
+    svc->refreshAccessToken("old-sdk-token", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "server_error");
+    EXPECT_FALSE(result.isMember("access_token"));
+}
+
+TEST(TokenServiceTest, RefreshDiscardedSuccessThenRetryRevokesCommittedFamily)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto rt = seedRefresh(repo, *crypto);
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    // Model a client that never receives the successful response: retain no
+    // new credential, then retry its old RT. This is not a wire fault test.
+    svc->refreshAccessToken("s03-refresh", "test-client", [](const Json::Value &) {});
+    EXPECT_TRUE(repo->refreshTokens[rt.token].revoked);
+    EXPECT_EQ(repo->refreshTokens.size(), 2u);
+    EXPECT_EQ(repo->accessTokens.size(), 1u);
+    Json::Value retry;
+    svc->refreshAccessToken("s03-refresh", "test-client", [&retry](const Json::Value &value) {
+        retry = value;
+    });
+    EXPECT_EQ(retry["error"], "invalid_grant");
+    for (const auto &item : repo->refreshTokens)
+        EXPECT_TRUE(item.second.revoked);
+    for (const auto &item : repo->accessTokens)
+        EXPECT_TRUE(item.second.revoked);
+}
+
+TEST(TokenServiceTest, RefreshRetainedUsedRecordStillDetectsReplayAfterExpiry)
+{
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto repo = std::make_shared<FakeTokenRepo>();
+    auto old = seedRefresh(repo, *crypto);
+    repo->refreshTokens[old.token].revoked = true;
+    repo->refreshTokens[old.token].expiresAt = std::time(nullptr) - 10;
+    auto current = old;
+    current.token = "current-refresh";
+    current.accessToken = "current-access";
+    current.expiresAt = std::time(nullptr) + 3600;
+    repo->refreshTokens[current.token] = current;
+    OAuth2AccessToken access;
+    access.token = current.accessToken;
+    access.expiresAt = current.expiresAt;
+    repo->accessTokens[access.token] = access;
+    auto svc = std::make_shared<TokenService>(
+      makeSeededClients(), std::make_shared<FakeGrantRepo>(), repo, crypto
+    );
+    Json::Value result;
+    svc->refreshAccessToken("s03-refresh", "test-client", [&result](const Json::Value &value) {
+        result = value;
+    });
+    EXPECT_EQ(result["error"], "invalid_grant");
+    EXPECT_EQ(repo->familyRevocations, 1);
+    EXPECT_TRUE(repo->refreshTokens[current.token].revoked);
+    EXPECT_TRUE(repo->accessTokens[access.token].revoked);
+    EXPECT_EQ(repo->refreshTokens.size(), 2u);
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fulla/drogon/plugin/OwnerStatusResult.h>
+
 #include <drogon/plugins/Plugin.h>
 #include <fulla/drogon/plugin/OAuth2CleanupService.h>
 #include <fulla/drogon/services/IdentityService.h>
@@ -510,13 +512,18 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     // P1-5 benchmark follow-up (five-scenario gate): process-local cache for
     // the introspection org-overlay. Every /oauth2/introspect used to query
     // oauth2_client_owners directly (-17% QPS); this cache answers from
-    // memory with a 3s TTL and precise invalidation from the two owner-row
+    // memory with a 60s budget and invalidation from the two owner-row
     // write paths (open-platform suspend/resume, org soft-delete cascade).
     // A cached "no owner row" is the hot path for admin-seeded clients.
-    /// cb receives: nullopt = no owner row; otherwise the owners.status value.
+    /// Deprecated for authorization: nullopt loses the distinction between
+    /// Unmanaged and Unavailable. Retained for source compatibility/display.
     void lookupOwnerStatus(
       const std::string &clientId,
       std::function<void(std::optional<std::string>)> &&cb
+    );
+    void lookupOwnerStatusChecked(
+      const std::string &clientId,
+      std::function<void(fulla::drogon::OwnerStatusResult)> &&cb
     );
     void invalidateOwnerStatusCache();
 
@@ -589,11 +596,17 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     std::shared_ptr<class fulla::drogon::adapters::CachedClaimMappingsProvider> claimMappingsCache_;
     // P1-3 (#280): cached enabled-mapping claim names (claims_supported).
     std::vector<std::string> mappedClaimNames_;
-    std::mutex ownerStatusMutex_;
-    std::unordered_map<
-      std::string,
-      std::pair<std::optional<std::string>, std::chrono::steady_clock::time_point>>
-      ownerStatusCache_;
+
+    struct OwnerStatusMemo
+    {
+        std::mutex ownerStatusMutex_;
+        std::unordered_map<
+          std::string,
+          std::pair<std::optional<std::string>, std::chrono::steady_clock::time_point>>
+          ownerStatusCache_;
+    };
+
+    std::shared_ptr<OwnerStatusMemo> ownerStatusMemo_ = std::make_shared<OwnerStatusMemo>();
     std::shared_ptr<const fulla::oauth2::JwkManager> jwkManager_;
     // M8 Task 40 decision b: Adapter-side observability ports, exposed via
     // getAuditSink()/getMetrics() for Drogon-layer consumers.

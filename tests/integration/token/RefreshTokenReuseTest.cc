@@ -88,6 +88,27 @@ DROGON_TEST(Integration_P0_RefreshToken_NormalRotation)
     std::string rt2 = refresh1["refresh_token"].asString();
     CHECK(rt2 != rt1);  // New RT issued (rotation)
 
+    // A second normal rotation succeeds before any reuse is observed.
+    std::string rt3;
+    {
+        std::promise<Json::Value> p;
+        auto f = p.get_future();
+        plugin->refreshAccessToken(rt2, "test-client", [&](const Json::Value &r) {
+            p.set_value(r);
+        });
+        if (f.wait_for(std::chrono::seconds(30)) == std::future_status::timeout)
+        {
+            throw std::runtime_error("TIMEOUT refreshing with rt2");
+        }
+        auto refresh2 = f.get();
+        CHECK(!refresh2.isMember("error"));
+        CHECK(refresh2.isMember("access_token"));
+        CHECK(refresh2.isMember("refresh_token"));
+        rt3 = refresh2["refresh_token"].asString();
+        CHECK(!rt3.empty());
+        CHECK(rt3 != rt2);  // Rotated again
+    }
+
     // Use old RT again - should fail (reuse detection)
     {
         std::promise<Json::Value> p;
@@ -104,21 +125,18 @@ DROGON_TEST(Integration_P0_RefreshToken_NormalRotation)
         CHECK(reuseResult["error"].asString() == "invalid_grant");
     }
 
-    // Use new RT (rt2) - should still work
+    // Strict reuse detection revokes even the latest, previously unused RT.
     {
         std::promise<Json::Value> p;
         auto f = p.get_future();
-        plugin->refreshAccessToken(rt2, "test-client", [&](const Json::Value &r) {
+        plugin->refreshAccessToken(rt3, "test-client", [&](const Json::Value &r) {
             p.set_value(r);
         });
         if (f.wait_for(std::chrono::seconds(30)) == std::future_status::timeout)
-        {
-            throw std::runtime_error("TIMEOUT refreshing with rt2");
-        }
-        auto refresh2 = f.get();
-        CHECK(!refresh2.isMember("error"));
-        CHECK(refresh2.isMember("access_token"));
-        CHECK(refresh2.isMember("refresh_token"));
-        CHECK(refresh2["refresh_token"].asString() != rt2);  // Rotated again
+            throw std::runtime_error("TIMEOUT refreshing revoked family");
+        auto rejected = f.get();
+        CHECK(rejected["error"].asString() == "invalid_grant");
+        CHECK(!rejected.isMember("access_token"));
+        CHECK(!rejected.isMember("refresh_token"));
     }
 }

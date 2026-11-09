@@ -624,54 +624,56 @@ void TokenEndpointController::introspect(
 
                     Json::Value response;
                     response["active"] = active;
-                    response["client_id"] = introspection->clientId;
-                    response["token_type"] = "Bearer";
+                    if (active)
+                    {
+                        response["client_id"] = introspection->clientId;
+                        response["token_type"] = "Bearer";
 
-                    if (introspection->exp > 0)
-                    {
-                        response["exp"] = static_cast<Json::Int64>(introspection->exp);
+                        if (introspection->exp > 0)
+                        {
+                            response["exp"] = static_cast<Json::Int64>(introspection->exp);
+                        }
+                        if (introspection->iat > 0)
+                        {
+                            response["iat"] = static_cast<Json::Int64>(introspection->iat);
+                        }
+                        if (introspection->nbf > 0)
+                        {
+                            response["nbf"] = static_cast<Json::Int64>(introspection->nbf);
+                        }
+                        if (!introspection->sub.empty())
+                        {
+                            response["sub"] = introspection->sub;
+                        }
+                        // v1.4.0 M1 (design §2.1 item 4): the token's org binding.
+                        if (introspection->orgId.has_value())
+                        {
+                            response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
+                        }
+                        if (!introspection->aud.empty())
+                        {
+                            response["aud"] = introspection->aud;
+                        }
+                        if (!introspection->iss.empty())
+                        {
+                            response["iss"] = introspection->iss;
+                        }
+                        else
+                        {
+                            // F-016: backfill from the configured issuer when the
+                            // storage row carries none (legacy rows / backends that
+                            // never persisted issuer), so introspection iss is always
+                            // byte-identical to the discovery document's issuer.
+                            const auto &cfgIssuer =
+                              ::drogon::app().getPlugin<::OAuth2Plugin>()->getIssuer();
+                            if (!cfgIssuer.empty())
+                                response["iss"] = cfgIssuer;
+                        }
+                        if (!introspection->scope.empty())
+                        {
+                            response["scope"] = introspection->scope;
+                        }
                     }
-                    if (introspection->iat > 0)
-                    {
-                        response["iat"] = static_cast<Json::Int64>(introspection->iat);
-                    }
-                    if (introspection->nbf > 0)
-                    {
-                        response["nbf"] = static_cast<Json::Int64>(introspection->nbf);
-                    }
-                    if (!introspection->sub.empty())
-                    {
-                        response["sub"] = introspection->sub;
-                    }
-                    // v1.4.0 M1 (design §2.1 item 4): the token's org binding.
-                    if (introspection->orgId.has_value())
-                    {
-                        response["org_id"] = static_cast<Json::Int64>(*introspection->orgId);
-                    }
-                    if (!introspection->aud.empty())
-                    {
-                        response["aud"] = introspection->aud;
-                    }
-                    if (!introspection->iss.empty())
-                    {
-                        response["iss"] = introspection->iss;
-                    }
-                    else
-                    {
-                        // F-016: backfill from the configured issuer when the
-                        // storage row carries none (legacy rows / backends that
-                        // never persisted issuer), so introspection iss is always
-                        // byte-identical to the discovery document's issuer.
-                        const auto &cfgIssuer =
-                          ::drogon::app().getPlugin<::OAuth2Plugin>()->getIssuer();
-                        if (!cfgIssuer.empty())
-                            response["iss"] = cfgIssuer;
-                    }
-                    if (!introspection->scope.empty())
-                    {
-                        response["scope"] = introspection->scope;
-                    }
-
                     auto resp = ::drogon::HttpResponse::newHttpJsonResponse(response);
                     resp->setStatusCode(::drogon::k200OK);
                     // F-019 (RFC 7667 §2.2): introspection responses carry token
@@ -691,40 +693,27 @@ void TokenEndpointController::introspect(
                 // was soft-deleted (the delete cascade suspends the owners
                 // row) introspects as inactive — read-only, zero write
                 // amplification, V9 bulk-revocation red line untouched.
-                // Postgres-only; every failure degrades to the current
-                // behavior (active). Suspension via open-platform moderation
+                // Postgres-only; unavailable owner state fails closed.
+                // Suspension via open-platform moderation
                 // rides the same status channel and now also deactivates
                 // outstanding tokens at introspection time.
                 {
                     auto *p = ::drogon::app().getPlugin<::OAuth2Plugin>();
                     if (p != nullptr && p->getStorageType() != "memory")
                     {
-                        ::drogon::orm::DbClientPtr db;
-                        try
-                        {
-                            db = ::drogon::app().getDbClient();
-                        }
-                        catch (...)
-                        {
-                        }
                         // P1-5 benchmark follow-up: the owner lookup rides
-                        // the plugin's 3s-TTL cache (write-path invalidated
+                        // the plugin's 60s-budget cache (write-path invalidated
                         // from open-platform suspend/resume and the org
                         // soft-delete cascade) instead of hitting
                         // oauth2_client_owners on every introspection.
                         auto sharedFinish =
                           std::make_shared<std::function<void(bool)>>(std::move(respondWith));
-                        p->lookupOwnerStatus(
+                        p->lookupOwnerStatusChecked(
                           introspection->clientId,
-                          [sharedFinish](std::optional<std::string> status) {
-                              // nullopt (no row / lookup failure) keeps the
-                              // current behavior (active) — the overlay only
-                              // ever DEACTIVATES on a positive suspended
-                              // verdict.
-                              const bool suspended =
-                                status.has_value() && *status != "active";
-                              (*sharedFinish)(!suspended);
-                          });
+                          [sharedFinish](fulla::drogon::OwnerStatusResult status) {
+                              (*sharedFinish)(status.permitsIntrospection());
+                          }
+                        );
                         return;
                     }
                     respondWith(true);

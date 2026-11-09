@@ -19,10 +19,10 @@
 //    cache key can only be populated by getAccessToken/saveAccessToken, which
 //    are access-token-only — so its presence proves the token is an access
 //    token.
-//  - C7: the access-cache TTL is min(remaining_lifetime, 60s); a write is
-//    skipped when remaining ≤ 0 (Redis rejects EX ≤ 0; an already-expired
-//    token is not worth caching anyway).
-//  - revokeAccessToken sets token:revoked:{hash} (60s, N3 fixed) BEFORE
+//  - C7: the absolute fill budget starts before the read; it is capped by
+//    remaining lifetime and the configured maximum (default 60s). Lua checks
+//    revocation and deadline atomically with EXAT, including delayed fills.
+//  - revokeAccessToken sets token:revoked:{hash} (at least the TTL cap) BEFORE
 //    DEL-ing token:access/token:introspect, so a re-population race is
 //    corrected on the next read (negative-cache-before-DEL, §5.4).
 //  - G1: revokeTokenFamily is a pure pass-through (TTL-bounded convergence,
@@ -47,13 +47,37 @@ using RedisCachedTokenRepositoryBase = ::fulla::oauth2::repository::ITokenReposi
  * @brief Redis L2 cache decorator for ITokenRepository (design #42 Phase 2).
  *
  * Caches getAccessToken + introspectToken (access-token-only, via the N2
- * discriminator). Every Redis operation soft-fails to the wrapped impl on
- * null client / miss / error. Callbacks fire exactly once (atomic guard).
+ * discriminator). Initial errors/misses use the authoritative repository;
+ * guarded-fill failures and the five-second local deadline reject the read.
+ * Completion fires once and releases the callback even if Redis queues forever.
  */
 class RedisCachedTokenRepository : public RedisCachedTokenRepositoryBase,
                                    public std::enable_shared_from_this<RedisCachedTokenRepository>
 {
   public:
+    void inspectRefreshToken(
+      const std::string &token,
+      const std::string &clientId,
+      RefreshResultCallback &&cb
+    ) override
+    {
+        impl_->inspectRefreshToken(token, clientId, std::move(cb));
+    }
+
+    void rotateRefreshToken(
+      const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+      const ::fulla::oauth2::model::OAuth2AccessToken &at,
+      const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+      RefreshResultCallback &&cb
+    ) override
+    {
+        impl_->rotateRefreshToken(expected, at, rt, std::move(cb));
+    }
+
+    void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override
+    {
+        impl_->revokeTokenFamilyChecked(familyId, std::move(cb));
+    }
     RedisCachedTokenRepository(
       std::shared_ptr<RedisCachedTokenRepositoryBase> impl,
       ::drogon::nosql::RedisClientPtr redisClient,

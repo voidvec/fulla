@@ -221,6 +221,20 @@ add_test(NAME OAuth2Tests COMMAND ${PROJECT_NAME} WORKING_DIRECTORY $<TARGET_FIL
 # Contract` runs exactly this set, `ctest -L Contract -E Postgres` can
 # exclude backend tiers, etc.
 set(FULLA_CONTRACT_TEST_NAMES
+    # Refresh rotation, transactional failures and family serialization.
+    Integration_P0_RefreshRotation_Memory_Bindings
+    Integration_P0_RefreshRotation_Postgres_Bindings
+    Integration_P0_RefreshRotation_Memory_PairFailureRollback
+    Integration_P0_RefreshRotation_Postgres_PairFailureRollback
+    Integration_P0_RefreshRotation_Memory_ConcurrentAndFamilyRevoke
+    Integration_P0_RefreshRotation_Postgres_ConcurrentAndFamilyRevoke
+    Integration_P0_RefreshRotation_Postgres_DeferredCommitRejection
+    Integration_P0_RefreshRotation_Postgres_MissingBackendIsStorageError
+    Integration_P0_RefreshRotation_Postgres_ExpiryWhileWaitingForFamilyLock
+    Integration_P0_RefreshRotation_Postgres_RevokeWaitsForPairCommit
+    Integration_P0_RefreshRotation_Memory_CleanupRetainsFamilyReachability
+    Integration_P0_RefreshRotation_Postgres_CleanupRetainsFamilyReachability
+    Integration_P0_RefreshRotation_Postgres_FamilyCommitRejectionRollsBackBothTables
     # ClientRepositoryContractTest.cc
     Integration_P0_Contract_Functional_ClientRepository_Postgres_NotFoundReturnsNullopt
     Integration_P0_Contract_Functional_ClientRepository_Postgres_PublicClientAcceptsAnySecret
