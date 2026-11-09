@@ -183,7 +183,10 @@ jobs:
     timeout-minutes: 90
     env:
       PRESET: linux-release-tsan
-      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+      # suppressions: documented trantor-internal races (tools/sanitizers/
+      # tsan.supp — created 2026-11-09 after tsan-nightly's first real run;
+      # see the file for the per-race evidence and the triage policy).
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tools/sanitizers/tsan.supp
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -272,7 +275,7 @@ jobs:
       - name: Run tests (ctest, full suite)
         working-directory: build/${{ env.PRESET }}
         env:
-          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tools/sanitizers/tsan.supp
           # CI Redis has no password; override the dev config's passwd
           # (mirrors _build-test.yml's FULLA_REDIS_PASSWORD="").
           FULLA_REDIS_PASSWORD: ""

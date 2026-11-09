@@ -226,9 +226,21 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
     // same repo IdentityService::getInternalUserId used in the old inline path.
     subjectResolver_ =
       std::make_shared<fulla::drogon::adapters::StorageSubjectResolver>(subjectMappingRepo_);
-    authorizationService_ = std::make_shared<fulla::oauth2::protocol::AuthorizationService>(
-      clientRepo_, consentRepo_, subjectResolver_, roleProvider_
-    );
+    // TSan 2026-11-09: the assignment itself is inside the adminScopesMu_
+    // handshake — the admin-scope DbLoop callback (initStorage, issued at
+    // :75) reads this member under the same lock, and any set it stashed
+    // before the service existed is flushed here.
+    {
+        std::lock_guard<std::mutex> lock(adminScopesMu_);
+        authorizationService_ = std::make_shared<fulla::oauth2::protocol::AuthorizationService>(
+          clientRepo_, consentRepo_, subjectResolver_, roleProvider_
+        );
+        if (!pendingAdminScopes_.empty())
+        {
+            authorizationService_->setAdminScopes(pendingAdminScopes_);
+            pendingAdminScopes_.clear();
+        }
+    }
 
     // Defect 1.3 fix: services now share ownership of storage_ (shared_ptr),
     // so the storage lifetime is guaranteed to cover every service instead of
@@ -708,6 +720,14 @@ void OAuth2Plugin::initStorage(const Json::Value &config)
               // (process-level singleton, bare-pointer managed by Drogon,
               // lifetime spans the entire process run). Same pattern as
               // the other plugin callbacks in this file.
+              //
+              // TSan 2026-11-09: this query is issued from initStorage
+              // (:75) but authorizationService_ is constructed ~150 lines
+              // later in initAndStart — the DbLoop callback used to read
+              // the member unsynchronized AND silently drop the loaded set
+              // when it arrived first. The mutex-ordered handshake: stash
+              // the set as pending if the service does not exist yet; the
+              // constructor site flushes it under the same lock.
               [this](const std::vector<drogon_model::fulla_db::Oauth2Scopes> &rows) {
                   std::unordered_set<std::string> adminScopes;
                   adminScopes.reserve(rows.size());
@@ -715,12 +735,15 @@ void OAuth2Plugin::initStorage(const Json::Value &config)
                       adminScopes.insert(row.getValueOfName());
                   LOG_INFO << "Loaded " << adminScopes.size()
                            << " admin-scoped entries from DB (oauth2_scopes.requires_admin_role)";
-                  if (authorizationService_)
-                      authorizationService_->setAdminScopes(adminScopes);
                   // P1-8 chain②: the same set backs IdentityService's
                   // scopeRequiresAdminRole (was a hardcoded list).
                   fulla::identity::IdentityService::setAdminScopeClass(
                     std::unordered_set<std::string>(adminScopes));
+                  std::lock_guard<std::mutex> lock(adminScopesMu_);
+                  if (authorizationService_)
+                      authorizationService_->setAdminScopes(adminScopes);
+                  else
+                      pendingAdminScopes_ = std::move(adminScopes);
               },
               [](const drogon::orm::DrogonDbException &e) {
                   LOG_ERROR << "OAuth2Plugin: failed to load admin scopes from DB ("

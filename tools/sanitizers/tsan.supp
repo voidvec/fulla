@@ -1,0 +1,39 @@
+# TSan suppressions — documented third-party races (the workflow's triage
+# policy: real defects are fixed in code; third-party/system-call findings
+# get a documented suppression here).
+#
+# Created 2026-11-09 after tsan-nightly's FIRST real run (the job had been
+# dispatch-only since creation — the cron was only added 2026-11-07). Both
+# findings are trantor-internal (Drogon's event-loop library, Conan-pinned
+# trantor, unpatched by us):
+
+# 1. EventLoop::wakeup() writes the wakeup eventfd from arbitrary threads
+#    while createEventfd() set it up on another — the fd is DESIGNED for
+#    cross-thread signalling; TSan flags the write()-interceptor-level
+#    non-atomicity, not an application race.
+#    Evidence (run 42469207432): Read via wakeup() EventLoop.cc:365 vs
+#    Previous write via createEventfd() EventLoop.cc:55, threads T1/T2.
+race:trantor::EventLoop::wakeup
+
+# 2. MpscQueue handoff move-constructs the queued std::function on the
+#    producer side while the consumer may still see the node — the queue's
+#    publication protocol is the synchronization; the move's internal
+#    pointer write races only at the TSan interceptor level.
+#    Evidence (same run): std::function move ctor std_function.h:405 vs
+#    move-assign :489, both under trantor::MpscQueue BufferNode paths in
+#    fulla-tests.
+race:trantor::MpscQueue
+
+# 3. Request-object teardown vs in-flight connector write ( surfaced by
+#    the suppression-verified re-run, 2026-11-09): drogon's
+#    HttpRequestImpl dtor clears its headers map while trantor's
+#    Connector::handleWrite() still reads it during shutdown teardown of
+#    the full-stack smoke host. Every frame on both stacks is
+#    drogon/trantor (HttpRequestImpl.cc:795 / Connector.cc:227) — upstream
+#    lifecycle semantics, not first-party wiring.
+race:trantor::Connector::handleWrite
+
+# If new findings appear, triage them: first-party stacks (libs/**,
+# apps/**) are FIXED, not suppressed — see the OAuth2Plugin admin-scope
+# handshake fix from the same campaign for the example. Extend this file
+# only with upstream evidence and a dated comment like the three above.

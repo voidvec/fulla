@@ -1,6 +1,6 @@
 // api-diff baseline -- Fulla SDK public header skeletons.
 // Regenerate ONLY via: python tools/api-diff/api_diff.py --update-baseline
-// version: 1.5.0
+// version: 1.6.0
 === libs/common/include/fulla/common/config/ConfigManager.h
 #pragma once
 #include <string>
@@ -3702,6 +3702,8 @@ std::shared_ptr<fulla::common::ports::IAuditSink> auditSink_;
 std::shared_ptr<fulla::common::ports::IMetrics> metrics_;
 std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
 std::shared_ptr<fulla::oauth2::protocol::AuthorizationService> authorizationService_;
+std::mutex adminScopesMu_;
+std::unordered_set<std::string> pendingAdminScopes_;
 std::string storageType_;
 std::string issuer_;
 long long authCodeTtl_{600};
