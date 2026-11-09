@@ -537,7 +537,7 @@ void RedisCachedTokenRepository::revokeAccessToken(
               },
               "SET %s 1 EX %d",
               revokedKey.c_str(),
-              std::max(60, self->accessTokenMaxTtlSeconds_)
+              std::max<int>(60, self->accessTokenMaxTtlSeconds_)
             );
             // DEL positive entries (double-delete, failure-observable).
             invalidateWithDoubleDelete(
