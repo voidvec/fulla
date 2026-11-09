@@ -22,10 +22,9 @@
 //
 // Concurrency: saveConsent serializes GRANTS per (org, client) with an
 // advisory transaction lock (#219 / R-M2-5 key
-// "orgconsent:<org_id>:<client_id>"). revokeClientConsents deliberately
-// takes no lock: it is one atomic batch UPDATE, and a grant racing a
-// revoke resolves last-writer-wins per row (the end state is exactly
-// one of the two intents, never a mix -- O4 semantics unaffected).
+// "orgconsent:<org_id>:<client_id>"). Pair revocation and request approval
+// share this lock, so a revoke cannot miss a scope inserted by an in-flight
+// multi-scope approval. Successful writes report only after COMMIT.
 
 #include <drogon/orm/DbClient.h>
 

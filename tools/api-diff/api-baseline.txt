@@ -7085,6 +7085,31 @@ private:
 ::drogon::orm::DbClientPtr dbClient_;
 };
 }
+=== libs/storage-postgres/include/fulla/storage/postgres/OrgConsentDecisionResult.h
+#pragma once
+#include <cstdint>
+#include <string>
+#include <vector>
+namespace fulla::storage::postgres
+{
+enum class OrgConsentDecisionStatus
+{
+Approved,
+AlreadyApproved,
+Rejected,
+NotFound,
+Forbidden,
+Conflict,
+StorageError
+};
+struct OrgConsentDecisionResult
+{
+OrgConsentDecisionStatus status = OrgConsentDecisionStatus::StorageError;
+int32_t requestId = 0;
+std::string clientId;
+std::vector<std::string> scopes;
+};
+}
 === libs/storage-postgres/include/fulla/storage/postgres/OrgConsentRepository.h
 #pragma once
 #include <drogon/orm/DbClient.h>
@@ -7132,6 +7157,7 @@ private:
 === libs/storage-postgres/include/fulla/storage/postgres/OrgConsentRequestRepository.h
 #pragma once
 #include <drogon/orm/DbClient.h>
+#include <fulla/storage/postgres/OrgConsentDecisionResult.h>
 #include <fulla/storage/postgres/models/OrganizationConsentRequests.h>
 #include <fulla/storage/postgres/models/OrganizationMembers.h>
 #include <functional>
@@ -7150,6 +7176,15 @@ std::function<void(bool found, ::drogon_model::fulla_db::OrganizationConsentRequ
 using CountCallback = std::function<void(std::size_t)>;
 using BoolCallback = std::function<void(bool)>;
 explicit OrgConsentRequestRepository(::drogon::orm::DbClientPtr dbClient);
+using DecisionCallback = std::function<void(OrgConsentDecisionResult)>;
+void decideAtomically(
+int32_t orgId,
+int32_t requestId,
+int32_t actorId,
+bool approve,
+const std::string &reason,
+DecisionCallback &&cb
+);
 void fileRequest(
 int32_t orgId,
 const std::string &clientId,

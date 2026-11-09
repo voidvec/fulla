@@ -1,3 +1,4 @@
+#include "../common/OnceResponse.h"
 #include "ApplicationService.h"
 #include "OpenPlatformConfig.h"
 
@@ -23,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
 
@@ -823,122 +825,160 @@ void insertApplication(
 // ---------------------------------------------------------------------------
 void ApplicationService::list(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
 {
-    std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
+    auto completion = ::fulla::server::detail::makeOnceResponse(req, std::move(cb));
+    cb = completion.callback;
+    const auto done = completion.completed;
+    const auto userIdAttr = req->getAttributes()->get<std::string>("userId");
     auto db = getDbOrRespond(req, cb);
     if (!db)
         return;
-
-    resolveCaller(db, userIdAttr, req, cb,
-      [req, cb, db](bool found, const ResolvedUser &caller) {
-          if (!found)
+    resolveCaller(
+      db, userIdAttr, req, cb, [req, cb, db, done](bool found, const ResolvedUser &caller) {
+          if (!found || done->load())
               return;
           try
           {
               Mapper<MemberModel>(db).findBy(
                 Criteria(MemberModel::Cols::_user_id, CompareOperator::EQ, caller.id),
-                [req, cb, db, caller](const std::vector<MemberModel> &memberships) {
+                [req, cb, db, caller, done](const std::vector<MemberModel> &memberships) {
+                    if (done->load())
+                        return;
                     std::vector<int32_t> managerOrgIds;
-                    for (const auto &m : memberships)
-                        if (isManagerRole(m.getValueOfRole()))
-                            managerOrgIds.push_back(m.getValueOfOrganizationId());
-
-                    auto merged = std::make_shared<std::map<std::string, OwnerModel>>();
-                    auto pending = std::make_shared<int>(1 + (managerOrgIds.empty() ? 0 : 1));
-                    // Review minor: if one parallel findOwners fails AFTER
-                    // the other already responded, the error callback would
-                    // emit a second response — guard every emission.
-                    auto responded = std::make_shared<bool>(false);
-                    auto guardedRespond =
-                      [cb, responded](const ::drogon::HttpResponsePtr &r) {
-                          if (*responded)
-                          {
-                              LOG_WARN << "applications list: suppressing duplicate response";
-                              return;
-                          }
-                          *responded = true;
-                          (*cb)(r);
-                      };
-                    auto finish = std::make_shared<std::function<void()>>();
-                    *finish = [req, cb, guardedRespond, db, merged]() {
-                        // Error paths route through the same guard so a
-                        // late failure can't double-respond after a success.
-                        auto guardedCb = std::make_shared<ResponseCallback::element_type>(
-                          guardedRespond);
-                        if (merged->empty())
+                    for (const auto &member : memberships)
+                        if (isManagerRole(member.getValueOfRole()))
+                            managerOrgIds.push_back(member.getValueOfOrganizationId());
+                    using Owners = std::map<std::string, OwnerModel>;
+                    struct Collection
+                    {
+                        std::mutex mutex;
+                        int pending = 0;
+                        Owners rows;
+                    };
+                    auto state = std::make_shared<Collection>();
+                    state->pending = managerOrgIds.empty() ? 1 : 2;
+                    auto finish = [req, cb, db, done](Owners rows) {
+                        if (done->load())
+                            return;
+                        if (rows.empty())
                         {
                             Json::Value json;
                             json["applications"] = Json::Value(Json::arrayValue);
                             json["total"] = 0;
-                            guardedRespond(::drogon::HttpResponse::newHttpJsonResponse(json));
+                            (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
                             return;
                         }
+                        auto snapshot = std::make_shared<const Owners>(std::move(rows));
                         std::vector<std::string> clientIds;
-                        for (const auto &kv : *merged)
-                            clientIds.push_back(kv.first);
+                        for (const auto &entry : *snapshot)
+                            clientIds.push_back(entry.first);
                         try
                         {
                             Mapper<ClientModel>(db).findBy(
-                              Criteria(ClientModel::Cols::_client_id, CompareOperator::In, clientIds) &&
+                              Criteria(
+                                ClientModel::Cols::_client_id, CompareOperator::In, clientIds
+                              ) &&
                                 Criteria(ClientModel::Cols::_deleted_at, CompareOperator::IsNull),
-                              [req, guardedRespond, merged](const std::vector<ClientModel> &clients) {
+                              [cb, snapshot](const std::vector<ClientModel> &clients) {
                                   Json::Value json;
-                                  Json::Value arr(Json::arrayValue);
-                                  for (const auto &c : clients)
+                                  Json::Value applications(Json::arrayValue);
+                                  for (const auto &client : clients)
                                   {
-                                      auto it = merged->find(c.getValueOfClientId());
-                                      if (it == merged->end())
-                                          continue;
-                                      arr.append(appJsonFromRow(c, it->second));
+                                      auto owner = snapshot->find(client.getValueOfClientId());
+                                      if (owner != snapshot->end())
+                                          applications.append(
+                                            appJsonFromRow(client, owner->second)
+                                          );
                                   }
-                                  json["applications"] = arr;
-                                  json["total"] = static_cast<int>(arr.size());
-                                  guardedRespond(::drogon::HttpResponse::newHttpJsonResponse(json));
+                                  json["applications"] = std::move(applications);
+                                  json["total"] = static_cast<int>(json["applications"].size());
+                                  (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
                               },
-                              [req, guardedCb](const DrogonDbException &e) {
-                                  respondError(req, guardedCb, "DB_QUERY_ERROR",
-                                    std::string("application query failed: ") + e.base().what());
+                              [req, cb](const DrogonDbException &e) {
+                                  respondError(
+                                    req,
+                                    cb,
+                                    "DB_QUERY_ERROR",
+                                    std::string("application query failed: ") + e.base().what()
+                                  );
                               }
+                            );
+                        }
+                        catch (const std::exception &)
+                        {
+                            respondError(
+                              req,
+                              cb,
+                              "DB_QUERY_ERROR",
+                              "application query: Mapper construction failed"
                             );
                         }
                         catch (...)
                         {
-                            respondError(req, guardedCb, "DB_QUERY_ERROR",
-                              "application query: Mapper construction failed");
+                            respondError(
+                              req,
+                              cb,
+                              "DB_QUERY_ERROR",
+                              "application query: Mapper construction failed"
+                            );
                         }
                     };
-
-                    findOwners(db,
-                      Criteria(OwnerModel::Cols::_creator_user_id, CompareOperator::EQ, caller.id) &&
+                    auto collect = [state, finish, done](const std::vector<OwnerModel> &rows) {
+                        Owners snapshot;
+                        {
+                            std::lock_guard<std::mutex> lock(state->mutex);
+                            if (done->load() || state->pending == 0)
+                                return;
+                            for (const auto &owner : rows)
+                                state->rows[owner.getValueOfClientId()] = owner;
+                            if (--state->pending != 0)
+                                return;
+                            snapshot.swap(state->rows);
+                        }
+                        finish(std::move(snapshot));
+                    };
+                    // Every branch, including findOwners' error path, receives
+                    // the same atomic completion sink created at entry.
+                    findOwners(
+                      db,
+                      Criteria(
+                        OwnerModel::Cols::_creator_user_id, CompareOperator::EQ, caller.id
+                      ) &&
                         Criteria(OwnerModel::Cols::_org_id, CompareOperator::IsNull),
-                      req, cb, [merged, pending, finish](const std::vector<OwnerModel> &rows) {
-                          for (const auto &r : rows)
-                              (*merged)[r.getValueOfClientId()] = r;
-                          if (--(*pending) == 0)
-                              (*finish)();
-                      });
+                      req,
+                      cb,
+                      collect
+                    );
                     if (!managerOrgIds.empty())
-                    {
-                        findOwners(db,
+                        findOwners(
+                          db,
                           Criteria(OwnerModel::Cols::_org_id, CompareOperator::In, managerOrgIds),
-                          req, cb, [merged, pending, finish](const std::vector<OwnerModel> &rows) {
-                              for (const auto &r : rows)
-                                  (*merged)[r.getValueOfClientId()] = r;
-                              if (--(*pending) == 0)
-                                  (*finish)();
-                          });
-                    }
+                          req,
+                          cb,
+                          collect
+                        );
                 },
                 [req, cb](const DrogonDbException &e) {
-                    respondError(req, cb, "DB_QUERY_ERROR",
-                      std::string("memberships lookup failed: ") + e.base().what());
+                    respondError(
+                      req,
+                      cb,
+                      "DB_QUERY_ERROR",
+                      std::string("memberships lookup failed: ") + e.base().what()
+                    );
                 }
+              );
+          }
+          catch (const std::exception &)
+          {
+              respondError(
+                req, cb, "DB_QUERY_ERROR", "memberships lookup: Mapper construction failed"
               );
           }
           catch (...)
           {
               respondError(req, cb, "DB_QUERY_ERROR", "memberships lookup: Mapper construction failed");
           }
-      });
+      }
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -2051,7 +2051,7 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   immediately when membership ends.
 - **Organization consents (v1.4.0)**: when a member authorizes an org-owned
   application, the grant is recorded on the **organization** (admin-level
-  rows in `organization_consents`); members can review and revoke grants on
+  rows in `organization_consents`); owners/admins can review and revoke grants on
   the portal's "Org authorizations" page
   (`GET /api/me/organizations/{slug}/consents`,
   `DELETE /api/me/organizations/{slug}/consents/{clientId}`).
@@ -2069,6 +2069,47 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   stays the client id).
 - **No migration cliff**: everything is optional and additive; deployments
   that don't care about orgs never touch it.
+
+### 3.1. Consent decisions, retries and recovery
+
+`POST /api/me/organizations/{slug}/consent-requests/{id}/approve` commits the
+registered scope snapshot, the request decision and visible pending sibling
+requests in one transaction. A successful response confirms the whole commit;
+there is no background tail that still needs to materialize scopes. An empty
+registered scope set still commits the decision. Rejection uses the same
+serialization and rechecks the pending state before committing.
+
+The transaction rechecks that the organization is live and the acting user is
+still an owner/admin member. Organization lifecycle and per-organization
+request decisions serialize; grants and pair revocation share the existing
+`orgconsent:<org>:<client>` lock. Member removal/demotion and withdrawal cannot
+turn a stale precheck into a new grant. The scope list is the snapshot read
+inside this transaction, without a new global isolation promise for unrelated
+client editing workflows. The organization-consent union and owner succession
+policies remain unchanged; revocation affects future authorizations and does
+not revoke already-issued tokens.
+
+Repeating an approved request with any active grant is a 200 no-op. It never
+adds scopes registered after the original decision. This also means a legacy
+partially materialized grant is not silently expanded. For controlled repair,
+a current manager must review the client's current scopes, explicitly revoke
+the entire organization/client grant through the existing DELETE consent API,
+and explicitly approve the old approved request again. With no active rows,
+that reapproval restores the current scope snapshot without duplicate rows.
+These are two separate operations: authorization can be absent between them,
+and failure must be retried through the same current-manager checks.
+
+Database failures and unconfirmed commits return an error. Approve/reject and
+application listing have a ten-second local HTTP completion deadline and one
+response sink, including parallel query failures. The actual steady deadline
+is checked when completing; a delayed event-loop timer cannot let a late
+success through. Hosts must run the Drogon event loop. This deadline does not
+cancel or prove rollback of an in-flight database commit: the database may
+still fully commit or roll back. Inspect persisted grants and use the existing
+idempotent approval path to recover; do not infer rollback from a 500/timeout.
+A late confirmed decision can still produce its audit event, but cannot send
+a second HTTP response. Direct C++ repository consumers configure their own
+DbClient timeouts; this HTTP deadline is not a new SDK-wide timeout guarantee.
 
 ## 4. What it does NOT do yet (roadmap)
 

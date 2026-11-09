@@ -88,7 +88,7 @@ curl -X POST http://localhost:5555/api/admin/organizations \
   该绑定沿授权码→令牌链流转，携带 `org` scope 签发的令牌带有 **`org_ctx` 声明**
   （userinfo / id_token），成员资格一旦终止即不再携带。
 - **组织授权（organization consent，v1.4.0）**：成员授权组织拥有的应用时，授权记录在
-  **组织**上（`organization_consents` 中的管理级记录）；成员可在门户的"组织授权"页
+  **组织**上（`organization_consents` 中的管理级记录）；owner/admin 可在门户的"组织授权"页
   查看并撤销（`GET /api/me/organizations/{slug}/consents`、
   `DELETE /api/me/organizations/{slug}/consents/{clientId}`）。
 - **授权申请工作流（consent request，v1.4.0，#236）**：非 owner 成员可提交组织授权
@@ -100,6 +100,34 @@ curl -X POST http://localhost:5555/api/admin/organizations \
 - **组织锚定的客户端凭据（v1.4.0）**：组织拥有的应用的 client_credentials 令牌携带
   `org_id` 声明（subject 仍是 client id）。
 - **无迁移断崖**：一切都是可选、增量式的；不关心组织的部署完全不碰它。
+
+### 3.1. 授权决定、重试与恢复
+
+`POST /api/me/organizations/{slug}/consent-requests/{id}/approve` 在一个事务中
+提交注册 scope 快照、目标申请的决定和当时可见的同组待处理申请。成功响应确认整组提交，
+不存在还要等待后台写入的尾部 scope。注册 scope 为空时仍提交决定。拒绝使用相同串行化
+边界，并在提交前复核 pending 状态。
+
+事务内重新确认组织未删除，执行审批的用户仍是 owner/admin 成员。组织生命周期和同组织
+的申请决定串行化；授权写入和整组撤销共用现有 `orgconsent:<org>:<client>` 锁。
+成员移除、降权或申请撤回不会让过时的前置检查变成新授权。scope 集合取自事务内读取的
+快照，不额外承诺与其他客户端编辑流程全局隔离。组织授权联集和 owner 继任政策保持
+不变；撤销影响未来授权，不撤销已经签发的令牌。
+
+重复批准时，只要已有任一 active 授权，就返回 200 no-op，不补入原决定之后新增的
+注册 scope。因此，历史上只落地部分 scope 的授权也不会被默默扩展。受控修复由当前
+manager 先检查客户端当前 scope，使用现有 DELETE 授权 API 明确撤销该组织/客户端的
+整组授权，再明确重批原 approved 申请。零 active 行时，重批恢复当前 scope 快照且
+不产生重复行。这是两个独立操作，中间可以没有授权；失败重试仍必须通过当前 manager
+权限复核。
+
+数据库错误和未确认提交返回失败。批准、拒绝和应用列表具有十秒本地 HTTP 完成期限，
+并行查询错误也只经过一个响应出口。完成时同时检查实际 steady 截止时间，事件循环的
+迟到 timer 不能让迟到成功通过；宿主必须运行 Drogon 事件循环。这一期限不取消也不能
+证明在途提交已回滚：数据库可能完整提交或完整回滚。应检查持久化授权，并通过现有
+幂等批准路径恢复，不能由 500/超时推断回滚。迟到的已确认决定仍可记录审计，但不能
+二次响应。直接调用 C++ 仓储的宿主自行配置 DbClient timeout；HTTP 期限不等于新增
+全 SDK 超时承诺。
 
 ## 4. 还没有的（路线图）
 
