@@ -9,17 +9,21 @@ This document describes the system's security threat model and the corresponding
 | **Replay Attack** | An attacker intercepts an auth code and attempts to redeem it before or after the legitimate client. | **Atomic Consume** + **One-Time Use Enforcement**. | [Data Consistency](data-persistence.md) |
 | **Credential Leakage** | A database breach leaks client secrets. | **SHA256 Salted Hash**. The database stores only hashes, never plaintext. | [Data Persistence](data-persistence.md) |
 | **Token Theft** | An access token is intercepted. | **Short-lived Token** (1 hour) + **Refresh Token Rotation**. | This document |
-| **CSRF** | An attacker tricks a user into an unintended authorization. | OAuth clients must validate the returned **state**. Third-party login currently has a separate limitation (see below). | [API Reference](../domains/api-reference.md) |
+| **CSRF** | An attacker tricks a user into an unintended authorization. | OAuth clients must validate the returned **state**. Third-party login enforces its own browser-bound state (see below). | [API Reference](../domains/api-reference.md) |
 
-### Current third-party login limitation
+### Third-party login state binding
 
-The GitHub/Google/WeChat login discovery flow currently emits authorize URLs
-without a browser-bound state. Do not interpret the OAuth-client state guidance
-above as protection for these extension endpoints. Track the hardening work in
-[issue #249](https://github.com/voidvec/fulla/issues/249); deployments requiring
-login-CSRF protection should disable these providers until the bound-state
-flow is implemented and verified. Account linking uses a separate one-time
-state flow.
+GitHub/Google/WeChat login requires a browser-bound, one-time state before any
+upstream exchange or account write. The authorize flow first initializes an
+HttpOnly `SameSite=Lax` binding cookie (204), then issues a one-time state
+tied to that cookie (200, 600-second TTL). The callback exchange must present
+an allowed `Origin`, the binding cookie and the state, and submits credentials
+only in the request body (JSON or form); query credentials and replayed or
+unsolicited callbacks are rejected, and a mismatched attempt does not consume
+the transaction. Implemented by
+[PR #308](https://github.com/voidvec/fulla/pull/308); hardening tracked in
+[issue #249](https://github.com/voidvec/fulla/issues/249). Account linking
+keeps its separate one-time state flow.
 
 ## 2. Token Lifecycle Management
 

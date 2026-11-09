@@ -9,15 +9,19 @@
 | **Replay Attack** (重放攻击) | 攻击者截获 Auth Code 并在合法客户端之前或之后尝试兑换。 | **Atomic Consume** (原子消费) + **One-Time Use Enforcement**。 | [Data Consistency](data-persistence.md) |
 | **Credential Leakage** (凭据泄露) | 数据库被拖库导致 Client Secret 泄露。 | **SHA256 Salted Hash**。数据库仅存 Hash 值，绝不存明文。 | [Data Persistence](data-persistence.md) |
 | **Token Theft** (令牌窃取) | Access Token 被截获。 | **Short-lived Token** (1小时) + **Refresh Token Rotation** (轮转机制)。 | 本文档 |
-| **CSRF** | 攻击者诱导用户进行非预期的授权。 | OAuth 客户端必须校验返回的 **state**；第三方登录当前另有限制，见下文。 | [API Reference](../domains/api-reference.md) |
+| **CSRF** | 攻击者诱导用户进行非预期的授权。 | OAuth 客户端必须校验返回的 **state**；第三方登录强制执行自身的浏览器绑定 state，见下文。 | [API Reference](../domains/api-reference.md) |
 
-### 当前第三方登录限制
+### 第三方登录 state 绑定
 
-GitHub/Google/微信登录发现流程当前生成的地址不含绑定浏览器的 state，
-不能把上表的 OAuth 客户端 state 要求理解为这些扩展端点已具备同等保护。
-加固工作见 [issue #249](https://github.com/voidvec/fulla/issues/249)；
-需要登录 CSRF 防护的部署应先关闭这些提供方，直到绑定 state 的流程完成并验证。
-账号绑定采用独立的一次性 state 流程。
+GitHub/Google/微信登录在任何上游交换或账号写入之前，都要求绑定浏览器的
+一次性 state。授权流程先初始化 HttpOnly `SameSite=Lax` 绑定 Cookie（204），
+再签发与该 Cookie 绑定的一次性 state（200，600 秒 TTL）。回调交换必须携带
+受允许的 `Origin`、绑定 Cookie 与 state，凭据只能放在请求体（JSON 或表单）
+中提交；query 凭据、重放与主动投递的回调一律拒绝，且不匹配的尝试不会
+消耗掉该次事务。实现见
+[PR #308](https://github.com/voidvec/fulla/pull/308)；加固跟踪见
+[issue #249](https://github.com/voidvec/fulla/issues/249)。账号绑定保持
+独立的一次性 state 流程。
 
 ## 2. Token 生命周期管理
 
