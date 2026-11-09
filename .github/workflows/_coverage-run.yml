@@ -156,14 +156,24 @@ jobs:
         # denominator), correctness is gated elsewhere. Gate mode (master
         # push + nightly, 150 min ceiling): failures propagate — the suite
         # MUST complete for the ratchet numbers to mean anything.
+        #
+        # Regex history (2026-11-09, first gate-leg run): the original
+        # "everything else" filter was -R "^(?!.*OAuth2Tests).*$" — ctest's
+        # regex engine (cmsys) does NOT support negative lookahead; it failed
+        # to compile ("?+* follows nothing"), matched NOTHING, printed "No
+        # tests were found!!!" and still exited 0 — so the 512 non-monolithic
+        # tests (incl. every Contract repository test) never executed on ANY
+        # coverage run, and the ratchet read the missing library-layer data
+        # as regressions (identity 87.1->63.0 etc.). The POSIX-safe form is
+        # ctest's own -E EXCLUDE flag.
         continue-on-error: ${{ env.GATING == 'false' }}
         run: |
           if [ "$GATING" = "true" ]; then
-            ctest -C Debug --output-on-failure --timeout 3600 -R "^(?!.*OAuth2Tests).*$"
-            ctest -C Debug --output-on-failure --timeout 3600 -R "^OAuth2Tests$"
+            ctest -C Debug --output-on-failure --timeout 3600 -E '^OAuth2Tests$'
+            ctest -C Debug --output-on-failure --timeout 3600 -R '^OAuth2Tests$'
           else
-            ctest -C Debug --output-on-failure --timeout 1800 -R "^(?!.*OAuth2Tests).*$" || true
-            ctest -C Debug --output-on-failure --timeout 1800 -R "^OAuth2Tests$" || true
+            ctest -C Debug --output-on-failure --timeout 1800 -E '^OAuth2Tests$' || true
+            ctest -C Debug --output-on-failure --timeout 1800 -R '^OAuth2Tests$' || true
           fi
 
       - name: Generate gcov JSON reports
