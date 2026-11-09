@@ -27,7 +27,8 @@ description: fulla 仓库的 PR/issue/GitHub 工作流——rebase-merge 约定�
   都会触发自动关；漏写 = issue 漏关（#54 实案）。部分解决用 `Addresses #N`（不触发关闭）。
 - 分支清理：rebase-merge 仓库里 `git branch -r --merged origin/master` **永远不显示**已合并
   分支（分支头是重写后的提交）——判定只能用 `gh pr list --state all --head <branch>` 的 PR
-  状态。仓库已开 "Automatically delete head branches"。
+  状态。"Automatically delete head branches" **已失效**（2026-11-09 实测：#306/#319 合并后
+  head 分支仍在）→ 合并后手动 `git push origin --delete <branch>`（先确认无 PR 引用）。
 - **多会话/多 worktree 纪律**：动手前必查 `git branch --show-current` + `git reflog -5`（实案：
   另一会话切分支+reset 导致提交落错链）；主检出停留在用户要求的分支上，不要顺手切 master；
   要在 master 提交而工作区被占用 → `git worktree add $TEMP/xxx origin/master` 独立提交后 remove。
@@ -37,10 +38,18 @@ description: fulla 仓库的 PR/issue/GitHub 工作流——rebase-merge 约定�
 - **push 必须 SSH**（HTTPS 403：credential-manager 旧 token + PAT 无 Contents write）；
   `--force-with-lease` 对 URL 推送须显式钉 `--force-with-lease=<ref>:<expected-oid>`。
 - SSH 到 github.com 间歇超时 → fetch 临时切 HTTPS remote，push 前切回。
-- gh PAT（细粒度）实测定谳：**可用** = issue/PR 创建、PR 评论、`pr close --comment`、全部读；
-  **403** = issue 评论/关闭、PR merge（注：分支保护报错会先于权限报错出现，别误诊）、repo
-  元数据编辑、release 删除/编辑、run rerun。撞 403 → 准备 paste-ready 文案交用户网页操作
-  （用户偏好自己关 issue）。CI 闪失重触发 = 推空提交。
+- gh PAT（细粒度）实测定谳（2026-11-09 复测）：**可用** = issue/PR 创建、PR 评论、
+  `pr close --comment`、全部读、**PR merge**（`pr merge --rebase` 实落 #306/#319/#308）；
+  **403** = issue 评论/关闭、repo 元数据编辑、release 删除/编辑、读分支保护规则
+  （`gh api .../branches/master/protection`）、run rerun（后两项为旧测，撞到先重试再定谳）。
+  撞 403 → 准备 paste-ready 文案交用户网页操作（用户偏好自己关 issue）。
+- merge 的真实阻碍是策略不是权限：draft 要先 `gh pr ready`；"Require branch up to date"
+  对 BEHIND 拒绝（rebase + force-push 解）；**REVIEW_REQUIRED 需外部批准——PR 作者无法自批**
+  （#306 靠 wangrh0909，#308/#319 靠用户网页 Approve）；仓库未开 auto-merge（`--auto` 报
+  GraphQL enablePullRequestAutoMerge 错）。
+- CI 闪失重触发：**close→reopen** 触发 `reopened`（默认类型），不污染提交历史，优于推空
+  提交。注意：push 发生在 PR 改 base **之前**会被 `pull_request: branches: [master]` 过滤，
+  而 base 编辑的 `edited` 事件不在 workflow 默认触发类型里（#319 实案）。
 
 ## 跟踪类 issue 创建规范
 
