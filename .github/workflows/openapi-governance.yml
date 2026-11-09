@@ -45,7 +45,9 @@ jobs:
 
       - name: Install oasdiff (pinned v1.29.1)
         run: |
-          curl -sSfL -o oasdiff.tgz \
+          # --retry-all-errors: GitHub release-asset CDNs intermittently 504
+          # (#308 hit one; the gate never ran). Retry before failing the PR.
+          curl -sSfL --retry 3 --retry-delay 2 --retry-all-errors -o oasdiff.tgz \
             https://github.com/Tufin/oasdiff/releases/download/v1.29.1/oasdiff_1.29.1_linux_amd64.tar.gz
           tar -xzf oasdiff.tgz
           sudo install -m 755 oasdiff /usr/local/bin/oasdiff
