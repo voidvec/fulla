@@ -1,3 +1,4 @@
+#include <atomic>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/filters/OAuth2AuthFilter.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
@@ -1322,72 +1323,133 @@ void OAuth2Plugin::lookupOwnerStatus(
   std::function<void(std::optional<std::string>)> &&cb
 )
 {
-    namespace chrono = std::chrono;
-    // Hot path first: lock, copy the cached answer out, unlock, then
-    // invoke — no allocation before the lock, single lookup.
+    lookupOwnerStatusChecked(
+      clientId,
+      [cb = std::move(cb)](fulla::drogon::OwnerStatusResult result) { cb(std::move(result.value)); }
+    );
+}
+
+void OAuth2Plugin::lookupOwnerStatusChecked(
+  const std::string &clientId,
+  std::function<void(fulla::drogon::OwnerStatusResult)> &&cb
+)
+{
+    using fulla::drogon::OwnerStatusCode;
+    using fulla::drogon::OwnerStatusResult;
+    const auto memo = ownerStatusMemo_;
+    const auto started = std::chrono::steady_clock::now();
+    auto classify = &OwnerStatusResult::fromStatus;
     std::optional<std::optional<std::string>> hit;
     {
-        std::lock_guard<std::mutex> lock(ownerStatusMutex_);
-        auto it = ownerStatusCache_.find(clientId);
-        if (it != ownerStatusCache_.end() &&
-            chrono::steady_clock::now() < it->second.second)
-        {
+        std::lock_guard<std::mutex> lock(memo->ownerStatusMutex_);
+        auto it = memo->ownerStatusCache_.find(clientId);
+        if (it != memo->ownerStatusCache_.end() && started < it->second.second)
             hit = it->second.first;
+    }
+    if (hit)
+    {
+        cb(classify(std::move(*hit)));
+        return;
+    }
+    auto callback = std::make_shared<std::function<void(OwnerStatusResult)>>(std::move(cb));
+    auto gate = std::make_shared<std::mutex>();
+    auto done = std::make_shared<bool>(false);
+    auto timer = std::make_shared<std::atomic<::trantor::TimerId>>(0);
+    auto *loop = ::drogon::app().getLoop();
+    const auto deadline = started + std::chrono::seconds(5);
+    const auto cacheUntil = started + std::chrono::seconds(60);
+    auto complete =
+      [memo, callback, gate, done, timer, loop, deadline, cacheUntil, clientId, metrics = metrics_](
+        OwnerStatusResult result, bool cacheable
+      ) {
+          std::function<void(OwnerStatusResult)> deliver;
+          {
+              std::lock_guard<std::mutex> lock(*gate);
+              if (*done)
+                  return;
+              if (std::chrono::steady_clock::now() >= deadline)
+              {
+                  result = {};
+                  cacheable = false;
+              }
+              *done = true;
+              if (cacheable && std::chrono::steady_clock::now() < cacheUntil)
+              {
+                  try
+                  {
+                      std::lock_guard<std::mutex> cacheLock(memo->ownerStatusMutex_);
+                      memo->ownerStatusCache_[clientId] = {result.value, cacheUntil};
+                  }
+                  catch (const std::exception &)
+                  {
+                      result = {};
+                  }
+                  catch (...)
+                  {
+                      result = {};
+                  }
+              }
+              deliver = std::move(*callback);
+          }
+          const auto id = timer->exchange(0);
+          if (id)
+              loop->invalidateTimer(id);
+          if (result.code == OwnerStatusCode::Unavailable)
+          {
+              LOG_WARN << "Client owner status lookup unavailable";
+              if (metrics)
+                  metrics->incrementCounter(
+                    "fulla_cache_total", {{"repo", "owner_status"}, {"outcome", "error"}}
+                  );
+          }
+          if (deliver)
+              deliver(std::move(result));
+      };
+    if (storageType_ != "postgres")
+    {
+        complete({}, false);
+        return;
+    }
+    timer->store(loop->runAfter(5.0, [complete]() { complete({}, false); }));
+    try
+    {
+        auto db = ::drogon::app().getDbClient();
+        if (!db)
+        {
+            complete({}, false);
+            return;
         }
-    }
-    if (hit.has_value())
-    {
-        cb(std::move(*hit));
-        return;
-    }
-    auto sharedCb = std::make_shared<std::function<void(std::optional<std::string>)>>(std::move(cb));
-    ::drogon::orm::DbClientPtr db;
-    try
-    {
-        db = ::drogon::app().getDbClient();
-    }
-    catch (...)
-    {
-        db = nullptr;
-    }
-    if (!db)
-    {
-        // No DB reachable: fail open (the overlay only ever DEACTIVATES on a
-        // positive suspended verdict, matching the pre-cache semantics).
-        (*sharedCb)(std::nullopt);
-        return;
-    }
-    try
-    {
         ::fulla::storage::postgres::ClientOwnersRepository ownersRepo(db);
         ownersRepo.findOwnerRow(
-          clientId,
-          [this, clientId, sharedCb](
-            const ::fulla::storage::postgres::OwnerRowLookup &lookup) {
-              std::optional<std::string> status;
-              if (lookup.status == ::fulla::storage::postgres::LookupStatus::Found)
-                  status = lookup.row.getValueOfStatus();
+          clientId, [classify, complete](const ::fulla::storage::postgres::OwnerRowLookup &lookup) {
+              using ::fulla::storage::postgres::LookupStatus;
+              if (lookup.status == LookupStatus::Error)
               {
-                  std::lock_guard<std::mutex> lock(ownerStatusMutex_);
-                  ownerStatusCache_[clientId] = {
-                    status, // 60s TTL: the write paths invalidate precisely (suspend/resume,
-                  // org soft-delete cascade); the TTL only bounds cross-
-                  // process staleness.
-                  std::chrono::steady_clock::now() + std::chrono::seconds(60)};
+                  complete({}, false);
+                  return;
               }
-              (*sharedCb)(status);
-          });
+              if (lookup.status == LookupStatus::NoRow)
+                  complete(classify(std::nullopt), true);
+              else
+                  complete(classify(lookup.row.getValueOfStatus()), true);
+          }
+        );
+    }
+    catch (const std::exception &)
+    {
+        complete({}, false);
     }
     catch (...)
     {
-        (*sharedCb)(std::nullopt);
+        complete({}, false);
     }
 }
 
 void OAuth2Plugin::invalidateOwnerStatusCache()
 {
-    std::lock_guard<std::mutex> lock(ownerStatusMutex_);
-    ownerStatusCache_.clear();
+    const auto memo = ownerStatusMemo_;
+    std::lock_guard<std::mutex> lock(memo->ownerStatusMutex_);
+    memo->ownerStatusCache_.clear();
 }
 
 void OAuth2Plugin::resolveUserProfileForClaims(

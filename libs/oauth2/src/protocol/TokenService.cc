@@ -652,55 +652,73 @@ void TokenService::refreshAccessToken(
         return;
     }
 
+    using repository::RefreshTokenResult;
+    using repository::RefreshTokenStatus;
     auto hashedRt = hashToken(*crypto_, refreshTokenStr);
-
+    if (hashedRt.empty())
+    {
+        callback(makeError("server_error", "Token hashing failed"));
+        return;
+    }
     auto self = shared_from_this();
-    tokens_->atomicRevokeRefreshToken(
-      hashedRt,
-      [self, callback = std::move(callback), clientId, hashedRt](
-        std::optional<fulla::oauth2::model::OAuth2RefreshToken> storedRt
-      ) mutable {
-          if (!storedRt)
+    auto reject = [self, callback](RefreshTokenResult result) {
+        if (result.status == RefreshTokenStatus::ClientMismatch)
+        {
+            callback(makeError("invalid_grant", "Client mismatch"));
+            return;
+        }
+        if (result.status == RefreshTokenStatus::Expired)
+        {
+            callback(makeError("invalid_grant", "Token expired"));
+            return;
+        }
+        if (result.status == RefreshTokenStatus::StorageError)
+        {
+            callback(makeError("server_error", "Refresh storage operation failed"));
+            return;
+        }
+        if (
+          result.status == RefreshTokenStatus::AlreadyUsed && result.token &&
+          !result.token->familyId.empty()
+        )
+        {
+            self->audit(
+              "refresh_token_reuse_detected",
+              "failure",
+              result.token->userId,
+              "token_family",
+              result.token->familyId
+            );
+            self->tokens_->revokeTokenFamilyChecked(result.token->familyId, [callback](bool ok) {
+                callback(
+                  ok ? makeError("invalid_grant", "Token reuse detected")
+                     : makeError("server_error", "Family revocation failed")
+                );
+            });
+            return;
+        }
+        callback(makeError("invalid_grant", "Invalid or revoked refresh token"));
+    };
+    tokens_->inspectRefreshToken(
+      hashedRt, clientId, [self, callback, clientId, reject](RefreshTokenResult result) mutable {
+          if (result.status != RefreshTokenStatus::Ready || !result.token)
           {
-              self->tokens_->getRefreshToken(
-                hashedRt,
-                [self, callback = std::move(callback)](
-                  std::optional<fulla::oauth2::model::OAuth2RefreshToken> maybeRevoked
-                ) {
-                    if (maybeRevoked && maybeRevoked->revoked && !maybeRevoked->familyId.empty())
-                    {
-                        self->audit(
-                          "refresh_token_reuse_detected",
-                          "failure",
-                          maybeRevoked->userId,
-                          "token_family",
-                          maybeRevoked->familyId
-                        );
-                        self->tokens_->revokeTokenFamily(maybeRevoked->familyId, [callback]() {
-                            callback(makeError("invalid_grant", "Token reuse detected"));
-                        });
-                    }
-                    else
-                    {
-                        callback(makeError("invalid_grant", "Invalid or revoked refresh token"));
-                    }
-                }
-              );
+              reject(std::move(result));
               return;
           }
-
+          auto storedRt = result.token;
           if (storedRt->clientId != clientId)
           {
               callback(makeError("invalid_grant", "Client mismatch"));
               return;
           }
-
           auto now = nowSeconds();
-          if (now > storedRt->expiresAt)
+          if (now >= storedRt->expiresAt)
           {
               callback(makeError("invalid_grant", "Token expired"));
               return;
           }
+          const auto expected = *storedRt;
 
           // P0-1 (#255): the rotation body below runs with a (possibly
           // normalized) subject. Legacy pre-hard-cut refresh families minted
@@ -714,129 +732,142 @@ void TokenService::refreshAccessToken(
             !storedRt->userId.empty() &&
             storedRt->userId.find_first_not_of("0123456789") == std::string::npos;
           auto withSubject = std::make_shared<std::function<void(std::string)>>(
-            [self, callback, storedRt, now](std::string subject) mutable {
-              storedRt->userId = std::move(subject);
-              // v1.4.0 M1 (design §2.1 item 4): refresh preserves the org
-              // binding along the family and re-resolves org_ctx (O7: a
-              // member removed from the org stops getting org_ctx on
-              // refresh-issued id_tokens immediately). Nullopt hop when not
-              // applicable.
-              self->resolveOrgContextForClaims(
-                storedRt->userId,
-                storedRt->orgId,
-                storedRt->scope,
-                [self, callback, storedRt, now](
-                  std::optional<fulla::common::ports::OrgContextInfo> orgCtx
-                ) {
-          auto newTokenStr = generateSecureToken(*self->crypto_);
-          auto newRefreshTokenStr = generateSecureToken(*self->crypto_);
-          // P2-1: refuse issuance on CSPRNG failure ("" results).
-          if (newTokenStr.empty() || newRefreshTokenStr.empty())
-          {
-              callback(makeError("server_error", "Token generation failed"));
-              return;
-          }
-          fulla::oauth2::model::OAuth2AccessToken token;
-          token.token = hashToken(*self->crypto_, newTokenStr);
-          token.clientId = storedRt->clientId;
-          token.userId = storedRt->userId;
-          token.scope = storedRt->scope;
-          // P2 #10: record real issue time for introspection iat.
-          token.issuedAt = now;
-          token.expiresAt = now + self->accessTokenTtl_;
-          // F-016: same issuer stamping as the authorization_code path above.
-          token.issuer = self->issuer_;
-            // v1.4.0 M1: the org binding survives rotation.
-            token.orgId = storedRt->orgId;
-            // P0-4 (#258): audience survives rotation with the same value
-            // (aud = issuing client).
-            token.audience = storedRt->clientId;
+            [self, callback, storedRt, now, expected, reject](std::string subject) mutable {
+                storedRt->userId = std::move(subject);
+                // v1.4.0 M1 (design §2.1 item 4): refresh preserves the org
+                // binding along the family and re-resolves org_ctx (O7: a
+                // member removed from the org stops getting org_ctx on
+                // refresh-issued id_tokens immediately). Nullopt hop when not
+                // applicable.
+                self->resolveOrgContextForClaims(
+                  storedRt->userId,
+                  storedRt->orgId,
+                  storedRt->scope,
+                  [self, callback, storedRt, now, expected, reject](
+                    std::optional<fulla::common::ports::OrgContextInfo> orgCtx
+                  ) {
+                      auto newTokenStr = generateSecureToken(*self->crypto_);
+                      auto newRefreshTokenStr = generateSecureToken(*self->crypto_);
+                      // P2-1: refuse issuance on CSPRNG failure ("" results).
+                      if (newTokenStr.empty() || newRefreshTokenStr.empty())
+                      {
+                          callback(makeError("server_error", "Token generation failed"));
+                          return;
+                      }
+                      fulla::oauth2::model::OAuth2AccessToken token;
+                      token.token = hashToken(*self->crypto_, newTokenStr);
+                      token.clientId = storedRt->clientId;
+                      token.userId = storedRt->userId;
+                      token.scope = storedRt->scope;
+                      // P2 #10: record real issue time for introspection iat.
+                      token.issuedAt = now;
+                      token.expiresAt = now + self->accessTokenTtl_;
+                      // F-016: same issuer stamping as the authorization_code path above.
+                      token.issuer = self->issuer_;
+                      // v1.4.0 M1: the org binding survives rotation.
+                      token.orgId = storedRt->orgId;
+                      // P0-4 (#258): audience survives rotation with the same value
+                      // (aud = issuing client).
+                      token.audience = storedRt->clientId;
 
-          fulla::oauth2::model::OAuth2RefreshToken newRt;
-          newRt.token = hashToken(*self->crypto_, newRefreshTokenStr);
-          newRt.accessToken = token.token;
-          newRt.clientId = storedRt->clientId;
-          newRt.userId = storedRt->userId;
-          newRt.scope = storedRt->scope;
-          newRt.expiresAt = now + self->refreshTokenTtl_;
-          newRt.familyId = storedRt->familyId;
-          newRt.orgId = storedRt->orgId;
+                      fulla::oauth2::model::OAuth2RefreshToken newRt;
+                      newRt.token = hashToken(*self->crypto_, newRefreshTokenStr);
+                      newRt.accessToken = token.token;
+                      newRt.clientId = storedRt->clientId;
+                      newRt.userId = storedRt->userId;
+                      newRt.scope = storedRt->scope;
+                      newRt.expiresAt = now + self->refreshTokenTtl_;
+                      newRt.familyId = storedRt->familyId;
+                      newRt.orgId = storedRt->orgId;
 
-          self->tokens_->saveTokenPair(
-            token, newRt, [self, callback, newTokenStr, newRefreshTokenStr, storedRt, now, orgCtx](bool ok) {
-                if (!ok)
-                {
-                    // Same silent-failure guard as exchangeCodeForToken:
-                    // never hand out a rotated pair that was never stored.
-                    callback(makeError("server_error", "Failed to persist token pair"));
-                    return;
-                }
-                self->audit("token_refreshed", "success", storedRt->userId, "token", "");
-                Json::Value json;
-                json["access_token"] = newTokenStr;
-                json["token_type"] = "Bearer";
-                // P1 #6: real configured lifetime, not hardcoded 3600.
-                json["expires_in"] = (Json::Int64)self->accessTokenTtl_;
-                json["refresh_token"] = newRefreshTokenStr;
-                // F-025 (OIDC Core §12): refresh_token grant with an openid
-                // scope MUST re-issue an id_token when the server supports
-                // OIDC. There is no nonce on refresh (the original request's
-                // nonce is not carried forward per §12), and auth_time/amr
-                // are omitted (the OAuth2RefreshToken DTO does not persist
-                // them; acceptable per §12 -- only sub/aud/iss/iat/exp are
-                // required on refresh-issued id_tokens).
-                if (
-                  self->jwkManager_ && self->jwkManager_->isInitialized() &&
-                  scopeContains(storedRt->scope, "openid")
-                )
-                {
-                    Json::Value idTokenClaims;
-                    idTokenClaims["iss"] = self->issuer_;
-                    idTokenClaims["sub"] = storedRt->userId;
-                    idTokenClaims["aud"] = storedRt->clientId;
-                    idTokenClaims["iat"] = (Json::Int64)now;
-                    idTokenClaims["exp"] = (Json::Int64)(now + self->accessTokenTtl_);
-                    // v1.4.0 M1: org_ctx mirrors the code-exchange id_token
-                    // (O7 re-resolution; orgCtx present implies the binding).
-                    if (orgCtx.has_value() && storedRt->orgId.has_value())
-                    {
-                        Json::Value orgCtxClaim;
-                        orgCtxClaim["org_id"] = (Json::Int64)*storedRt->orgId;
-                        orgCtxClaim["org_name"] = orgCtx->orgName;
-                        Json::Value orgRoles(Json::arrayValue);
-                        for (const auto &r : orgCtx->roles)
-                        {
-                            orgRoles.append(r);
+                      self->tokens_->rotateRefreshToken(
+                        expected,
+                        token,
+                        newRt,
+                        [self,
+                         callback,
+                         reject,
+                         newTokenStr,
+                         newRefreshTokenStr,
+                         storedRt,
+                         now,
+                         orgCtx](RefreshTokenResult rotation) {
+                            if (rotation.status != RefreshTokenStatus::Rotated)
+                            {
+                                reject(std::move(rotation));
+                                return;
+                            }
+                            self
+                              ->audit("token_refreshed", "success", storedRt->userId, "token", "");
+                            Json::Value json;
+                            json["access_token"] = newTokenStr;
+                            json["token_type"] = "Bearer";
+                            // P1 #6: real configured lifetime, not hardcoded 3600.
+                            json["expires_in"] = (Json::Int64)self->accessTokenTtl_;
+                            json["refresh_token"] = newRefreshTokenStr;
+                            // F-025 (OIDC Core §12): refresh_token grant with an openid
+                            // scope MUST re-issue an id_token when the server supports
+                            // OIDC. There is no nonce on refresh (the original request's
+                            // nonce is not carried forward per §12), and auth_time/amr
+                            // are omitted (the OAuth2RefreshToken DTO does not persist
+                            // them; acceptable per §12 -- only sub/aud/iss/iat/exp are
+                            // required on refresh-issued id_tokens).
+                            if (
+                              self->jwkManager_ && self->jwkManager_->isInitialized() &&
+                              scopeContains(storedRt->scope, "openid")
+                            )
+                            {
+                                Json::Value idTokenClaims;
+                                idTokenClaims["iss"] = self->issuer_;
+                                idTokenClaims["sub"] = storedRt->userId;
+                                idTokenClaims["aud"] = storedRt->clientId;
+                                idTokenClaims["iat"] = (Json::Int64)now;
+                                idTokenClaims["exp"] = (Json::Int64)(now + self->accessTokenTtl_);
+                                // v1.4.0 M1: org_ctx mirrors the code-exchange id_token
+                                // (O7 re-resolution; orgCtx present implies the binding).
+                                if (orgCtx.has_value() && storedRt->orgId.has_value())
+                                {
+                                    Json::Value orgCtxClaim;
+                                    orgCtxClaim["org_id"] = (Json::Int64)*storedRt->orgId;
+                                    orgCtxClaim["org_name"] = orgCtx->orgName;
+                                    Json::Value orgRoles(Json::arrayValue);
+                                    for (const auto &r : orgCtx->roles)
+                                    {
+                                        orgRoles.append(r);
+                                    }
+                                    orgCtxClaim["roles"] = orgRoles;
+                                    idTokenClaims["org_ctx"] = orgCtxClaim;
+                                }
+                                // P1-3 (#280): refresh RE-EVALUATES the mappings —
+                                // a mapping disabled since the original grant drops
+                                // its claim from this rotation-issued id_token (the
+                                // org_ctx O7 semantics), and a newly enabled one
+                                // appears.
+                                self->resolveMappedClaims(
+                                  storedRt->userId,
+                                  storedRt->scope,
+                                  "id_token",
+                                  [self, json, callback, idTokenClaims, actorId = storedRt->userId](
+                                    Json::Value mappedClaims
+                                  ) mutable {
+                                      for (const auto &k : mappedClaims.getMemberNames())
+                                          idTokenClaims[k] = mappedClaims[k];
+                                      std::string idToken =
+                                        self->jwkManager_->signJwt(idTokenClaims);
+                                      if (!idToken.empty())
+                                          json["id_token"] = idToken;
+                                      callback(json);
+                                  }
+                                );
+                                return;
+                            }
+                            callback(json);
                         }
-                        orgCtxClaim["roles"] = orgRoles;
-                        idTokenClaims["org_ctx"] = orgCtxClaim;
-                    }
-                    // P1-3 (#280): refresh RE-EVALUATES the mappings —
-                    // a mapping disabled since the original grant drops
-                    // its claim from this rotation-issued id_token (the
-                    // org_ctx O7 semantics), and a newly enabled one
-                    // appears.
-                    self->resolveMappedClaims(
-                      storedRt->userId,
-                      storedRt->scope,
-                      "id_token",
-                      [self, json, callback, idTokenClaims,
-                       actorId = storedRt->userId](Json::Value mappedClaims) mutable {
-                          for (const auto &k : mappedClaims.getMemberNames())
-                              idTokenClaims[k] = mappedClaims[k];
-                          std::string idToken = self->jwkManager_->signJwt(idTokenClaims);
-                          if (!idToken.empty())
-                              json["id_token"] = idToken;
-                          callback(json);
-                      });
-                    return;
-                }
-                callback(json);
+                      );
+                  }
+                );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
             }
           );
-                }
-              );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
-            });
           if (!numericSubject)
           {
               (*withSubject)(storedRt->userId);
@@ -903,7 +934,7 @@ void TokenService::validateAccessToken(
               return;
           }
 
-          if (nowSeconds() > t->expiresAt)
+          if (nowSeconds() >= t->expiresAt)
           {
               callback(nullptr);
               return;

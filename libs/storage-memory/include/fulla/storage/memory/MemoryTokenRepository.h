@@ -78,6 +78,18 @@ using ITokenRepositoryBase = ::fulla::oauth2::repository::ITokenRepository;
 class MemoryTokenRepository : public ITokenRepositoryBase
 {
   public:
+    void inspectRefreshToken(
+      const std::string &token,
+      const std::string &clientId,
+      RefreshResultCallback &&cb
+    ) override;
+    void rotateRefreshToken(
+      const ::fulla::oauth2::model::OAuth2RefreshToken &expected,
+      const ::fulla::oauth2::model::OAuth2AccessToken &at,
+      const ::fulla::oauth2::model::OAuth2RefreshToken &rt,
+      RefreshResultCallback &&cb
+    ) override;
+    void revokeTokenFamilyChecked(const std::string &familyId, SaveResultCallback &&cb) override;
     void saveAccessToken(
       const ::fulla::oauth2::model::OAuth2AccessToken &token,
       VoidCallback &&cb

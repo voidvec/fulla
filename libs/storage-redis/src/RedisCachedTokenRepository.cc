@@ -4,6 +4,7 @@
 #include <drogon/drogon.h>
 #include <json/json.h>
 
+#include <algorithm>
 #include <sstream>
 #include <string_view>
 
@@ -33,6 +34,9 @@ namespace
 std::string serializeAccessToken(const OAuth2AccessToken &t)
 {
     Json::Value j;
+    j["cacheSchema"] = 2;
+    if (t.orgId)
+        j["orgId"] = *t.orgId;
     j["token"] = t.token;
     j["clientId"] = t.clientId;
     j["userId"] = t.userId;
@@ -53,37 +57,55 @@ std::string serializeAccessToken(const OAuth2AccessToken &t)
 
 bool deserializeAccessToken(const std::string &s, OAuth2AccessToken &out)
 {
-    Json::Value root;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream is(s);
-    if (!Json::parseFromStream(b, is, &root, &errs))
+    try
     {
-        LOG_ERROR << "RedisCachedTokenRepository: access-token JSON parse error: " << errs;
+        Json::Value root;
+        Json::CharReaderBuilder b;
+        std::string errs;
+        std::istringstream is(s);
+        if (!Json::parseFromStream(b, is, &root, &errs))
+        {
+            LOG_ERROR << "RedisCachedTokenRepository: access-token JSON parse error: " << errs;
+            return false;
+        }
+        // token + expiresAt are the load-bearing fields; the rest default safely.
+        if (!root.isMember("token") || !root.isMember("expiresAt"))
+            return false;
+        if (root.get("cacheSchema", 0).asInt() != 2)
+            return false;
+        if (root.isMember("orgId"))
+        {
+            if (!root["orgId"].isInt())
+                return false;
+            out.orgId = root["orgId"].asInt();
+        }
+        out.token = root["token"].asString();
+        out.clientId = root.get("clientId", "").asString();
+        out.userId = root.get("userId", "").asString();
+        out.scope = root.get("scope", "").asString();
+        out.expiresAt = root.get("expiresAt", Json::Int64(0)).asInt64();
+        out.revoked = root.get("revoked", false).asBool();
+        out.issuedAt = root.get("issuedAt", Json::Int64(0)).asInt64();
+        out.issuer = root.get("issuer", "").asString();
+        out.audience = root.get("audience", "").asString();
+        out.notBefore = root.get("notBefore", Json::Int64(0)).asInt64();
+        out.introspectCount = root.get("introspectCount", 0).asInt();
+        out.revokedAt = root.get("revokedAt", Json::Int64(0)).asInt64();
+        out.revokedBy = root.get("revokedBy", "").asString();
+        return true;
+    }
+    catch (const std::exception &)
+    {
         return false;
     }
-    // token + expiresAt are the load-bearing fields; the rest default safely.
-    if (!root.isMember("token") || !root.isMember("expiresAt"))
-        return false;
-    out.token = root["token"].asString();
-    out.clientId = root.get("clientId", "").asString();
-    out.userId = root.get("userId", "").asString();
-    out.scope = root.get("scope", "").asString();
-    out.expiresAt = root.get("expiresAt", Json::Int64(0)).asInt64();
-    out.revoked = root.get("revoked", false).asBool();
-    out.issuedAt = root.get("issuedAt", Json::Int64(0)).asInt64();
-    out.issuer = root.get("issuer", "").asString();
-    out.audience = root.get("audience", "").asString();
-    out.notBefore = root.get("notBefore", Json::Int64(0)).asInt64();
-    out.introspectCount = root.get("introspectCount", 0).asInt();
-    out.revokedAt = root.get("revokedAt", Json::Int64(0)).asInt64();
-    out.revokedBy = root.get("revokedBy", "").asString();
-    return true;
 }
 
 std::string serializeIntrospection(const TokenIntrospection &t)
 {
     Json::Value j;
+    j["cacheSchema"] = 2;
+    if (t.orgId)
+        j["orgId"] = *t.orgId;
     j["active"] = t.active;
     j["clientId"] = t.clientId;
     j["tokenType"] = t.tokenType;
@@ -101,28 +123,43 @@ std::string serializeIntrospection(const TokenIntrospection &t)
 
 bool deserializeIntrospection(const std::string &s, TokenIntrospection &out)
 {
-    Json::Value root;
-    Json::CharReaderBuilder b;
-    std::string errs;
-    std::istringstream is(s);
-    if (!Json::parseFromStream(b, is, &root, &errs))
+    try
     {
-        LOG_ERROR << "RedisCachedTokenRepository: introspection JSON parse error: " << errs;
+        Json::Value root;
+        Json::CharReaderBuilder b;
+        std::string errs;
+        std::istringstream is(s);
+        if (!Json::parseFromStream(b, is, &root, &errs))
+        {
+            LOG_ERROR << "RedisCachedTokenRepository: introspection JSON parse error: " << errs;
+            return false;
+        }
+        if (!root.isMember("active"))
+            return false;
+        if (root.get("cacheSchema", 0).asInt() != 2)
+            return false;
+        if (root.isMember("orgId"))
+        {
+            if (!root["orgId"].isInt())
+                return false;
+            out.orgId = root["orgId"].asInt();
+        }
+        out.active = root["active"].asBool();
+        out.clientId = root.get("clientId", "").asString();
+        out.tokenType = root.get("tokenType", "Bearer").asString();
+        out.exp = root.get("exp", Json::Int64(0)).asInt64();
+        out.iat = root.get("iat", Json::Int64(0)).asInt64();
+        out.nbf = root.get("nbf", Json::Int64(0)).asInt64();
+        out.sub = root.get("sub", "").asString();
+        out.aud = root.get("aud", "").asString();
+        out.iss = root.get("iss", "").asString();
+        out.scope = root.get("scope", "").asString();
+        return true;
+    }
+    catch (const std::exception &)
+    {
         return false;
     }
-    if (!root.isMember("active"))
-        return false;
-    out.active = root["active"].asBool();
-    out.clientId = root.get("clientId", "").asString();
-    out.tokenType = root.get("tokenType", "Bearer").asString();
-    out.exp = root.get("exp", Json::Int64(0)).asInt64();
-    out.iat = root.get("iat", Json::Int64(0)).asInt64();
-    out.nbf = root.get("nbf", Json::Int64(0)).asInt64();
-    out.sub = root.get("sub", "").asString();
-    out.aud = root.get("aud", "").asString();
-    out.iss = root.get("iss", "").asString();
-    out.scope = root.get("scope", "").asString();
-    return true;
 }
 
 const ::fulla::common::ports::MetricLabels kHitLabels{{"repo", "token"}, {"outcome", "hit"}};
@@ -160,6 +197,54 @@ RevokedThenGet decodeRevokedThenGet(const RedisResult &result, std::string &valu
     }
     return RevokedThenGet::kMiss;
 }
+// A late database snapshot or queued Redis command must not renew the
+// original budget, nor return an active token after a revocation marker.
+// The access-key check keeps refresh-token introspections out of L2.
+enum class SnapshotCacheResult
+{
+    Valid,
+    Rejected,
+    Error
+};
+
+void guardedFill(
+  const ::drogon::nosql::RedisClientPtr &redis,
+  const std::string &token,
+  const std::string &payload,
+  int64_t expires,
+  bool introspection,
+  std::function<void(SnapshotCacheResult)> cb
+)
+{
+    static const char script[] =
+      "if redis.call('EXISTS', KEYS[1]) > 0 then return 0 end "
+      "if tonumber(redis.call('TIME')[1]) >= tonumber(ARGV[2]) then return 0 end "
+      "if ARGV[3] == '1' and redis.call('EXISTS', KEYS[3]) == 0 then return 2 end "
+      "redis.call('SET', KEYS[2], ARGV[1], 'EXAT', ARGV[2]) return 1";
+    auto callback = std::make_shared<decltype(cb)>(std::move(cb));
+    const auto revoked = "fulla:cache:token:revoked:" + token;
+    const auto key =
+      std::string("fulla:cache:token:") + (introspection ? "introspect:" : "access:") + token;
+    const auto access = "fulla:cache:token:access:" + token;
+    redis->execCommandAsync(
+      [callback](const RedisResult &result) {
+          (*callback)(
+            result.type() != RedisResultType::kInteger ? SnapshotCacheResult::Error
+            : result.asInteger() > 0                   ? SnapshotCacheResult::Valid
+                                                       : SnapshotCacheResult::Rejected
+          );
+      },
+      [callback](const RedisException &) { (*callback)(SnapshotCacheResult::Error); },
+      "EVAL %s 3 %s %s %s %s %lld %d",
+      script,
+      revoked.c_str(),
+      key.c_str(),
+      access.c_str(),
+      payload.c_str(),
+      static_cast<long long>(expires),
+      introspection ? 1 : 0
+    );
+}
 }  // namespace
 
 RedisCachedTokenRepository::RedisCachedTokenRepository(
@@ -189,208 +274,228 @@ void RedisCachedTokenRepository::emitMetric(const char *outcome) const
 // ---------------------------------------------------------------------------
 void RedisCachedTokenRepository::getAccessToken(const std::string &token, AccessTokenCallback &&cb)
 {
-    auto sharedCb = std::make_shared<AccessTokenCallback>(std::move(cb));
+    auto callback = std::make_shared<AccessTokenCallback>(std::move(cb));
     auto fired = std::make_shared<std::atomic<bool>>(false);
+    const auto cacheUntil = std::time(nullptr) + accessTokenMaxTtlSeconds_;
+    auto timer = std::make_shared<std::atomic<::trantor::TimerId>>(0);
+    auto *loop = ::drogon::app().getLoop();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    auto finish = [callback, fired, timer, loop, deadline, metrics = metrics_](
+                    std::optional<OAuth2AccessToken> value
+                  ) {
+        if (fired->exchange(true))
+            return false;
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            value = std::nullopt;
+            if (metrics)
+                metrics->incrementCounter("fulla_cache_total", kErrorLabels);
+        }
+        const auto id = timer->exchange(0);
+        if (id)
+            loop->invalidateTimer(id);
+        auto deliver = std::move(*callback);
+        if (deliver)
+            deliver(std::move(value));
+        return true;
+    };
     auto self = shared_from_this();
-    std::string key = "fulla:cache:token:access:" + token;
-    std::string revokedKey = "fulla:cache:token:revoked:" + token;
-
     if (!redisClient_)
     {
         emitMetric("miss");
-        impl_->getAccessToken(token, std::move(*sharedCb));
+        impl_->getAccessToken(token, std::move(finish));
         return;
     }
-
-    // C1: check the negative cache FIRST (revoked → nullopt, never consult
-    // the positive cache), then the positive cache — both in ONE EVAL
-    // round-trip (Wave-2 P2; was two serial EXISTS+GET hops).
+    // A reconnecting Redis client can queue forever without an error
+    // callback. One deadline spans lookup, master read and guarded fill;
+    // completion moves out the business callback even if Redis retains us.
+    timer->store(loop->runAfter(5.0, [finish]() { finish(std::nullopt); }));
     redisClient_->execCommandAsync(
-      [self, sharedCb, fired, token](const RedisResult &result) {
-          std::string value;
-          const auto state = decodeRevokedThenGet(result, value);
-          if (state == RevokedThenGet::kRevoked)
-          {
-              self->emitMetric("hit");  // hit on the negative cache
-              if (!fired->exchange(true))
-                  (*sharedCb)(std::nullopt);
+      [self, token, cacheUntil, finish, fired](const RedisResult &result) {
+          if (fired->load())
               return;
-          }
-          if (state == RevokedThenGet::kValue)
-          {
-              OAuth2AccessToken cached;
-              if (deserializeAccessToken(value, cached))
-              {
-                  self->emitMetric("hit");
-                  if (!fired->exchange(true))
-                      (*sharedCb)(std::move(cached));
-                  return;
-              }
-              // Corrupt entry → treat as a miss.
-          }
-          // Miss → delegate + fill.
-          self->emitMetric("miss");
-          auto fillCb = std::make_shared<AccessTokenCallback>(
-            [self, sharedCb, fired, token](const std::optional<OAuth2AccessToken> &t) {
-                if (t && self->redisClient_)
-                {
-                    // C7: only cache if the token has positive remaining
-                    // lifetime. Redis rejects EX ≤ 0; an expired token is
-                    // not worth caching anyway.
-                    int64_t now = std::time(nullptr);
-                    int64_t remaining = t->expiresAt - now;
-                    if (remaining > 0)
-                    {
-                        int ttl = static_cast<int>(
-                          std::min<int64_t>(remaining, self->accessTokenMaxTtlSeconds_)
-                        );
-                        std::string payload = serializeAccessToken(*t);
-                        std::string k = "fulla:cache:token:access:" + token;
-                        self->redisClient_->execCommandAsync(
-                          [](const RedisResult &) {},
-                          [k](const RedisException &e) {
-                              LOG_DEBUG << "RedisCachedTokenRepository: access fill SET "
-                                           "failed for "
-                                        << k << ": " << e.what();
-                          },
-                          "SET %s %s EX %d",
-                          k.c_str(),
-                          payload.c_str(),
-                          ttl
-                        );
-                    }
-                }
-                if (!fired->exchange(true))
-                    (*sharedCb)(t);
-            }
-          );
-          self->impl_->getAccessToken(token, std::move(*fillCb));
-      },
-      [self, sharedCb, fired, token](const RedisException &e) {
-          LOG_WARN << "RedisCachedTokenRepository: EVAL revoked+access error: " << e.what();
-          self->emitMetric("error");
-          if (!fired->exchange(true))
-              self->impl_->getAccessToken(token, std::move(*sharedCb));
-      },
-      "EVAL %s 2 %s %s",
-      kRevokedThenGetScript,
-      revokedKey.c_str(),
-      key.c_str()
-    );
-}
-
-// ---------------------------------------------------------------------------
-// introspectToken (N2 discriminator: cache only when access cache exists)
-// ---------------------------------------------------------------------------
-void RedisCachedTokenRepository::introspectToken(
-  const std::string &token,
-  TokenIntrospectionCallback &&cb
-)
-{
-    auto sharedCb = std::make_shared<TokenIntrospectionCallback>(std::move(cb));
-    auto fired = std::make_shared<std::atomic<bool>>(false);
-    auto self = shared_from_this();
-    std::string revokedKey = "fulla:cache:token:revoked:" + token;
-    std::string introKey = "fulla:cache:token:introspect:" + token;
-
-    if (!redisClient_)
-    {
-        emitMetric("miss");
-        impl_->introspectToken(token, std::move(*sharedCb));
-        return;
-    }
-
-    // Negative cache (revoked → active=false) then the positive introspection
-    // cache — both in ONE EVAL round-trip (Wave-2 P2).
-    redisClient_->execCommandAsync(
-      [self, sharedCb, fired, token](const RedisResult &result) {
           std::string value;
           const auto state = decodeRevokedThenGet(result, value);
           if (state == RevokedThenGet::kRevoked)
           {
               self->emitMetric("hit");
-              if (!fired->exchange(true))
-              {
-                  TokenIntrospection inactive;
-                  inactive.active = false;
-                  (*sharedCb)(std::move(inactive));
-              }
+              finish(std::nullopt);
               return;
           }
-          if (state == RevokedThenGet::kValue)
+          OAuth2AccessToken cached;
+          if (
+            state == RevokedThenGet::kValue && deserializeAccessToken(value, cached) &&
+            cached.token == token && !cached.revoked && cached.expiresAt > std::time(nullptr) &&
+            cached.notBefore <= std::time(nullptr)
+          )
           {
-              TokenIntrospection cached;
-              if (deserializeIntrospection(value, cached))
-              {
-                  self->emitMetric("hit");
-                  if (!fired->exchange(true))
-                      (*sharedCb)(std::move(cached));
-                  return;
-              }
-              // Corrupt entry → treat as a miss.
+              self->emitMetric("hit");
+              finish(std::move(cached));
+              return;
           }
-          // Miss → delegate. The N2 discriminator runs after.
           self->emitMetric("miss");
-          auto wrapCb = std::make_shared<TokenIntrospectionCallback>(
-            [self, sharedCb, fired, token](const std::optional<TokenIntrospection> &res) {
-                // N2: only cache when active AND the token is confirmed
-                // access-token-only (its access-cache key exists). The
-                // access key can only be populated by getAccessToken /
-                // saveAccessToken, both access-token-only — so its
-                // presence proves this introspection did NOT come from
-                // the refresh-token fallthrough.
-                if (res && res->active && self->redisClient_)
+          self->impl_->getAccessToken(
+            token,
+            [self, token, cacheUntil, finish, fired](std::optional<OAuth2AccessToken> fresh) {
+                if (fired->load())
+                    return;
+                if (
+                  !fresh || fresh->revoked || fresh->notBefore > std::time(nullptr) ||
+                  fresh->expiresAt <= std::time(nullptr) || std::time(nullptr) >= cacheUntil
+                )
                 {
-                    std::string accessKey = "fulla:cache:token:access:" + token;
-                    self->redisClient_->execCommandAsync(
-                      [self, res, token](const RedisResult &ex) {
-                          if (ex.type() == RedisResultType::kInteger && ex.asInteger() > 0)
-                          {
-                              int64_t now = std::time(nullptr);
-                              int64_t remaining = res->exp - now;
-                              if (remaining > 0)
-                              {
-                                  int ttl = static_cast<int>(std::min<int64_t>(
-                                    remaining, self->accessTokenMaxTtlSeconds_
-                                  ));
-                                  std::string payload = serializeIntrospection(*res);
-                                  std::string k = "fulla:cache:token:introspect:" + token;
-                                  self->redisClient_->execCommandAsync(
-                                    [](const RedisResult &) {},
-                                    [k](const RedisException &e) {
-                                        LOG_DEBUG << "RedisCachedTokenRepository: introspect "
-                                                     "fill SET failed for "
-                                                  << k << ": " << e.what();
-                                    },
-                                    "SET %s %s EX %d",
-                                    k.c_str(),
-                                    payload.c_str(),
-                                    ttl
-                                  );
-                              }
-                          }
-                      },
-                      [](const RedisException &) {},
-                      "EXISTS %s",
-                      accessKey.c_str()
-                    );
+                    finish(std::nullopt);
+                    return;
                 }
-                if (!fired->exchange(true))
-                    (*sharedCb)(res);
+                const auto expires = std::min<int64_t>(fresh->expiresAt, cacheUntil);
+                guardedFill(
+                  self->redisClient_,
+                  token,
+                  serializeAccessToken(*fresh),
+                  expires,
+                  false,
+                  [self, fresh, expires, finish](SnapshotCacheResult status) {
+                      if (status == SnapshotCacheResult::Error)
+                          self->emitMetric("error");
+                      finish(
+                        status == SnapshotCacheResult::Valid && std::time(nullptr) < expires
+                          ? fresh
+                          : std::nullopt
+                      );
+                  }
+                );
             }
           );
-          self->impl_->introspectToken(token, std::move(*wrapCb));
       },
-      [self, sharedCb, fired, token](const RedisException &e) {
-          LOG_WARN << "RedisCachedTokenRepository: EVAL revoked+introspect error: " << e.what();
+      [self, token, finish, fired](const RedisException &) mutable {
+          if (fired->load())
+              return;
           self->emitMetric("error");
-          if (!fired->exchange(true))
-              self->impl_->introspectToken(token, std::move(*sharedCb));
+          self->impl_->getAccessToken(token, std::move(finish));
       },
       "EVAL %s 2 %s %s",
       kRevokedThenGetScript,
-      revokedKey.c_str(),
-      introKey.c_str()
+      ("fulla:cache:token:revoked:" + token).c_str(),
+      ("fulla:cache:token:access:" + token).c_str()
+    );
+}
+
+void RedisCachedTokenRepository::introspectToken(
+  const std::string &token,
+  TokenIntrospectionCallback &&cb
+)
+{
+    auto callback = std::make_shared<TokenIntrospectionCallback>(std::move(cb));
+    auto fired = std::make_shared<std::atomic<bool>>(false);
+    const auto cacheUntil = std::time(nullptr) + accessTokenMaxTtlSeconds_;
+    auto timer = std::make_shared<std::atomic<::trantor::TimerId>>(0);
+    auto *loop = ::drogon::app().getLoop();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    auto finish = [callback, fired, timer, loop, deadline, metrics = metrics_](
+                    std::optional<TokenIntrospection> value
+                  ) {
+        if (fired->exchange(true))
+            return false;
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            value = std::nullopt;
+            if (metrics)
+                metrics->incrementCounter("fulla_cache_total", kErrorLabels);
+        }
+        const auto id = timer->exchange(0);
+        if (id)
+            loop->invalidateTimer(id);
+        auto deliver = std::move(*callback);
+        if (deliver)
+            deliver(std::move(value));
+        return true;
+    };
+    auto self = shared_from_this();
+    if (!redisClient_)
+    {
+        emitMetric("miss");
+        impl_->introspectToken(token, std::move(finish));
+        return;
+    }
+    auto inactive = []() {
+        TokenIntrospection value;
+        value.active = false;
+        return value;
+    };
+    // A reconnecting Redis client can queue forever without an error
+    // callback. One deadline spans lookup, master read and guarded fill;
+    // completion moves out the business callback even if Redis retains us.
+    timer->store(loop->runAfter(5.0, [finish]() { finish(std::nullopt); }));
+    redisClient_->execCommandAsync(
+      [self, token, cacheUntil, finish, inactive, fired](const RedisResult &result) {
+          if (fired->load())
+              return;
+          std::string value;
+          const auto state = decodeRevokedThenGet(result, value);
+          if (state == RevokedThenGet::kRevoked)
+          {
+              self->emitMetric("hit");
+              finish(inactive());
+              return;
+          }
+          TokenIntrospection cached;
+          if (
+            state == RevokedThenGet::kValue && deserializeIntrospection(value, cached) &&
+            cached.active && cached.exp > std::time(nullptr) && cached.nbf <= std::time(nullptr)
+          )
+          {
+              self->emitMetric("hit");
+              finish(std::move(cached));
+              return;
+          }
+          self->emitMetric("miss");
+          self->impl_->introspectToken(
+            token,
+            [self, token, cacheUntil, finish, inactive, fired](
+              std::optional<TokenIntrospection> fresh
+            ) {
+                if (fired->load())
+                    return;
+                if (!fresh || !fresh->active)
+                {
+                    finish(fresh);
+                    return;
+                }
+                const auto expires = std::min<int64_t>(fresh->exp, cacheUntil);
+                if (expires <= std::time(nullptr) || fresh->nbf > std::time(nullptr))
+                {
+                    finish(inactive());
+                    return;
+                }
+                guardedFill(
+                  self->redisClient_,
+                  token,
+                  serializeIntrospection(*fresh),
+                  expires,
+                  true,
+                  [self, fresh, expires, finish, inactive](SnapshotCacheResult status) {
+                      if (status == SnapshotCacheResult::Error)
+                          self->emitMetric("error");
+                      finish(
+                        status == SnapshotCacheResult::Valid && std::time(nullptr) < expires
+                          ? fresh
+                          : inactive()
+                      );
+                  }
+                );
+            }
+          );
+      },
+      [self, token, finish, fired](const RedisException &) mutable {
+          if (fired->load())
+              return;
+          self->emitMetric("error");
+          self->impl_->introspectToken(token, std::move(finish));
+      },
+      "EVAL %s 2 %s %s",
+      kRevokedThenGetScript,
+      ("fulla:cache:token:revoked:" + token).c_str(),
+      ("fulla:cache:token:introspect:" + token).c_str()
     );
 }
 
@@ -426,9 +531,13 @@ void RedisCachedTokenRepository::revokeAccessToken(
             // SET negative entry (60s).
             self->redisClient_->execCommandAsync(
               [](const RedisResult &) {},
-              [](const RedisException &) {},
-              "SET %s 1 EX 60",
-              revokedKey.c_str()
+              [self](const RedisException &) {
+                  self->emitMetric("error");
+                  LOG_WARN << "Token revocation cache marker failed";
+              },
+              "SET %s 1 EX %d",
+              revokedKey.c_str(),
+              std::max(60, self->accessTokenMaxTtlSeconds_)
             );
             // DEL positive entries (double-delete, failure-observable).
             invalidateWithDoubleDelete(
@@ -446,45 +555,29 @@ void RedisCachedTokenRepository::revokeAccessToken(
 // ---------------------------------------------------------------------------
 // saveAccessToken (cache warming — improves cold-start for the N2 discriminator)
 // ---------------------------------------------------------------------------
-void RedisCachedTokenRepository::saveAccessToken(
-  const OAuth2AccessToken &token,
-  VoidCallback &&cb
-)
+void RedisCachedTokenRepository::saveAccessToken(const OAuth2AccessToken &token, VoidCallback &&cb)
 {
-    auto sharedCb = std::make_shared<VoidCallback>(std::move(cb));
+    auto callback = std::make_shared<VoidCallback>(std::move(cb));
     auto self = shared_from_this();
-
-    impl_->saveAccessToken(token, [self, sharedCb, token]() {
-        // Warm the access cache: a freshly-saved token is definitely active
-        // and unexpired. This populates token:access:{hash} so the first
-        // introspectToken (N2 discriminator) + validateAccessToken both hit.
-        // C7: skip if the token is already expired.
-        if (self->redisClient_)
+    const auto cacheUntil = std::time(nullptr) + accessTokenMaxTtlSeconds_;
+    impl_->saveAccessToken(token, [self, callback, token, cacheUntil]() {
+        const auto expires = std::min<int64_t>(token.expiresAt, cacheUntil);
+        if (self->redisClient_ && !token.revoked && expires > std::time(nullptr))
         {
-            int64_t now = std::time(nullptr);
-            int64_t remaining = token.expiresAt - now;
-            if (remaining > 0)
-            {
-                int ttl = static_cast<int>(
-                  std::min<int64_t>(remaining, self->accessTokenMaxTtlSeconds_)
-                );
-                std::string payload = serializeAccessToken(token);
-                std::string key = "fulla:cache:token:access:" + token.token;
-                self->redisClient_->execCommandAsync(
-                  [](const RedisResult &) {},
-                  [key](const RedisException &e) {
-                      LOG_DEBUG << "RedisCachedTokenRepository: warm SET failed for " << key << ": "
-                                << e.what();
-                  },
-                  "SET %s %s EX %d",
-                  key.c_str(),
-                  payload.c_str(),
-                  ttl
-                );
-            }
+            guardedFill(
+              self->redisClient_,
+              token.token,
+              serializeAccessToken(token),
+              expires,
+              false,
+              [self](SnapshotCacheResult status) {
+                  if (status == SnapshotCacheResult::Error)
+                      self->emitMetric("error");
+              }
+            );
         }
-        if (*sharedCb)
-            (*sharedCb)();
+        if (*callback)
+            (*callback)();
     });
 }
 

@@ -1,5 +1,10 @@
 # SDK Runtime Contract
 
+尚未发布的 S03 刷新加固增加了仓储迁移要求，见
+[刷新令牌与撤销生效边界](../domains/token-refresh-and-revocation.md)。
+仅实现旧 ITokenRepository 接口的仓储仍可编译，但在实现新的查询、原子轮换与确认撤销端口前，
+刷新会失败关闭。
+
 对外契约声明：Fulla SDK（`fulla::common` / `fulla::oauth2` /
 `fulla::identity` / `fulla::storage-*` / `fulla::drogon`）在 v1.x
 期间对消费者承诺的线程模型、ABI、异常、日志与依赖边界。

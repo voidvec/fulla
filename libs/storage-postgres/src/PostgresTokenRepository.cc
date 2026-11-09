@@ -1,5 +1,6 @@
 #include <fulla/storage/postgres/PostgresTokenRepository.h>
 #include <drogon/drogon.h>
+#include <atomic>
 
 #include <fulla/storage/postgres/models/Oauth2AccessTokens.h>
 #include <fulla/storage/postgres/models/Oauth2RefreshTokens.h>
@@ -80,240 +81,406 @@ void PostgresTokenRepository::saveAccessToken(const OAuth2AccessToken &token, Vo
     }
 }
 
+namespace
+{
+using RefreshResult = ::fulla::oauth2::repository::RefreshTokenResult;
+using RefreshStatus = ::fulla::oauth2::repository::RefreshTokenStatus;
+using RefreshCallback = ITokenRepositoryBase::RefreshResultCallback;
+
+// The shared quota-lock helper predates synchronous-throw guards in async
+// continuations. Keep token failure completion local without changing the
+// behavior of unrelated quota/consent callers.
+void withTokenFamilyLock(
+  const DbClientPtr &db,
+  const std::string &key,
+  std::function<void(const std::shared_ptr<Transaction> &)> locked,
+  std::function<void()> failed
+)
+{
+    if (!db)
+    {
+        failed();
+        return;
+    }
+    auto onLocked = std::make_shared<decltype(locked)>(std::move(locked));
+    auto onError = std::make_shared<decltype(failed)>(std::move(failed));
+    try
+    {
+        db->newTransactionAsync([key, onLocked, onError](const auto &txn) {
+            if (!txn)
+            {
+                (*onError)();
+                return;
+            }
+            auto fail = [txn, onError]() {
+                txn->rollback();
+                (*onError)();
+            };
+            try
+            {
+                // Advisory-lock concurrency primitive; parameter-bound key.
+                txn->execSqlAsync(
+                  "SELECT pg_advisory_xact_lock(hashtext($1))",
+                  [txn, onLocked, fail](const Result &) {
+                      try
+                      {
+                          (*onLocked)(txn);
+                      }
+                      catch (const std::exception &)
+                      {
+                          fail();
+                      }
+                      catch (...)
+                      {
+                          fail();
+                      }
+                  },
+                  [fail](const DrogonDbException &) { fail(); },
+                  key
+                );
+            }
+            catch (const std::exception &)
+            {
+                fail();
+            }
+            catch (...)
+            {
+                fail();
+            }
+        });
+    }
+    catch (const std::exception &)
+    {
+        (*onError)();
+    }
+    catch (...)
+    {
+        (*onError)();
+    }
+}
+
+OAuth2RefreshToken refreshDto(const Oauth2RefreshTokens &row)
+{
+    OAuth2RefreshToken rt;
+    rt.token = row.getValueOfToken();
+    rt.accessToken = row.getValueOfAccessToken();
+    rt.clientId = row.getValueOfClientId();
+    rt.userId = row.getValueOfUserId();
+    rt.scope = row.getValueOfScope();
+    rt.expiresAt = row.getValueOfExpiresAt();
+    rt.revoked = row.getValueOfRevoked();
+    rt.familyId = row.getValueOfFamilyId();
+    if (row.getOrgId())
+        rt.orgId = *row.getOrgId();
+    return rt;
+}
+
+void inspectRefresh(
+  const DbClientPtr &db,
+  const std::string &token,
+  const std::string &clientId,
+  RefreshCallback cb
+)
+{
+    auto sharedCb = std::make_shared<RefreshCallback>(std::move(cb));
+    if (!db)
+    {
+        (*sharedCb)({RefreshStatus::StorageError, std::nullopt});
+        return;
+    }
+    try
+    {
+        Mapper<Oauth2RefreshTokens> mapper(db);
+        mapper.findBy(
+          Criteria(Oauth2RefreshTokens::Cols::_token, token),
+          [sharedCb, clientId](const std::vector<Oauth2RefreshTokens> &rows) {
+              if (rows.empty())
+              {
+                  (*sharedCb)({RefreshStatus::NotFound, std::nullopt});
+                  return;
+              }
+              auto rt = refreshDto(rows.front());
+              if (rt.clientId != clientId)
+                  (*sharedCb)({RefreshStatus::ClientMismatch, std::nullopt});
+              else if (!rt.revoked && rt.expiresAt <= std::time(nullptr))
+                  (*sharedCb)({RefreshStatus::Expired, std::nullopt});
+              else
+                  (*sharedCb)(
+                    {rt.revoked ? RefreshStatus::AlreadyUsed : RefreshStatus::Ready, std::move(rt)}
+                  );
+          },
+          [sharedCb](const DrogonDbException &) {
+              LOG_ERROR << "Refresh lookup failed";
+              (*sharedCb)({RefreshStatus::StorageError, std::nullopt});
+          }
+        );
+    }
+    catch (const std::exception &)
+    {
+        (*sharedCb)({RefreshStatus::StorageError, std::nullopt});
+    }
+    catch (...)
+    {
+        (*sharedCb)({RefreshStatus::StorageError, std::nullopt});
+    }
+}
+
+// Both issuance and rotation share the same transactional pair insert. A
+// synchronous Mapper failure also needs rollback, unlike a SQL error which
+// Drogon rolls back automatically. Completion belongs to the commit callback.
+void insertPair(
+  const std::shared_ptr<Transaction> &txn,
+  const OAuth2AccessToken &at,
+  const OAuth2RefreshToken &rt,
+  const std::function<void()> &failed
+)
+{
+    auto fail = [txn, failed]() {
+        txn->rollback();
+        failed();
+    };
+    try
+    {
+        Mapper<Oauth2AccessTokens> mapper(txn);
+        Oauth2AccessTokens row;
+        row.setToken(at.token);
+        row.setClientId(at.clientId);
+        row.setUserId(at.userId);
+        row.setScope(at.scope);
+        row.setExpiresAt(at.expiresAt);
+        row.setRevoked(at.revoked);
+        row.setIssuer(at.issuer);
+        row.setAudience(at.audience);
+        if (at.issuedAt)
+            row.setIssuedAt(at.issuedAt);
+        if (at.notBefore)
+            row.setNotBefore(at.notBefore);
+        if (at.orgId)
+            row.setOrgId(*at.orgId);
+        mapper.insert(
+          row,
+          [txn, rt, fail](const Oauth2AccessTokens &) {
+              try
+              {
+                  Mapper<Oauth2RefreshTokens> refresh(txn);
+                  Oauth2RefreshTokens next;
+                  next.setToken(rt.token);
+                  next.setAccessToken(rt.accessToken);
+                  next.setClientId(rt.clientId);
+                  next.setUserId(rt.userId);
+                  next.setScope(rt.scope);
+                  next.setExpiresAt(rt.expiresAt);
+                  next.setRevoked(rt.revoked);
+                  if (!rt.familyId.empty())
+                      next.setFamilyId(rt.familyId);
+                  if (rt.orgId)
+                      next.setOrgId(*rt.orgId);
+                  refresh.insert(
+                    next,
+                    [](const Oauth2RefreshTokens &) {},
+                    [fail](const DrogonDbException &) { fail(); }
+                  );
+              }
+              catch (const std::exception &)
+              {
+                  fail();
+              }
+              catch (...)
+              {
+                  fail();
+              }
+          },
+          [fail](const DrogonDbException &) { fail(); }
+        );
+    }
+    catch (const std::exception &)
+    {
+        fail();
+    }
+    catch (...)
+    {
+        fail();
+    }
+}
+}  // namespace
+
 void PostgresTokenRepository::saveTokenPair(
   const OAuth2AccessToken &at,
   const OAuth2RefreshToken &rt,
   SaveResultCallback &&cb
 )
 {
-    if (!dbClientMaster_)
-    {
-        // Failure: no backend to persist into. Reporting false (not true,
-        // and not silently dropping the callback) is exactly the
-        // ITokenRepository::SaveResultCallback contract.
-        if (cb)
-            cb(false);
-        return;
-    }
-    auto sharedCb = std::make_shared<SaveResultCallback>(std::move(cb));
-
-    // Exemption (db-operations.md §3): Documented batch operation.
-    // saveTokenPair inserts both access and refresh tokens within a single
-    // database transaction.  The commit callback ensures the caller is
-    // notified only after COMMIT (not merely after INSERT), which is
-    // critical for correctness (see inline comment for the race-condition
-    // analysis).  Splitting into two Mapper::insert calls would lose
-    // transactional atomicity.
-
-    // Bug fix: the caller's callback must not fire until the transaction
-    // has actually been COMMITted. Drogon only issues "commit" to Postgres
-    // when the last shared_ptr reference to the Transaction object is
-    // released (see drogon::orm::TransactionImpl::~TransactionImpl), which
-    // happens asynchronously, some time after the second INSERT's own
-    // result callback returns. The previous implementation called the
-    // caller's callback directly from that second INSERT's success
-    // callback -- i.e. before COMMIT was even sent. A second connection
-    // (e.g. this repository's own dbClientReader_, or a contract test using
-    // a separate client) reading immediately afterwards could observe
-    // pre-commit state under Postgres MVCC and see neither row. This was
-    // intermittent (a race between the async COMMIT round trip and a
-    // subsequent read on a different connection), which is why it only
-    // reproduced under some CI runners/timings and not deterministically
-    // in every environment.
-    //
-    // Fix: install a commit callback on the transaction and fire the
-    // caller's callback from there (guaranteed to run only after COMMIT
-    // completes). The insert error paths still invoke the caller's
-    // callback directly, because Drogon automatically rolls back on error
-    // and its own documentation states the commit callback "will never be
-    // executed" if the transaction is rolled back.
-    auto invoked = std::make_shared<bool>(false);
-    // ok must be true ONLY when the transaction actually committed. Every
-    // failure path below reports false so callers (token endpoint,
-    // GitHub/social login) can surface a real error instead of handing
-    // out tokens that were never persisted.
-    auto invokeOnce = [sharedCb, invoked](bool ok) {
-        if (!*invoked)
+    auto callback = std::make_shared<SaveResultCallback>(std::move(cb));
+    auto fired = std::make_shared<std::atomic<bool>>(false);
+    auto finish = [callback, fired](bool ok) {
+        if (!fired->exchange(true))
         {
-            *invoked = true;
-            if (*sharedCb)
-                (*sharedCb)(ok);
+            auto deliver = std::move(*callback);
+            if (deliver)
+                deliver(ok);
         }
     };
+    if (!dbClientMaster_)
+    {
+        finish(false);
+        return;
+    }
+    try
+    {
+        dbClientMaster_->newTransactionAsync([finish, at, rt](const auto &txn) {
+            if (!txn)
+            {
+                finish(false);
+                return;
+            }
+            txn->setCommitCallback([finish](bool ok) { finish(ok); });
+            insertPair(txn, at, rt, [finish]() { finish(false); });
+        });
+    }
+    catch (const std::exception &)
+    {
+        finish(false);
+    }
+    catch (...)
+    {
+        finish(false);
+    }
+}
 
-    // Deadlock fix: the transaction must be acquired asynchronously.
-    // saveTokenPair is reached from inside DB result callbacks (e.g. the
-    // token endpoint's device-code flow issues tokens from within
-    // PgConnection::handleRead on a DbLoop thread). The blocking
-    // newTransaction() overload waits on a future that is only fulfilled by
-    // the DB event loops themselves, so calling it there stalls the loop it
-    // runs on; with every DbLoop blocked this way (two concurrent
-    // redemptions), BEGIN can never be sent and the whole process
-    // deadlocks. newTransactionAsync() delivers the transaction via
-    // callback without ever blocking the calling loop.
-    dbClientMaster_->newTransactionAsync(
-      [invokeOnce, at, rt](const std::shared_ptr<Transaction> &transPtr) {
-          if (!transPtr)
+void PostgresTokenRepository::inspectRefreshToken(
+  const std::string &token,
+  const std::string &clientId,
+  RefreshResultCallback &&cb
+)
+{
+    inspectRefresh(dbClientMaster_, token, clientId, std::move(cb));
+}
+
+void PostgresTokenRepository::rotateRefreshToken(
+  const OAuth2RefreshToken &expected,
+  const OAuth2AccessToken &at,
+  const OAuth2RefreshToken &rt,
+  RefreshResultCallback &&cb
+)
+{
+    auto callback = std::make_shared<RefreshResultCallback>(std::move(cb));
+    auto fired = std::make_shared<std::atomic<bool>>(false);
+    auto finish = [callback, fired](RefreshResult result) {
+        if (!fired->exchange(true))
+        {
+            auto deliver = std::move(*callback);
+            if (deliver)
+                deliver(std::move(result));
+        }
+    };
+    auto self = shared_from_this();
+    // Derive the lock domain from authoritative metadata, never the new pair.
+    inspectRefresh(
+      dbClientMaster_,
+      expected.token,
+      expected.clientId,
+      [self, expected, at, rt, finish](RefreshResult first) {
+          if (first.status != RefreshStatus::Ready || !first.token)
           {
-              LOG_ERROR << "saveTokenPair: failed to acquire transaction (timeout)";
-              invokeOnce(false);
+              finish(std::move(first));
               return;
           }
-
-          // Use a transaction to ensure both tokens are saved atomically
-          transPtr->setCommitCallback([invokeOnce](bool committed) {
-              if (!committed)
-                  LOG_ERROR << "saveTokenPair: transaction commit failed";
-              invokeOnce(committed);
-          });
-
-          auto refreshInsertErrorCb = [invokeOnce](const DrogonDbException &e) {
-              LOG_ERROR << "saveTokenPair (refresh) failed: " << e.base().what();
-              invokeOnce(false);
-          };
-
-          // v1.4.0 M1: the refresh insert branches on family_id (pre-
-          // existing) AND org_id (new) -- raw SQL placeholders are a
-          // compile-time arg list, so each combination gets its own
-          // statement. Kept in one lambda so the access insert below has a
-          // single continuation regardless.
-          auto insertRefresh = [transPtr, rt, refreshInsertErrorCb]() {
-              const bool hasFamily = !rt.familyId.empty();
-              const bool hasOrg = rt.orgId.has_value();
-              if (hasFamily && hasOrg)
-              {
-                  transPtr->execSqlAsync(
-                    "INSERT INTO oauth2_refresh_tokens "
-                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
-                    "family_id, org_id) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                    [](const ::drogon::orm::Result &) {},
-                    refreshInsertErrorCb,
-                    rt.token,
-                    rt.accessToken,
-                    rt.clientId,
-                    rt.userId,
-                    rt.scope,
-                    rt.expiresAt,
-                    rt.revoked,
-                    rt.familyId,
-                    *rt.orgId
-                  );
-              }
-              else if (hasFamily)
-              {
-                  transPtr->execSqlAsync(
-                    "INSERT INTO oauth2_refresh_tokens "
-                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
-                    "family_id) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                    [](const ::drogon::orm::Result &) {},
-                    refreshInsertErrorCb,
-                    rt.token,
-                    rt.accessToken,
-                    rt.clientId,
-                    rt.userId,
-                    rt.scope,
-                    rt.expiresAt,
-                    rt.revoked,
-                    rt.familyId
-                  );
-              }
-              else if (hasOrg)
-              {
-                  transPtr->execSqlAsync(
-                    "INSERT INTO oauth2_refresh_tokens "
-                    "(token, access_token, client_id, user_id, scope, expires_at, revoked, "
-                    "org_id) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                    [](const ::drogon::orm::Result &) {},
-                    refreshInsertErrorCb,
-                    rt.token,
-                    rt.accessToken,
-                    rt.clientId,
-                    rt.userId,
-                    rt.scope,
-                    rt.expiresAt,
-                    rt.revoked,
-                    *rt.orgId
-                  );
-              }
-              else
-              {
-                  transPtr->execSqlAsync(
-                    "INSERT INTO oauth2_refresh_tokens "
-                    "(token, access_token, client_id, user_id, scope, expires_at, revoked) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                    [](const ::drogon::orm::Result &) {},
-                    refreshInsertErrorCb,
-                    rt.token,
-                    rt.accessToken,
-                    rt.clientId,
-                    rt.userId,
-                    rt.scope,
-                    rt.expiresAt,
-                    rt.revoked
-                  );
-              }
-          };
-
-          auto accessInsertErrorCb = [invokeOnce](const DrogonDbException &e) {
-              LOG_ERROR << "saveTokenPair (access) failed: " << e.base().what();
-              invokeOnce(false);
-          };
-
-          if (at.orgId.has_value())
-          {
-              transPtr->execSqlAsync(
-                "INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, "
-                "expires_at, revoked, issuer, org_id) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                [insertRefresh](const ::drogon::orm::Result &) {
-                    // Access token saved, now save refresh token. The
-                    // caller's callback fires from the commit callback above,
-                    // not here.
-                    insertRefresh();
-                },
-                accessInsertErrorCb,
-                at.token,
-                at.clientId,
-                at.userId,
-                at.scope,
-                at.expiresAt,
-                at.revoked,
-                at.issuer,
-                *at.orgId
-              );
-          }
-          else
-          {
-              transPtr->execSqlAsync(
-                "INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, "
-                "expires_at, revoked, issuer) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                [insertRefresh](const ::drogon::orm::Result &) {
-                    // Access token saved, now save refresh token. The
-                    // caller's callback fires from the commit callback above,
-                    // not here.
-                    insertRefresh();
-                },
-                accessInsertErrorCb,
-                at.token,
-                at.clientId,
-                at.userId,
-                at.scope,
-                at.expiresAt,
-                at.revoked,
-                at.issuer  // F-016: write the issuance-time issuer, not the schema default
-              );
-          }
+          const auto family = first.token->familyId;
+          const auto key =
+            family.empty() ? "refresh-token:" + expected.token : "refresh-family:" + family;
+          withTokenFamilyLock(
+            self->dbClientMaster_,
+            key,
+            [expected, at, rt, family, finish](const auto &txn) {
+                inspectRefresh(
+                  txn,
+                  expected.token,
+                  expected.clientId,
+                  [txn, expected, at, rt, family, finish](RefreshResult current) {
+                      try
+                      {
+                          if (current.status != RefreshStatus::Ready || !current.token)
+                          {
+                              finish(std::move(current));
+                              return;
+                          }
+                          const auto &old = *current.token;
+                          if (
+                            old.familyId != family || old.familyId != expected.familyId ||
+                            old.userId != expected.userId || old.scope != expected.scope ||
+                            old.orgId != expected.orgId || at.clientId != old.clientId ||
+                            rt.clientId != old.clientId || at.scope != old.scope ||
+                            rt.scope != old.scope || at.orgId != old.orgId ||
+                            rt.orgId != old.orgId || rt.familyId != old.familyId ||
+                            at.userId != rt.userId || rt.accessToken != at.token ||
+                            at.token.empty() || rt.token.empty() || at.revoked || rt.revoked
+                          )
+                          {
+                              finish({RefreshStatus::StorageError, std::nullopt});
+                              return;
+                          }
+                          txn->setCommitCallback([finish](bool ok) {
+                              finish(
+                                {ok ? RefreshStatus::Rotated : RefreshStatus::StorageError,
+                                 std::nullopt}
+                              );
+                          });
+                          // CAS is guarded in SQL as well as under the family lock.
+                          // UPDATE RETURNING is the documented raw-SQL exemption.
+                          txn->execSqlAsync(
+                            "UPDATE oauth2_refresh_tokens SET revoked=true "
+                            "WHERE token=$1 AND client_id=$2 AND revoked=false "
+                            "AND expires_at > EXTRACT(EPOCH FROM statement_timestamp()) "
+                            "RETURNING token",
+                            [txn, at, rt, expected, finish](const Result &rows) {
+                                if (rows.empty())
+                                {
+                                    inspectRefresh(
+                                      txn,
+                                      expected.token,
+                                      expected.clientId,
+                                      [txn, finish](RefreshResult state) {
+                                          txn->rollback();
+                                          if (state.status == RefreshStatus::Ready)
+                                              state = {RefreshStatus::StorageError, std::nullopt};
+                                          finish(std::move(state));
+                                      }
+                                    );
+                                    return;
+                                }
+                                insertPair(txn, at, rt, [finish]() {
+                                    finish({RefreshStatus::StorageError, std::nullopt});
+                                });
+                            },
+                            [finish](const DrogonDbException &) {
+                                finish({RefreshStatus::StorageError, std::nullopt});
+                            },
+                            expected.token,
+                            expected.clientId
+                          );
+                      }
+                      catch (const std::exception &)
+                      {
+                          txn->rollback();
+                          finish({RefreshStatus::StorageError, std::nullopt});
+                      }
+                      catch (...)
+                      {
+                          txn->rollback();
+                          finish({RefreshStatus::StorageError, std::nullopt});
+                      }
+                  }
+                );
+            },
+            [finish]() { finish({RefreshStatus::StorageError, std::nullopt}); }
+          );
       }
     );
 }
 
 void PostgresTokenRepository::getAccessToken(const std::string &token, AccessTokenCallback &&cb)
 {
-    if (!dbClientReader_)
+    if (!dbClientMaster_)
     {
         cb(std::nullopt);
         return;
@@ -321,7 +488,7 @@ void PostgresTokenRepository::getAccessToken(const std::string &token, AccessTok
     auto sharedCb = std::make_shared<AccessTokenCallback>(std::move(cb));
     try
     {
-        Mapper<Oauth2AccessTokens> mapper(dbClientReader_);
+        Mapper<Oauth2AccessTokens> mapper(dbClientMaster_);
         mapper.findOne(
           Criteria(Oauth2AccessTokens::Cols::_token, CompareOperator::EQ, token),
           [sharedCb](const Oauth2AccessTokens &row) {
@@ -545,50 +712,73 @@ void PostgresTokenRepository::atomicRevokeRefreshToken(
     );
 }
 
-void PostgresTokenRepository::revokeTokenFamily(const std::string &familyId, VoidCallback &&cb)
+void PostgresTokenRepository::revokeTokenFamilyChecked(
+  const std::string &familyId,
+  SaveResultCallback &&cb
+)
 {
+    auto callback = std::make_shared<SaveResultCallback>(std::move(cb));
+    auto fired = std::make_shared<std::atomic<bool>>(false);
+    auto finish = [callback, fired](bool ok) {
+        if (!fired->exchange(true))
+        {
+            auto deliver = std::move(*callback);
+            if (deliver)
+                deliver(ok);
+        }
+    };
     if (!dbClientMaster_ || familyId.empty())
     {
-        if (cb)
-            cb();
+        finish(false);
         return;
     }
-    auto sharedCb = std::make_shared<VoidCallback>(std::move(cb));
-
-    // Exemption (db-operations.md §3): Documented batch operation.
-    // Security-critical cascade revoke of an entire token family in 2 queries
-    // (refresh tokens + access tokens via sub-select).  Splitting into
-    // individual Mapper::update calls would be both incorrect (non-atomic)
-    // and inefficient (N+M round-trips vs 2).
-
-    // Revoke all refresh tokens in the family
-    dbClientMaster_->execSqlAsync(
-      "UPDATE oauth2_refresh_tokens SET revoked = true WHERE family_id = $1",
-      [sharedCb, familyId, self = shared_from_this(), this](const ::drogon::orm::Result &) {
-          // Also revoke all associated access tokens
-          dbClientMaster_->execSqlAsync(
-            "UPDATE oauth2_access_tokens SET revoked = true "
-            "WHERE token IN (SELECT access_token FROM oauth2_refresh_tokens WHERE family_id = $1)",
-            [sharedCb, familyId](const ::drogon::orm::Result &) {
-                LOG_WARN << "[SECURITY] Token family cascade-revoked: " << familyId;
-                if (*sharedCb)
-                    (*sharedCb)();
+    withTokenFamilyLock(
+      dbClientMaster_,
+      "refresh-family:" + familyId,
+      [familyId, finish](const auto &txn) {
+          txn->setCommitCallback([finish](bool ok) { finish(ok); });
+          // Documented batch-operation exemption: one family spans two
+          // token tables; both updates share this locked transaction.
+          txn->execSqlAsync(
+            "UPDATE oauth2_refresh_tokens SET revoked=true WHERE family_id=$1",
+            [txn, familyId, finish](const Result &) {
+                try
+                {
+                    txn->execSqlAsync(
+                      "UPDATE oauth2_access_tokens SET revoked=true WHERE token IN "
+                      "(SELECT access_token FROM oauth2_refresh_tokens WHERE family_id=$1)",
+                      [](const Result &) {},
+                      [finish](const DrogonDbException &) { finish(false); },
+                      familyId
+                    );
+                }
+                catch (const std::exception &)
+                {
+                    txn->rollback();
+                    finish(false);
+                }
+                catch (...)
+                {
+                    txn->rollback();
+                    finish(false);
+                }
             },
-            [sharedCb](const DrogonDbException &e) {
-                LOG_ERROR << "revokeTokenFamily (access tokens) error: " << e.base().what();
-                if (*sharedCb)
-                    (*sharedCb)();
-            },
+            [finish](const DrogonDbException &) { finish(false); },
             familyId
           );
       },
-      [sharedCb](const DrogonDbException &e) {
-          LOG_ERROR << "revokeTokenFamily error: " << e.base().what();
-          if (*sharedCb)
-              (*sharedCb)();
-      },
-      familyId
+      [finish]() { finish(false); }
     );
+}
+
+void PostgresTokenRepository::revokeTokenFamily(const std::string &familyId, VoidCallback &&cb)
+{
+    revokeTokenFamilyChecked(familyId, [cb = std::move(cb)](bool ok) {
+        if (!ok)
+            LOG_ERROR << "Token family revocation failed";
+        if (cb)
+            cb();
+    });
 }
 
 // ========== P1: Token Introspection (RFC 7662) ==========
@@ -598,99 +788,110 @@ void PostgresTokenRepository::introspectToken(
   TokenIntrospectionCallback &&cb
 )
 {
-    if (!dbClientReader_)
+    auto callback = std::make_shared<TokenIntrospectionCallback>(std::move(cb));
+    auto fired = std::make_shared<std::atomic<bool>>(false);
+    auto finish = [callback, fired](TokenIntrospection result) {
+        if (!fired->exchange(true))
+        {
+            auto deliver = std::move(*callback);
+            if (deliver)
+                deliver(std::move(result));
+        }
+    };
+    auto inactive = [finish]() {
+        TokenIntrospection result;
+        result.active = false;
+        finish(std::move(result));
+    };
+    // Security reads cannot refill L2 from a lagging reader after revocation.
+    const auto db = dbClientMaster_;
+    if (!db)
     {
-        TokenIntrospection introspection;
-        introspection.active = false;
-        cb(introspection);
+        inactive();
         return;
     }
-
-    auto sharedCb = std::make_shared<TokenIntrospectionCallback>(std::move(cb));
-    int64_t now = std::time(nullptr);
-
-    // 查询 access tokens 表
-    Mapper<Oauth2AccessTokens> atMapper(dbClientReader_);
-    atMapper.findOne(
-      Criteria(Oauth2AccessTokens::Cols::_token, CompareOperator::EQ, token),
-      [sharedCb, now, token, self = shared_from_this()](
-        const Oauth2AccessTokens &accessToken
-      ) {
-          // 检查是否吊销或过期
-          bool revoked = accessToken.getValueOfRevoked();
-          int64_t expiresAt = accessToken.getValueOfExpiresAt();
-
-          if (revoked || expiresAt < now)
-          {
-              TokenIntrospection introspection;
-              introspection.active = false;
-              (*sharedCb)(introspection);
-              return;
-          }
-
-          TokenIntrospection introspection;
-          introspection.active = true;
-          introspection.clientId = accessToken.getValueOfClientId();
-          introspection.tokenType = "Bearer";
-          introspection.exp = expiresAt;
-          introspection.iat = accessToken.getValueOfIssuedAt();
-          introspection.iss = accessToken.getValueOfIssuer();
-          introspection.aud = accessToken.getValueOfAudience();
-          introspection.nbf = accessToken.getValueOfNotBefore();
-          introspection.sub = accessToken.getValueOfUserId();
-          introspection.scope = accessToken.getValueOfScope();
-          // v1.4.0 M1: expose the token's org binding (design §2.1 item 4).
-          introspection.orgId =
-            accessToken.getOrgId() ? std::optional<int32_t>(*accessToken.getOrgId())
-                                   : std::nullopt;
-          (*sharedCb)(introspection);
-      },
-      [sharedCb, now, token, self = shared_from_this(), this](const DrogonDbException &) {
-          // 未在 access tokens 中找到，尝试 refresh tokens
-          Mapper<Oauth2RefreshTokens> rtMapper(dbClientReader_);
-          rtMapper.findOne(
-            Criteria(Oauth2RefreshTokens::Cols::_token, CompareOperator::EQ, token),
-            [sharedCb, now](const Oauth2RefreshTokens &refreshToken) {
-                bool revoked = refreshToken.getValueOfRevoked();
-                int64_t expiresAt = refreshToken.getValueOfExpiresAt();
-
-                if (revoked || expiresAt < now)
-                {
-                    TokenIntrospection introspection;
-                    introspection.active = false;
-                    (*sharedCb)(introspection);
-                    return;
-                }
-
-                TokenIntrospection introspection;
-                introspection.active = true;
-                introspection.clientId = refreshToken.getValueOfClientId();
-                introspection.tokenType = "Bearer";
-                introspection.exp = expiresAt;
-                // P2-7 audit fix: a refresh token has no iat/nbf on its row;
-                // the previous response fabricated iat=now/nbf=now. Omit
-                // both (RFC 7662: claims the server has no knowledge of are
-                // simply absent).
-                introspection.iat = 0;
-                introspection.iss = "";
-                introspection.aud = "";
-                introspection.nbf = 0;
-                introspection.sub = refreshToken.getValueOfUserId();
-                introspection.scope = refreshToken.getValueOfScope();
-                // v1.4.0 M1: org binding on the refresh branch too.
-                introspection.orgId =
-                  refreshToken.getOrgId() ? std::optional<int32_t>(*refreshToken.getOrgId())
-                                          : std::nullopt;
-                (*sharedCb)(introspection);
-            },
-            [sharedCb](const DrogonDbException &) {
-                TokenIntrospection introspection;
-                introspection.active = false;
-                (*sharedCb)(introspection);
-            }
-          );
-      }
-    );
+    auto readRefresh = [db, token, finish, inactive]() {
+        try
+        {
+            Mapper<Oauth2RefreshTokens> mapper(db);
+            mapper.findBy(
+              Criteria(Oauth2RefreshTokens::Cols::_token, token),
+              [finish, inactive](const std::vector<Oauth2RefreshTokens> &rows) {
+                  if (
+                    rows.empty() || rows.front().getValueOfRevoked() ||
+                    rows.front().getValueOfExpiresAt() <= std::time(nullptr)
+                  )
+                  {
+                      inactive();
+                      return;
+                  }
+                  const auto &row = rows.front();
+                  TokenIntrospection result;
+                  result.active = true;
+                  result.clientId = row.getValueOfClientId();
+                  result.tokenType = "Bearer";
+                  result.exp = row.getValueOfExpiresAt();
+                  result.sub = row.getValueOfUserId();
+                  result.scope = row.getValueOfScope();
+                  if (row.getOrgId())
+                      result.orgId = *row.getOrgId();
+                  finish(std::move(result));
+              },
+              [inactive](const DrogonDbException &) { inactive(); }
+            );
+        }
+        catch (const std::exception &)
+        {
+            inactive();
+        }
+        catch (...)
+        {
+            inactive();
+        }
+    };
+    try
+    {
+        Mapper<Oauth2AccessTokens> mapper(db);
+        mapper.findBy(
+          Criteria(Oauth2AccessTokens::Cols::_token, token),
+          [finish, inactive, readRefresh](const std::vector<Oauth2AccessTokens> &rows) {
+              if (rows.empty())
+              {
+                  readRefresh();
+                  return;
+              }
+              const auto &row = rows.front();
+              if (row.getValueOfRevoked() || row.getValueOfExpiresAt() <= std::time(nullptr))
+              {
+                  inactive();
+                  return;
+              }
+              TokenIntrospection result;
+              result.active = true;
+              result.clientId = row.getValueOfClientId();
+              result.tokenType = "Bearer";
+              result.exp = row.getValueOfExpiresAt();
+              result.iat = row.getValueOfIssuedAt();
+              result.iss = row.getValueOfIssuer();
+              result.aud = row.getValueOfAudience();
+              result.nbf = row.getValueOfNotBefore();
+              result.sub = row.getValueOfUserId();
+              result.scope = row.getValueOfScope();
+              if (row.getOrgId())
+                  result.orgId = *row.getOrgId();
+              finish(std::move(result));
+          },
+          [inactive](const DrogonDbException &) { inactive(); }
+        );
+    }
+    catch (const std::exception &)
+    {
+        inactive();
+    }
+    catch (...)
+    {
+        inactive();
+    }
 }
 
 void PostgresTokenRepository::incrementIntrospectCount(const std::string &token, VoidCallback &&cb)
@@ -876,17 +1077,25 @@ void PostgresTokenRepository::purgeExpired()
           }
         );
 
-        // Refresh Tokens
-        Mapper<Oauth2RefreshTokens> rtMapper(dbClientMaster_);
-        rtMapper.deleteBy(
-          Criteria(Oauth2RefreshTokens::Cols::_expires_at, CompareOperator::LT, now),
-          [](const size_t count) {
-              if (count > 0)
-                  LOG_INFO << "Cleaned " << count << " expired refresh tokens";
+        // Documented batch-operation exemption: the cross-token predicate
+        // preserves family revocation reachability when RT TTL is shorter
+        // than AT TTL. Expired RTs remain unusable and are reclaimed once
+        // the associated AT is absent, expired or revoked. IS NOT TRUE also
+        // preserves nullable legacy AT flags, matching the DTO default.
+        dbClientMaster_->execSqlAsync(
+          "DELETE FROM oauth2_refresh_tokens AS expired_rt "
+          "WHERE expired_rt.expires_at < $1 AND NOT EXISTS ("
+          "SELECT 1 FROM oauth2_access_tokens AS live_at "
+          "WHERE live_at.token=expired_rt.access_token "
+          "AND live_at.expires_at > $1 AND live_at.revoked IS NOT TRUE)",
+          [](const ::drogon::orm::Result &result) {
+              if (result.affectedRows() > 0)
+                  LOG_INFO << "Cleaned " << result.affectedRows() << " expired refresh tokens";
           },
           [](const DrogonDbException &e) {
               LOG_ERROR << "Cleanup RefreshTokens Error: " << e.base().what();
-          }
+          },
+          now
         );
 
         // Archive old tokens (older than 30 days)
