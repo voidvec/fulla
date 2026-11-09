@@ -24,6 +24,16 @@ race:trantor::EventLoop::wakeup
 #    fulla-tests.
 race:trantor::MpscQueue
 
+# 3. Request-object teardown vs in-flight connector write ( surfaced by
+#    the suppression-verified re-run, 2026-11-09): drogon's
+#    HttpRequestImpl dtor clears its headers map while trantor's
+#    Connector::handleWrite() still reads it during shutdown teardown of
+#    the full-stack smoke host. Every frame on both stacks is
+#    drogon/trantor (HttpRequestImpl.cc:795 / Connector.cc:227) — upstream
+#    lifecycle semantics, not first-party wiring.
+race:trantor::Connector::handleWrite
+
 # If new findings appear, triage them: first-party stacks (libs/**,
-# apps/**) are FIXED, not suppressed. Extend this file only with upstream
-# evidence and a dated comment like the two above.
+# apps/**) are FIXED, not suppressed — see the OAuth2Plugin admin-scope
+# handshake fix from the same campaign for the example. Extend this file
+# only with upstream evidence and a dated comment like the three above.

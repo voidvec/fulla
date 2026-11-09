@@ -601,7 +601,16 @@ class OAuth2Plugin : public drogon::Plugin<OAuth2Plugin>
     std::shared_ptr<fulla::common::ports::IMetrics> metrics_;
     // B10 / Task 45: authorization engine + its subject resolver.
     std::shared_ptr<fulla::common::ports::ISubjectResolver> subjectResolver_;
+    // TSan 2026-11-09 (first tsan-nightly run): initAndStart issues the
+    // admin-scope DB load at :75 (initStorage) but constructs
+    // authorizationService_ ~150 lines later — the DbLoop callback read the
+    // member unsynchronized AND silently dropped the loaded set when it won
+    // the race (falling back to the hardcoded defaults). The mutex below
+    // orders the handshake; pendingAdminScopes_ carries the set when the
+    // callback arrives before the service exists.
     std::shared_ptr<fulla::oauth2::protocol::AuthorizationService> authorizationService_;
+    std::mutex adminScopesMu_;
+    std::unordered_set<std::string> pendingAdminScopes_;
 
     std::string storageType_;
 
