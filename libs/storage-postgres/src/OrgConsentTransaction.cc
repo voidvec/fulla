@@ -47,6 +47,9 @@ void takeLock(const ConsentTransaction &txn, const std::shared_ptr<LockChain> &c
             return;
         }
         // Parameter-bound advisory concurrency primitive, held to COMMIT.
+        // Same user-ruled seventh raw-SQL use as AdvisoryLock.h (#219 /
+        // R-M2-5, outside the six documented exemptions): a lock is not
+        // CRUD and cannot be expressed through Mapper.
         txn->execSqlAsync(
           "SELECT pg_advisory_xact_lock(hashtext($1))",
           [txn, chain, index](const ::drogon::orm::Result &) { takeLock(txn, chain, index + 1); },

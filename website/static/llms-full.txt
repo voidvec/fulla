@@ -2099,8 +2099,14 @@ that reapproval restores the current scope snapshot without duplicate rows.
 These are two separate operations: authorization can be absent between them,
 and failure must be retried through the same current-manager checks.
 
-Database failures and unconfirmed commits return an error. Approve/reject and
-application listing have a ten-second local HTTP completion deadline and one
+A request whose client has been soft-deleted cannot be approved — it renders
+as the same 404 as a missing or foreign request id (previously the approval
+succeeded and wrote grants for the deleted client). Rejection and withdrawal
+skip that client check, so such a request stays resolvable.
+
+Database failures and unconfirmed commits return an error. Approve/reject,
+application listing, consent-request withdrawal and pair revocation have a
+ten-second local HTTP completion deadline and one
 response sink, including parallel query failures. The actual steady deadline
 is checked when completing; a delayed event-loop timer cannot let a late
 success through. Hosts must run the Drogon event loop. This deadline does not

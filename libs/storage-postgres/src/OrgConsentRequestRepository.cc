@@ -335,6 +335,11 @@ class ConsentDecision : public std::enable_shared_from_this<ConsentDecision>
           false,
           [self](const std::vector<Oauth2Clients> &rows) {
               if (rows.empty())
+                  // Deliberate tightening vs. the pre-S04 flow (which
+                  // approved leftover scope rows for a soft-deleted
+                  // client): an unapprovable request renders as the same
+                  // 404 as a missing/foreign id. Rejection and withdrawal
+                  // skip this read, so the request stays resolvable.
                   self->abort(DecisionStatus::NotFound);
               else
                   self->readActive();
