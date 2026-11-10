@@ -1407,7 +1407,13 @@ void OAuth2Plugin::lookupOwnerStatusChecked(
       };
     if (storageType_ != "postgres")
     {
-        complete({}, false);
+        // No owner registry exists outside postgres -- a structural fact
+        // known at startup, not a failed lookup. Classify as Unmanaged
+        // (same as memory mode, permits introspection) instead of
+        // Unavailable, which is reserved for registry query failures and
+        // must not turn every valid token inactive in a mode without an
+        // owner registry (RFC 7662 would report a falsehood).
+        complete(OwnerStatusResult::fromStatus(std::nullopt), false);
         return;
     }
     timer->store(loop->runAfter(5.0, [complete]() { complete({}, false); }));

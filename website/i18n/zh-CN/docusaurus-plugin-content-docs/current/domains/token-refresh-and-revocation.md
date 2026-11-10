@@ -34,7 +34,7 @@ subject 规范化、claim 解析及随机令牌生成均在消费之前完成。
 
 原 CRUD/CAS 方法保留。新方法默认失败关闭，所以旧实现仍能编译，但迁移前刷新请求会返回 `server_error`。这是源码兼容，不是行为兼容，也不提供二进制 ABI 承诺。不能把旧接口的所有 nullopt 判成重用，或将顺序写入宣称为原子操作。
 
-Drogon 宿主的 introspection 归属判断必须使用 lookupOwnerStatusChecked。OwnerStatusResult 区分 Active、成功确认无归属的 Unmanaged、Suspended（包含未知行状态）及 Unavailable，仅前两种可继续 introspection。旧 optional lookupOwnerStatus 包装为展示和源码兼容保留，仍丢失错误与不存在的区别，不可用于授权。
+Drogon 宿主的 introspection 归属判断必须使用 lookupOwnerStatusChecked。OwnerStatusResult 区分 Active、成功确认无归属的 Unmanaged、Suspended（包含未知行状态）及 Unavailable，仅前两种可继续 introspection。没有 owner 注册表的部署（storage_type 非 postgres）归类为 Unmanaged——这是启动即知的结构事实，与 memory 模式一致；Unavailable 仅保留给注册表查询错误与超时，因此无注册表的模式不会把有效 token 报为 inactive。旧 optional lookupOwnerStatus 包装为展示和源码兼容保留，仍丢失错误与不存在的区别，不可用于授权。
 
 内置 Memory/Postgres 仓储与 Redis 缓存装饰器实现了新路径。已弃用的独立 Redis 存储继续拒绝刷新 grant。按[版本政策](../contribute/versioning-and-release.md)，下一次 MINOR 发布必须显著标记此安全行为收紧与迁移要求。
 
