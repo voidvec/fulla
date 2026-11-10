@@ -24,8 +24,13 @@ struct ClientRegistrationControllerDocs
         registerDocs.path = "/oauth2/register";
         registerDocs.method = "POST";
         registerDocs.summary = "Register OAuth2 Client (RFC 7591)";
-        registerDocs.description = "Dynamically register a new OAuth2 client.";
-        registerDocs.tags = {"OAuth2"};
+        registerDocs.description =
+          "Dynamically register a new OAuth2 client. Requires a valid Bearer token "
+          "and the admin role under the shipped AuthorizationFilter rbac_rules. "
+          "Missing/invalid credentials return 401; authenticated callers without "
+          "the required role receive 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). "
+          "Self-service application registration uses /api/me/applications.";
+        registerDocs.tags = {"OAuth2", "Dynamic Registration"};
         registerDocs.requiresAuth = true;
         ::fulla::drogon::observability::openapi::OpenApiGenerator::addEndpoint(registerDocs);
     }

@@ -35,7 +35,7 @@ openapi::EndpointInfo adminAppEp(
     ep.method = method;
     ep.summary = summary;
     ep.description = description;
-    ep.tags = {"Admin", "Applications"};
+    ep.tags = {"Admin", "Clients"};
     ep.requiresAuth = true;
     ep.requiredScopes = {"clients:write"};
     ep.impliedBy = {"admin"};

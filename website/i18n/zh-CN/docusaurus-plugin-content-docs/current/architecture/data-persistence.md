@@ -201,7 +201,7 @@ SHA-256 加盐哈希），且：
 
 - 进程重启即丢失全部数据（无持久化）；
 - 无多用户 / 多实例共享（每个进程一份独立状态）；
-- 无事务、无原子 CAS 保证（测试桩实现）；
+- 没有持久化或跨进程事务边界；授权码消费与旧 RT CAS 在单进程内受互斥锁保护，但这不代表旧的“消费再保存”刷新序列具有整体原子性，也不代表重放处置与 PostgreSQL 等价；
 - Memory identity 仓库永远从 `findByUsername` 返回 `nullopt`，因此 admin
   登录链路在该模式下不可用（`loginAsAdmin()` 返回 `nullopt`，依赖它的集成
   测试会干净跳过）。
@@ -221,13 +221,29 @@ Memory 后端存在的唯一目的是让 Windows / macOS CI 环境在无 Postgre
 
 ### 缓存一致性：延迟双删
 
-Redis L2 缓存（键前缀 `fulla:cache:`）的写路径失效采用**延迟双删**：立即 DEL + 事件循环上
-延迟二次 DEL（默认 200ms，`cache.invalidation_double_delete_delay_ms` 可配，钳位 [50,2000]），
-以覆盖"读线程在 DEL 前刚回填旧值"的竞态窗口（issue #79）。二次 DEL 失败可观测：
-`fulla_cache_invalidation_failures_total{kind}` 计数器（issue #80）。读路径为 cache-aside，
-未命中回源 PostgreSQL 后回填（TTL 兜底最终一致）。
+Redis L2（`fulla:cache:`）采用 cache-aside 读取与部分写路径失效。直接撤销 AT
+会尝试写负标记，并对 access/introspection 条目执行**延迟双删**：立即 DEL，
+再由事件循环延迟 DEL（默认 200ms，由 `cache.invalidation_double_delete_delay_ms`
+配置并钳位至 50–2000ms）。family/RT 撤销与 pair 持久化直接委托后端，并非每条
+路径都清理正缓存；其他仓储各有失效 hook。双删可减少常见回填竞态，不是事务，
+也不代表所有副本都确认失效。
+
+Token 正缓存默认存活 60 秒，并受 token 到期时间限制。当前回填在后端读取后计算
+相对 TTL，延迟读取/回填和副本滞后使它不能视为“撤销到拒绝”的严格期限。各缓存
+存活时间及与尚未发布的绝对预算加固之间的区别见
+[令牌生命周期 §7](../domains/token-lifecycle.md)。DEL 失败计入
+`fulla_cache_invalidation_failures_total{kind}`，该计数并不证明每次负标记都写入成功。
 
 ### refresh token 家族与级联撤销
 
-refresh token 存储家族标识（V008），检测到重放即撤销整个家族；撤销可按 token / client / user
-三个粒度发起（管理 API 与 `/oauth2/revoke`）。
+refresh token 存储家族标识（V008）。生产 PostgreSQL 路径在保留的已撤销 RT 证明
+重用时尝试家族撤销，缓存收敛仍是独立边界。失败重试及后端差异见
+[令牌生命周期 §4](../domains/token-lifecycle.md)。管理撤销还支持 token、client、user
+粒度；`/oauth2/revoke` 撤销本次提交的令牌。
+
+### 组织邀请凭据
+
+`organization_invitations.token` 保留旧列名，但只保存邀请凭据的 SHA-256 哈希。
+创建时将原始凭据发送一次，接受邀请时先哈希用户提交值再查询；不能把库内哈希
+当作可兑换邀请。列重命名需要前向迁移与 ORM 再生成，本轮不重命名，也不修改
+已冻结的 V034 迁移。

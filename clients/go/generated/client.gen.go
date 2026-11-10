@@ -599,7 +599,7 @@ type HealthStatus struct {
 // HealthStatusStatus defines model for HealthStatus.Status.
 type HealthStatusStatus string
 
-// IntrospectionResponse RFC 7662 introspection body. Inactive tokens return {"active": false} only. Active responses always carry iss (backfilled from config); Cache-Control: no-store.
+// IntrospectionResponse RFC 7662 introspection body. Check active before using any metadata; inactive responses may still contain metadata, which must be ignored. Active responses carry iss (backfilled from config). Cache-Control: no-store. Optional org_id is a stored token binding, not proof of current organization membership.
 type IntrospectionResponse struct {
 	Active   bool    `json:"active"`
 	Aud      *string `json:"aud,omitempty"`
@@ -609,7 +609,7 @@ type IntrospectionResponse struct {
 	Iss      *string `json:"iss,omitempty"`
 	Nbf      *int64  `json:"nbf,omitempty"`
 
-	// OrgId v1.4.0: present when the token was issued in org context (authorize org_id parameter). The token's own binding; roles/name stay userinfo-only.
+	// OrgId When present, the organization binding saved at token issuance (authorize org_id or an organization-owned client_credentials application). Introspection does not recheck current membership. Legacy Redis L2 payloads may omit this field; absence does not prove a personal token. Roles/name stay userinfo-only. Resource servers must apply current authorization separately and ignore all metadata when active is false.
 	OrgId *int32 `json:"org_id,omitempty"`
 
 	// Scope Space-separated scopes.
@@ -3497,7 +3497,7 @@ type ClientInterface interface {
 
 	// PostOauth2IntrospectWithBody Introspect token
 	//
-	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3506,7 +3506,7 @@ type ClientInterface interface {
 
 	// PostOauth2IntrospectWithFormdataBody Introspect token
 	//
-	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 	//
 	// Takes a body of the `application/x-www-form-urlencoded` content type.
 	//
@@ -3605,7 +3605,7 @@ type ClientInterface interface {
 
 	// PostOauth2RegisterWithBody Register Client
 	//
-	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3614,7 +3614,7 @@ type ClientInterface interface {
 
 	// PostOauth2Register Register Client
 	//
-	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -7077,7 +7077,7 @@ func (c *Client) PostOauth2EndSession(ctx context.Context, params *PostOauth2End
 
 // PostOauth2IntrospectWithBody Introspect token
 //
-// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7096,7 +7096,7 @@ func (c *Client) PostOauth2IntrospectWithBody(ctx context.Context, contentType s
 
 // PostOauth2IntrospectWithFormdataBody Introspect token
 //
-// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 //
 // Takes a body of the `application/x-www-form-urlencoded` content type.
 //
@@ -7305,7 +7305,7 @@ func (c *Client) PostOauth2PasswordChange(ctx context.Context, body PostOauth2Pa
 
 // PostOauth2RegisterWithBody Register Client
 //
-// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7324,7 +7324,7 @@ func (c *Client) PostOauth2RegisterWithBody(ctx context.Context, contentType str
 
 // PostOauth2Register Register Client
 //
-// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -14890,7 +14890,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostOauth2IntrospectWithBodyWithResponse Introspect token
 	//
-	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14899,7 +14899,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostOauth2IntrospectWithFormdataBodyWithResponse Introspect token
 	//
-	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+	// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 	//
 	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14998,7 +14998,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostOauth2RegisterWithBodyWithResponse Register Client
 	//
-	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15007,7 +15007,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostOauth2RegisterWithResponse Register Client
 	//
-	// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+	// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21674,6 +21674,13 @@ func (r PostOauth2PasswordChangeResponse) ContentType() string {
 type PostOauth2RegisterResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ErrorEnvelope
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostOauth2RegisterResponse) GetJSON403() *ErrorEnvelope {
+	return r.JSON403
 }
 
 // GetBody returns the raw response body bytes
@@ -24744,7 +24751,7 @@ func (c *ClientWithResponses) PostOauth2EndSessionWithResponse(ctx context.Conte
 
 // PostOauth2IntrospectWithBodyWithResponse Introspect token
 //
-// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24759,7 +24766,7 @@ func (c *ClientWithResponses) PostOauth2IntrospectWithBodyWithResponse(ctx conte
 
 // PostOauth2IntrospectWithFormdataBodyWithResponse Introspect token
 //
-// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+// RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
 //
 // Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24924,7 +24931,7 @@ func (c *ClientWithResponses) PostOauth2PasswordChangeWithResponse(ctx context.C
 
 // PostOauth2RegisterWithBodyWithResponse Register Client
 //
-// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24939,7 +24946,7 @@ func (c *ClientWithResponses) PostOauth2RegisterWithBodyWithResponse(ctx context
 
 // PostOauth2RegisterWithResponse Register Client
 //
-// Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+// Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29376,6 +29383,25 @@ func ParsePostOauth2RegisterResponse(rsp *http.Response) (*PostOauth2RegisterRes
 	response := &PostOauth2RegisterResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		break // No content-type
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 401:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	}
 
 	return response, nil

@@ -591,7 +591,7 @@ salted hashing), and:
 
 - All data is lost on process restart (no persistence);
 - No multi-user / multi-instance sharing (each process holds an independent copy of the state);
-- No transactions, no atomic CAS guarantees (test-stub implementation);
+- No durable or cross-process transaction boundary. Code consumption and old-RT CAS are mutex-protected within one process; this does not make the legacy consume-and-save refresh sequence atomic or its replay handling equivalent to PostgreSQL;
 - The memory identity repository always returns `nullopt` from `findByUsername`, so the
   admin login path is unavailable in this mode (`loginAsAdmin()` returns `nullopt`;
   integration tests that depend on it skip cleanly).
@@ -613,19 +613,42 @@ is covered for all three implementations by `tests/contract/GrantRepositoryContr
 
 ### Cache consistency: delayed double-delete
 
-Write-path invalidation for the Redis L2 cache (key prefix `fulla:cache:`) uses a **delayed
-double-delete**: an immediate DEL plus a second, delayed DEL on the event loop (default 200ms,
-configurable via `cache.invalidation_double_delete_delay_ms`, clamped to [50,2000]). This covers
-the race window where "a reader thread backfills a stale value just before the DEL" (issue #79).
-Second-DEL failures are observable via the `fulla_cache_invalidation_failures_total{kind}`
-counter (issue #80). The read path is cache-aside: on a miss it falls through to PostgreSQL and
-backfills (with TTL as the eventual-consistency backstop).
+Redis L2 (`fulla:cache:`) uses cache-aside reads and selected write-path
+invalidation. Direct access-token revocation attempts a negative marker and
+**delayed double-delete** of access/introspection entries: immediate DEL plus
+a second event-loop DEL (default 200 ms, configured by
+`cache.invalidation_double_delete_delay_ms`, clamped to 50–2000 ms).
+Family/RT revocation and pair persistence pass through the token decorator;
+they do not all invalidate positive cache entries. Other repositories have
+their own hooks. Double-delete reduces common refill races but is not a
+transaction or an invalidation acknowledgement for every replica.
+
+Positive token entry TTL defaults to 60 seconds, capped by token expiry.
+Current refill calculates a relative TTL after its backing read, so delayed
+reads/refills and replica lag prevent treating that value as a strict
+revocation-to-rejection deadline. See [Token Lifecycle §7](../domains/token-lifecycle.md)
+for per-cache lifetimes and the distinction from unreleased absolute-budget
+hardening. Failed DEL attempts increment
+`fulla_cache_invalidation_failures_total{kind}`; this is not proof that every
+negative-marker write succeeded.
 
 ### Refresh-token families and cascading revocation
 
-Refresh tokens store a family identifier (V008); on detected replay the entire family is
-revoked. Revocation can be initiated at three granularities — per token / per client / per
-user (admin API and `/oauth2/revoke`).
+Refresh tokens store a family identifier (V008). The production PostgreSQL
+path attempts family revocation when a retained revoked RT proves reuse;
+cache convergence remains separate. See [Token Lifecycle §4](../domains/token-lifecycle.md)
+for failure/retry and backend boundaries. Administrative revocation also
+supports token, client and user granularity; `/oauth2/revoke` revokes the
+presented token.
+
+### Organization invitation credentials
+
+`organization_invitations.token` retains its legacy column name but stores
+only the SHA-256 hash of the invitation credential. Creation sends the raw
+credential once; acceptance hashes the supplied value before lookup.
+Do not use a stored hash as a redeemable invitation. Renaming this column
+would require a forward migration and ORM regeneration; no rename or change
+to the frozen V034 migration is included here.
 
 
 ---
@@ -1451,6 +1474,22 @@ Authorization: `Bearer {access_token}`
 }
 ```
 
+### 3.w Introspection and organization context
+
+`POST /oauth2/introspect` requires client authentication and returns the
+stored token status, not a fresh authorization decision for an RP. Check
+`active` first; ignore all other fields when it is false, even if the server
+includes metadata. Do not cache this HTTP response (`Cache-Control: no-store`).
+
+When present, `org_id` is the organization binding saved at issuance through
+an authorization request or an organization-owned `client_credentials`
+application. Introspection does not recheck current organization membership.
+Removing a member or consent does not itself revoke issued ATs/RTs; resource
+servers must enforce current organization access separately. Current Redis
+L2 token payloads can omit this binding on a cache hit, so a missing `org_id`
+is not evidence of personal context. Expiry and cache convergence are
+separate limits; see [Token Lifecycle](token-lifecycle.md) §6–7.
+
 ### 3.x Path → required-scope mapping (#43 resource-scope model)
 
 After an access token passes validation, `OAuth2AuthFilter` / `AuthorizationFilter`
@@ -1486,8 +1525,12 @@ Three management surfaces exist:
   lifecycle management on behalf of any client.
 - **RFC 7591 dynamic registration** `POST /oauth2/register` (v1.4.0) —
   implements the RFC 7591 protocol shape but is **admin-gated** (Bearer token
-  with admin role); it creates the client record without an owner row, so
-  registered clients are administered via the admin API, not the portal.
+  with the role required by the shipped `AuthorizationFilter.rbac_rules`,
+  currently `admin`). Missing/invalid credentials return 401; an authenticated
+  caller without that role receives 403 `AUTHZ_INSUFFICIENT_PERMISSIONS`
+  (the application ErrorEnvelope). It creates the client record without an
+  owner row, so registered clients are administered via the admin API, not
+  the portal. This is separate from self-service application registration.
 - **Self-service applications** `POST /api/me/applications` (v1.4.0 open
   platform, Bearer token) — quota'd per user (`max_apps_per_user`) and rate
   limited (`creation_rate_limit_per_day`); created applications are owned by
@@ -2988,9 +3031,10 @@ contract, see the [API Reference](api-reference.md) and
 | id_token | **RS256 JWT** signed via JWKS (`kid` published at `/.well-known/jwks.json`) | Client-side signature verification (standard OIDC) | Same as access token; issued only with the `openid` scope |
 
 Design rationale ([ADR-0004](../adr/ADR-0004.md)): opaque access tokens keep
-the server in full control — revocation is immediate and stateful, and no
-key-compromised token outlives its server-side record. The JWT capability is
-reserved for the OIDC `id_token`, where the protocol requires it.
+the authoritative validity decision in server-side state. Redis caches and
+replicas have their own convergence windows (§7); stateful revocation does
+not imply that every replica rejects the next request. The JWT capability
+is reserved for the OIDC `id_token`, where the protocol requires it.
 
 One frequent confusion: the **roles** that accompany a token response are part
 of the JSON envelope (`"roles": [...]`) and the id_token claims — the opaque
@@ -3004,7 +3048,7 @@ All grants converge on `TokenService` (libs/oauth2):
 |---|---|---|
 | `authorization_code` (+ PKCE, mandatory for PUBLIC clients) | access + refresh (+ id_token if `openid`) | The code is single-use with atomic consume (see §5) |
 | `refresh_token` | new access + **new** refresh | Old refresh is revoked; family id is inherited (§4) |
-| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally carries the `org_id` claim (v1.4.0), exposed via introspection — the subject stays the client id |
+| `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally stores `org_id` (v1.4.0), exposed via introspection when available — the subject is `client:<client_id>` |
 | `device_code` | access + refresh after user approval | Polling per RFC 8628 |
 
 `expires_in` in every response advertises the **configured** access-token
@@ -3023,12 +3067,27 @@ lifetime — not a hardcoded 3600 (RFC 6749 §5.1).
 
 ## 4. Refresh rotation, reuse detection, family revocation
 
-Every refresh grants a **new** refresh token that inherits the same
-`token_family` (V008). If a refresh token that was already revoked is
-presented again, that is treated as theft: the server **cascades revocation
-to every token in the family** — attacker and legitimate user alike must
-re-authenticate. The full threat-model walkthrough (with a sequence diagram)
-lives in [Security Architecture §7](../architecture/security-architecture.md).
+Every successful refresh grants a **new** refresh token that inherits the
+same `token_family` (V008). In the production PostgreSQL path, detecting a
+retained, previously revoked RT triggers family revocation; attacker and
+legitimate user may both need to reauthenticate. Expiry or a missing row
+alone is not evidence of replay. The development Memory backend prevents
+reuse with an in-process CAS, but its legacy lookup hides revoked records;
+it does not provide the same retained-record replay handling as PostgreSQL.
+The threat model is described in
+[Security Architecture §7](../architecture/security-architecture.md).
+
+There is no refresh grace period or retry-idempotency guarantee. In the
+current implementation, old-RT consumption and replacement-pair persistence
+are separate repository calls. A persistence failure can consume the old RT;
+a lost response can hide an already persisted replacement pair. A network
+error does not prove rollback or make the old RT safe to reuse. Stop a failed
+refresh loop and reauthenticate; coordinate refreshes across tabs/processes.
+
+**Unreleased hardening:** [PR #321](https://github.com/voidvec/fulla/pull/321)
+adds atomic rotation, checked repository results and stronger cache budgets;
+its custom-repository migration applies when upgrading to a release that
+includes it. These guarantees must not be assumed for earlier builds.
 
 ## 5. Single-use of authorization codes
 
@@ -3046,20 +3105,56 @@ contract is enforced across all three implementations by
 | Admin API `DELETE /api/admin/tokens/{prefix}` | By token prefix |
 | Admin token management | Revoke by **client** or by **user** — wipes every token minted for that principal |
 
-Revocation is stateful and immediate: the very next introspection or
-userinfo call with a revoked token returns `{"active": false}` / 401.
+After a successful authoritative revocation, a read of that state rejects
+the token. An existing cache snapshot or stale replica can delay observation
+(§7). Always check introspection's `active` value first; ignore any metadata
+when it is false. Userinfo rejects a token it observes as revoked with 401.
+
+Login eligibility, current authorization and token validity are different:
+
+| Administrative change | Existing behavior and boundary |
+|---|---|
+| Disable a user | Sets the login lock and invalidates user read caches; does not automatically revoke every issued AT/RT. Explicit token revocation is a separate action. |
+| Remove a user's role assignment | Role-protected APIs resolve role/permission data. Token scopes are not rewritten; role-cache invalidation and its lifetime still matter. |
+| Change a role's permissions | Uses a separate process-local permission cache without a TTL; invalidate it on every replica or restart. The user-role TTL does not bound these changes. |
+| Remove organization membership or consent | Organization gates and claim resolution check their own current state. The stored token `org_id` is historical context, not a live membership grant; issued tokens are not automatically revoked. |
+| Suspend an open-platform client | Client validation and introspection's owner-status overlay have separate caches. This operation is not universal token revocation for every API. |
+
+Organization-decision atomicity and response-completion hardening are tracked
+in [PR #322](https://github.com/voidvec/fulla/pull/322); they do not change these
+issued-token revocation boundaries.
 
 ## 7. Cache interplay
 
-With the Redis L2 cache enabled (`cache.enabled`), token and client reads hit
-`fulla:cache:*` before Postgres. Every write path (issue, refresh, revoke)
-invalidates through **delayed double-delete** (immediate DEL + a second DEL
-~200 ms later, `cache.invalidation_double_delete_delay_ms`), closing the
-race where a concurrent reader re-fills a stale entry between the write and
-the first delete. Failures of the second delete are counted in
-`fulla_cache_invalidation_failures_total` — see
-[Observability](../operate/observability.md). Details in
-[Data Persistence · cache consistency](../architecture/data-persistence.md).
+With Redis L2 enabled (`cache.enabled`), token/client reads check
+`fulla:cache:*` before PostgreSQL. Direct AT revocation attempts a negative
+marker and immediate/delayed deletion of access and introspection entries.
+The second DEL defaults to 200 ms (`cache.invalidation_double_delete_delay_ms`,
+clamped to 50–2000 ms). This reduces refill races; it does not prove that
+every invalidation succeeds. Family/RT revocation and pair writes pass
+through to storage and do not all perform positive-cache invalidation.
+
+| Cache | Default entry lifetime |
+|---|---|
+| Access/introspection | `cache.ttl_seconds.access_token_max`: 60 s, capped by token expiry |
+| Client | `cache.ttl_seconds.client`: 300 s |
+| User roles / profile | `cache.ttl_seconds.user_roles`: 120 s / `user_profile`: 300 s |
+| Owner status for introspection | 60 s process-local memo, separate from the client cache |
+
+These are entry lifetimes, not a proven deadline measured from revocation.
+Current token refill computes a relative TTL after the backing read;
+in-flight reads, queued writes and replica lag can extend observation beyond
+one configured TTL after a change. A delayed second DEL is also best effort.
+Do not infer an absolute cross-replica revocation SLO from these defaults.
+The absolute token-cache budgets proposed in PR #321 must not be generalized
+to the other caches.
+
+Current Redis token payloads do not preserve `org_id`, so a cache hit may
+omit it. Absence is not proof of personal context; resource servers must
+establish required organization authorization separately. Invalidation
+failures are observable through `fulla_cache_invalidation_failures_total`
+([Observability](../operate/observability.md)). See
+[Data Persistence](../architecture/data-persistence.md) for the storage paths.
 
 ## 8. Configuration reference
 
@@ -3456,9 +3551,25 @@ If the admin password was changed accidentally, or login fails after the upgrade
 .\scripts\backend\reset-admin-password.ps1
 ```
 
-**Note**: this script resets the admin password to the default in SHA-256 form (for development environments). On first login, the system automatically upgrades it to PBKDF2.
+The script writes the development password `admin` directly in the current
+`$pbkdf2-sha256$310000$...` format and clears the legacy salt and lockout
+fields. It does not write a SHA-256 password or rely on an automatic first-login
+upgrade. Legacy hashes are rejected by default; a separately configured
+migration window is not the recovery procedure.
+
+Use this default-password reset only in an isolated development/test database.
+The script automatically selects the first running PostgreSQL-named Docker
+container when available; verify the selected database before proceeding.
+Production recovery must use an approved privileged process and a new secret,
+not these public development credentials. Restarting the server does not reset
+an existing admin password.
 
 ### Method 3: direct SQL
+
+The commands below clear lockout only; they do not change the password.
+For the development password reset, use Method 2. Do not paste a PBKDF2 digest
+into a shell-expanded SQL string: `$` is part of the stored format and must
+remain literal.
 
 #### Local PostgreSQL
 
@@ -3468,18 +3579,12 @@ $env:PGPASSWORD = "123456"
 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 $env:PGPASSWORD = $null
 
-# 如果密码也需要重置（重置为默认密码 'admin'）
-$env:PGPASSWORD = "123456"
-psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
-$env:PGPASSWORD = $null
 ```
 
 ```bash
 # Linux/Mac - 重置锁定状态
 PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 #### Docker database
@@ -3488,8 +3593,6 @@ PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users S
 # 重置锁定状态
 docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 ### Method 4: inspect lockout state

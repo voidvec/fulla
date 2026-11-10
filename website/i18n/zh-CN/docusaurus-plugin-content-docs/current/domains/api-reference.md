@@ -174,6 +174,18 @@ token（subject `client:*`）。响应附带
 }
 ```
 
+### 3.w Introspection 与组织上下文
+
+`POST /oauth2/introspect` 要求客户端认证，返回已保存的令牌状态，不是替 RP 重新
+作当前授权决定。必须先检查 `active`，为 false 时忽略其他字段，即使服务器仍带有
+元数据。不要缓存该 HTTP 响应（`Cache-Control: no-store`）。
+
+当 `org_id` 存在时，它是授权请求或组织所属 `client_credentials` 应用签发令牌时
+保存的组织绑定；introspection 不复核当前组织会员资格。移除成员或授权不会自动
+撤销已签发 AT/RT，资源服务器必须另行实施当前组织授权。当前 Redis L2 token
+payload 在缓存命中时可能省略这个绑定，缺少 `org_id` 不证明是个人上下文。到期与
+缓存收敛仍是独立边界，见[令牌生命周期](token-lifecycle.md) §6–7。
+
 ### 3.x 路径→required-scope 映射（#43 资源-scope 模型）
 
 `OAuth2AuthFilter` / `AuthorizationFilter` 在 access token 校验通过后，强制
@@ -199,12 +211,23 @@ scope="<required>"`，其中 `scope` 属性命名解锁该资源所需的 scope�
 > （`fulla::drogon::utils::hasScope()`），避免 `openidprofile` 误过
 > `openid`/`profile`。
 
-### 3.y 客户端管理（F-030：admin-only，无 RFC 7592 自管理）
+### 3.y 客户端管理（无 RFC 7592 管理协议）
 
-客户端注册与管理**仅**经 admin API `/api/admin/clients/*`（需 admin scope +
-admin 角色）。本服务**不**实现 RFC 7592 动态客户端管理的
-`registration_access_token` 自管理端点 —— 客户端无法自助查看/修改自身注册
-信息。需要变更的客户端须联系管理员经 admin API 处理。
+现有管理入口：
+
+- **Admin API** `/api/admin/clients/*`：admin scope 与 admin role 双重门禁，管理所有客户端。
+- **RFC 7591 动态注册** `POST /oauth2/register`（v1.4.0）：要求 Bearer token，以及随仓库发布的
+  `AuthorizationFilter.rbac_rules` 所指定的角色（当前为 `admin`）。凭据缺失/无效返回
+  401；已认证但不满足角色要求返回 403 `AUTHZ_INSUFFICIENT_PERMISSIONS`，使用应用
+  ErrorEnvelope。注册只创建 client，不创建 owner 行；后续通过 admin API 管理，不能
+  与自助应用注册混同。
+- **自助应用** `POST /api/me/applications`（v1.4.0 开放平台）：Bearer token，受 `max_apps_per_user` 配额与
+  `creation_rate_limit_per_day` 限制；创建者可在门户“我的应用”管理凭据、状态和删除。
+- **组织所属应用**：由组织 owner/admin 管理，其组织授权可单独撤销，见
+  [多租户](multi-tenancy.md) §3。
+
+尚未实现 RFC 7592 `registration_access_token` 管理协议，即使用 registration token
+访问 `/register/{client_id}` GET/PUT/DELETE；应用通过门户或 admin API 管理。
 
 ### 3.z nonce 重放防护（F-026：客户端责任）
 

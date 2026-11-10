@@ -66,9 +66,19 @@ OAuth2 系统实现了账号锁定机制以防止暴力破解攻击。当用户�
 .\scripts\backend\reset-admin-password.ps1
 ```
 
-**注意**：此脚本会将admin密码重置为SHA-256格式的默认密码（开发环境用）。首次登录后，系统会自动升级为PBKDF2格式。
+脚本直接把开发密码 `admin` 写成当前 `$pbkdf2-sha256$310000$...` 格式，并清空
+旧 salt 与锁定字段。它不会写入 SHA-256 密码，也不依赖首次登录自动升级。旧哈希
+默认被拒绝；单独配置的迁移窗口不是此处的恢复流程。
+
+只在隔离的开发/测试数据库使用这种默认密码重置。脚本在存在匹配容器时会自动选取
+第一个正在运行、名称含 PostgreSQL 的 Docker 容器，执行前必须核对所选数据库。
+生产恢复应走获准的特权流程并使用新的秘密，不能套用这些公开开发凭据。重启服务
+也不会重置已有管理员密码。
 
 ### 方法3：直接使用SQL
+
+下面命令只清除锁定，不修改密码。开发密码重置使用方法 2。不要把 PBKDF2 摘要
+嵌入会被 shell 展开的 SQL 字符串，`$` 是存储格式的一部分，必须保持字面值。
 
 #### 本地PostgreSQL
 
@@ -78,18 +88,12 @@ $env:PGPASSWORD = "123456"
 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 $env:PGPASSWORD = $null
 
-# 如果密码也需要重置（重置为默认密码 'admin'）
-$env:PGPASSWORD = "123456"
-psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
-$env:PGPASSWORD = $null
 ```
 
 ```bash
 # Linux/Mac - 重置锁定状态
 PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 #### Docker数据库
@@ -98,8 +102,6 @@ PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users S
 # 重置锁定状态
 docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 ### 方法4：查看锁定状态

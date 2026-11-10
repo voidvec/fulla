@@ -66,9 +66,25 @@ If the admin password was changed accidentally, or login fails after the upgrade
 .\scripts\backend\reset-admin-password.ps1
 ```
 
-**Note**: this script resets the admin password to the default in SHA-256 form (for development environments). On first login, the system automatically upgrades it to PBKDF2.
+The script writes the development password `admin` directly in the current
+`$pbkdf2-sha256$310000$...` format and clears the legacy salt and lockout
+fields. It does not write a SHA-256 password or rely on an automatic first-login
+upgrade. Legacy hashes are rejected by default; a separately configured
+migration window is not the recovery procedure.
+
+Use this default-password reset only in an isolated development/test database.
+The script automatically selects the first running PostgreSQL-named Docker
+container when available; verify the selected database before proceeding.
+Production recovery must use an approved privileged process and a new secret,
+not these public development credentials. Restarting the server does not reset
+an existing admin password.
 
 ### Method 3: direct SQL
+
+The commands below clear lockout only; they do not change the password.
+For the development password reset, use Method 2. Do not paste a PBKDF2 digest
+into a shell-expanded SQL string: `$` is part of the stored format and must
+remain literal.
 
 #### Local PostgreSQL
 
@@ -78,18 +94,12 @@ $env:PGPASSWORD = "123456"
 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 $env:PGPASSWORD = $null
 
-# 如果密码也需要重置（重置为默认密码 'admin'）
-$env:PGPASSWORD = "123456"
-psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
-$env:PGPASSWORD = $null
 ```
 
 ```bash
 # Linux/Mac - 重置锁定状态
 PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 #### Docker database
@@ -98,8 +108,6 @@ PGPASSWORD=123456 psql -U fulla_user -d fulla_db -h localhost -c "UPDATE users S
 # 重置锁定状态
 docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET failed_login_count = 0, locked_until = 0 WHERE username='admin';"
 
-# 如果密码也需要重置
-docker exec <container_name> psql -U fulla_user -d fulla_db -c "UPDATE users SET password_hash = '$pbkdf2-sha256$310000$61646d696e5f736565645f73616c74$6c0307305e1390e1214b15f1f4d0250b2de86aa0e8aa0e008e5cca03084d3d62', salt = '', failed_login_count = 0, locked_until = 0 WHERE username = 'admin';"
 ```
 
 ### Method 4: inspect lockout state

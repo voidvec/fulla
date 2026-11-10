@@ -203,7 +203,7 @@ salted hashing), and:
 
 - All data is lost on process restart (no persistence);
 - No multi-user / multi-instance sharing (each process holds an independent copy of the state);
-- No transactions, no atomic CAS guarantees (test-stub implementation);
+- No durable or cross-process transaction boundary. Code consumption and old-RT CAS are mutex-protected within one process; this does not make the legacy consume-and-save refresh sequence atomic or its replay handling equivalent to PostgreSQL;
 - The memory identity repository always returns `nullopt` from `findByUsername`, so the
   admin login path is unavailable in this mode (`loginAsAdmin()` returns `nullopt`;
   integration tests that depend on it skip cleanly).
@@ -225,16 +225,39 @@ is covered for all three implementations by `tests/contract/GrantRepositoryContr
 
 ### Cache consistency: delayed double-delete
 
-Write-path invalidation for the Redis L2 cache (key prefix `fulla:cache:`) uses a **delayed
-double-delete**: an immediate DEL plus a second, delayed DEL on the event loop (default 200ms,
-configurable via `cache.invalidation_double_delete_delay_ms`, clamped to [50,2000]). This covers
-the race window where "a reader thread backfills a stale value just before the DEL" (issue #79).
-Second-DEL failures are observable via the `fulla_cache_invalidation_failures_total{kind}`
-counter (issue #80). The read path is cache-aside: on a miss it falls through to PostgreSQL and
-backfills (with TTL as the eventual-consistency backstop).
+Redis L2 (`fulla:cache:`) uses cache-aside reads and selected write-path
+invalidation. Direct access-token revocation attempts a negative marker and
+**delayed double-delete** of access/introspection entries: immediate DEL plus
+a second event-loop DEL (default 200 ms, configured by
+`cache.invalidation_double_delete_delay_ms`, clamped to 50–2000 ms).
+Family/RT revocation and pair persistence pass through the token decorator;
+they do not all invalidate positive cache entries. Other repositories have
+their own hooks. Double-delete reduces common refill races but is not a
+transaction or an invalidation acknowledgement for every replica.
+
+Positive token entry TTL defaults to 60 seconds, capped by token expiry.
+Current refill calculates a relative TTL after its backing read, so delayed
+reads/refills and replica lag prevent treating that value as a strict
+revocation-to-rejection deadline. See [Token Lifecycle §7](../domains/token-lifecycle.md)
+for per-cache lifetimes and the distinction from unreleased absolute-budget
+hardening. Failed DEL attempts increment
+`fulla_cache_invalidation_failures_total{kind}`; this is not proof that every
+negative-marker write succeeded.
 
 ### Refresh-token families and cascading revocation
 
-Refresh tokens store a family identifier (V008); on detected replay the entire family is
-revoked. Revocation can be initiated at three granularities — per token / per client / per
-user (admin API and `/oauth2/revoke`).
+Refresh tokens store a family identifier (V008). The production PostgreSQL
+path attempts family revocation when a retained revoked RT proves reuse;
+cache convergence remains separate. See [Token Lifecycle §4](../domains/token-lifecycle.md)
+for failure/retry and backend boundaries. Administrative revocation also
+supports token, client and user granularity; `/oauth2/revoke` revokes the
+presented token.
+
+### Organization invitation credentials
+
+`organization_invitations.token` retains its legacy column name but stores
+only the SHA-256 hash of the invitation credential. Creation sends the raw
+credential once; acceptance hashes the supplied value before lookup.
+Do not use a stored hash as a redeemable invitation. Renaming this column
+would require a forward migration and ORM regeneration; no rename or change
+to the frozen V034 migration is included here.

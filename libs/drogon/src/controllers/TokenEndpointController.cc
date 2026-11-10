@@ -204,7 +204,12 @@ void TokenEndpointController::initApiDocsImpl()
         introspectEndpoint.method = "POST";
         introspectEndpoint.summary = "Introspect token";
         introspectEndpoint.description =
-          "RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token.";
+          "RFC 7662 OAuth 2.0 Token Introspection. Requires client authentication. "
+          "Check active first and ignore metadata when inactive. When present, "
+          "org_id is the stored issuance binding, not a live membership check. "
+          "Membership or consent removal does not itself revoke issued tokens. "
+          "Legacy Redis L2 payloads may omit org_id; absence does not prove "
+          "personal context. Expiry and cache convergence remain separate limits.";
         introspectEndpoint.tags = {"OAuth2", "Token"};
 
         fulla::drogon::observability::openapi::ParameterInfo tokenParam;
