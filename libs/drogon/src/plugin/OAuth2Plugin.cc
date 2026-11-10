@@ -1407,13 +1407,16 @@ void OAuth2Plugin::lookupOwnerStatusChecked(
       };
     if (storageType_ != "postgres")
     {
-        // No owner registry exists outside postgres -- a structural fact
-        // known at startup, not a failed lookup. Classify as Unmanaged
-        // (same as memory mode, permits introspection) instead of
-        // Unavailable, which is reserved for registry query failures and
-        // must not turn every valid token inactive in a mode without an
-        // owner registry (RFC 7662 would report a falsehood).
-        complete(OwnerStatusResult::fromStatus(std::nullopt), false);
+        // No owner registry exists in the memory/redis modes -- a structural
+        // fact known at startup, not a failed lookup. Classify as Unmanaged
+        // (same as memory mode, permits introspection) so a mode without a
+        // registry never reports valid tokens inactive (RFC 7662 would state
+        // a falsehood). Unavailable stays reserved for postgres registry
+        // query failures -- and for an empty storage type, which is not a
+        // real mode but an uninitialized plugin: deny rather than guess.
+        complete(storageType_.empty() ? OwnerStatusResult{}
+                                      : OwnerStatusResult::fromStatus(std::nullopt),
+                 false);
         return;
     }
     timer->store(loop->runAfter(5.0, [complete]() { complete({}, false); }));
