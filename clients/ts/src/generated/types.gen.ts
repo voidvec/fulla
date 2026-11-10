@@ -134,7 +134,7 @@ export type WebAuthnAssertionCredential = {
 };
 
 /**
- * RFC 7662 introspection body. Inactive tokens return {"active": false} only. Active responses always carry iss (backfilled from config); Cache-Control: no-store.
+ * RFC 7662 introspection body. Check active before using any metadata; inactive responses may still contain metadata, which must be ignored. Active responses carry iss (backfilled from config). Cache-Control: no-store. Optional org_id is a stored token binding, not proof of current organization membership.
  */
 export type IntrospectionResponse = {
     active: boolean;
@@ -157,7 +157,7 @@ export type IntrospectionResponse = {
      */
     scope?: string;
     /**
-     * v1.4.0: present when the token was issued in org context (authorize org_id parameter). The token's own binding; roles/name stay userinfo-only.
+     * When present, the organization binding saved at token issuance (authorize org_id or an organization-owned client_credentials application). Introspection does not recheck current membership. Legacy Redis L2 payloads may omit this field; absence does not prove a personal token. Roles/name stay userinfo-only. Resource servers must apply current authorization separately and ignore all metadata when active is false.
      */
     org_id?: number;
 };
@@ -5240,7 +5240,13 @@ export type PostOauth2RegisterErrors = {
      * Unauthorized
      */
     401: unknown;
+    /**
+     * Authenticated caller lacks the role required by the registration RBAC rule
+     */
+    403: ErrorEnvelope;
 };
+
+export type PostOauth2RegisterError = PostOauth2RegisterErrors[keyof PostOauth2RegisterErrors];
 
 export type PostOauth2RegisterResponses = {
     /**

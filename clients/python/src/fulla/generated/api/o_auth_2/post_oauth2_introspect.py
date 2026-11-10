@@ -76,7 +76,12 @@ def sync_detailed(
     """Introspect token
 
      RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST
-    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active
+    before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's
+    stored issuance binding, not a live membership check. Removing a member or an organization consent
+    does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain
+    separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that
+    a token has no organization.
 
     Args:
         body (PostOauth2IntrospectBody):
@@ -108,7 +113,12 @@ def sync(
     """Introspect token
 
      RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST
-    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active
+    before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's
+    stored issuance binding, not a live membership check. Removing a member or an organization consent
+    does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain
+    separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that
+    a token has no organization.
 
     Args:
         body (PostOauth2IntrospectBody):
@@ -135,7 +145,12 @@ async def asyncio_detailed(
     """Introspect token
 
      RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST
-    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active
+    before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's
+    stored issuance binding, not a live membership check. Removing a member or an organization consent
+    does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain
+    separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that
+    a token has no organization.
 
     Args:
         body (PostOauth2IntrospectBody):
@@ -165,7 +180,12 @@ async def asyncio(
     """Introspect token
 
      RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST
-    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+    authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active
+    before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's
+    stored issuance binding, not a live membership check. Removing a member or an organization consent
+    does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain
+    separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that
+    a token has no organization.
 
     Args:
         body (PostOauth2IntrospectBody):

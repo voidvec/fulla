@@ -1542,7 +1542,7 @@ export const postOauth2EndSession = <ThrowOnError extends boolean = false>(optio
 /**
  * Introspect token
  *
- * RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted).
+ * RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token. The calling client MUST authenticate (HTTP Basic preferred; client_id/client_secret form parameters accepted). Check active before using metadata; ignore metadata in inactive responses. When returned, org_id is the token's stored issuance binding, not a live membership check. Removing a member or an organization consent does not itself revoke issued tokens. Expiry, explicit revocation and cache convergence remain separate limits. Legacy Redis L2 cache hits can omit org_id; absence must not be used to infer that a token has no organization.
  */
 export const postOauth2Introspect = <ThrowOnError extends boolean = false>(options: Options<PostOauth2IntrospectData, ThrowOnError>): RequestResult<PostOauth2IntrospectResponses, PostOauth2IntrospectErrors, ThrowOnError> => (options.client ?? client).post<PostOauth2IntrospectResponses, PostOauth2IntrospectErrors, ThrowOnError>({
     ...urlSearchParamsBodySerializer,
@@ -1615,7 +1615,7 @@ export const postOauth2PasswordChange = <ThrowOnError extends boolean = false>(o
 /**
  * Register Client
  *
- * Dynamic client registration (admin-gated). Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
+ * Dynamic client registration (admin-gated). Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; an authenticated caller without the required role returns 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). This is separate from self-service application registration at /api/me/applications. Accepted metadata: client_name, client_type (CONFIDENTIAL|PUBLIC), token_endpoint_auth_method, redirect_uris (https enforced, loopback exempt), grant_types, and — P0-7b — optional post_logout_redirect_uris (dedicated RP-initiated-logout redirect registrations, same scheme policy; when registered they are authoritative for end_session's post_logout_redirect_uri validation).
  */
 export const postOauth2Register = <ThrowOnError extends boolean = false>(options: Options<PostOauth2RegisterData, ThrowOnError>): RequestResult<PostOauth2RegisterResponses, PostOauth2RegisterErrors, ThrowOnError> => (options.client ?? client).post<PostOauth2RegisterResponses, PostOauth2RegisterErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

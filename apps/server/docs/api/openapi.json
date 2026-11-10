@@ -462,7 +462,7 @@
         "tags" : 
         [
           "Admin",
-          "Applications"
+          "Clients"
         ],
         "x-required-scopes" : 
         [
@@ -546,7 +546,7 @@
         "tags" : 
         [
           "Admin",
-          "Applications"
+          "Clients"
         ],
         "x-required-scopes" : 
         [
@@ -3949,7 +3949,7 @@
     {
       "post" : 
       {
-        "description" : "RFC 7662 OAuth 2.0 Token Introspection. Returns information about a token.",
+        "description" : "RFC 7662 OAuth 2.0 Token Introspection. Requires client authentication. Check active first and ignore metadata when inactive. When present, org_id is the stored issuance binding, not a live membership check. Membership or consent removal does not itself revoke issued tokens. Legacy Redis L2 payloads may omit org_id; absence does not prove personal context. Expiry and cache convergence remain separate limits.",
         "operationId" : "post_oauth2_introspect",
         "parameters" : 
         [
@@ -4335,7 +4335,7 @@
     {
       "post" : 
       {
-        "description" : "Dynamically register a new OAuth2 client.",
+        "description" : "Dynamically register a new OAuth2 client. Requires a valid Bearer token and the admin role under the shipped AuthorizationFilter rbac_rules. Missing/invalid credentials return 401; authenticated callers without the required role receive 403 (AUTHZ_INSUFFICIENT_PERMISSIONS). Self-service application registration uses /api/me/applications.",
         "operationId" : "post_oauth2_register",
         "responses" : null,
         "security" : 
@@ -4347,7 +4347,8 @@
         "summary" : "Register OAuth2 Client (RFC 7591)",
         "tags" : 
         [
-          "OAuth2"
+          "OAuth2",
+          "Dynamic Registration"
         ]
       }
     },

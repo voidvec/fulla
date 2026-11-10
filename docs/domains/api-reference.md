@@ -177,6 +177,22 @@ Authorization: `Bearer {access_token}`
 }
 ```
 
+### 3.w Introspection and organization context
+
+`POST /oauth2/introspect` requires client authentication and returns the
+stored token status, not a fresh authorization decision for an RP. Check
+`active` first; ignore all other fields when it is false, even if the server
+includes metadata. Do not cache this HTTP response (`Cache-Control: no-store`).
+
+When present, `org_id` is the organization binding saved at issuance through
+an authorization request or an organization-owned `client_credentials`
+application. Introspection does not recheck current organization membership.
+Removing a member or consent does not itself revoke issued ATs/RTs; resource
+servers must enforce current organization access separately. Current Redis
+L2 token payloads can omit this binding on a cache hit, so a missing `org_id`
+is not evidence of personal context. Expiry and cache convergence are
+separate limits; see [Token Lifecycle](token-lifecycle.md) §6–7.
+
 ### 3.x Path → required-scope mapping (#43 resource-scope model)
 
 After an access token passes validation, `OAuth2AuthFilter` / `AuthorizationFilter`
@@ -212,8 +228,12 @@ Three management surfaces exist:
   lifecycle management on behalf of any client.
 - **RFC 7591 dynamic registration** `POST /oauth2/register` (v1.4.0) —
   implements the RFC 7591 protocol shape but is **admin-gated** (Bearer token
-  with admin role); it creates the client record without an owner row, so
-  registered clients are administered via the admin API, not the portal.
+  with the role required by the shipped `AuthorizationFilter.rbac_rules`,
+  currently `admin`). Missing/invalid credentials return 401; an authenticated
+  caller without that role receives 403 `AUTHZ_INSUFFICIENT_PERMISSIONS`
+  (the application ErrorEnvelope). It creates the client record without an
+  owner row, so registered clients are administered via the admin API, not
+  the portal. This is separate from self-service application registration.
 - **Self-service applications** `POST /api/me/applications` (v1.4.0 open
   platform, Bearer token) — quota'd per user (`max_apps_per_user`) and rate
   limited (`creation_rate_limit_per_day`); created applications are owned by
