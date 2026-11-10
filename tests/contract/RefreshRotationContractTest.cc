@@ -155,7 +155,10 @@ void rollback(
     CHECK(rotate(repo, old.rt, next).status == RefreshTokenStatus::Rotated);
 }
 
-void concurrency(
+// Named to avoid the PPL Concurrency namespace: on MSVC an unqualified
+// `concurrency` call resolves against it (C2872/C2882, see the windows
+// build failure on 895bdfe1).
+void concurrentRotationAndFamilyRevoke(
   const std::shared_ptr<::drogon::test::Case> &TEST_CTX,
   const std::shared_ptr<ITokenRepository> &repo
 )
@@ -327,14 +330,14 @@ DROGON_TEST(Integration_P0_RefreshRotation_Postgres_PairFailureRollback)
 
 DROGON_TEST(Integration_P0_RefreshRotation_Memory_ConcurrentAndFamilyRevoke)
 {
-    concurrency(TEST_CTX, std::make_shared<MemoryTokenRepository>());
+    concurrentRotationAndFamilyRevoke(TEST_CTX, std::make_shared<MemoryTokenRepository>());
 }
 
 DROGON_TEST(Integration_P0_RefreshRotation_Postgres_ConcurrentAndFamilyRevoke)
 {
     auto repo = postgres();
     if (repo)
-        concurrency(TEST_CTX, repo);
+        concurrentRotationAndFamilyRevoke(TEST_CTX, repo);
 }
 
 DROGON_TEST(Integration_P0_RefreshRotation_Postgres_DeferredCommitRejection)
