@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $passed = 0
 $failed = 0
-$total = 55
+$total = 61
 
 # Import common functions
 . "$PSScriptRoot\common-test-functions.ps1"
@@ -824,6 +824,175 @@ Test-Endpoint "Test 46: POST /api/admin/clients - create with backchannel_logout
         Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/$bcId" -Method Delete -Headers $h | Out-Null
     }
     Write-Host "    created with uri, read back, deleted: $bcId"
+}
+
+# P1-6 (#283): audit CSV export — window guard, CSV content type, self-audit
+# row (roadmap §7-3 endpoint-script coverage debt from the 2026-11 audit).
+Test-Endpoint "Test 47: GET /api/admin/logs/export - window guard + CSV + self-audit" {
+    $h = Get-AuthHeaders
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/logs/export" -Method Get -Headers $h -ErrorAction Stop
+        throw "should have returned 400 without a time window"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    # Windowed export must answer text/csv (Invoke-RestMethod would try to
+    # deserialize CSV; use Invoke-WebRequest for the content-type check —
+    # with -UseBasicParsing, mandatory on Windows PowerShell 5.1 where the
+    # IE-engine variant throws NullReferenceException).
+    $to = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/admin/logs/export?from=0&to=$to" -Method Get -UseBasicParsing -Headers @{ Authorization = "Bearer $script:accessToken" }
+    if ($resp.Headers["Content-Type"] -notmatch "text/csv") { throw "unexpected content-type: $($resp.Headers['Content-Type'])" }
+    # The export audited itself (audit_exported).
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/logs?action=audit_exported&page=1&per_page=5" -Method Get -Headers $h
+    if ($null -eq $r.logs) { throw "missing logs in audit_exported query" }
+    Write-Host "    window guard 400 + text/csv + audit_exported self-audit: ok"
+}
+
+# P1-3 (#280): claim-mapping CRUD red lines.
+Test-Endpoint "Test 48: /api/admin/claim-mappings - CRUD red lines (P1-3)" {
+    $h = Get-AuthHeaders
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    # Reserved claim name -> 400.
+    try {
+        $body = @{ scope_name = "profile"; claim_name = "sub"; source_path = "custom_attributes.department" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings" -Method Post -Headers $h -Body $body -ErrorAction Stop | Out-Null
+        throw "reserved claim name should be rejected"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "reserved claim: expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    # openid as trigger scope -> 400.
+    try {
+        $body = @{ scope_name = "openid"; claim_name = "audit_dept_$ts"; source_path = "custom_attributes.department" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings" -Method Post -Headers $h -Body $body -ErrorAction Stop | Out-Null
+        throw "openid trigger scope should be rejected"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "openid scope: expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    # Valid create -> id.
+    $body = @{ scope_name = "profile"; claim_name = "audit_dept_$ts"; source_path = "custom_attributes.department" } | ConvertTo-Json
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings" -Method Post -Headers $h -Body $body
+    if ($r.status -ne "success") { throw "create failed" }
+    $mid = $r.id
+    if (-not $mid) { throw "missing mapping id" }
+    try {
+        $list = Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings" -Method Get -Headers $h
+        if (-not ($list.mappings | Where-Object { $_.id -eq $mid })) { throw "mapping $mid not listed" }
+        # Full-replace PUT toggling enabled off.
+        $upd = @{ scope_name = "profile"; claim_name = "audit_dept_$ts"; source_path = "custom_attributes.department"; enabled = $false } | ConvertTo-Json
+        $r2 = Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings/$mid" -Method Put -Headers $h -Body $upd
+        if ($r2.status -ne "success") { throw "update failed" }
+    } finally {
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/claim-mappings/$mid" -Method Delete -Headers $h | Out-Null
+    }
+    Write-Host "    reserved 400 / openid-scope 400 / create-list-update-delete: ok"
+}
+
+# P1-3 (#280): self-service custom attributes round trip + policy rejection.
+Test-Endpoint "Test 49: /api/me/profile/custom-attributes - round trip + policy (P1-3)" {
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $un = "attr_$ts"
+    Invoke-RestMethod -Uri "$BaseUrl/api/register" -Method Post -Body @{ username = $un; password = "TestPass123!"; email = "${un}@test.com" } | Out-Null
+    $tok = Get-UserToken -BaseUrl $BaseUrl -Username $un -Password "TestPass123!"
+    $h = @{ Authorization = "Bearer $tok"; "Content-Type" = "application/json" }
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/me/profile/custom-attributes" -Method Put -Headers $h -Body (@{ department = "engineering" } | ConvertTo-Json)
+    if ($r.status -ne "success") { throw "put failed" }
+    $g = Invoke-RestMethod -Uri "$BaseUrl/api/me/profile/custom-attributes" -Method Get -Headers $h
+    if ($g.custom_attributes.department -ne "engineering") { throw "round-trip mismatch: '$($g.custom_attributes.department)'" }
+    # Prototype-pollution key -> 400.
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/api/me/profile/custom-attributes" -Method Put -Headers $h -Body (@{ __proto__ = "x" } | ConvertTo-Json) -ErrorAction Stop | Out-Null
+        throw "__proto__ key should be rejected"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    Write-Host "    put/get round trip + __proto__ rejection: ok"
+}
+
+# P1-8 (#285, ADR-0014): role permissions full-replace semantics.
+Test-Endpoint "Test 50: /api/admin/roles/:id/permissions - full-replace (P1-8)" {
+    $h = Get-AuthHeaders
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/roles" -Method Post -Headers $h -Body (@{ name = "helpdesk_$ts"; description = "audit wave A script role" } | ConvertTo-Json)
+    if ($r.status -ne "success") { throw "role create failed" }
+    $rid = $r.id
+    try {
+        # Grant exactly users:read (the delegated-admin red line).
+        $put = Invoke-RestMethod -Uri "$BaseUrl/api/admin/roles/$rid/permissions" -Method Put -Headers $h -Body (@{ permissions = @("users:read") } | ConvertTo-Json)
+        if ($put.status -ne "success") { throw "permission grant failed" }
+        $g = Invoke-RestMethod -Uri "$BaseUrl/api/admin/roles/$rid/permissions" -Method Get -Headers $h
+        if (-not ($g.permissions -contains "users:read")) { throw "users:read not granted: [$($g.permissions -join ',')]" }
+        # Unknown permission name fails the WHOLE replace.
+        try {
+            Invoke-RestMethod -Uri "$BaseUrl/api/admin/roles/$rid/permissions" -Method Put -Headers $h -Body (@{ permissions = @("users:read", "no_such_permission") } | ConvertTo-Json) -ErrorAction Stop | Out-Null
+            throw "unknown permission should fail the whole replace"
+        } catch {
+            if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "unknown perm: expected 400, got: $($_.Exception.Response.StatusCode)" }
+        }
+    } finally {
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/roles/$rid" -Method Delete -Headers $h | Out-Null
+    }
+    Write-Host "    grant/read-back/unknown-name-400/teardown: ok"
+}
+
+# P1-2 (#278): email template list + content-policy rejection. test-send is
+# SMTP/whitelist-dependent — only the policy branch is script-testable.
+Test-Endpoint "Test 51: /api/admin/email-templates - list + content policy (P1-2)" {
+    $h = Get-AuthHeaders
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/email-templates" -Method Get -Headers $h
+    if ($r.status -ne "success") { throw "list failed" }
+    if ($null -eq $r.templates) { throw "missing templates" }
+    $key = $r.templates[0].template_key
+    if (-not $key) { throw "no seeded template" }
+    try {
+        $body = @{ subject = "probe"; body_html = "<p>hi</p><script>alert(1)</script>" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/email-templates/$key/en" -Method Put -Headers $h -Body $body -ErrorAction Stop | Out-Null
+        throw "script tag should be rejected by the content policy"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    Write-Host "    list seeded templates + <script> policy rejection: ok"
+}
+
+# P1-4 (#281): organization lifecycle — PATCH validation, members, soft
+# delete, tombstone.
+Test-Endpoint "Test 52: /api/admin/organizations - lifecycle + tombstone (P1-4)" {
+    $h = Get-AuthHeaders
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $slug = "audit-org-$ts"
+    $r = Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations" -Method Post -Headers $h -Body (@{ slug = $slug; name = "Audit Org $ts" } | ConvertTo-Json)
+    # Create answers 201 {id, slug, name, message} — no status field.
+    if ($r.slug -ne $slug) { throw "org create failed: $($r | ConvertTo-Json -Compress)" }
+    try {
+        # Invalid primary_color -> 400.
+        try {
+            Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations/$slug" -Method Patch -Headers $h -Body (@{ primary_color = "#zzzzzz" } | ConvertTo-Json) -ErrorAction Stop | Out-Null
+            throw "invalid color should be rejected"
+        } catch {
+            if ($_.Exception.Response.StatusCode -ne "BadRequest") { throw "color: expected 400, got: $($_.Exception.Response.StatusCode)" }
+        }
+        $p = Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations/$slug" -Method Patch -Headers $h -Body (@{ name = "Audit Org Renamed $ts" } | ConvertTo-Json)
+        if ($p.status -ne "success") { throw "org patch failed" }
+        $m = Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations/$slug/members" -Method Get -Headers $h
+        if ($null -eq $m.members) { throw "missing members" }
+    } finally {
+        # Soft delete happens in finally so a failed assertion still cleans up.
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations/$slug" -Method Delete -Headers $h | Out-Null
+    }
+    # Deleted -> 404; same-slug re-registration hits the tombstone 409.
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations/$slug" -Method Get -Headers $h -ErrorAction Stop | Out-Null
+        throw "deleted org should 404"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "NotFound") { throw "expected 404, got: $($_.Exception.Response.StatusCode)" }
+    }
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/api/admin/organizations" -Method Post -Headers $h -Body (@{ slug = $slug; name = "Impersonator $ts" } | ConvertTo-Json) -ErrorAction Stop | Out-Null
+        throw "tombstone should 409"
+    } catch {
+        if ($_.Exception.Response.StatusCode -ne "Conflict") { throw "tombstone: expected 409, got: $($_.Exception.Response.StatusCode)" }
+    }
+    Write-Host "    create/patch-400/patch/members/delete-404/tombstone-409: ok"
 }
 
 # ========================================

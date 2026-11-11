@@ -13,7 +13,7 @@ AUTH_CODE=""
 DISCOVERY_ISSUER=""
 ADMIN_PASSWORD="admin"  # Track current admin password across tests
 
-TOTAL=58
+TOTAL=62
 
 echo "========================================"
 echo "Pre-test Setup"
@@ -906,6 +906,102 @@ test_44() {
     echo "    401 + invalid_client body returned ($wwwauth)"
 }
 run_test "Test 44: POST /oauth2/introspect - Missing client credentials" test_44
+
+# Test 45: authorize-context — client display name, unknown 404, missing 400
+# (P0-6 #260; roadmap §7-3 endpoint-script coverage debt from the 2026-11 audit)
+test_45() {
+    local r code name
+    r=$(curl -s "$BASE_URL/oauth2/authorize-context?client_id=fulla-portal")
+    # The display name is seed/config-dependent ("Vue Frontend" via config
+    # seeds, "Vue Front-end Client" via dev_portal_client.sql) — assert it is
+    # resolved to a NON-EMPTY display name, not the raw id fallback.
+    name=$(echo "$r" | jq -r '.client_name')
+    [ -n "$name" ] && [ "$name" != "null" ] && [ "$name" != "fulla-portal" ] \
+        || { echo "    client_name not resolved: $r"; return 1; }
+    code=$(curl -s -o /dev/null -w '%{http_code}' \
+        "$BASE_URL/oauth2/authorize-context?client_id=no-such-client-xyz")
+    assert_status "$code" "404" || return 1
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/oauth2/authorize-context")
+    assert_status "$code" "400" || return 1
+    echo "    display name + unknown 404 + missing-param 400: ok"
+}
+run_test "Test 45: GET /oauth2/authorize-context - name/404/400 (P0-6)" test_45
+
+# Test 46: WebAuthn credential delete — auth guard + generic 404 shape (P0-7a).
+# A real credential registration needs an attestation signature (not
+# scriptable); the audit-event assertion (webauthn_credential_deleted) is
+# therefore left to the integration tier.
+test_46() {
+    local tok code
+    tok=$(get_user_token "$BASE_URL" "admin" "admin")
+    [ -n "$tok" ] || { echo "    skipped: no token"; return 1; }
+    # No token -> 401.
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+        "$BASE_URL/api/me/webauthn/credentials/AAAAAAAAAAAAAAAAAAAAAA")
+    assert_status "$code" "401" || return 1
+    # Unknown credential id with a valid token -> the SAME generic 404 as a
+    # foreign id (no ownership oracle).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+        -H "Authorization: Bearer $tok" \
+        "$BASE_URL/api/me/webauthn/credentials/AAAAAAAAAAAAAAAAAAAAAA")
+    assert_status "$code" "404" || return 1
+    echo "    401 without token + generic 404 for unknown id: ok"
+}
+run_test "Test 46: DELETE /api/me/webauthn/credentials/:id - guards (P0-7a)" test_46
+
+# Test 47: end_session with a DEDICATED post_logout_redirect_uris registration
+# (P0-7b #261): a non-empty dedicated list is authoritative — a login-only URI
+# is rejected even though it is registered for login. The dedicated list is
+# only writable via RFC 7591 dynamic registration (ClientRegistrationService is
+# the sole writer), so this test registers its own client first.
+test_47() {
+    local ts cid verifier challenge login_resp code tok_resp id_token loc code2 adm_tok
+    ts=$(date +%s)
+    # /oauth2/register is admin-gated: the script's global token carries only
+    # "openid profile" (no admin scope) — mint an admin-scoped token for the
+    # registration call (and the client-delete cleanup) instead.
+    adm_tok=$(get_admin_token "$BASE_URL" "admin" "$ADMIN_PASSWORD")
+    [ -n "$adm_tok" ] || { echo "    skipped: no admin-scoped token"; return 1; }
+    local reg
+    reg=$(curl -s -X POST -H "Authorization: Bearer $adm_tok" \
+        -H "Content-Type: application/json" \
+        -d '{"client_name":"EndSession Script '"$ts"'","client_type":"PUBLIC","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:9099/cb"],"grant_types":["authorization_code"],"post_logout_redirect_uris":["http://127.0.0.1:9099/logged-out"]}' \
+        "$BASE_URL/oauth2/register")
+    cid=$(echo "$reg" | jq -r '.client_id')
+    [ -n "$cid" ] && [ "$cid" != "null" ] || { echo "    registration failed: $reg"; return 1; }
+    # DCR registration grants NO scopes (ClientRegistrationService has no
+    # scope handling) — grant openid+email via the admin scope API so the
+    # login leg below can request them.
+    curl -s -X PUT -H "Authorization: Bearer $adm_tok" -H "Content-Type: application/json" \
+        -d '{"scopes":["openid","email"]}' \
+        "$BASE_URL/api/admin/clients/$cid/scopes" >/dev/null
+    # Login + exchange against the fresh client to obtain an id_token for it.
+    verifier=$(generate_pkce_verifier)
+    challenge=$(pkce_s256_challenge "$verifier")
+    login_resp=$(curl -s -X POST "$BASE_URL/oauth2/login" \
+        -d "username=admin&password=admin&client_id=$cid&redirect_uri=http://127.0.0.1:9099/cb&scope=openid&state=es-$ts&code_challenge=$challenge&code_challenge_method=S256&json=true")
+    code=$(echo "$login_resp" | jq -r '.code')
+    [ -n "$code" ] && [ "$code" != "null" ] || { echo "    no auth code for $cid"; return 1; }
+    tok_resp=$(curl -s -X POST "$BASE_URL/oauth2/token" \
+        -d "grant_type=authorization_code&code=$code&redirect_uri=http://127.0.0.1:9099/cb&client_id=$cid&code_verifier=$verifier")
+    id_token=$(echo "$tok_resp" | jq -r '.id_token')
+    [ -n "$id_token" ] && [ "$id_token" != "null" ] || { echo "    no id_token for $cid"; return 1; }
+    # Registered-for-logout URI -> 302 with the redirect target.
+    loc=$(curl -s -o /dev/null -w '%{redirect_url}' \
+        "$BASE_URL/oauth2/end_session?id_token_hint=$id_token&post_logout_redirect_uri=http://127.0.0.1:9099/logged-out&state=es-ok-$ts")
+    case "$loc" in
+        http://127.0.0.1:9099/logged-out*) ;;
+        *) echo "    unexpected redirect: '$loc'"; curl -s -X DELETE -H "Authorization: Bearer $adm_tok" "$BASE_URL/api/admin/clients/$cid" >/dev/null 2>&1; return 1 ;;
+    esac
+    # Login-only URI (not in the dedicated list) -> 400: the non-empty
+    # dedicated list is authoritative.
+    code2=$(curl -s -o /dev/null -w '%{http_code}' \
+        "$BASE_URL/oauth2/end_session?id_token_hint=$id_token&post_logout_redirect_uri=http://127.0.0.1:9099/cb")
+    curl -s -X DELETE -H "Authorization: Bearer $adm_tok" "$BASE_URL/api/admin/clients/$cid" >/dev/null 2>&1
+    assert_status "$code2" "400" || return 1
+    echo "    dedicated-list 302 + login-only 400 (client $cid cleaned up): ok"
+}
+run_test "Test 47: end_session - dedicated post_logout list is authoritative (P0-7b)" test_47
 
 # Post-test Cleanup
 echo ""

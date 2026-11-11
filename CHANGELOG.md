@@ -48,6 +48,10 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 - **Race in the consent fan-out could produce wrong authorization decisions under load**: `AuthorizationService::evaluateScopes` fanned one DB lookup out per requested scope, and the per-scope finishers ran unsynchronized on whatever IO thread their DbClient callback landed on — with multiple IO threads the shared consent map and the outstanding-scope counter were mutated concurrently. Observed as an ASan heap-buffer-overflow inside the `unordered_map` buckets plus a torn counter that fired the completion callback early (incomplete consent summary → authorize bounced back to the consent screen) or never (request hung). Latent since the v1.5.0-M2 organization-consent union fan-out; first caught by the ASan CI leg on 2026-11-07. The finishers are now serialized by a per-request mutex; the summary evaluation and completion callback fire exactly once, outside the lock.
 
+- **`PUT /api/admin/roles/{roleId}/permissions` answered 500 for unknown permission names** (the documented contract, openapi: "Invalid body or unknown permission names" → 400, and the P1-8 design, "unknown names fail the whole replace"): the fail-the-whole-replace branch routed through the shared transaction-error path, which classifies every failure as `DB_QUERY_ERROR` (500). A user-input validation miss is now `VALIDATION_INVALID_INPUT` (400); genuine DB/rollback failures keep the 500 classification. Found by the new admin endpoint-script case (unknown-name full-replace), audit wave A 2026-11.
+
+- Endpoint-script and test-tier debt from the 2026-11 P0/P1 retro audit: both endpoint script suites (`test-admin-endpoints`/`test-oauth2-endpoints`, sh + ps1) gain coverage for every endpoint added in v1.5.0/v1.6.0 (audit CSV export, claim-mappings, custom attributes, role permissions, email templates, org lifecycle + tombstone, authorize-context, WebAuthn credential delete, end_session dedicated post-logout list) — closing the roadmap §7-3 DoD gap; the MFA backup-code login fall-through gains an HTTP-level end-to-end regression net (one-shot CAS, both hash-case forms, `mfa_backup_code_used` audit row, re-bind flag); the testing guide documents the four-driver RP interop gate (EN + zh mirror).
+
 ## [1.6.0] - 2026-10-30
 
 The P1 platform release: eight packages from the 2026-10 improvement
@@ -253,7 +257,7 @@ hot-path regressions and fixed them in-release (userinfo/introspect at
   where the subject resolver needs the numeric id, silently dropping the
   admin scope.
 
-## [1.5.0] - 2026-10-15
+## [1.5.0] - 2026-10-16
 
 The correctness & trust release: the 2026-10 IAM gap analysis drove a P0 sprint
 that unifies the token subject, scope-gates userinfo claims, makes MFA backup

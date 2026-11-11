@@ -25,6 +25,8 @@
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/identity/TotpUtils.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <json/json.h>
 #include <future>
@@ -119,13 +121,56 @@ void restoreAdminMfa()
     std::promise<void> p;
     db->execSqlAsync(
       "UPDATE users "
-      "SET mfa_enabled = false, mfa_secret = NULL, "
+      "SET mfa_enabled = false, mfa_secret = NULL, mfa_backup_codes = NULL, "
       "    mfa_pending_client_id = NULL, mfa_pending_redirect_uri = NULL "
       "WHERE username = 'admin'",
       [&](const Result &) { p.set_value(); },
       [&](const DrogonDbException &) { p.set_value(); }
     );
     p.get_future().get();
+}
+
+// P0-3 backup-code seeding for the fallback test below. The storage contract
+// (users.mfa_backup_codes) is a JSON array of SHA-256 hex hashes in a text
+// column; the two historical write paths hash with different hex case
+// (enable: sha256Hex lowercase; regenerate: hashToken uppercase), so the test
+// seeds one code per form to pin the case-insensitive match (libs/drogon/
+// include/fulla/drogon/utils/MfaBackupCodes.h).
+bool seedAdminBackupCodes(const std::string &jsonArray)
+{
+    auto db = app().getDbClient();
+    if (!db)
+        return false;
+    std::promise<bool> p;
+    db->execSqlAsync(
+      "UPDATE users SET mfa_backup_codes = $1 WHERE username = 'admin'",
+      [&](const Result &) { p.set_value(true); },
+      [&](const DrogonDbException &) { p.set_value(false); },
+      jsonArray
+    );
+    return p.get_future().get();
+}
+
+// audit_logs rows for the admin user's mfa_backup_code_used events; -1 on
+// query failure (audit_logs columns per V012: actor_id, action).
+long countBackupCodeAuditRows()
+{
+    auto db = app().getDbClient();
+    if (!db)
+        return -1;
+    std::promise<long> p;
+    db->execSqlAsync(
+      "SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'mfa_backup_code_used' "
+      "AND actor_id = (SELECT public_sub::text FROM users WHERE username = 'admin')",
+      [&](const Result &r) {
+          long n = -1;
+          if (!r.empty())
+              n = r[0]["n"].as<long>();
+          p.set_value(n);
+      },
+      [&](const DrogonDbException &) { p.set_value(-1); }
+    );
+    return p.get_future().get();
 }
 
 std::string loginForMfaToken(const std::string &clientId, const std::string &redirectUri)
@@ -307,4 +352,104 @@ DROGON_TEST(Integration_P1_MfaCrossClientAuthFix_CrossClient_NoRowsCreated)
     // The rejected attempt must not have created any new access tokens.
     long tokensAfter = countRowsForUser("oauth2_access_tokens");
     CHECK(tokensAfter == tokensBefore);
+}
+
+// ---------------------------------------------------------------------------
+// Integration: P0-3 backup-code login fallback, end to end at the HTTP tier
+// (2026-11 audit finding #3: the backup-code path had only unit-level
+// coverage — Unit_P0_MfaBackup_* + MfaBackupCodesTest — and no HTTP-level
+// regression net for the login fall-through, one-shot consumption, the
+// mfa_backup_code_used audit row, or the re-bind flag).
+//
+//   1. seed TWO backup codes — one hashed lowercase (enable-path form), one
+//      UPPERCASE (regenerate-path form): matching is case-insensitive;
+//   2. a code that is not a valid TOTP falls through to the backup codes and
+//      completes the login (backup_codes_remaining reflects the consumption);
+//   3. the SAME code cannot be consumed twice (one-shot CAS);
+//   4. consuming the LAST code answers mfa_rebind_required=true;
+//   5. every consumption writes an mfa_backup_code_used audit row.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P0_MfaBackupCode_LoginFallback_EndToEnd)
+{
+    auto plugin = app().getPlugin<OAuth2Plugin>();
+    if (!plugin || plugin->getStorageType() == "memory")
+    {
+        CHECK(true);
+        return;
+    }
+    if (!serverReachable())
+    {
+        LOG_INFO << "Skipping: HTTP listener not reachable";
+        CHECK(true);
+        return;
+    }
+
+    auto fx = enableAdminMfa();
+    REQUIRE(fx.ok);
+
+    struct Guard
+    {
+        ~Guard()
+        {
+            restoreAdminMfa();
+        }
+    } guard;
+
+    const std::string plain1 = "wavea-backup-one-4f2a91";
+    const std::string plain2 = "wavea-backup-two-b7c3d5";
+    std::string hash1 =
+      fulla::drogon::utils::detail::cryptoProvider().sha256Hex(plain1);
+    std::string hash2 =
+      fulla::drogon::utils::detail::cryptoProvider().sha256Hex(plain2);
+    std::transform(
+      hash2.begin(), hash2.end(), hash2.begin(),
+      [](unsigned char c) { return static_cast<char>(std::toupper(c)); }
+    );
+    REQUIRE(seedAdminBackupCodes("[\"" + hash1 + "\",\"" + hash2 + "\"]"));
+
+    long auditBefore = countBackupCodeAuditRows();
+    REQUIRE(auditBefore >= 0);
+
+    // -- 1st consumption: the lowercase-stored code completes the login. ----
+    std::string mfaToken = loginForMfaToken("fulla-portal", kVueRedirectUri);
+    REQUIRE(!mfaToken.empty());
+
+    Json::Value body;
+    body["mfa_token"] = mfaToken;
+    body["code"] = plain1;
+    body["client_id"] = "fulla-portal";
+    body["redirect_uri"] = kVueRedirectUri;
+    body["scope"] = "openid profile email";
+    auto resp = postJson("/oauth2/mfa/verify", body);
+    REQUIRE(resp != nullptr);
+    CHECK(resp->getStatusCode() == k200OK);
+
+    Json::Value root;
+    REQUIRE(parseBody(resp, root));
+    CHECK(root.isMember("access_token"));
+    CHECK(root.get("backup_codes_remaining", -1).asInt() == 1);
+    CHECK(root.get("mfa_rebind_required", true).asBool() == false);
+    CHECK(countBackupCodeAuditRows() == auditBefore + 1);
+
+    // -- Replay: one-shot CAS — the same code must not work twice. ----------
+    body["mfa_token"] = loginForMfaToken("fulla-portal", kVueRedirectUri);
+    REQUIRE(!body["mfa_token"].asString().empty());
+    auto replay = postJson("/oauth2/mfa/verify", body);
+    REQUIRE(replay != nullptr);
+    CHECK(replay->getStatusCode() == k401Unauthorized);
+
+    // -- Last consumption: the UPPERCASE-stored form matches too; exhausting
+    //    the final code flags a forced TOTP re-bind. -------------------------
+    body["mfa_token"] = loginForMfaToken("fulla-portal", kVueRedirectUri);
+    REQUIRE(!body["mfa_token"].asString().empty());
+    body["code"] = plain2;
+    auto last = postJson("/oauth2/mfa/verify", body);
+    REQUIRE(last != nullptr);
+    CHECK(last->getStatusCode() == k200OK);
+
+    Json::Value lastRoot;
+    REQUIRE(parseBody(last, lastRoot));
+    CHECK(lastRoot.get("backup_codes_remaining", -1).asInt() == 0);
+    CHECK(lastRoot.get("mfa_rebind_required", false).asBool() == true);
+    CHECK(countBackupCodeAuditRows() == auditBefore + 2);
 }

@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $passed = 0
 $failed = 0
-$total = 59
+$total = 62
 $adminPassword = "admin"  # Track current admin password across tests
 
 # Import common functions
@@ -1103,6 +1103,134 @@ Test-Endpoint "Test 44: POST /oauth2/introspect - Missing client credentials" {
         if ($respBody -notmatch '"error"\s*:\s*"invalid_client"') { throw "expected invalid_client error body, got: $respBody" }
         Write-Host "    401 + invalid_client body returned (WWW-Authenticate: $wwwAuth)"
     }
+}
+
+# P0-6 (#260): authorize-context — client display name, unknown 404, missing
+# 400 (roadmap §7-3 endpoint-script coverage debt from the 2026-11 audit).
+Test-Endpoint "Test 45: GET /oauth2/authorize-context - name/404/400 (P0-6)" {
+    $r = Invoke-RestMethod -Uri "$BaseUrl/oauth2/authorize-context?client_id=fulla-portal" -Method Get
+    # The display name is seed/config-dependent ("Vue Frontend" via config
+    # seeds, "Vue Front-end Client" via dev_portal_client.sql) — assert it is
+    # resolved to a NON-EMPTY display name, not the raw id fallback.
+    if (-not $r.client_name -or "$($r.client_name)" -eq "fulla-portal") { throw "client_name not resolved: '$($r.client_name)'" }
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/oauth2/authorize-context?client_id=no-such-client-xyz" -Method Get -ErrorAction Stop | Out-Null
+        throw "unknown client should 404"
+    } catch {
+        if ($_.Exception.Message -match "should 404") { throw $_.Exception.Message }
+        if ([int]$_.Exception.Response.StatusCode -ne 404) { throw "expected 404, got: $($_.Exception.Response.StatusCode)" }
+    }
+    try {
+        Invoke-RestMethod -Uri "$BaseUrl/oauth2/authorize-context" -Method Get -ErrorAction Stop | Out-Null
+        throw "missing client_id should 400"
+    } catch {
+        if ($_.Exception.Message -match "should 400") { throw $_.Exception.Message }
+        if ([int]$_.Exception.Response.StatusCode -ne 400) { throw "expected 400, got: $($_.Exception.Response.StatusCode)" }
+    }
+    Write-Host "    display name + unknown 404 + missing-param 400: ok"
+}
+
+# P0-7a (#260): WebAuthn credential delete — auth guard + generic 404 shape.
+# A real credential registration needs an attestation signature (not
+# scriptable); the audit-event assertion (webauthn_credential_deleted) is
+# therefore left to the integration tier.
+Test-Endpoint "Test 46: DELETE /api/me/webauthn/credentials/:id - guards (P0-7a)" {
+    $tok = Get-UserToken -BaseUrl $BaseUrl -Username "admin" -Password "admin"
+    if (-not $tok) { throw "skipped: no token" }
+    try {
+        Invoke-WebRequest -Uri "$BaseUrl/api/me/webauthn/credentials/AAAAAAAAAAAAAAAAAAAAAA" -Method Delete -UseBasicParsing -ErrorAction Stop | Out-Null
+        throw "delete without token should 401"
+    } catch {
+        if ($_.Exception.Message -match "should 401") { throw $_.Exception.Message }
+        if ([int]$_.Exception.Response.StatusCode -ne 401) { throw "expected 401, got: $($_.Exception.Response.StatusCode)" }
+    }
+    try {
+        $h = @{ Authorization = "Bearer $tok" }
+        Invoke-WebRequest -Uri "$BaseUrl/api/me/webauthn/credentials/AAAAAAAAAAAAAAAAAAAAAA" -Method Delete -Headers $h -UseBasicParsing -ErrorAction Stop | Out-Null
+        throw "unknown credential id should 404"
+    } catch {
+        if ($_.Exception.Message -match "should 404") { throw $_.Exception.Message }
+        if ([int]$_.Exception.Response.StatusCode -ne 404) { throw "expected 404, got: $($_.Exception.Response.StatusCode)" }
+    }
+    Write-Host "    401 without token + generic 404 for unknown id: ok"
+}
+
+# P0-7b (#261): end_session with a DEDICATED post_logout_redirect_uris
+# registration — a non-empty dedicated list is authoritative (a login-only URI
+# is rejected). The dedicated list is only writable via RFC 7591 dynamic
+# registration (ClientRegistrationService is the sole writer), so this test
+# registers its own client first.
+Test-Endpoint "Test 47: end_session - dedicated post_logout list is authoritative (P0-7b)" {
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    # /oauth2/register is admin-gated: the script's global token carries only
+    # "openid profile" (no admin scope) — mint an admin-scoped token for the
+    # registration call (and the client-delete cleanup) instead.
+    $admTok = Get-AdminToken -BaseUrl $BaseUrl -Password $adminPassword
+    if (-not $admTok) { throw "skipped: no admin-scoped token" }
+    $h = @{ Authorization = "Bearer $admTok"; "Content-Type" = "application/json" }
+    $reg = Invoke-RestMethod -Uri "$BaseUrl/oauth2/register" -Method Post -Headers $h -Body (@{
+        client_name = "EndSession Script $ts"
+        client_type = "PUBLIC"
+        token_endpoint_auth_method = "none"
+        redirect_uris = @("http://127.0.0.1:9099/cb")
+        grant_types = @("authorization_code")
+        post_logout_redirect_uris = @("http://127.0.0.1:9099/logged-out")
+    } | ConvertTo-Json)
+    if (-not $reg.client_id) { throw "registration failed: $($reg | ConvertTo-Json -Compress)" }
+    $cid = $reg.client_id
+    # DCR registration grants NO scopes (ClientRegistrationService has no
+    # scope handling) — grant openid+email via the admin scope API so the
+    # login leg below can request them.
+    Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/$cid/scopes" -Method Put -Headers $h -Body (@{ scopes = @("openid", "email") } | ConvertTo-Json) | Out-Null
+    $idToken = $null
+    try {
+        # Login + exchange against the fresh client to obtain an id_token.
+        $pkce = New-PkcePair
+        $login = Invoke-RestMethod -Uri "$BaseUrl/oauth2/login" -Method Post -Body @{
+            username = 'admin'; password = 'admin'
+            client_id = $cid
+            redirect_uri = 'http://127.0.0.1:9099/cb'
+            scope = 'openid'
+            state = "es-$ts"; json = 'true'
+            code_challenge = $pkce.challenge; code_challenge_method = 'S256'
+        }
+        if (-not $login.code) { throw "no auth code for $cid" }
+        $tok = Invoke-RestMethod -Uri "$BaseUrl/oauth2/token" -Method Post -Body @{
+            grant_type = 'authorization_code'; code = $login.code
+            redirect_uri = 'http://127.0.0.1:9099/cb'
+            client_id = $cid; code_verifier = $pkce.verifier
+        }
+        if (-not $tok.id_token) { throw "no id_token for $cid" }
+        $idToken = $tok.id_token
+        # Registered-for-logout URI -> 302 with the redirect target.
+        # curl.exe (bundled with Windows) mirrors the sh dialect's redirect
+        # capture exactly: no following (the target port is deliberately not
+        # listening), Location via %{redirect_url}. Windows PowerShell 5.1's
+        # Invoke-WebRequest -MaximumRedirection 0 variant disposes the error
+        # Response before the catch block can read the header.
+        $loc = & curl.exe -s -o NUL -w "%{redirect_url}" `
+            "$BaseUrl/oauth2/end_session?id_token_hint=$idToken&post_logout_redirect_uri=http://127.0.0.1:9099/logged-out&state=es-ok-$ts"
+        if ($LASTEXITCODE -ne 0) { throw "curl.exe failed: $LASTEXITCODE" }
+        if ($loc -notmatch "^http://127\.0\.0\.1:9099/logged-out") { throw "unexpected redirect: '$loc'" }
+        # Login-only URI (not in the dedicated list) -> 400.
+        try {
+            Invoke-WebRequest -Uri "$BaseUrl/oauth2/end_session?id_token_hint=$idToken&post_logout_redirect_uri=http://127.0.0.1:9099/cb" -UseBasicParsing -ErrorAction Stop | Out-Null
+            throw "login-only post_logout uri should 400"
+        } catch {
+            if ($_.Exception.Message -match "should 400") { throw $_.Exception.Message }
+            if ([int]$_.Exception.Response.StatusCode -ne 400) { throw "expected 400, got: $($_.Exception.Response.StatusCode)" }
+        }
+    } finally {
+        # Best-effort teardown: deleting a client that already has issued
+        # token rows can 500 (observed 2026-11; follow-up candidate) — never
+        # let a cleanup failure fail the assertions above.
+        try {
+            Invoke-RestMethod -Uri "$BaseUrl/api/admin/clients/$cid" -Method Delete -Headers $h | Out-Null
+        } catch {
+            Write-Host "    cleanup note: client $cid delete returned $($_.Exception.Response.StatusCode)"
+        }
+    }
+    Write-Host "    dedicated-list redirect + login-only 400 (client $cid teardown attempted): ok"
 }
 
 # ========================================
