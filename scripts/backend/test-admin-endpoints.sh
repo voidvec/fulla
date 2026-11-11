@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/common-test-functions.sh"
 BASE_URL="${1:-http://127.0.0.1:5555}"
 ACCESS_TOKEN=""
 
-TOTAL=52
+TOTAL=61
 
 echo "========================================"
 echo "Pre-test Setup"
@@ -752,6 +752,178 @@ test_46() {
     echo "    created with uri, read back, deleted: $bc_id"
 }
 run_test "Test 46: POST /api/admin/clients - create with backchannel_logout_uri (B1)" test_46
+
+# Test 47: audit CSV export — window guard, CSV content type, self-audit row
+# (P1-6 #283; roadmap §7-3 endpoint-script coverage debt from the 2026-11 audit)
+test_47() {
+    local code ct r
+    # No from/to and no all=true -> 400 (AUDIT_EXPORT_WINDOW_REQUIRED).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "$(auth_header)" \
+        "$BASE_URL/api/admin/logs/export")
+    assert_status "$code" "400" || return 1
+    # Windowed export must answer text/csv.
+    ct=$(curl -s -o /dev/null -w '%{content_type}' -H "$(auth_header)" \
+        "$BASE_URL/api/admin/logs/export?from=0&to=$(date +%s)")
+    case "$ct" in
+        text/csv*) ;;
+        *) echo "    unexpected content-type: $ct"; return 1 ;;
+    esac
+    # The export audited itself (audit_exported) — security paths carry audit
+    # events per roadmap §7-3.
+    r=$(curl -s -H "$(auth_header)" \
+        "$BASE_URL/api/admin/logs?action=audit_exported&page=1&per_page=5")
+    assert_json_exists "$r" "logs" || return 1
+    echo "    window guard 400 + text/csv + audit_exported self-audit: ok"
+}
+run_test "Test 47: GET /api/admin/logs/export - window guard + CSV + self-audit" test_47
+
+# Test 48: claim-mapping CRUD red lines (P1-3 #280)
+test_48() {
+    local ts code r mid
+    ts=$(date +%s)
+    # Reserved claim name -> 400 (CLAIM_MAPPING_RESERVED_CLAIM).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"scope_name":"profile","claim_name":"sub","source_path":"custom_attributes.department"}' \
+        "$BASE_URL/api/admin/claim-mappings")
+    assert_status "$code" "400" || return 1
+    # openid as trigger scope -> 400 (CLAIM_MAPPING_FORBIDDEN_SCOPE).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"scope_name":"openid","claim_name":"audit_dept_'"$ts"'","source_path":"custom_attributes.department"}' \
+        "$BASE_URL/api/admin/claim-mappings")
+    assert_status "$code" "400" || return 1
+    # Valid create -> 201 + id.
+    r=$(curl -s -X POST -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"scope_name":"profile","claim_name":"audit_dept_'"$ts"'","source_path":"custom_attributes.department"}' \
+        "$BASE_URL/api/admin/claim-mappings")
+    assert_json_field "$r" "status" "success" || return 1
+    mid=$(echo "$r" | jq -r '.id')
+    [ -n "$mid" ] && [ "$mid" != "null" ] || { echo "    missing mapping id"; return 1; }
+    # List reflects it.
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/claim-mappings")
+    echo "$r" | jq -e --argjson id "$mid" '.mappings[]? | select(.id == $id)' >/dev/null \
+        || { echo "    mapping $mid not listed"; return 1; }
+    # Full-replace PUT toggling enabled off.
+    r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"scope_name":"profile","claim_name":"audit_dept_'"$ts"'","source_path":"custom_attributes.department","enabled":false}' \
+        "$BASE_URL/api/admin/claim-mappings/$mid")
+    assert_json_field "$r" "status" "success" || return 1
+    # Cleanup.
+    curl -s -X DELETE -H "$(auth_header)" "$BASE_URL/api/admin/claim-mappings/$mid" >/dev/null
+    echo "    reserved 400 / openid-scope 400 / create-list-update-delete: ok"
+}
+run_test "Test 48: /api/admin/claim-mappings - CRUD red lines (P1-3)" test_48
+
+# Test 49: self-service custom attributes round trip + policy rejection (P1-3)
+test_49() {
+    local ts un tok code r
+    ts=$(date +%s)
+    un="attr_$ts"
+    curl -s -X POST "$BASE_URL/api/register" \
+        -d "username=$un&password=TestPass123!&email=${un}@test.com" >/dev/null
+    tok=$(get_user_token "$BASE_URL" "$un" "TestPass123!")
+    [ -n "$tok" ] || { echo "    skipped: could not get token"; return 1; }
+    r=$(curl -s -X PUT -H "Authorization: Bearer $tok" -H "Content-Type: application/json" \
+        -d '{"department":"engineering"}' "$BASE_URL/api/me/profile/custom-attributes")
+    assert_json_field "$r" "status" "success" || return 1
+    r=$(curl -s -H "Authorization: Bearer $tok" "$BASE_URL/api/me/profile/custom-attributes")
+    assert_json_field "$r" "custom_attributes.department" "engineering" || return 1
+    # Prototype-pollution key -> 400 (CUSTOM_ATTRIBUTES_INVALID).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
+        -H "Authorization: Bearer $tok" -H "Content-Type: application/json" \
+        -d '{"__proto__":"x"}' "$BASE_URL/api/me/profile/custom-attributes")
+    assert_status "$code" "400" || return 1
+    echo "    put/get round trip + __proto__ rejection: ok"
+}
+run_test "Test 49: /api/me/profile/custom-attributes - round trip + policy (P1-3)" test_49
+
+# Test 50: role permissions full-replace semantics (P1-8 #285, ADR-0014)
+test_50() {
+    local ts r rid code
+    ts=$(date +%s)
+    r=$(curl -s -X POST -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"name":"helpdesk_'"$ts"'","description":"audit wave A script role"}' \
+        "$BASE_URL/api/admin/roles")
+    assert_json_field "$r" "status" "success" || return 1
+    rid=$(echo "$r" | jq -r '.id')
+    [ -n "$rid" ] && [ "$rid" != "null" ] || { echo "    missing role id"; return 1; }
+    # Grant exactly users:read (the delegated-admin red line).
+    r=$(curl -s -X PUT -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"permissions":["users:read"]}' "$BASE_URL/api/admin/roles/$rid/permissions")
+    assert_json_field "$r" "status" "success" || return 1
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/roles/$rid/permissions")
+    echo "$r" | jq -e '.permissions | index("users:read") != null' >/dev/null \
+        || { echo "    users:read not granted"; return 1; }
+    # Unknown permission name fails the WHOLE replace.
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"permissions":["users:read","no_such_permission"]}' \
+        "$BASE_URL/api/admin/roles/$rid/permissions")
+    assert_status "$code" "400" || return 1
+    curl -s -X DELETE -H "$(auth_header)" "$BASE_URL/api/admin/roles/$rid" >/dev/null
+    echo "    grant/read-back/unknown-name-400/teardown: ok"
+}
+run_test "Test 50: /api/admin/roles/:id/permissions - full-replace (P1-8)" test_50
+
+# Test 51: email template list + content-policy rejection (P1-2 #278).
+# test-send is SMTP-dependent and whitelist-gated — only its deny branch would
+# be script-testable, and it needs a non-whitelisted admin address; skipped.
+test_51() {
+    local r code key subject
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/email-templates")
+    assert_json_field "$r" "status" "success" || return 1
+    assert_json_exists "$r" "templates" || return 1
+    key=$(echo "$r" | jq -r '.templates[0].template_key')
+    subject=$(echo "$r" | jq -r '.templates[0].subject')
+    [ -n "$key" ] && [ "$key" != "null" ] || { echo "    no seeded template"; return 1; }
+    # Save-time content policy: <script> in body_html -> 400
+    # (EMAIL_TEMPLATE_CONTENT_REJECTED).
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"subject":"probe","body_html":"<p>hi</p><script>alert(1)</script>"}' \
+        "$BASE_URL/api/admin/email-templates/$key/en")
+    assert_status "$code" "400" || return 1
+    echo "    list seeded templates + <script> policy rejection: ok (subject was: $subject)"
+}
+run_test "Test 51: /api/admin/email-templates - list + content policy (P1-2)" test_51
+
+# Test 52: organization lifecycle — PATCH validation, members, soft delete,
+# tombstone (P1-4 #281)
+test_52() {
+    local ts slug r code
+    ts=$(date +%s)
+    slug="audit-org-$ts"
+    r=$(curl -s -X POST -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"slug":"'"$slug"'","name":"Audit Org '"$ts"'"}' \
+        "$BASE_URL/api/admin/organizations")
+    # Create answers 201 {id, slug, name, message} — no status field.
+    assert_json_field "$r" "slug" "$slug" || return 1
+    # Invalid primary_color -> 400.
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"primary_color":"#zzzzzz"}' "$BASE_URL/api/admin/organizations/$slug")
+    assert_status "$code" "400" || return 1
+    # Valid PATCH + member roster.
+    r=$(curl -s -X PATCH -H "$(auth_header)" -H "Content-Type: application/json" \
+        -d '{"name":"Audit Org Renamed '"$ts"'"}' "$BASE_URL/api/admin/organizations/$slug")
+    assert_json_field "$r" "status" "success" || return 1
+    r=$(curl -s -H "$(auth_header)" "$BASE_URL/api/admin/organizations/$slug/members")
+    assert_json_exists "$r" "members" || return 1
+    # Soft delete -> gone; same-slug re-registration hits the tombstone 409.
+    r=$(curl -s -X DELETE -H "$(auth_header)" "$BASE_URL/api/admin/organizations/$slug")
+    assert_json_field "$r" "status" "success" || return 1
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "$(auth_header)" \
+        "$BASE_URL/api/admin/organizations/$slug")
+    assert_status "$code" "404" || return 1
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$(auth_header)" \
+        -H "Content-Type: application/json" \
+        -d '{"slug":"'"$slug"'","name":"Impersonator '"$ts"'"}' \
+        "$BASE_URL/api/admin/organizations")
+    assert_status "$code" "409" || return 1
+    echo "    create/patch-400/patch/members/delete-404/tombstone-409: ok"
+}
+run_test "Test 52: /api/admin/organizations - lifecycle + tombstone (P1-4)" test_52
 
 # Post-test Cleanup
 echo "========================================"

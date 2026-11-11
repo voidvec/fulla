@@ -98,6 +98,25 @@ CHECK(body.isMember("error") || body.isMember("code"));
 
 > 用例数量随版本演进，**以 `ctest -N` 实测为准**（当前全套基线见 §7）。
 
+### Level 6 补充明细 — RP 互操作冒烟（`tests/interop/`）
+
+标准 RP（依赖方）库以严格模式从 C++ 测试二进制**外部**驱动 fulla 的
+**授权码 + PKCE(S256) → token → userinfo → refresh → end-session** 全链——
+这是 v1.5.0 P0 的出口验收门（"三库零告警"），也是后续协议工作
+（PAR、resource indicators）的常备回归设施。第四个驱动用**真实浏览器**跑同一条链：
+
+| 驱动 | 库 / 应用 | 只有它能看到的 |
+|---|---|---|
+| `tests/interop/node/` | `openid-client` v6（strict） | id_token 签名/iss/aud/exp/nonce（经 JWKS）、PKCE、state |
+| `tests/interop/python/` | `authlib` | 授权 URL/token 互操作、refresh、userinfo scope 门控 |
+| `tests/interop/go/` | `coreos/go-oidc/v3` + `x/oauth2` | `IDToken.Verify`、userinfo sub 一致性 |
+| `examples/nextjs-demo/`（Playwright） | 经 TS SDK 的参考 Web 应用 | Cookie、重定向、真实登录表单 —— 抓到了 json-mode 驱动结构性看不到的登录页 CSP `form-action` 缺陷（v1.6.0） |
+
+- **CI**：`.github/workflows/interop.yml` 在每次 push 到 `master`/`release/**`
+  （外加手动 dispatch）时构建服务端、起栈并跑全部驱动；**刻意不进** PR 热路径。
+- **本地运行**：见仓库内 `tests/interop/README.md` ——
+  需先起栈并完成种子（dev 种子：`fulla-portal` PUBLIC 客户端，`admin`/`admin`）。
+
 ---
 
 ## 3. 执行方式
@@ -193,6 +212,9 @@ In test case SomeTestName
 2. 初始化数据库 Schema
 3. 编译项目
 4. 运行 `ctest`
+5. 另行（**不进** PR 热路径）：RP 互操作冒烟门禁（`interop.yml`，见 §2 Level 6）
+   在每次 push 到 `master`/`release/**` 时用三个标准 RP 库加浏览器 demo
+   对构建出的服务端跑全链
 
 详见 [CI/CD 指南](ci-cd-guide.md)。
 

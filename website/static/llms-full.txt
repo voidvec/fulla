@@ -9277,6 +9277,27 @@ Coverage highlights: the complete authorization code flow, error scenarios, UTF-
 
 > Test case counts evolve with each version — **the `ctest -N` measurement is authoritative** (see §7 for the current full-suite baseline).
 
+### Level 6 details — RP Interop Smoke (`tests/interop/`)
+
+Standard relying-party libraries drive fulla's **authorization code + PKCE(S256) → token →
+userinfo → refresh → end-session** chain in strict mode, from OUTSIDE the C++ test binaries —
+the v1.5.0 P0 exit gate ("three libraries, zero warnings") and the standing regression harness
+for later protocol work (PAR, resource indicators). A fourth driver runs a **real browser**
+through the same chain:
+
+| Driver | Library / app | What it alone can see |
+|---|---|---|
+| `tests/interop/node/` | `openid-client` v6 (strict) | id_token signature/iss/aud/exp/nonce via JWKS, PKCE, state |
+| `tests/interop/python/` | `authlib` | authorize-URL/token interop, refresh, userinfo scope gating |
+| `tests/interop/go/` | `coreos/go-oidc/v3` + `x/oauth2` | `IDToken.Verify`, userinfo sub consistency |
+| `examples/nextjs-demo/` (Playwright) | the reference web app via the TS SDK | cookies, redirects, the real login form — found the login-CSP `form-action` bug (v1.6.0) that json-mode drivers structurally cannot see |
+
+- **CI**: `.github/workflows/interop.yml` builds the server, boots the stack and runs all
+  drivers on every push to `master`/`release/**` (plus manual dispatch); it is deliberately
+  NOT on the per-PR hot path.
+- **Local run**: see [`tests/interop/README.md`](../../tests/interop/README.md) — the stack
+  must be up and seeded (dev seeds: `fulla-portal` PUBLIC client, `admin`/`admin`).
+
 ---
 
 ## 3. How to Run
@@ -9379,6 +9400,10 @@ On every push to `master` or PR, GitHub Actions CI automatically:
 2. Initializes the database schema
 3. Builds the project
 4. Runs `ctest`
+5. Separately (NOT on the per-PR hot path): the RP interop smoke gate
+   (`interop.yml`, see §2 Level 6) runs the three standard RP libraries plus
+   the browser demo against the built server on every push to
+   `master`/`release/**`
 
 See the [CI/CD Guide](ci-cd-guide.md) for details.
 

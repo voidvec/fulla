@@ -534,11 +534,23 @@ void RoleScopeAdminService::putRolePermissions(
                       Mapper<Permissions> permMapper(txn);
                       permMapper.findBy(
                         Criteria(Permissions::Cols::_name, CompareOperator::In, requested),
-                        [txn, requested, respondCommitted, txnError, id](
+                        [txn, requested, respondCommitted, txnError, id, req, cb](
                           const std::vector<Permissions> &permRows) {
                             if (permRows.size() != requested.size())
                             {
-                                (*txnError)("one or more permission names do not exist");
+                                // Unknown permission name(s) are a user-input
+                                // validation failure, not a DB failure: the
+                                // contract (openapi: "Invalid body or unknown
+                                // permission names" -> 400) demands a 400. The
+                                // original routing through txnError
+                                // misclassified this as DB_QUERY_ERROR (500)
+                                // — caught by the admin endpoint script's
+                                // unknown-name case (audit wave A, 2026-11).
+                                // The transaction is pristine (no writes have
+                                // run); it rolls back on scope exit.
+                                respondError(
+                                  req, cb, "VALIDATION_INVALID_INPUT",
+                                  "put role permissions: one or more permission names do not exist");
                                 return;
                             }
                             // Step 2: drop the old mapping rows (documented
