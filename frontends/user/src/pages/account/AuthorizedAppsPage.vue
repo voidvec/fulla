@@ -8,9 +8,8 @@ import AppAlert from '../../components/ui/AppAlert.vue'
 import AppCard from '../../components/ui/AppCard.vue'
 import AppEmptyState from '../../components/ui/AppEmptyState.vue'
 import DData from '../../components/ui/DData.vue'
-import AppModal from '../../components/ui/AppModal.vue'
-import AppSelect from '../../components/ui/AppSelect.vue'
 import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
+import RequestOrgAuthModal from '../../components/account/RequestOrgAuthModal.vue'
 
 const { t } = useI18n()
 const apps = ref<any[]>([])
@@ -79,58 +78,19 @@ function revokeApp(clientId: string, appName: string) {
 // instead of an empty select.
 const requestAuthOpen = ref(false)
 const requestAuthApp = ref<any>(null)
-const requestAuthOrgs = ref<any[]>([])
-const requestAuthSlug = ref('')
-const requestAuthLoading = ref(false)
-const requestAuthNoOrgs = ref(false)
-const requestAuthSubmitting = ref(false)
 
-const requestAuthOptions = computed(() =>
-  requestAuthOrgs.value.map((o: any) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
-)
-
-async function openRequestAuth(app: any) {
+function openRequestAuth(app: any) {
   requestAuthApp.value = app
-  requestAuthOrgs.value = []
-  requestAuthSlug.value = ''
-  requestAuthNoOrgs.value = false
   requestAuthOpen.value = true
-  requestAuthLoading.value = true
-  try {
-    const resp = await http.get('/api/me/organizations')
-    requestAuthOrgs.value = resp.data?.organizations || []
-    requestAuthNoOrgs.value = requestAuthOrgs.value.length === 0
-  } catch (e: unknown) {
-    requestAuthOpen.value = false
-    error.value = normalizeError(e)
-  } finally {
-    requestAuthLoading.value = false
-  }
 }
 
-async function submitRequestAuth() {
-  if (!requestAuthApp.value || !requestAuthSlug.value) return
-  requestAuthSubmitting.value = true
-  error.value = null
-  try {
-    const resp = await http.post(
-      `/api/me/organizations/${requestAuthSlug.value}/consent-requests`,
-      { client_id: requestAuthApp.value.client_id },
-      // The user app's axios instance defaults to form-encoded bodies; the
-      // endpoint reads a JSON object (getJsonObject), so send JSON explicitly.
-      { headers: { 'Content-Type': 'application/json' } },
-    )
-    // The backend's message distinguishes first filing from the idempotent
-    // already-pending replay — surface it verbatim.
-    success.value = resp.data?.message || t('account.authorizedApps.requestOrgAuthSuccess')
-    setTimeout(() => { success.value = '' }, 3000)
-    requestAuthOpen.value = false
-  } catch (e: unknown) {
-    error.value = normalizeError(e)
-    requestAuthOpen.value = false
-  } finally {
-    requestAuthSubmitting.value = false
-  }
+function onRequestAuthSuccess(message: string) {
+  success.value = message
+  setTimeout(() => { success.value = '' }, 3000)
+}
+
+function onRequestAuthError(e: unknown) {
+  error.value = normalizeError(e)
 }
 
 onMounted(fetchApps)
@@ -228,49 +188,14 @@ onMounted(fetchApps)
       </AppCard>
     </div>
 
-    <AppModal
+    <RequestOrgAuthModal
       :open="requestAuthOpen"
-      :title="$t('account.authorizedApps.requestOrgAuthTitle')"
-      size="sm"
+      :app="requestAuthApp"
+      scope="account.authorizedApps"
       @close="requestAuthOpen = false"
-    >
-      <p
-        v-if="requestAuthLoading"
-        class="text-sm text-neutral-500"
-      >
-        {{ $t('common.loading') }}
-      </p>
-      <p
-        v-else-if="requestAuthNoOrgs"
-        class="text-sm text-neutral-600"
-        data-testid="request-org-auth-no-orgs"
-      >
-        {{ $t('account.authorizedApps.requestOrgAuthNoOrgs') }}
-      </p>
-      <form
-        v-else
-        class="space-y-4"
-        @submit.prevent="submitRequestAuth"
-      >
-        <AppSelect
-          v-model="requestAuthSlug"
-          :label="$t('account.authorizedApps.requestOrgAuthPick')"
-          :options="requestAuthOptions"
-          :placeholder="$t('account.authorizedApps.requestOrgAuthPick')"
-          required
-        />
-        <button
-          type="submit"
-          :disabled="requestAuthSubmitting || !requestAuthSlug"
-          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700
-                 disabled:opacity-50 transition-colors
-                 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
-          data-testid="request-org-auth-submit"
-        >
-          {{ $t('account.authorizedApps.requestOrgAuthSubmit') }}
-        </button>
-      </form>
-    </AppModal>
+      @success="onRequestAuthSuccess"
+      @error="onRequestAuthError"
+    />
 
     <AppConfirmDialog
       :open="confirmOpen"
