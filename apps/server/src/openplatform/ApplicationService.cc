@@ -1,8 +1,8 @@
-#include "../common/OnceResponse.h"
 #include "ApplicationService.h"
 #include "OpenPlatformConfig.h"
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
+#include <fulla/drogon/http/OnceResponse.h>
 #include <fulla/drogon/utils/BrandValidator.h>
 #include <fulla/drogon/utils/ClientCacheInvalidator.h>
 #include <fulla/drogon/error/ErrorResponder.h>
@@ -825,7 +825,7 @@ void insertApplication(
 // ---------------------------------------------------------------------------
 void ApplicationService::list(const ::drogon::HttpRequestPtr &req, ResponseCallback cb)
 {
-    auto completion = ::fulla::server::detail::makeOnceResponse(req, std::move(cb));
+    auto completion = ::fulla::drogon::http::makeOnceResponse(req, std::move(cb));
     cb = completion.callback;
     const auto done = completion.completed;
     const auto userIdAttr = req->getAttributes()->get<std::string>("userId");

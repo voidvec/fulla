@@ -7,7 +7,7 @@
 #include <functional>
 #include <memory>
 
-namespace fulla::server::detail
+namespace fulla::drogon::http
 {
 using SharedResponse = std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
 
@@ -62,4 +62,4 @@ inline OnceResponse makeOnceResponse(
     }
     return {std::move(wrapped), std::move(completed)};
 }
-}  // namespace fulla::server::detail
+}  // namespace fulla::drogon::http

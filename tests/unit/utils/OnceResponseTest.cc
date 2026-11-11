@@ -1,4 +1,4 @@
-#include "common/OnceResponse.h"
+#include <fulla/drogon/http/OnceResponse.h>
 #include <drogon/drogon_test.h>
 #include <future>
 #include <thread>
@@ -6,8 +6,8 @@
 
 namespace
 {
-using fulla::server::detail::makeOnceResponse;
-using fulla::server::detail::SharedResponse;
+using fulla::drogon::http::makeOnceResponse;
+using fulla::drogon::http::SharedResponse;
 
 SharedResponse sink(
   const std::shared_ptr<std::atomic<int>> &calls,

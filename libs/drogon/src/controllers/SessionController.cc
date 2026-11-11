@@ -26,6 +26,7 @@
 #include <json/json.h>
 #include <sstream>
 #include <vector>
+#include <fulla/drogon/http/OnceResponse.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>
 #include <fulla/drogon/validation/RuleSet.h>
 #include <fulla/drogon/validation/HttpResponder.h>
@@ -1319,6 +1320,17 @@ void SessionController::consent(
   std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
 )
 {
+    // #323: org-bound consent writes queue behind the orgconsent advisory
+    // lock (and code minting behind them); route the endpoint through the
+    // shared once-sink deadline like the control-plane endpoints so a
+    // wedged transaction cannot hang the browser.
+    auto cb = ::fulla::drogon::http::makeOnceResponse(
+      req,
+      std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
+        std::move(callback)
+      )
+    )
+      .callback;
     // P0-2: Handle user consent approval
     auto params = req->getParameters();
     std::string clientId = params["client_id"];
@@ -1349,7 +1361,7 @@ void SessionController::consent(
     if (sessSub.empty() || sessUserId.empty())
     {
         respondError(
-          req, std::move(callback), "AUTH_SESSION_REQUIRED",
+          req, *cb, "AUTH_SESSION_REQUIRED",
           "consent: an authenticated session is required"
         );
         return;
@@ -1362,7 +1374,7 @@ void SessionController::consent(
     if (userId != sessSub)
     {
         respondError(
-          req, std::move(callback), "AUTHZ_ACCESS_DENIED",
+          req, *cb, "AUTHZ_ACCESS_DENIED",
           "consent: user_id does not match the authenticated session"
         );
         return;
@@ -1376,7 +1388,7 @@ void SessionController::consent(
     if (req->session()->find("mfa_pending") && req->session()->get<bool>("mfa_pending"))
     {
         respondError(
-          req, std::move(callback), "AUTH_MFA_REQUIRED",
+          req, *cb, "AUTH_MFA_REQUIRED",
           "consent: complete MFA verification before granting consent"
         );
         return;
@@ -1391,7 +1403,7 @@ void SessionController::consent(
     )
     {
         respondError(
-          req, std::move(callback), "AUTH_PASSWORD_CHANGE_REQUIRED",
+          req, *cb, "AUTH_PASSWORD_CHANGE_REQUIRED",
           "consent: change the account password before granting consent"
         );
         return;
@@ -1413,7 +1425,7 @@ void SessionController::consent(
         if (!::fulla::drogon::utils::ConsentCsrfSlots::consume(req->session(), consentCsrf, now))
         {
             respondError(
-              req, std::move(callback), "VALIDATION_INVALID_INPUT",
+              req, *cb, "VALIDATION_INVALID_INPUT",
               "consent: missing, expired, or mismatched consent_csrf"
             );
             return;
@@ -1449,15 +1461,12 @@ void SessionController::consent(
         if (!plugin)
         {
             respondError(
-              req, std::move(callback), "INTERNAL_ERROR",
+              req, *cb, "INTERNAL_ERROR",
               "consent: OAuth2 Plugin not loaded"
             );
             return;
         }
-        auto sharedCb =
-          std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
-            std::move(callback)
-          );
+        auto sharedCb = cb;
         plugin->validateRedirectUri(
           clientId,
           redirectUri,
@@ -1485,7 +1494,7 @@ void SessionController::consent(
     if (!plugin)
     {
         respondError(
-          req, std::move(callback), "INTERNAL_ERROR", "consent: OAuth2 Plugin not loaded"
+          req, *cb, "INTERNAL_ERROR", "consent: OAuth2 Plugin not loaded"
         );
         return;
     }
@@ -1507,7 +1516,7 @@ void SessionController::consent(
         if (requirePkce && codeChallenge.empty())
         {
             respondError(
-              req, std::move(callback), "VALIDATION_INVALID_INPUT",
+              req, *cb, "VALIDATION_INVALID_INPUT",
               "consent: PKCE (code_challenge) is required"
             );
             return;
@@ -1534,12 +1543,12 @@ void SessionController::consent(
        nonce,
        sessAuthTime,
        sessAmr,
-       callback = std::move(callback)](
+       cb](
         ::OAuth2Plugin::CodeIssuanceGuardResult guard) mutable {
           if (!guard.ok)
           {
               respondError(
-                req, std::move(callback), guard.errorCode, "consent: " + guard.detail
+                req, *cb, guard.errorCode, "consent: " + guard.detail
               );
               return;
           }
@@ -1549,7 +1558,7 @@ void SessionController::consent(
           {
               respondError(
                 req,
-                std::move(callback),
+                *cb,
                 "VALIDATION_FORMAT_ERROR",
                 "consent: code_challenge must be 43-128 characters of [A-Za-z0-9-._~]"
               );
@@ -1570,11 +1579,11 @@ void SessionController::consent(
              req,
              sessAuthTime,
              sessAmr,
-             callback = std::move(callback)](std::optional<int32_t> internalUserId) mutable {
+             cb](std::optional<int32_t> internalUserId) mutable {
           if (!internalUserId)
           {
               respondError(
-                req, std::move(callback), "INTERNAL_ERROR", "consent: failed to get user mapping"
+                req, *cb, "INTERNAL_ERROR", "consent: failed to get user mapping"
               );
               return;
           }
@@ -1593,11 +1602,7 @@ void SessionController::consent(
               state,
               static_cast<int64_t>(::trantor::Date::now().secondsSinceEpoch())
             );
-          auto sharedCb =
-            std::make_shared<
-              std::function<void(const ::drogon::HttpResponsePtr &)>>(
-              std::move(callback)
-            );
+          auto sharedCb = cb;
           // The code-minting tail shared by every save path (personal,
           // org, empty-scope). F-020: code + state are urlEncoded on the
           // redirect (the empty-scope leg previously skipped the

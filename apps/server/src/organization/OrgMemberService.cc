@@ -1,4 +1,4 @@
-#include "../common/OnceResponse.h"
+#include <fulla/drogon/http/OnceResponse.h>
 #include "OrgMemberService.h"
 #include "../openplatform/OpenPlatformConfig.h"
 
@@ -1326,7 +1326,7 @@ void OrgMemberService::revokeOrgConsents(
     // Revoke queues on the orgconsent:<org>:<client> advisory lock behind
     // whole-pair approval transactions -- same once-sink deadline class as
     // approve/reject so a wedged transaction cannot hang this response.
-    cb = ::fulla::server::detail::makeOnceResponse(req, std::move(cb)).callback;
+    cb = ::fulla::drogon::http::makeOnceResponse(req, std::move(cb)).callback;
     std::string userIdAttr = req->getAttributes()->get<std::string>("userId");
     auto db = getDbOrRespond(req, cb);
     if (!db)
@@ -2142,7 +2142,7 @@ void OrgMemberService::approveConsentRequest(
   const std::string &requestIdStr
 )
 {
-    cb = ::fulla::server::detail::makeOnceResponse(req, std::move(cb)).callback;
+    cb = ::fulla::drogon::http::makeOnceResponse(req, std::move(cb)).callback;
     int32_t requestId = 0;
     if (!parseRequestId(requestIdStr, requestId))
     {
@@ -2164,7 +2164,7 @@ void OrgMemberService::rejectConsentRequest(
   const std::string &requestIdStr
 )
 {
-    cb = ::fulla::server::detail::makeOnceResponse(req, std::move(cb)).callback;
+    cb = ::fulla::drogon::http::makeOnceResponse(req, std::move(cb)).callback;
     int32_t requestId = 0;
     if (!parseRequestId(requestIdStr, requestId))
     {
@@ -2192,7 +2192,7 @@ void OrgMemberService::withdrawConsentRequest(
     // The withdrawal DELETE queues on the request row lock behind decision
     // transactions (they hold FOR UPDATE for the whole commit) -- same
     // once-sink deadline class as approve/reject.
-    cb = ::fulla::server::detail::makeOnceResponse(req, std::move(cb)).callback;
+    cb = ::fulla::drogon::http::makeOnceResponse(req, std::move(cb)).callback;
     int32_t requestId = 0;
     if (!parseRequestId(requestIdStr, requestId))
     {

@@ -3352,6 +3352,29 @@ RouteValidationRules getValidationRules(const std::string &path) const;
 static const std::map<std::string, RouteValidationRules> &rules();
 static std::map<std::string, RouteValidationRules> buildRules();
 };
+=== libs/drogon/include/fulla/drogon/http/OnceResponse.h
+#pragma once
+#include <drogon/drogon.h>
+#include <fulla/drogon/error/ErrorResponder.h>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <memory>
+namespace fulla::drogon::http
+{
+using SharedResponse = std::shared_ptr<std::function<void(const ::drogon::HttpResponsePtr &)>>;
+struct OnceResponse
+{
+SharedResponse callback;
+std::shared_ptr<std::atomic<bool>> completed;
+};
+inline OnceResponse makeOnceResponse(
+const ::drogon::HttpRequestPtr &req,
+SharedResponse cb,
+double timeoutSeconds = 10.0
+)
+;
+}
 === libs/drogon/include/fulla/drogon/observability/AuditLogger.h
 #pragma once
 #include <fulla/common/observability/AuditEvent.h>
