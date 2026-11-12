@@ -66,6 +66,11 @@ const router = createRouter({
           component: () => import('../pages/scopes/ScopesPage.vue'),
         },
         {
+          path: 'claim-mappings',
+          name: 'claim-mappings',
+          component: () => import('../pages/claimmappings/ClaimMappingsPage.vue'),
+        },
+        {
           path: 'logs',
           name: 'logs',
           component: () => import('../pages/logs/LogsPage.vue'),

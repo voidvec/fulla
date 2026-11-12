@@ -230,9 +230,25 @@ release/1.2:    └──●(cherry-pick fix)──● tag v1.2.1
 
 ## 11. 版本发布标准操作流程（SOP）
 
+### 11.0 发版前三件套门槛（阻断项，每次发版）
+
+改进路线图 §7 DoD 的三件套：**三件齐备才能打 tag**。v1.5.0 发版漏跑了第 1 件、
+对比只能事后补进 v1.6.0 战役（`deliverables/five-scenario-benchmark-2026-10-27.md`）——
+本节把门槛写死，避免再次被无声跳过。
+
+1. **五场景性能对比 ≥ 90%**：发版候选与上一 tag 的同机背靠背对比
+   （benchmark-methodology 纪律：宿主零负载、独立栈、wrk 楼梯、复跑 + 同窗口对照臂）。
+   报告落 `deliverables/`、原始数据落 `benchmarks/results/<date>-<sha>-*`，
+   版本 bump PR 引用两者（v1.6.0 起的既定惯例）。判定采信**同窗口对照**，不是首臂数据。
+2. **CHANGELOG 完备**：`[vX.Y.Z]` 节成稿、Breaking 置顶（release-notes splice 缺节即挂）。
+3. **版本六点同步**：release-engineering 清单（cmake SSoT → 全部载体；双 SDK 清单；
+   前端；helm/compose；docs），以 `regen_clients.py --version-only` + spec 治理门验证。
+
 ### 11.1 正式版 MINOR / PATCH（从 master）
 
 ```sh
+# 0. 五场景门槛（见 11.0）：报告 + 原始数据先入库，bump PR 引用两者
+
 # 1. 确认 master 绿（CI 全过）
 git checkout master && git pull
 
