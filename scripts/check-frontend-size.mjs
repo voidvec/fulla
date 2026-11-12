@@ -32,8 +32,13 @@ import { join, resolve } from 'node:path'
 // ~15.6KB raw to the admin bundle (456.0KB measured vs the 440.5KB cap,
 // CI-build numbers). admin.total base 400.4KB -> 456.0KB, main 143.0KB ->
 // 156.2KB.
+// Re-baselined 2026-11-12 for the user-frontend minor group (#305): 17
+// dependency minors (vue ecosystem) add ~4.6KB raw to the user bundle
+// (418.6KB CI-measured vs the 414.0KB cap; main 155.2KB stayed inside at
+// 157.6KB — both bases moved to the CI-measured numbers for consistency).
+// user.total base 376.4KB -> 418.6KB, main 143.3KB -> 155.2KB.
 const BUDGETS = {
-  user: { total: 385441, main: 146739 },
+  user: { total: 428646, main: 158931 },
   admin: { total: 466944, main: 159949 },
 }
 const HEADROOM = 1.1
