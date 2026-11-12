@@ -18,18 +18,18 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/noto-sans-sc": "^5.3.1",
-    "axios": "^1.21.0",
+    "axios": "^1.21.1",
     "pinia": "^4.1.0",
     "qrcode.vue": "^3.11.0",
-    "vue": "^3.5.44",
-    "vue-i18n": "^11.4.17",
+    "vue": "^3.5.45",
+    "vue-i18n": "^11.4.18",
     "vue-router": "^5.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@intlify/unplugin-vue-i18n": "^11.2.8",
-    "@playwright/test": "^1.64.1",
-    "@tailwindcss/vite": "^4.3.3",
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/vite": "^4.3.5",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@typescript/typescript6": "^6.0.2",
     "@vitejs/plugin-vue": "^6.0.10",
@@ -39,10 +39,10 @@
     "globals": "^17.14.0",
     "tailwindcss": "^4.3.4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.72.1",
-    "vite": "^8.3.5",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.7",
     "vitest": "5.0.3",
-    "vue-eslint-parser": "^10.4.1",
+    "vue-eslint-parser": "^10.4.2",
     "vue-tsc": "^3.3.14"
   }
 }
