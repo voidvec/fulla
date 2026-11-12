@@ -39,6 +39,7 @@ const navSections = computed(() => [
       { name: t('nav.users'), path: '/users', icon: 'users' },
       { name: t('nav.roles'), path: '/roles', icon: 'roles' },
       { name: t('nav.scopes'), path: '/scopes', icon: 'scopes' },
+      { name: t('nav.claimMappings'), path: '/claim-mappings', icon: 'scopes' },
       { name: t('nav.tokens'), path: '/tokens', icon: 'tokens' },
       { name: t('nav.devices'), path: '/devices', icon: 'devices' },
     ],

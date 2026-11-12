@@ -10107,9 +10107,33 @@ LOG_WARNING at config load time as the annotation mechanism.
 
 ## 11. Release Standard Operating Procedure (SOP)
 
+### 11.0 Pre-release three-part gate (release-blocking, every release)
+
+The three-part release gate from the improvement roadmap (§7 DoD): a release
+tag is **not cut** until all three are in the tree. The v1.5.0 release skipped
+part 1 and the comparison had to be retrofitted into the v1.6.0 campaign
+(`deliverables/five-scenario-benchmark-2026-10-27.md`) — this section makes
+the gate explicit so it cannot be skipped silently again.
+
+1. **Five-scenario performance comparison ≥ 90%** — same-machine back-to-back
+   run of the release candidate against the previous tag
+   (benchmark-methodology discipline: idle host, independent stacks, wrk
+   staircase, repeat + same-window control arms). The report lands in
+   `deliverables/` and the raw data in `benchmarks/results/<date>-<sha>-*`;
+   the release bump PR carries the results (established convention since
+   v1.6.0). Same-window comparison, not first-arm numbers, is the verdict.
+2. **CHANGELOG curated** — `[vX.Y.Z]` section complete, Breaking entries on
+   top (the release-notes splice fails closed without it).
+3. **Six-point version sync** — the release-engineering checklist (cmake SSoT
+   → all carriers; both SDK manifests; frontends; helm/compose; docs) —
+   verified by `regen_clients.py --version-only` + spec governance.
+
 ### 11.1 Official MINOR / PATCH (from master)
 
 ```sh
+# 0. Five-scenario gate (see 11.0): report + raw data committed first;
+#    the bump PR references both
+
 # 1. Confirm master is green (CI fully passing)
 git checkout master && git pull
 

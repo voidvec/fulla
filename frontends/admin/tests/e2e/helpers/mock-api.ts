@@ -656,12 +656,97 @@ export async function setupAuthenticatedMocks(page: Page) {
     }
   })
 
+  // Claim mappings (P1-3 #280 — audit wave B). In-memory CRUD mirroring the
+  // server's red lines: reserved claim names and the openid trigger scope
+  // answer the catalog 400s; everything else round-trips.
+  const claimMappings = [
+    { id: 1, claim_name: 'tenant_id', scope_name: 'profile', source_path: 'custom_attributes.tenant', include_in: 'both', enabled: true },
+    { id: 2, claim_name: 'display_name', scope_name: 'email', source_path: 'user.display_name', include_in: 'id_token', enabled: false },
+  ]
+  let nextClaimMappingId = 3
+  const RESERVED_CLAIMS = ['sub', 'iss', 'aud', 'email', 'name', 'preferred_username', 'roles']
+  await page.route('**/api/admin/claim-mappings**', async (route) => {
+    const method = route.request().method()
+    const url = new URL(route.request().url())
+    const idMatch = url.pathname.match(/\/claim-mappings\/(\d+)$/)
+    if (method === 'GET' && !idMatch) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'success', mappings: claimMappings, total: claimMappings.length }),
+      })
+    } else if (method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}')
+      if (RESERVED_CLAIMS.includes(body.claim_name)) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'CLAIM_MAPPING_RESERVED_CLAIM', message: 'reserved claim' } }),
+        })
+        return
+      }
+      if (body.scope_name === 'openid') {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'CLAIM_MAPPING_FORBIDDEN_SCOPE', message: 'openid forbidden' } }),
+        })
+        return
+      }
+      const created = { id: nextClaimMappingId++, include_in: 'both', enabled: true, ...body }
+      claimMappings.push(created)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'success', id: created.id, message: 'Claim mapping created' }),
+      })
+    } else if (method === 'PUT' && idMatch) {
+      const target = claimMappings.find((m) => m.id === Number(idMatch[1]))
+      const body = JSON.parse(route.request().postData() || '{}')
+      if (!target) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_RESOURCE_NOT_FOUND', message: 'not found' } }) })
+        return
+      }
+      Object.assign(target, body)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', message: 'updated' }) })
+    } else if (method === 'DELETE' && idMatch) {
+      const idx = claimMappings.findIndex((m) => m.id === Number(idMatch[1]))
+      if (idx >= 0) claimMappings.splice(idx, 1)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', message: 'deleted' }) })
+    } else {
+      await route.fulfill({ status: 405, body: '' })
+    }
+  })
+
   // Audit logs
   await page.route('**/api/admin/logs**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ logs: MOCK_LOGS }),
+    })
+  })
+
+  // Audit CSV export (P1-6). Registered AFTER the logs route so it wins for
+  // /export URLs (Playwright matches the most recently registered route
+  // first). Window guard mirrors the server: missing from/to ->
+  // AUDIT_EXPORT_WINDOW_REQUIRED 400; a window answers text/csv.
+  await page.route('**/api/admin/logs/export**', async (route) => {
+    const url = new URL(route.request().url())
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    if (!from || !to) {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'AUDIT_EXPORT_WINDOW_REQUIRED', message: 'window required' } }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      body: 'id,timestamp,action,outcome,actor_id,actor_type,target_type,target_id,ip,user_agent,details\n1,2026-11-11T00:00:00Z,login_success,success,uuid,user,,,,127.0.0.1,"-","{}"\n',
     })
   })
 

@@ -31,6 +31,21 @@ Changelog entries are written in English (see CONTRIBUTING).
   redaction. OAuth HTTP adapter failures also omit URLs and exception text that
   could contain upstream credentials. No database migration or release/tag is included.
 
+### Added
+
+- **Admin console: audit-log CSV export and the claim-mappings editor** (audit wave B,
+  closing the frontend legs of two v1.6.0 endpoints): the Audit Logs page gains a
+  time-windowed Export CSV action (empty from/to defaults to the last 24h; the
+  `AUDIT_EXPORT_WINDOW_REQUIRED` / `AUDIT_EXPORT_TOO_LARGE` catalog messages surface
+  through the blob-decoding error path); a new Claim Mappings page drives the
+  `/api/admin/claim-mappings` CRUD end to end (create/edit modals with scope-name
+  datalist and the source whitelist hint, row-level enable toggle issuing the
+  documented full-replace PUT, confirm-guarded delete) — the UI follow-up declared
+  in #293. The release process docs now carry the explicit pre-release three-part
+  gate (five-scenario benchmark ≥ 90% in-tree, curated CHANGELOG, six-point version
+  sync — versioning-and-release.md §11.0 EN + zh, release-engineering checklist,
+  PR template section), so the v1.5.0-style silent skip cannot recur.
+
 
 ### Fixed
 

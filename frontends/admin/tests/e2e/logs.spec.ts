@@ -111,4 +111,37 @@ test.describe('Audit Logs', () => {
     await expect(page.locator('text=Page 2')).toBeVisible()
     expect(requestedPage).toBe(2)
   })
+
+  // P1-6 CSV export (audit wave B): the export button must send the mandatory
+  // time window (epoch-seconds from/to; empty inputs default to last 24h).
+  test('export sends the mandatory from/to window', async ({ page }) => {
+    const exportRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/admin/logs/export'),
+    )
+    await page.click('button:has-text("Export CSV")')
+    const req = await exportRequest
+    const url = new URL(req.url())
+    const from = Number(url.searchParams.get('from'))
+    const to = Number(url.searchParams.get('to'))
+    expect(from).toBeGreaterThan(0)
+    expect(to).toBeGreaterThan(from)
+    // The default window is 24h (allow slack for test runtime).
+    expect(to - from).toBeLessThanOrEqual(24 * 3600 + 60)
+  })
+
+  test('export window-required error shows the localized catalog message', async ({ page }) => {
+    // Override the export route (later registration wins) with the server's
+    // 400 envelope; the blob-decoding path must resolve the catalog code.
+    await page.route('**/api/admin/logs/export**', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'AUDIT_EXPORT_WINDOW_REQUIRED', message: 'window required' } }),
+      })
+    })
+    await page.click('button:has-text("Export CSV")')
+    await expect(page.locator('p.text-error-700')).toContainText(
+      'Audit export requires a time window',
+    )
+  })
 })

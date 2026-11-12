@@ -25,6 +25,68 @@ const actionFilter = ref('')
 const outcomeFilter = ref('')
 const actorIdFilter = ref('')
 
+// CSV export (P1-6 #283 — audit wave B): the export endpoint requires an
+// explicit time window (from/to, epoch seconds) unless all=true is sent.
+// The inputs are datetime-local strings; empty inputs default to the last
+// 24 hours so a one-click export never trips WINDOW_REQUIRED by accident.
+const exportFrom = ref('')
+const exportTo = ref('')
+const exporting = ref(false)
+
+function exportWindowSeconds(): { from: number; to: number } {
+  const now = Math.floor(Date.now() / 1000)
+  const from = exportFrom.value
+    ? Math.floor(new Date(exportFrom.value).getTime() / 1000)
+    : now - 24 * 3600
+  const to = exportTo.value
+    ? Math.floor(new Date(exportTo.value).getTime() / 1000)
+    : now
+  return { from, to }
+}
+
+// A blob request's error body arrives as a Blob, which normalizeError cannot
+// parse (its envelope detection expects an object) — decode it back to the
+// Error Envelope shape first so the catalog code (e.g.
+// AUDIT_EXPORT_WINDOW_REQUIRED / AUDIT_EXPORT_TOO_LARGE) resolves normally.
+async function normalizeBlobError(e: unknown): Promise<NormalizedError | string> {
+  const data = (e as { response?: { data?: unknown } })?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text())
+      return normalizeError({ response: { status: (e as { response?: { status?: number } })?.response?.status, data: parsed } })
+    } catch {
+      // fall through to the generic normalization below
+    }
+  }
+  return normalizeError(e)
+}
+
+async function exportCsv() {
+  if (exporting.value) return
+  exporting.value = true
+  errorMessage.value = null
+  const { from, to } = exportWindowSeconds()
+  try {
+    const params: Record<string, string | number> = { from, to }
+    if (actionFilter.value) params.action = actionFilter.value
+    if (outcomeFilter.value) params.outcome = outcomeFilter.value
+    if (actorIdFilter.value) params.actor_id = actorIdFilter.value
+    const resp = await axios.get('/api/admin/logs/export', { params, responseType: 'blob' })
+    const url = URL.createObjectURL(resp.data as Blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `audit-export-${from}-${to}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    errorMessage.value = await normalizeBlobError(e)
+  } finally {
+    exporting.value = false
+  }
+}
+
 async function fetchLogs() {
   loading.value = true
   errorMessage.value = null
@@ -121,6 +183,28 @@ onMounted(fetchLogs)
       >
         {{ $t('common.clear') }}
       </button>
+      <!-- CSV export (P1-6): window defaults to the last 24h when empty -->
+      <div class="flex items-center gap-2 ml-auto">
+        <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportFromLabel') }}</label>
+        <input
+          v-model="exportFrom"
+          type="datetime-local"
+          class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
+        >
+        <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportToLabel') }}</label>
+        <input
+          v-model="exportTo"
+          type="datetime-local"
+          class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
+        >
+        <button
+          :disabled="exporting"
+          class="px-4 py-1.5 border border-brand-600 text-brand-600 text-sm font-medium rounded-md hover:bg-brand-50 disabled:opacity-50"
+          @click="exportCsv"
+        >
+          {{ exporting ? $t('common.loading') : $t('admin.logs.exportLabel') }}
+        </button>
+      </div>
     </div>
 
     <!-- Error Banner -->

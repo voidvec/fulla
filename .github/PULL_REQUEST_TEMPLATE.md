@@ -26,3 +26,11 @@ If this touches the API surface (skip otherwise):
 - [ ] Endpoint fingerprints / golden baselines regenerated if endpoints changed
 - [ ] `api-diff` and `oasdiff` gates addressed (a justified `--force` / ignore entry is fine — explain below)
 - [ ] Breaking changes curated into the `Breaking changes` section of `CHANGELOG.md`
+
+If this is a release/version bump PR (skip otherwise — see
+`docs/contribute/versioning-and-release.md` §11.0):
+
+- [ ] Five-scenario performance comparison ≥ 90% vs the previous tag, report +
+      raw data committed and referenced in this PR
+- [ ] CHANGELOG `[vX.Y.Z]` section complete (Breaking entries on top)
+- [ ] Six-point version sync verified (`python tools/clients/regen_clients.py --version-only`)
