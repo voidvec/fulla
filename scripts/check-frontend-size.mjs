@@ -26,9 +26,15 @@ import { join, resolve } from 'node:path'
 // grant checkboxes) plus its bilingual i18n catalog added ~2.4KB raw to the
 // admin bundle (439.3KB measured vs the 438.2KB cap). admin.total base
 // 398.4KB -> 400.4KB.
+// Re-baselined 2026-11-12 for audit wave B (#329): the claim-mappings admin
+// page (table + create/edit modals + confirm dialog wiring, lazy route) and
+// the audit-logs export controls plus their bilingual i18n catalogs added
+// ~15.6KB raw to the admin bundle (456.0KB measured vs the 440.5KB cap,
+// CI-build numbers). admin.total base 400.4KB -> 456.0KB, main 143.0KB ->
+// 156.2KB.
 const BUDGETS = {
   user: { total: 385441, main: 146739 },
-  admin: { total: 410049, main: 146452 },
+  admin: { total: 466944, main: 159949 },
 }
 const HEADROOM = 1.1
 
