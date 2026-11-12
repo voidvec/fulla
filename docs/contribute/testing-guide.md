@@ -116,7 +116,8 @@ through the same chain:
 - **CI**: `.github/workflows/interop.yml` builds the server, boots the stack and runs all
   drivers on every push to `master`/`release/**` (plus manual dispatch); it is deliberately
   NOT on the per-PR hot path.
-- **Local run**: see [`tests/interop/README.md`](../../tests/interop/README.md) — the stack
+- **Local run**: see `tests/interop/README.md` in the repository (outside the docs
+  tree, so not hyperlinked here) — the stack
   must be up and seeded (dev seeds: `fulla-portal` PUBLIC client, `admin`/`admin`).
 
 ---
