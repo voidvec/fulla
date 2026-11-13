@@ -43,7 +43,7 @@ enable_testing()
 # generate(). All default ON to preserve today's build behavior; turning
 # WITH_SOCIAL/WITH_WEBAUTHN OFF shrinks the dependency surface (the social
 # controllers + WebAuthn controllers/services drop out of the build). libcbor
-# (found via conan, target libcbor::libcbor) is a hard requirement of the
+# (found via conan, target libcbor::libcbor) is required only by the
 # WITH_WEBAUTHN=ON identity build since #142: the WebAuthn attestation/
 # assertion verification (libs/identity/src/webauthn/) parses authenticator
 # attestation objects and COSE keys with it.
@@ -162,6 +162,13 @@ endif()
 # Tagged LABELS "SdkSmoke" (the label M8 Task 39 depends on).
 if(BUILD_EXAMPLES)
     set(_sdk_smoke_gen_platform "")
+    set(_sdk_smoke_feature_options "")
+    if(NOT WITH_WEBAUTHN)
+        # A separate consumer configure does not inherit outer cache values.
+        # Prove that OFF exports are consumable without finding libcbor.
+        list(APPEND _sdk_smoke_feature_options
+            "-DCMAKE_DISABLE_FIND_PACKAGE_libcbor=TRUE")
+    endif()
     if(CMAKE_GENERATOR_PLATFORM)
         set(_sdk_smoke_gen_platform --build-generator-platform "${CMAKE_GENERATOR_PLATFORM}")
     endif()
@@ -177,6 +184,7 @@ if(BUILD_EXAMPLES)
             --build-options
                 "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"
                 "-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/fulla-cmake"
+                ${_sdk_smoke_feature_options}
             --test-command "${CMAKE_CTEST_COMMAND}" -C "$<CONFIG>" --output-on-failure
     )
     set_tests_properties(SdkSmoke.FullStack PROPERTIES LABELS "SdkSmoke")

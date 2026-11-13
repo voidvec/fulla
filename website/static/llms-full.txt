@@ -3457,10 +3457,74 @@ until the new inspect/atomic-rotation/checked-revocation ports are implemented.
   and Postgres adapter still require `fulla::identity`; configuration fails
   explicitly. Keep identity enabled when configuring the repository.
 - WebAuthn performs real W3C Level 2 CBOR/COSE and ES256 verification since
-  v1.1.0 (#142); its typed read-only CborReader consumes libcbor. `libcbor` remains
-  an **unconditional dependency**, including when WebAuthn is disabled,
-  because `WebAuthnCrypto.cc` and its tests are still compiled. Disabling a
-  feature does not currently guarantee removal of all of its dependencies.
+  v1.1.0 (#142); its typed read-only CborReader consumes libcbor. With WebAuthn
+  disabled, Conan does not require libcbor, CMake does not find/link it, the
+  service/crypto/CBOR tests are not compiled, and exported SDK configs do not
+  require it. OpenSSL and jsoncpp remain shared dependencies for other features.
+
+### 5.1 Supported combinations
+
+Identity stays ON in every supported configuration. Both optional switches
+default to ON; use matching Conan options rather than overriding only CMake.
+
+| Social | WebAuthn | Compiled surface and dependency boundary |
+|---|---|---|
+| ON | ON | Full provider/WebAuthn services and controllers; libcbor required |
+| OFF | ON | Provider login/link routes and social services removed; WebAuthn and libcbor remain |
+| ON | OFF | WebAuthn routes, implementation and tests removed; no libcbor requirement |
+| OFF | OFF | Core identity/MFA/TOTP/OAuth2 remain; neither optional service set nor libcbor is required |
+
+Social OFF retains `GET /api/auth/providers` with an empty provider list and
+the shared `POST /api/auth/providers/{provider}/authorize` route, which returns
+404 when unavailable. Social OFF does not promise removal of shared HTTP or
+storage adapters. Headers remain installed; existing `WITH_*` guards still
+determine which declarations are available. An OFF library does not provide
+the disabled service implementations. Link imported SDK targets and
+use their exported feature definitions instead of defining `WITH_*` yourself.
+
+Build switches do not delete stored WebAuthn credentials or social links.
+Before deploying a trimmed variant, provide an available sign-in method for
+accounts that rely on the removed feature. No automatic factor/data migration
+is performed.
+
+The checked-in Conan lock is a superset for supported configurations. Its
+libcbor entry continues to lock ON builds; OFF graphs do not consume that entry.
+Both build-tree and installed SDK consumers must resolve the selected closure.
+No binary ABI compatibility is promised between feature configurations.
+
+### 5.2 Reproduce the matrix checks
+
+Prepare an isolated PostgreSQL/Redis test fixture as described in the
+[testing guide](../contribute/testing-guide.md). The same `FULLA_DB_*` and
+`FULLA_REDIS_*` overrides used by the normal test runner apply. Then run one
+combination (Python 3.10+, Conan, CMake and the native toolchain required):
+
+```bash
+python3 tools/feature-matrix/run.py \
+  --social ON --webauthn OFF \
+  --build-dir build/social-on-webauthn-off \
+  --evidence-dir docs-local/feature-matrix/social-on-webauthn-off
+```
+
+Use a new evidence directory for each attempt; earlier results are never
+overwritten. Consumer/install directories must also be fresh (choose a fresh
+build directory if an earlier attempt created them). Repeat for the other three rows. The runner resolves the locked
+graph, builds with `FULLA_WERROR=ON`, checks configured sources/flags/exports,
+runs the applicable CTest suite (including the complete service binary), and
+builds/runs SDK consumers from both the build tree and a fresh install prefix.
+OFF consumers explicitly forbid finding libcbor, and package/target locations
+are checked against the intended prefix. Required tests must be registered and
+pass without CTest skips, with live PG/Redis readiness verified. The unsupported
+identity-OFF combination must fail in both Conan and CMake. Existing gtest/example warning
+policies are unchanged; Werror applies to targets using the project warning helper.
+
+Full-feature builds retain the legacy OAuth2/Admin endpoint scripts. Trimmed
+builds instead run the feature-surface executable probe, which checks public
+endpoints and asserts 404 for removed routes; enabled social builds also retain
+the browser-bound state executable check. The complete default route golden
+and OpenAPI fingerprint remain unchanged; only the expected set is reduced
+for a trimmed build. Three trimmed Linux jobs run in Optional Feature Matrix
+CI; the normal cross-platform CI covers ON/ON.
 
 ## 6. Plugin Registration and Configuration Contract (Host Integration)
 

@@ -51,6 +51,7 @@
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
+#include "../../common/EnabledFeatureRoutes.h"
 
 #include <fulla/drogon/controllers/HealthController.h>
 using fulla::drogon::controllers::HealthController;
@@ -260,6 +261,15 @@ void compareOrSeed(
     const bool exists = readGolden(path, golden);
     if (!exists)
     {
+#if !defined(WITH_SOCIAL) || !defined(WITH_WEBAUTHN)
+        if (fileName == "route_manifest.txt")
+        {
+            // A trimmed binary must never seed the full product baseline.
+            LOG_ERROR << "Missing full-feature route golden: " << path;
+            CHECK(exists);
+            return;
+        }
+#endif
         // First run / fresh checkout: seed the baseline and pass.
         const bool wrote = writeGolden(path, current);
         if (!wrote)
@@ -271,6 +281,8 @@ void compareOrSeed(
         return;
     }
 
+    if (fileName == "route_manifest.txt")
+        golden = fulla::test::features::expectedRoutes(golden);
     const std::string normalizedCurrent = stripCr(current);
     if (golden != normalizedCurrent)
     {

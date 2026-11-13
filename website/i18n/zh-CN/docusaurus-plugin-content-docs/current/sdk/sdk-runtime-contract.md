@@ -58,9 +58,63 @@
   Postgres 适配器仍需要 `fulla::identity`，配置阶段会明确报错；
   配置仓库时应保持 identity 启用。
 - WebAuthn 自 v1.1.0（#142）起实现真实 W3C Level 2 CBOR/COSE 和 ES256 验证，
-  只读强类型 CborReader 消费 libcbor。`libcbor` 当前仍是
-  **无条件依赖**，关闭 WebAuthn 后也保留，因为 `WebAuthnCrypto.cc`
-  及其测试仍会构建。关闭特性不代表已经移除其全部第三方依赖。
+  只读强类型 CborReader 消费 libcbor。关闭 WebAuthn 后，Conan 不再要求 libcbor，
+  CMake 不再查找/链接它，相关服务、加密实现与 CBOR 测试不参与编译，导出的 SDK
+  配置也不再要求它。OpenSSL 与 jsoncpp 仍是其他特性的共享依赖。
+
+### 5.1 受支持的组合
+
+所有受支持配置都保持 identity ON。两个可选开关默认均为 ON，应使用对应 Conan
+选项，不要只覆盖 CMake 开关。
+
+| Social | WebAuthn | 编译面与依赖边界 |
+|---|---|---|
+| ON | ON | 完整 provider/WebAuthn 服务与 Controller，需要 libcbor |
+| OFF | ON | 去除 provider 登录/绑定路由与 social 服务，保留 WebAuthn/libcbor |
+| ON | OFF | 去除 WebAuthn 路由、实现和测试，不再要求 libcbor |
+| OFF | OFF | 保留核心 identity/MFA/TOTP/OAuth2，不要求两组可选服务或 libcbor |
+
+Social OFF 仍保留 `GET /api/auth/providers`，返回空 provider 列表；共享的
+`POST /api/auth/providers/{provider}/authorize` 路由也保留，在不可用时返回 404。
+关闭 social 不承诺移除共享 HTTP 或存储适配器。头文件继续安装；哪些声明可用仍由
+既有 `WITH_*` guards 决定。OFF 库不提供被关闭服务的实现。应链接 SDK imported
+targets，使用其导出的 feature 定义，不要
+自行定义 `WITH_*`。
+
+编译开关不会删除已保存的 WebAuthn 凭据或社交绑定。部署裁剪变体前，应给依赖
+被关闭特性的账号准备可用登录方式；不会自动迁移认证因子或数据。
+
+仓库中的 Conan lock 是受支持配置的超集；libcbor 条目继续锁定 ON 构建，OFF 图
+不消费该条目。构建树和安装树消费者都必须解析所选依赖闭包。不同 feature 配置
+之间不承诺二进制 ABI 兼容。
+
+### 5.2 复现矩阵检查
+
+按[测试指南](../contribute/testing-guide.md)准备隔离的 PostgreSQL/Redis fixture，
+沿用普通测试入口的 `FULLA_DB_*` 与 `FULLA_REDIS_*` 环境覆盖。然后运行一个组合
+（需要 Python 3.10+、Conan、CMake 与原生工具链）：
+
+```bash
+python3 tools/feature-matrix/run.py \
+  --social ON --webauthn OFF \
+  --build-dir build/social-on-webauthn-off \
+  --evidence-dir docs-local/feature-matrix/social-on-webauthn-off
+```
+
+每次尝试使用新的证据目录，不覆盖已有结果；消费者/安装目录也必须全新，若上次
+尝试已生成它们，应选择新的构建目录。其余三个组合依次重复。脚本解析
+锁定依赖图，以 `FULLA_WERROR=ON` 构建，检查配置源文件/flags/exports，运行适用的
+完整 CTest（含完整服务 binary），并从构建树及新安装前缀分别构建/运行 SDK 宿主。
+OFF 消费者显式禁找 libcbor，包目录和 imported target 路径也要匹配预期前缀。
+必需测试须已注册且通过，不能有 CTest skip，并验证 PG/Redis 实际就绪；不支持的
+identity OFF 组合必须在 Conan 和 CMake 两处失败。
+既有 gtest/example 警告策略保持，Werror 应用于使用项目 warnings helper 的目标。
+
+全开构建保留原 OAuth2/Admin 端点脚本；裁剪构建改跑独立 feature-surface 进程探针，
+检查公共端点并断言被裁剪路由返回 404；启用 social 时仍运行浏览器绑定 state 的
+独立进程检查。默认完整 route golden 和 OpenAPI fingerprint 原文不变，仅裁剪
+构建的预期集合按开关缩减。Optional Feature Matrix CI 跑三个裁剪 Linux 组合，
+普通跨平台 CI 覆盖 ON/ON。
 
 ## 6. 插件注册与配置契约（宿主集成）
 

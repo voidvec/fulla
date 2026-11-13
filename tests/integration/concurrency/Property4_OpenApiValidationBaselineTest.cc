@@ -48,6 +48,7 @@
 #include <fulla/drogon/filters/RequestValidationFilter.h>
 
 #include "Property4_PreservationSupport.h"
+#include "../../common/EnabledFeatureRoutes.h"
 
 using namespace fulla::drogon::observability::openapi;
 using namespace fulla::test::concurrency;
@@ -244,7 +245,8 @@ const std::string &expectedFingerprint()
       "PUT /api/admin/users/{userId}/roles\n"
       "PUT /api/me/password\n"
       "PUT /api/me/profile/custom-attributes\n";
-    return kFingerprint;
+    static const auto enabled = fulla::test::features::expectedRoutes(kFingerprint);
+    return enabled;
 }
 
 enum class FilterOutcome

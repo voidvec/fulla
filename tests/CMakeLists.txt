@@ -87,10 +87,14 @@ file(GLOB_RECURSE PERFORMANCE_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/performance/*.c
 # design §6 target location tests/contract/.
 file(GLOB_RECURSE CONTRACT_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/contract/*.cc")
 
+if(NOT WITH_WEBAUTHN)
+    list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "WebAuthnHttpTest\\.cc$")
+endif()
 if(NOT WITH_SOCIAL)
-    # These fixtures inject provider services that do not exist in this build.
+    # These fixtures depend on services/repository types guarded by WITH_SOCIAL.
     list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "SocialLoginHttpTest\\.cc$")
     list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "SocialLinkEndpointHttpTest\\.cc$")
+    list(FILTER INTEGRATION_TESTS EXCLUDE REGEX "SoftDeleteSocialRepoTest\\.cc$")
 endif()
 
 # Root test sources
@@ -403,6 +407,15 @@ set(_ENDPOINT_BASE_URL "http://127.0.0.1:5555")
 set(_ENDPOINT_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/scripts/backend")
 
 if(WIN32)
+    set(_SERVER_BIN "${CMAKE_BINARY_DIR}/apps/server/Release/fulla-server.exe")
+else()
+    set(_SERVER_BIN "${CMAKE_BINARY_DIR}/apps/server/fulla-server")
+endif()
+
+# The legacy scripts assert full WebAuthn/provider routes. Trimmed products
+# use the feature-surface probe below, which asserts their absence explicitly.
+if(WITH_SOCIAL AND WITH_WEBAUTHN)
+if(WIN32)
     set(_ENDPOINT_WRAPPER "${_ENDPOINT_SCRIPTS_DIR}/run-endpoint-tests.ps1")
     set(_SERVER_BIN "${CMAKE_BINARY_DIR}/apps/server/Release/fulla-server.exe")
     find_program(_POWERSHELL_BIN NAMES pwsh powershell)
@@ -425,6 +438,7 @@ else()
     )
     set(_ENDPOINT_TEST_REGISTERED TRUE)
 endif()
+endif()
 # Properties are set only if add_test actually ran. The server binary is
 # NOT checked at configure time (it may not exist yet -- configure runs
 # before build); the wrapper checks for it at test-run time.
@@ -438,8 +452,19 @@ endif()
 
 # Real executable protocol checks use a separate cookie jar per browser and
 # never contact an external provider. Match the endpoint suite's prerequisites.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME FeatureSurface_OutOfProcess
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/feature-matrix/check_runtime.py"
+            --server-exe "${_SERVER_BIN}"
+            --social "$<BOOL:${WITH_SOCIAL}>"
+            --webauthn "$<BOOL:${WITH_WEBAUTHN}>"
+            --log-file "${CMAKE_CURRENT_BINARY_DIR}/feature-surface-server.log")
+    set_tests_properties(FeatureSurface_OutOfProcess PROPERTIES
+        LABELS "FeatureMatrix" RUN_SERIAL TRUE TIMEOUT 60)
+endif()
 if(WITH_SOCIAL)
-    find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME SocialLoginState_OutOfProcess
             COMMAND "${Python3_EXECUTABLE}"

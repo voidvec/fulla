@@ -49,6 +49,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- Honor WebAuthn-disabled builds throughout Conan, crypto/test compilation and build/install SDK exports: libcbor is no longer required when the feature is OFF. Validate all supported social/WebAuthn combinations, preserve full-feature route baselines, and check trimmed routes and real external SDK consumers.
+
 - Advisory-lock transactions now guard every asynchronous continuation: a synchronous throw from `withAdvisoryXactLock`'s statement chain or a caller's continuation no longer escapes into the Drogon event loop (the SIGABRT class the Mapper-construction rule guards against), and lock-acquisition failures roll the transaction back instead of leaving it to the destructor-time COMMIT. The consent-specific `withConsentTransaction` became a thin adapter over the shared helper (#323 unification). The interactive `/oauth2/consent` submit joined the once-sink ten-second HTTP completion deadline: it queues behind the organization-consent advisory lock for org-bound approvals, and a wedged transaction now yields a retryable error instead of an indefinitely hanging browser. `makeOnceResponse` moved from the server assembly to the public `fulla/drogon/http/OnceResponse.h` header (additive API baseline).
 
 - Align API documentation with the existing dynamic-registration admin/403 gate, stored introspection organization context and client-management tags. Clarify refresh failure and cache convergence boundaries, in-process Memory atomic operations, hashed invitation storage and PBKDF2 development recovery; remove shell-expanded password-reset SQL examples. No authorization or token-lifetime behavior changes are introduced.
