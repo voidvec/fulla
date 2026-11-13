@@ -32,7 +32,15 @@ find_package(OpenSSL REQUIRED)
 # #142: CBOR parsing for WebAuthn attestation/assertion verification
 # (libs/identity/src/webauthn/); same Domain-layer exception rationale as
 # OpenSSL above.
-find_package(libcbor REQUIRED)
+set(_identity_webauthn_sources)
+set(_identity_webauthn_deps)
+if(WITH_WEBAUTHN)
+    find_package(libcbor REQUIRED)
+    list(APPEND _identity_webauthn_sources
+        src/webauthn/WebAuthnService.cc
+        src/webauthn/WebAuthnCrypto.cc)
+    list(APPEND _identity_webauthn_deps libcbor::libcbor)
+endif()
 
 # Sources
 #
@@ -49,12 +57,7 @@ set(IDENTITY_SOURCES
     src/mfa/MfaService.cc
     src/mfa/TotpUtils.cc
     # WebAuthn (conditional)
-    $<$<BOOL:${WITH_WEBAUTHN}>:src/webauthn/WebAuthnService.cc>
-    # #142: crypto core (CborReader is header-only) -- compiled
-    # unconditionally (unlike WebAuthnService.cc) because its unit tests
-    # (CborReaderTest.cc/WebAuthnCryptoTest.cc) are glob-collected into
-    # fulla-identity-test regardless of WITH_WEBAUTHN.
-    src/webauthn/WebAuthnCrypto.cc
+    ${_identity_webauthn_sources}
     # Social (conditional)
     $<$<BOOL:${WITH_SOCIAL}>:src/social/GoogleAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/WeChatAuthService.cc>
@@ -106,7 +109,7 @@ target_link_libraries(fulla-identity
     PRIVATE
         JsonCpp::JsonCpp
         OpenSSL::Crypto
-        libcbor::libcbor
+        ${_identity_webauthn_deps}
 )
 
 # Compile definitions for conditional features
@@ -144,11 +147,16 @@ if(NOT COMMAND fulla_package)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
     include(FullaPackage)
 endif()
+set(_identity_package_deps jsoncpp OpenSSL)
+if(WITH_WEBAUTHN)
+    list(APPEND _identity_package_deps libcbor)
+endif()
+list(APPEND _identity_package_deps fulla-common)
 fulla_package(
     TARGET fulla-identity
     PACKAGE fulla-identity
     EXPORT_NAME identity
-    DEPENDENCIES jsoncpp OpenSSL libcbor fulla-common
+    DEPENDENCIES ${_identity_package_deps}
 )
 
 # --- Tests (pure unit, no DB/no Drogon) ---

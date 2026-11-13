@@ -73,6 +73,22 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     OpenSSL::Crypto
 )
 
+# Record where the foreign consumer actually resolved the SDK. Matrix checks
+# use this for both build-tree and installed-prefix consumption; a prefix on
+# the command line alone does not prove which cached package was selected.
+set(_fulla_sdk_audit "")
+foreach(_pkg fulla-common fulla-oauth2 fulla-identity fulla-storage-memory
+             fulla-storage-postgres fulla-storage-redis fulla-drogon)
+    string(APPEND _fulla_sdk_audit "${_pkg}_DIR=${${_pkg}_DIR}\n")
+endforeach()
+foreach(_target common oauth2 identity storage::memory storage::postgres storage::redis drogon)
+    string(APPEND _fulla_sdk_audit
+        "fulla::${_target}=$<TARGET_FILE:fulla::${_target}>\n")
+endforeach()
+file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fulla-sdk-dependencies-$<CONFIG>.txt"
+    CONTENT "${_fulla_sdk_audit}")
+
 if(MSVC)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()

@@ -6,9 +6,8 @@ with_identity=False is reserved but unsupported: the product and Postgres
 adapter still require the identity package, so validate() rejects it explicitly.
 
 WebAuthn performs real W3C Level 2 CBOR/COSE and ES256 verification since
-v1.1.0 (#142). libcbor backs the typed read-only CborReader and remains an
-unconditional requirement because the identity build compiles WebAuthnCrypto
-and its tests even when the WebAuthn service/controllers are disabled.
+v1.1.0 (#142). libcbor backs the typed read-only CborReader and is required
+only when with_webauthn=True, alongside its crypto implementation and tests.
 """
 
 from conan import ConanFile
@@ -66,7 +65,8 @@ class FullaConan(ConanFile):
         self.requires("zlib/1.3.1", override=True)
         # #142: real WebAuthn attestation/assertion verification. libcbor
         # backs the typed read-only CborReader in libs/identity/src/webauthn/.
-        self.requires("libcbor/0.13.0")
+        if self.options.with_webauthn:
+            self.requires("libcbor/0.13.0")
 
     def build_requirements(self):
         self.test_requires("gtest/1.14.0")
