@@ -13,6 +13,7 @@ Evaluate docs:
 - [Architecture Overview](https://fulla.dev/docs/architecture/architecture-overview): This page summarizes the overall architecture of fulla from four perspectives: technology stack, module layout, request flow, and deployment topology.
 - [OAuth2 Data Persistence](https://fulla.dev/docs/architecture/data-persistence): This document describes the OAuth2 plugin's persistence layer design, database schema, Redis key-value structure, and security hardening.
 - [OAuth2 Security Architecture](https://fulla.dev/docs/architecture/security-architecture): This document describes the system's security threat model and the corresponding defense mechanisms, covering token lifecycle management, secret storage, and a…
+- [Capacity evidence protocol (S07)](https://fulla.dev/docs/benchmark/capacity-evidence): S07 adds a reproducible, failure-preserving capacity harness. **No accepted
 - [fulla Competitor Performance Benchmark Comparison Design](https://fulla.dev/docs/benchmark/competitor-benchmark-design): - **What**: Load-test Keycloak / Ory Hydra / Zitadel on the **same machine, with the same wrk ladder and the same PostgreSQL backend**, producing a like-for-li…
 
 Domains docs:

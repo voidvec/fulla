@@ -206,6 +206,7 @@ python3 benchmarks/reporting/gen-comparison.py
 方法论与公平性偏离项（各家配置出处、对齐了什么没对齐什么）：
 [competitor-benchmark-design.md](https://fulla.dev/zh-CN/docs/benchmark/competitor-benchmark-design)。
 Fulla 侧场景细节：[benchmarks/README.md](benchmarks/README.md)。
+容量/长跑工具及其测量门见 [S07 协议](website/i18n/zh-CN/docusaurus-plugin-content-docs/current/benchmark/capacity-evidence.md)。
 
 ---
 

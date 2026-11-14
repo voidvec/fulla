@@ -30,6 +30,7 @@ const sidebars = {
           href: 'https://github.com/voidvec/fulla/blob/master/benchmarks/competitors/results/COMPARISON.md',
         },
         'benchmark/competitor-benchmark-design',
+        'benchmark/capacity-evidence',
       ],
     },
     {
