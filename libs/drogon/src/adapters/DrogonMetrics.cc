@@ -1,5 +1,7 @@
 #include <fulla/drogon/adapters/DrogonMetrics.h>
 
+#include "CacheCounter.h"
+
 #include <drogon/drogon.h>
 #include <drogon/plugins/PromExporter.h>
 #include <drogon/utils/monitoring/Collector.h>
@@ -19,8 +21,8 @@ namespace dm = ::drogon::monitoring;
 
 // Format the metric name + labels into the same "[METRIC] <name> k=v ..."
 // log line the legacy fulla::drogon::observability::Metrics statics
-// produced, so output consumers (log scrapers, PromExporter readers) see no
-// change. value is appended as val= (matching observeLatency/updateActiveTokens).
+// produced, so log consumers see no change. value is appended as val=
+// (matching observeLatency/updateActiveTokens).
 std::string formatMetric(
   const std::string &name,
   const fulla::common::ports::MetricLabels &labels,
@@ -76,6 +78,12 @@ std::shared_ptr<dm::CollectorBase> DrogonMetrics::resolveCollector(
     {
         return it->second;
     }
+    // The templated getPlugin<T>() asserts before startup and caches a
+    // static raw pointer; skip the lookup until the framework is running.
+    if (!::drogon::app().isRunning())
+    {
+        return nullptr;
+    }
     auto plugin = ::drogon::app().getPlugin<::drogon::plugin::PromExporter>();
     if (!plugin)
     {
@@ -111,21 +119,46 @@ void DrogonMetrics::incrementCounter(
 {
     // Export is best-effort: a collector/label mismatch must never break
     // the request path; the [METRIC] log line below remains the fallback.
-    try
+    if (name == "fulla_cache_total")
     {
-        auto names = labelNames(labels);
-        auto collector = resolveCollector(name, [&]() {
-            return std::make_shared<dm::Collector<dm::Counter>>(
-              name, name, names);
-        });
-        if (auto typed =
-              std::dynamic_pointer_cast<dm::Collector<dm::Counter>>(collector))
+        // The bounded cache family goes through the whitelist helper ONLY:
+        // the generic path would double-count it and admit unbounded label
+        // values. The templated getPlugin<T>() asserts before startup and
+        // caches a static raw pointer, so use the running check and the
+        // non-template lookup for this family.
+        try
         {
-            typed->metric(labelValues(labels, names))->increment(value);
+            auto &app = ::drogon::app();
+            if (app.isRunning())
+            {
+                auto *exporter = dynamic_cast<::drogon::plugin::PromExporter *>(
+                  app.getPlugin("drogon::plugin::PromExporter")
+                );
+                detail::incrementCacheCounter(exporter, name, labels, value);
+            }
+        }
+        catch (...)
+        {
         }
     }
-    catch (...)
+    else
     {
+        try
+        {
+            auto names = labelNames(labels);
+            auto collector = resolveCollector(name, [&]() {
+                return std::make_shared<dm::Collector<dm::Counter>>(
+                  name, name, names);
+            });
+            if (auto typed =
+                  std::dynamic_pointer_cast<dm::Collector<dm::Counter>>(collector))
+            {
+                typed->metric(labelValues(labels, names))->increment(value);
+            }
+        }
+        catch (...)
+        {
+        }
     }
     try
     {
