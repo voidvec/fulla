@@ -32,9 +32,17 @@
 #include <fulla/storage/postgres/PostgresIdentityRepository.h>
 #include <fulla/storage/postgres/PostgresMfaRepository.h>
 #include <fulla/storage/postgres/PostgresSocialAccountRepository.h>
+#include <fulla/storage/postgres/PostgresUpstreamProviderRepository.h>
 #include <fulla/storage/postgres/PostgresWebAuthnRepository.h>
 #include <drogon/DrClassMap.h>
 #include <drogon/drogon.h>
+#ifdef WITH_SOCIAL
+// P2-1: OIDC-in upstream federation (registry runtime + controllers).
+#include <fulla/drogon/controllers/UpstreamLoginController.h>
+#include <fulla/drogon/controllers/UpstreamProviderAdminController.h>
+#include <fulla/drogon/services/UpstreamProviderRuntime.h>
+#include <fulla/identity/OidcUpstreamAuthService.h>
+#endif  // WITH_SOCIAL
 
 #include <string>
 #include <vector>
@@ -433,6 +441,107 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
       ->setSocialLoginGuard(loginGuard);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
       ->setSocialLoginGuard(loginGuard);
+
+    // ------------------------------------------------------------------
+    // P2-1: OIDC-in upstream registry (upstream_providers). The runtime
+    // snapshots enabled rows, pre-resolves endpoints and pushes them into
+    // the guard as DynamicProviders -- registry keys then ride the exact
+    // same state/cookie/origin machinery as the three social providers.
+    // Memory deployments returned at the top of wireIdentityServices, so
+    // this block only runs with a real dbClient.
+    // ------------------------------------------------------------------
+    {
+        auto upstreamRepo =
+          std::make_shared<fulla::storage::postgres::PostgresUpstreamProviderRepository>(dbClient);
+        bool upstreamAutoCreate = true;
+        if (customConfig.isMember("external_auth") &&
+            customConfig["external_auth"].isMember("auto_create_on_first_login"))
+        {
+            upstreamAutoCreate =
+              customConfig["external_auth"]["auto_create_on_first_login"].asBool();
+        }
+        // Transport seams: drogon HttpClient GET / form POST. HttpClient's
+        // factory caches per host internally, so per-call construction is
+        // cheap; hosts come from registry issuer/discovery documents.
+        auto httpGet = [](const std::string &url, const std::string &bearer,
+                          fulla::identity::OidcUpstreamAuthService::FetchCallback &&cb) {
+            const auto sep = url.find('/', url.find("://") + 3);
+            const std::string host = sep == std::string::npos ? url : url.substr(0, sep);
+            const std::string path = sep == std::string::npos ? "/" : url.substr(sep);
+            auto req = ::drogon::HttpRequest::newHttpRequest();
+            req->setMethod(::drogon::Get);
+            req->setPath(path);
+            if (!bearer.empty())
+                req->addHeader("authorization", "Bearer " + bearer);
+            ::drogon::HttpClient::newHttpClient(host, ::drogon::app().getLoop())
+              ->sendRequest(req, [cb = std::make_shared<
+                    fulla::identity::OidcUpstreamAuthService::FetchCallback>(std::move(cb))](
+                    ::drogon::ReqResult result, const ::drogon::HttpResponsePtr &resp) {
+                  if (result != ::drogon::ReqResult::Ok || !resp)
+                  {
+                      (*cb)(false, 0, "");
+                      return;
+                  }
+                  (*cb)(true, resp->getStatusCode(),
+                        std::string(resp->getBody().data(), resp->getBody().size()));
+              });
+        };
+        auto httpPostForm = [](const std::string &url,
+                               const std::vector<std::pair<std::string, std::string>> &form,
+                               fulla::identity::OidcUpstreamAuthService::FetchCallback &&cb) {
+            const auto sep = url.find('/', url.find("://") + 3);
+            const std::string host = sep == std::string::npos ? url : url.substr(0, sep);
+            const std::string path = sep == std::string::npos ? "/" : url.substr(sep);
+            std::string body;
+            for (const auto &[key, value] : form)
+            {
+                if (!body.empty())
+                    body += '&';
+                body += ::drogon::utils::urlEncodeComponent(key) + "=" +
+                        ::drogon::utils::urlEncodeComponent(value);
+            }
+            auto req = ::drogon::HttpRequest::newHttpRequest();
+            req->setMethod(::drogon::Post);
+            req->setPath(path);
+            req->addHeader("content-type", "application/x-www-form-urlencoded");
+            req->setBody(std::move(body));
+            ::drogon::HttpClient::newHttpClient(host, ::drogon::app().getLoop())
+              ->sendRequest(req, [cb = std::make_shared<
+                    fulla::identity::OidcUpstreamAuthService::FetchCallback>(std::move(cb))](
+                    ::drogon::ReqResult result, const ::drogon::HttpResponsePtr &resp) {
+                  if (result != ::drogon::ReqResult::Ok || !resp)
+                  {
+                      (*cb)(false, 0, "");
+                      return;
+                  }
+                  (*cb)(true, resp->getStatusCode(),
+                        std::string(resp->getBody().data(), resp->getBody().size()));
+              });
+        };
+        static auto oidcUpstreamService = std::make_shared<fulla::identity::OidcUpstreamAuthService>(
+          socialAccountRepo, upstreamAutoCreate, httpGet, httpPostForm);
+        static auto upstreamRuntime =
+          std::make_shared<fulla::drogon::services::UpstreamProviderRuntime>(
+            upstreamRepo,
+            oidcUpstreamService,
+            loginGuard,
+            [customConfig](const std::string &key) {
+                // Same per-key override convention as the social providers
+                // (external_auth.{key}.redirect_uri, else frontend/callback).
+                return fulla::common::utils::socialRedirectUri(customConfig, key);
+            });
+        upstreamRuntime->refresh();
+        ::drogon::app().getLoop()->runEvery(
+          60.0, [runtime = upstreamRuntime]() { runtime->refresh(); });
+        drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
+          ->setRuntime(upstreamRuntime);
+        drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
+          ->setSocialLoginGuard(loginGuard);
+        drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamProviderAdminController>()
+          ->setRuntime(upstreamRuntime);
+        drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::AuthProvidersController>()
+          ->setUpstreamRuntime(upstreamRuntime);
+    }
 #else
     // No social support compiled in: no provider is ever offered.
     std::vector<std::string> enabledProviderNames;
