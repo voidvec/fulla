@@ -1,4 +1,6 @@
 #include <fulla/drogon/controllers/TokenEndpointController.h>
+
+#include "TokenGrantResponse.h"
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
@@ -1108,39 +1110,11 @@ void TokenEndpointController::token(
           redirectUri,
           codeVerifier,
           [callback = std::move(callback)](const Json::Value &result) {
-              if (result.isMember("error"))
-              {
-                  auto resp = ::drogon::HttpResponse::newHttpJsonResponse(result);
-                  std::string errorCode = result.get("error", "").asString();
-                  ::drogon::HttpStatusCode statusCode =
-                    fulla::common::error::OAuth2ErrorHandler::getHttpStatusCode(errorCode);
-                  resp->setStatusCode(statusCode);
-                  if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                      m->incrementCounter(
-                        "oauth2_requests_total",
-                        fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                        static_cast<double>(static_cast<int>(statusCode))
-                      );
-                  callback(resp);
-                  return;
-              }
-
-              auto resp = ::drogon::HttpResponse::newHttpJsonResponse(result);
-              if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                  m->incrementCounter(
-                    "oauth2_requests_total",
-                    fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                    static_cast<double>(200)
-                  );
-              if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                  m->setGauge(
-                    "oauth2_active_tokens",
-                    fulla::common::ports::MetricLabels{},
-                    static_cast<double>(1)
-                  );
-              // F-019 (RFC 6749 §5.1): token responses MUST NOT be cached.
-              applyNoStoreHeaders(resp);
-              callback(resp);
+              callback(detail::buildTokenGrantResponse(
+                result,
+                detail::TokenGrantResponseKind::AuthorizationCode,
+                ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics()
+              ));
           }
         );
     }
@@ -1183,35 +1157,11 @@ void TokenEndpointController::token(
               auto proceedRefresh = [plugin, clientId, refreshToken, refreshCb]() {
                   plugin->refreshAccessToken(
                     refreshToken, clientId, [refreshCb](const Json::Value &result) {
-                        if (result.isMember("error"))
-                        {
-                            auto resp = ::drogon::HttpResponse::newHttpJsonResponse(result);
-                            std::string errorCode = result.get("error", "").asString();
-                            ::drogon::HttpStatusCode statusCode =
-                              fulla::common::error::OAuth2ErrorHandler::getHttpStatusCode(
-                                errorCode
-                              );
-                            resp->setStatusCode(statusCode);
-                            if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                                m->incrementCounter(
-                                  "oauth2_requests_total",
-                                  fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                  static_cast<double>(static_cast<int>(statusCode))
-                                );
-                            (*refreshCb)(resp);
-                            return;
-                        }
-
-                        auto resp = ::drogon::HttpResponse::newHttpJsonResponse(result);
-                        if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-                            m->incrementCounter(
-                              "oauth2_requests_total",
-                              fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                              static_cast<double>(200)
-                            );
-                        // F-019 (RFC 6749 §5.1): token responses MUST NOT be cached.
-                        applyNoStoreHeaders(resp);
-                        (*refreshCb)(resp);
+                        (*refreshCb)(detail::buildTokenGrantResponse(
+                          result,
+                          detail::TokenGrantResponseKind::RefreshToken,
+                          ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics()
+                        ));
                     }
                   );
               };
