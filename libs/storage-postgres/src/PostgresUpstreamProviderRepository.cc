@@ -40,17 +40,6 @@ Record toRecord(const UpstreamProviders &row)
     return r;
 }
 
-std::vector<Record> toRecords(const drogon::orm::Result &rows)
-{
-    std::vector<Record> out;
-    out.reserve(rows.size());
-    for (const auto &row : rows)
-    {
-        out.push_back(toRecord(UpstreamProviders(row)));
-    }
-    return out;
-}
-
 // UNIQUE(provider_key) collisions are the one expected constraint failure;
 // everything else is a generic db_error.
 std::string mutationError(const std::exception &e)
