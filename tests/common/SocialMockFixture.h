@@ -47,6 +47,11 @@
 #include <fulla/drogon/controllers/GitHubController.h>
 #include <fulla/drogon/controllers/GoogleController.h>
 #include <fulla/drogon/controllers/WeChatController.h>
+#ifdef WITH_SOCIAL
+// P2-1: registry runtime re-binding (see injectLoginGuard).
+#include <fulla/drogon/controllers/UpstreamLoginController.h>
+#include <fulla/drogon/services/UpstreamProviderRuntime.h>
+#endif
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
 #include <fulla/identity/SocialAuthService.h>
 #include <fulla/identity/SocialLinkService.h>
@@ -96,6 +101,20 @@ inline void injectLoginGuard()
       ->setSocialLoginGuard(guard);
     ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
       ->setSocialLoginGuard(guard);
+#ifdef WITH_SOCIAL
+    // P2-1: keep the OIDC-in registry functional inside the test process --
+    // the UpstreamLoginController rides this guard too, and the production
+    // UpstreamProviderRuntime must re-target it so registry providers stay
+    // authorizable after the swap (memory deployments have no runtime; skip).
+    ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
+      ->setSocialLoginGuard(guard);
+    if (auto runtime =
+          ::drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
+            ->runtime())
+    {
+        runtime->setGuardTarget(guard);
+    }
+#endif  // WITH_SOCIAL
 }
 
 struct LoginBrowser

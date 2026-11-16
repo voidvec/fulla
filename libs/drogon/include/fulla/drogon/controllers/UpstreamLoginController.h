@@ -34,6 +34,12 @@ class UpstreamLoginController : public ::drogon::HttpController<UpstreamLoginCon
     {
         runtime_ = std::move(runtime);
     }
+    // Fixture seam: the social mock fixture re-binds the guard and needs the
+    // runtime to re-target it (production wiring never swaps guards).
+    std::shared_ptr<services::UpstreamProviderRuntime> runtime() const
+    {
+        return runtime_;
+    }
     void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
     {
         loginGuard_ = std::move(guard);

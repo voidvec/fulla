@@ -24,9 +24,12 @@ namespace
 {
 
 using fulla::identity::ISocialAccountRepository;
+using fulla::identity::LinkMutationStatus;
+using fulla::identity::LinkNewSocialAccountResult;
 using fulla::identity::OidcUpstreamAuthService;
+using fulla::identity::SocialAccountLookup;
+using fulla::identity::SocialLinkStatus;
 using fulla::identity::UpstreamProviderRecord;
-using Callback = std::function<void()>;
 
 // Immediate (synchronous) fake of the account repository. Only the states
 // the service's flow reaches are modelled: linked / no-mapping /
@@ -180,11 +183,11 @@ OidcUpstreamAuthService::OidcEndpoints pinnedEndpoints()
 
 std::function<void(OidcUpstreamAuthService::LoginResult)> captureResult(
   OidcUpstreamAuthService::LoginResult &out,
-  Callback &done)
+  bool &done)
 {
     return [&out, &done](OidcUpstreamAuthService::LoginResult result) {
         out = std::move(result);
-        done();
+        done = true;
     };
 }
 

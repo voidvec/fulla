@@ -356,14 +356,25 @@ export type SocialLoginAuthorization = {
 };
 
 /**
- * An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST.
+ * An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST. P2-1 registry-configured OIDC upstreams additionally carry display_name and type=oidc.
  */
 export type AuthProvider = {
     /**
      * @deprecated
      */
     authorize_url: string;
-    provider: 'github' | 'google' | 'wechat';
+    /**
+     * Config-static social keys (github, google, wechat) or a registry provider key (upstream_providers.provider_key, lowercase [a-z0-9-]).
+     */
+    provider: string;
+    /**
+     * Registry providers only; the login-page button label.
+     */
+    display_name?: string;
+    /**
+     * Registry providers only; config-static social entries omit this field.
+     */
+    type?: 'oidc';
 };
 
 /**
@@ -371,6 +382,50 @@ export type AuthProvider = {
  */
 export type AuthProvidersResponse = {
     providers: Array<AuthProvider>;
+};
+
+/**
+ * P2-1: one OIDC-in upstream registry row (public view; client_secret is never echoed).
+ */
+export type UpstreamProvider = {
+    /**
+     * Lowercase [a-z0-9-]; keys URLs and oauth2_subject_mappings.provider; immutable after create.
+     */
+    provider_key: string;
+    display_name: string;
+    /**
+     * OIDC issuer; endpoints via discovery unless pinned in endpoint_overrides.
+     */
+    issuer: string;
+    client_id: string;
+    client_secret_set?: boolean;
+    scopes?: string;
+    /**
+     * JSON object mapping identity slots to upstream claim names; defaults {"sub":"sub","email":"email","username":"preferred_username","name":"name"}.
+     */
+    claims_mapping?: string;
+    /**
+     * Optional discovery bypass {"authorize":url,"token":url,"userinfo":url}.
+     */
+    endpoint_overrides?: string;
+    enabled: boolean;
+};
+
+/**
+ * Create/update body for the upstream registry (client_secret write-only; empty on update keeps the current value).
+ */
+export type UpstreamProviderCreate = {
+    /**
+     * ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$; not github/google/wechat (create only; immutable).
+     */
+    provider_key: string;
+    display_name: string;
+    issuer: string;
+    client_id: string;
+    scopes?: string;
+    claims_mapping?: string;
+    endpoint_overrides?: string;
+    enabled?: boolean;
 };
 
 /**
@@ -537,6 +592,24 @@ export type MfaVerifyRequest = {
     code_verifier?: string;
 };
 
+/**
+ * Create/update body for the upstream registry (client_secret write-only; empty on update keeps the current value).
+ */
+export type UpstreamProviderCreateWritable = {
+    /**
+     * ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$; not github/google/wechat (create only; immutable).
+     */
+    provider_key: string;
+    display_name: string;
+    issuer: string;
+    client_id: string;
+    client_secret: string;
+    scopes?: string;
+    claims_mapping?: string;
+    endpoint_overrides?: string;
+    enabled?: boolean;
+};
+
 export type GetWellKnownJwksJsonData = {
     body?: never;
     path?: never;
@@ -692,6 +765,124 @@ export type PutApiAdminClaimMappingsMappingIdErrors = {
 export type PutApiAdminClaimMappingsMappingIdResponses = {
     /**
      * Mapping updated
+     */
+    200: unknown;
+};
+
+export type GetApiAdminUpstreamProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/upstream-providers';
+};
+
+export type GetApiAdminUpstreamProvidersResponses = {
+    /**
+     * Registry listing
+     */
+    200: {
+        status?: string;
+        total?: number;
+        providers?: Array<UpstreamProvider>;
+    };
+};
+
+export type GetApiAdminUpstreamProvidersResponse = GetApiAdminUpstreamProvidersResponses[keyof GetApiAdminUpstreamProvidersResponses];
+
+export type PostApiAdminUpstreamProvidersData = {
+    body: UpstreamProviderCreateWritable;
+    path?: never;
+    query?: never;
+    url: '/api/admin/upstream-providers';
+};
+
+export type PostApiAdminUpstreamProvidersErrors = {
+    /**
+     * VALIDATION_MISSING_REQUIRED_FIELD / VALIDATION_FORMAT_ERROR
+     */
+    400: unknown;
+    /**
+     * VALIDATION_RESOURCE_CONFLICT; provider_key taken
+     */
+    409: unknown;
+};
+
+export type PostApiAdminUpstreamProvidersResponses = {
+    /**
+     * Created
+     */
+    201: UpstreamProvider;
+};
+
+export type PostApiAdminUpstreamProvidersResponse = PostApiAdminUpstreamProvidersResponses[keyof PostApiAdminUpstreamProvidersResponses];
+
+export type DeleteApiAdminUpstreamProvidersProviderKeyData = {
+    body?: never;
+    path: {
+        providerKey: string;
+    };
+    query?: never;
+    url: '/api/admin/upstream-providers/{providerKey}';
+};
+
+export type DeleteApiAdminUpstreamProvidersProviderKeyErrors = {
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND
+     */
+    404: unknown;
+};
+
+export type DeleteApiAdminUpstreamProvidersProviderKeyResponses = {
+    /**
+     * Deleted
+     */
+    200: unknown;
+};
+
+export type GetApiAdminUpstreamProvidersProviderKeyData = {
+    body?: never;
+    path: {
+        providerKey: string;
+    };
+    query?: never;
+    url: '/api/admin/upstream-providers/{providerKey}';
+};
+
+export type GetApiAdminUpstreamProvidersProviderKeyErrors = {
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND
+     */
+    404: unknown;
+};
+
+export type GetApiAdminUpstreamProvidersProviderKeyResponses = {
+    /**
+     * Registry row
+     */
+    200: UpstreamProvider;
+};
+
+export type GetApiAdminUpstreamProvidersProviderKeyResponse = GetApiAdminUpstreamProvidersProviderKeyResponses[keyof GetApiAdminUpstreamProvidersProviderKeyResponses];
+
+export type PutApiAdminUpstreamProvidersProviderKeyData = {
+    body: UpstreamProviderCreateWritable;
+    path: {
+        providerKey: string;
+    };
+    query?: never;
+    url: '/api/admin/upstream-providers/{providerKey}';
+};
+
+export type PutApiAdminUpstreamProvidersProviderKeyErrors = {
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND
+     */
+    404: unknown;
+};
+
+export type PutApiAdminUpstreamProvidersProviderKeyResponses = {
+    /**
+     * Updated
      */
     200: unknown;
 };
@@ -2418,7 +2609,10 @@ export type PostApiAuthProvidersProviderAuthorizeData = {
         [key: string]: unknown;
     };
     path: {
-        provider: 'github' | 'google' | 'wechat';
+        /**
+         * Config-static social provider (github, google, wechat) or a registry provider key (upstream_providers.provider_key).
+         */
+        provider: string;
     };
     query?: never;
     url: '/api/auth/providers/{provider}/authorize';
@@ -2455,6 +2649,58 @@ export type PostApiAuthProvidersProviderAuthorizeResponses = {
 };
 
 export type PostApiAuthProvidersProviderAuthorizeResponse = PostApiAuthProvidersProviderAuthorizeResponses[keyof PostApiAuthProvidersProviderAuthorizeResponses];
+
+export type PostApiAuthOidcProviderLoginData = {
+    body: {
+        code: string;
+        state: string;
+    };
+    path: {
+        /**
+         * Enabled registry provider key (upstream_providers.provider_key).
+         */
+        provider: string;
+    };
+    query?: never;
+    url: '/api/auth/oidc/{provider}/login';
+};
+
+export type PostApiAuthOidcProviderLoginErrors = {
+    /**
+     * VALIDATION_INVALID_INPUT; missing, expired, mismatched or replayed transaction
+     */
+    400: unknown;
+    /**
+     * AUTH_SOCIAL_ACCOUNT_NOT_LINKED; not linked and auto-create disabled
+     */
+    403: unknown;
+    /**
+     * VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+     */
+    404: unknown;
+    /**
+     * INTERNAL_ERROR; state service unavailable
+     */
+    500: unknown;
+    /**
+     * NET_CONNECTION_FAILED; upstream token/userinfo endpoint unreachable or rejected the exchange
+     */
+    502: unknown;
+};
+
+export type PostApiAuthOidcProviderLoginResponses = {
+    /**
+     * First-party token pair for the upstream-linked account
+     */
+    200: {
+        access_token?: string;
+        refresh_token?: string;
+        token_type?: string;
+        expires_in?: number;
+    };
+};
+
+export type PostApiAuthOidcProviderLoginResponse = PostApiAuthOidcProviderLoginResponses[keyof PostApiAuthOidcProviderLoginResponses];
 
 export type PostApiGithubLoginData = {
     body: SocialLoginRequest;

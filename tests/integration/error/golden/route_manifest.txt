@@ -5,6 +5,7 @@ DELETE /api/admin/organizations/{slug}/members/{userId}
 DELETE /api/admin/roles/{roleId}
 DELETE /api/admin/scopes/{scopeId}
 DELETE /api/admin/tokens/{tokenPrefix}
+DELETE /api/admin/upstream-providers/{providerKey}
 DELETE /api/admin/users/{userId}
 DELETE /api/me
 DELETE /api/me/applications/{clientId}
@@ -38,6 +39,8 @@ GET /api/admin/roles/{roleId}/permissions
 GET /api/admin/scopes
 GET /api/admin/scopes/resources
 GET /api/admin/tokens
+GET /api/admin/upstream-providers
+GET /api/admin/upstream-providers/{providerKey}
 GET /api/admin/users
 GET /api/admin/users/{userId}
 GET /api/admin/users/{userId}/roles
@@ -67,6 +70,7 @@ GET /oauth2/authorize-context
 GET /oauth2/consent/context
 GET /oauth2/end_session
 GET /oauth2/userinfo
+OPTIONS /api/auth/oidc/{provider}/login
 OPTIONS /api/github/login
 OPTIONS /api/google/login
 OPTIONS /api/wechat/login
@@ -86,8 +90,10 @@ POST /api/admin/roles
 POST /api/admin/scopes
 POST /api/admin/tokens/revoke-by-client
 POST /api/admin/tokens/revoke-by-user
+POST /api/admin/upstream-providers
 POST /api/admin/users
 POST /api/admin/users/{userId}/enable
+POST /api/auth/oidc/{provider}/login
 POST /api/auth/providers/{provider}/authorize
 POST /api/github/login
 POST /api/google/login
@@ -136,6 +142,7 @@ PUT /api/admin/email-templates/{key}/{locale}
 PUT /api/admin/roles/{roleId}
 PUT /api/admin/roles/{roleId}/permissions
 PUT /api/admin/scopes/{scopeId}
+PUT /api/admin/upstream-providers/{providerKey}
 PUT /api/admin/users/{userId}
 PUT /api/admin/users/{userId}/disable
 PUT /api/admin/users/{userId}/roles

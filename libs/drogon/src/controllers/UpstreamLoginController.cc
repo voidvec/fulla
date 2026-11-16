@@ -2,7 +2,8 @@
 
 #ifdef WITH_SOCIAL
 
-#include <fulla/drogon/controllers/SocialAuthorizeUrl.h>
+// src-local shared helper (not part of the installed SDK surface).
+#include "SocialAuthorizeUrl.h"
 #include <fulla/drogon/controllers/SocialTokenIssuer.h>
 #include <fulla/drogon/error/ErrorResponder.h>
 #include <fulla/drogon/observability/openapi/OpenApiGenerator.h>

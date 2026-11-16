@@ -58,7 +58,7 @@ std::optional<Json::Value> authorizeTransaction(const std::string &key)
     auto json = response->getJsonObject();
     if (!json)
         return std::nullopt;
-    return json;
+    return std::optional<Json::Value>(*json);
 }
 
 }  // namespace

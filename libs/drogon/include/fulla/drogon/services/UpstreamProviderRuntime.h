@@ -52,6 +52,26 @@ class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProv
     {
     }
 
+    // Re-target the guard that receives dynamic providers. The production
+    // wiring sets the app guard at construction; the social mock fixture
+    // swaps the controllers onto a test guard and must re-bind here so the
+    // registry keeps functioning inside the test process (single guard
+    // instance per process either way).
+    void setGuardTarget(std::shared_ptr<SocialLoginGuard> guard)
+    {
+        guard_ = std::move(guard);
+        // Push the current snapshot into the new target immediately.
+        std::vector<SocialLoginGuard::DynamicProvider> dynamic;
+        {
+            std::lock_guard<std::mutex> lock(snapshotMutex_);
+            dynamic = buildDynamic(snapshotRecords_, snapshotEndpoints_);
+        }
+        if (guard_)
+        {
+            guard_->setDynamicProviders(std::move(dynamic));
+        }
+    }
+
     // Snapshot enabled rows -> resolve endpoints -> guard. Safe to call
     // concurrently; last writer wins.
     void refresh(std::function<void()> &&done = nullptr)
@@ -85,7 +105,7 @@ class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProv
                   [self, snap, sharedDone, key = record.providerKey](
                     bool ok,
                     fulla::identity::OidcUpstreamAuthService::OidcEndpoints endpoints) mutable {
-                      std::lock_guard<std::mutex> lock(self->snapshotMutex_);
+                      std::unique_lock<std::mutex> lock(self->snapshotMutex_);
                       if (ok)
                       {
                           (*snap).endpoints[key] = std::move(endpoints);
@@ -111,7 +131,7 @@ class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProv
     void findForLogin(const std::string &providerKey, RecordCallback &&cb)
     {
         {
-            std::lock_guard<std::mutex> lock(snapshotMutex_);
+            std::unique_lock<std::mutex> lock(snapshotMutex_);
             for (const auto &record : snapshotRecords_)
             {
                 if (record.providerKey == providerKey)
@@ -145,16 +165,19 @@ class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProv
     }
 
   private:
-    void commit(std::vector<Record> records,
-                std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
-                  endpoints = {})
+    // Dynamic-provider projection of a (records, endpoints) snapshot; rows
+    // without a resolvable authorize endpoint are never advertised.
+    std::vector<SocialLoginGuard::DynamicProvider> buildDynamic(
+      const std::vector<Record> &records,
+      const std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
+        &endpoints) const
     {
         std::vector<SocialLoginGuard::DynamicProvider> dynamic;
         for (const auto &record : records)
         {
             auto it = endpoints.find(record.providerKey);
             if (it == endpoints.end() || it->second.authorize.empty())
-                continue;  // unresolved endpoints: never advertise for authorize
+                continue;
             SocialLoginGuard::DynamicProvider entry;
             entry.key = record.providerKey;
             entry.clientId = record.clientId;
@@ -163,6 +186,15 @@ class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProv
             entry.scopes = record.scopes;
             dynamic.push_back(std::move(entry));
         }
+        return dynamic;
+    }
+
+  public:
+    void commit(std::vector<Record> records,
+                std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
+                  endpoints = {})
+    {
+        auto dynamic = buildDynamic(records, endpoints);
         {
             std::lock_guard<std::mutex> lock(snapshotMutex_);
             snapshotRecords_ = std::move(records);

@@ -11,7 +11,6 @@
 #include "AccountLinkFlow.h"
 
 #include <json/json.h>
-#include <trantor/utils/Logger.h>
 
 #include <algorithm>
 #include <cctype>
@@ -154,10 +153,8 @@ void OidcUpstreamAuthService::resolveEndpoints(
                  }
                  const bool complete = !merged.authorize.empty() && !merged.token.empty() &&
                                        !merged.userinfo.empty();
-                 if (!complete)
-                 {
-                     LOG_WARN << "OidcUpstream: endpoint resolution failed for issuer " << issuer;
-                 }
+                 // Identity layer is logging-free by design (no drogon/
+                 // trantor dependency): failure travels through the callback.
                  cb(complete, merged);
              });
 }
@@ -231,8 +228,6 @@ void OidcUpstreamAuthService::login(const UpstreamProviderRecord &record,
                   [self, record, endpoints, sharedCb](bool ok, int status, std::string body) mutable {
                       if (!ok || status != 200)
                       {
-                          LOG_WARN << "OidcUpstream: token exchange failed (status="
-                                   << (ok ? std::to_string(status) : std::string("transport")) << ")";
                           LoginResult result;
                           result.errorCode = "NET_CONNECTION_FAILED";
                           (*sharedCb)(std::move(result));
@@ -269,8 +264,6 @@ void OidcUpstreamAuthService::fetchUserinfo(
              [self, record, sharedCb](bool ok, int status, std::string body) mutable {
                  if (!ok || status != 200)
                  {
-                     LOG_WARN << "OidcUpstream: userinfo failed (status="
-                              << (ok ? std::to_string(status) : std::string("transport")) << ")";
                      LoginResult result;
                      result.errorCode = "NET_CONNECTION_FAILED";
                      (*sharedCb)(std::move(result));

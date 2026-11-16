@@ -17,21 +17,15 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for AuthProviderProvider.
+// Defines values for AuthProviderType.
 const (
-	AuthProviderProviderGithub AuthProviderProvider = "github"
-	AuthProviderProviderGoogle AuthProviderProvider = "google"
-	AuthProviderProviderWechat AuthProviderProvider = "wechat"
+	Oidc AuthProviderType = "oidc"
 )
 
-// Valid indicates whether the value is a known member of the AuthProviderProvider enum.
-func (e AuthProviderProvider) Valid() bool {
+// Valid indicates whether the value is a known member of the AuthProviderType enum.
+func (e AuthProviderType) Valid() bool {
 	switch e {
-	case AuthProviderProviderGithub:
-		return true
-	case AuthProviderProviderGoogle:
-		return true
-	case AuthProviderProviderWechat:
+	case Oidc:
 		return true
 	default:
 		return false
@@ -272,27 +266,6 @@ func (e GetApiAdminUsersParamsLocked) Valid() bool {
 	}
 }
 
-// Defines values for PostApiAuthProvidersProviderAuthorizeParamsProvider.
-const (
-	PostApiAuthProvidersProviderAuthorizeParamsProviderGithub PostApiAuthProvidersProviderAuthorizeParamsProvider = "github"
-	PostApiAuthProvidersProviderAuthorizeParamsProviderGoogle PostApiAuthProvidersProviderAuthorizeParamsProvider = "google"
-	PostApiAuthProvidersProviderAuthorizeParamsProviderWechat PostApiAuthProvidersProviderAuthorizeParamsProvider = "wechat"
-)
-
-// Valid indicates whether the value is a known member of the PostApiAuthProvidersProviderAuthorizeParamsProvider enum.
-func (e PostApiAuthProvidersProviderAuthorizeParamsProvider) Valid() bool {
-	switch e {
-	case PostApiAuthProvidersProviderAuthorizeParamsProviderGithub:
-		return true
-	case PostApiAuthProvidersProviderAuthorizeParamsProviderGoogle:
-		return true
-	case PostApiAuthProvidersProviderAuthorizeParamsProviderWechat:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for GetApiMeApplications200JSONResponseBodyApplicationsClientType.
 const (
 	GetApiMeApplications200JSONResponseBodyApplicationsClientTypeCONFIDENTIAL GetApiMeApplications200JSONResponseBodyApplicationsClientType = "CONFIDENTIAL"
@@ -524,16 +497,24 @@ func (e PostOauth2RegisterJSONBodyClientType) Valid() bool {
 	}
 }
 
-// AuthProvider An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST.
+// AuthProvider An enabled external login provider. The deprecated authorize_url is always empty. Start a browser-bound transaction using the authorize POST. P2-1 registry-configured OIDC upstreams additionally carry display_name and type=oidc.
 type AuthProvider struct {
 	// AuthorizeUrl Example:
 	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
-	AuthorizeUrl string               `json:"authorize_url"`
-	Provider     AuthProviderProvider `json:"provider"`
+	AuthorizeUrl string `json:"authorize_url"`
+
+	// DisplayName Registry providers only; the login-page button label.
+	DisplayName *string `json:"display_name,omitempty"`
+
+	// Provider Config-static social keys (github, google, wechat) or a registry provider key (upstream_providers.provider_key, lowercase [a-z0-9-]).
+	Provider string `json:"provider"`
+
+	// Type Registry providers only; config-static social entries omit this field.
+	Type *AuthProviderType `json:"type,omitempty"`
 }
 
-// AuthProviderProvider defines model for AuthProvider.Provider.
-type AuthProviderProvider string
+// AuthProviderType Registry providers only; config-static social entries omit this field.
+type AuthProviderType string
 
 // AuthProvidersResponse External login provider discovery. An empty list means external login is disabled on this deployment.
 type AuthProvidersResponse struct {
@@ -898,6 +879,43 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 }
 
+// UpstreamProvider P2-1: one OIDC-in upstream registry row (public view; client_secret is never echoed).
+type UpstreamProvider struct {
+	// ClaimsMapping JSON object mapping identity slots to upstream claim names; defaults {"sub":"sub","email":"email","username":"preferred_username","name":"name"}.
+	ClaimsMapping   *string `json:"claims_mapping,omitempty"`
+	ClientId        string  `json:"client_id"`
+	ClientSecretSet *bool   `json:"client_secret_set,omitempty"`
+	DisplayName     string  `json:"display_name"`
+	Enabled         bool    `json:"enabled"`
+
+	// EndpointOverrides Optional discovery bypass {"authorize":url,"token":url,"userinfo":url}.
+	EndpointOverrides *string `json:"endpoint_overrides,omitempty"`
+
+	// Issuer OIDC issuer; endpoints via discovery unless pinned in endpoint_overrides.
+	Issuer string `json:"issuer"`
+
+	// ProviderKey Lowercase [a-z0-9-]; keys URLs and oauth2_subject_mappings.provider; immutable after create.
+	ProviderKey string `json:"provider_key"`
+
+	// Scopes Example: openid profile email
+	Scopes *string `json:"scopes,omitempty"`
+}
+
+// UpstreamProviderCreate Create/update body for the upstream registry (client_secret write-only; empty on update keeps the current value).
+type UpstreamProviderCreate struct {
+	ClaimsMapping     *string `json:"claims_mapping,omitempty"`
+	ClientId          string  `json:"client_id"`
+	ClientSecret      *string `json:"client_secret,omitempty"`
+	DisplayName       string  `json:"display_name"`
+	Enabled           *bool   `json:"enabled,omitempty"`
+	EndpointOverrides *string `json:"endpoint_overrides,omitempty"`
+	Issuer            string  `json:"issuer"`
+
+	// ProviderKey ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$; not github/google/wechat (create only; immutable).
+	ProviderKey string  `json:"provider_key"`
+	Scopes      *string `json:"scopes,omitempty"`
+}
+
 // UserInfoResponse OIDC Core §5.3 userinfo claims, scope-gated per §5.4 (P0-2): profile claims (name/preferred_username/picture) require the profile scope; email/email_verified require the email scope; sub is unconditional. email_verified present iff email present; roles present iff non-empty. org_ctx present iff the token was issued in org context, carries the org scope, and the user is still a member (v1.4.0; membership is re-checked in real time).
 type UserInfoResponse struct {
 	// Email Email address (email scope).
@@ -1193,11 +1211,20 @@ type PutApiAdminUsersUserIdRolesJSONBody struct {
 	Roles []string `json:"roles"`
 }
 
+// PostApiAuthOidcProviderLoginJSONBody defines parameters for PostApiAuthOidcProviderLogin.
+type PostApiAuthOidcProviderLoginJSONBody struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+// PostApiAuthOidcProviderLoginFormdataBody defines parameters for PostApiAuthOidcProviderLogin.
+type PostApiAuthOidcProviderLoginFormdataBody struct {
+	Code  string `form:"code" json:"code"`
+	State string `form:"state" json:"state"`
+}
+
 // PostApiAuthProvidersProviderAuthorizeJSONBody defines parameters for PostApiAuthProvidersProviderAuthorize.
 type PostApiAuthProvidersProviderAuthorizeJSONBody = map[string]interface{}
-
-// PostApiAuthProvidersProviderAuthorizeParamsProvider defines parameters for PostApiAuthProvidersProviderAuthorize.
-type PostApiAuthProvidersProviderAuthorizeParamsProvider string
 
 // GetApiMeApplications200JSONResponseBodyApplicationsClientType defines parameters for GetApiMeApplications.
 type GetApiMeApplications200JSONResponseBodyApplicationsClientType string
@@ -1639,6 +1666,12 @@ type PostApiAdminTokensRevokeByClientJSONRequestBody = PostApiAdminTokensRevokeB
 // PostApiAdminTokensRevokeByUserJSONRequestBody defines body for PostApiAdminTokensRevokeByUser for application/json ContentType.
 type PostApiAdminTokensRevokeByUserJSONRequestBody = PostApiAdminTokensRevokeByUserJSONBody
 
+// PostApiAdminUpstreamProvidersJSONRequestBody defines body for PostApiAdminUpstreamProviders for application/json ContentType.
+type PostApiAdminUpstreamProvidersJSONRequestBody = UpstreamProviderCreate
+
+// PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody defines body for PutApiAdminUpstreamProvidersProviderKey for application/json ContentType.
+type PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody = UpstreamProviderCreate
+
 // PostApiAdminUsersJSONRequestBody defines body for PostApiAdminUsers for application/json ContentType.
 type PostApiAdminUsersJSONRequestBody PostApiAdminUsersJSONBody
 
@@ -1653,6 +1686,12 @@ type PostApiAdminUsersUserIdEnableJSONRequestBody = PostApiAdminUsersUserIdEnabl
 
 // PutApiAdminUsersUserIdRolesJSONRequestBody defines body for PutApiAdminUsersUserIdRoles for application/json ContentType.
 type PutApiAdminUsersUserIdRolesJSONRequestBody PutApiAdminUsersUserIdRolesJSONBody
+
+// PostApiAuthOidcProviderLoginJSONRequestBody defines body for PostApiAuthOidcProviderLogin for application/json ContentType.
+type PostApiAuthOidcProviderLoginJSONRequestBody PostApiAuthOidcProviderLoginJSONBody
+
+// PostApiAuthOidcProviderLoginFormdataRequestBody defines body for PostApiAuthOidcProviderLogin for application/x-www-form-urlencoded ContentType.
+type PostApiAuthOidcProviderLoginFormdataRequestBody PostApiAuthOidcProviderLoginFormdataBody
 
 // PostApiAuthProvidersProviderAuthorizeJSONRequestBody defines body for PostApiAuthProvidersProviderAuthorize for application/json ContentType.
 type PostApiAuthProvidersProviderAuthorizeJSONRequestBody = PostApiAuthProvidersProviderAuthorizeJSONBody
@@ -2523,6 +2562,63 @@ type ClientInterface interface {
 	// Corresponds with DELETE /api/admin/tokens/{tokenPrefix} (the `DeleteApiAdminTokensTokenPrefix` operationId).
 	DeleteApiAdminTokensTokenPrefix(ctx context.Context, tokenPrefix string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetApiAdminUpstreamProviders List Upstream Providers
+	//
+	// P2-1: list every OIDC-in upstream provider (enabled and disabled). client_secret is write-only (client_secret_set bool).
+	//
+	// Corresponds with GET /api/admin/upstream-providers (the `GetApiAdminUpstreamProviders` operationId).
+	GetApiAdminUpstreamProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminUpstreamProvidersWithBody Create Upstream Provider
+	//
+	// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+	PostApiAdminUpstreamProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAdminUpstreamProviders Create Upstream Provider
+	//
+	// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+	PostApiAdminUpstreamProviders(ctx context.Context, body PostApiAdminUpstreamProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteApiAdminUpstreamProvidersProviderKey Delete Upstream Provider
+	//
+	// P2-1: remove a registry row. Linked oauth2_subject_mappings rows stay by design (historical links outlive the entry; re-creating the key re-attaches them). Refreshes the login-page provider set.
+	//
+	// Corresponds with DELETE /api/admin/upstream-providers/{providerKey} (the `DeleteApiAdminUpstreamProvidersProviderKey` operationId).
+	DeleteApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiAdminUpstreamProvidersProviderKey Get Upstream Provider
+	//
+	// P2-1: fetch one registry row (client_secret never echoed).
+	//
+	// Corresponds with GET /api/admin/upstream-providers/{providerKey} (the `GetApiAdminUpstreamProvidersProviderKey` operationId).
+	GetApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminUpstreamProvidersProviderKeyWithBody Update Upstream Provider
+	//
+	// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+	PutApiAdminUpstreamProvidersProviderKeyWithBody(ctx context.Context, providerKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutApiAdminUpstreamProvidersProviderKey Update Upstream Provider
+	//
+	// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+	PutApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, body PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiAdminUsers List Users
 	//
 	// List users with optional pagination (page, per_page) and filtering (q for username/email prefix, role, locked). Returns total count.
@@ -2641,6 +2737,33 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostApiAuthOidcProviderLoginWithBody OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLoginWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAuthOidcProviderLogin OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLogin(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiAuthOidcProviderLoginWithFormdataBody OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLoginWithFormdataBody(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetApiAuthProviders List Enabled External Login Providers
 	//
 	// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
@@ -2655,7 +2778,7 @@ type ClientInterface interface {
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-	PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAuthProvidersProviderAuthorize Start Browser-Bound Social Login
 	//
@@ -2664,7 +2787,7 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-	PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider string, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiGithubLoginWithBody GitHub OAuth2 Login
 	//
@@ -4943,6 +5066,133 @@ func (c *Client) DeleteApiAdminTokensTokenPrefix(ctx context.Context, tokenPrefi
 	return c.Client.Do(req)
 }
 
+// GetApiAdminUpstreamProviders List Upstream Providers
+//
+// P2-1: list every OIDC-in upstream provider (enabled and disabled). client_secret is write-only (client_secret_set bool).
+//
+// Corresponds with GET /api/admin/upstream-providers (the `GetApiAdminUpstreamProviders` operationId).
+func (c *Client) GetApiAdminUpstreamProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminUpstreamProvidersRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminUpstreamProvidersWithBody Create Upstream Provider
+//
+// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+func (c *Client) PostApiAdminUpstreamProvidersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminUpstreamProvidersRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAdminUpstreamProviders Create Upstream Provider
+//
+// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+func (c *Client) PostApiAdminUpstreamProviders(ctx context.Context, body PostApiAdminUpstreamProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAdminUpstreamProvidersRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteApiAdminUpstreamProvidersProviderKey Delete Upstream Provider
+//
+// P2-1: remove a registry row. Linked oauth2_subject_mappings rows stay by design (historical links outlive the entry; re-creating the key re-attaches them). Refreshes the login-page provider set.
+//
+// Corresponds with DELETE /api/admin/upstream-providers/{providerKey} (the `DeleteApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *Client) DeleteApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteApiAdminUpstreamProvidersProviderKeyRequest(c.Server, providerKey)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApiAdminUpstreamProvidersProviderKey Get Upstream Provider
+//
+// P2-1: fetch one registry row (client_secret never echoed).
+//
+// Corresponds with GET /api/admin/upstream-providers/{providerKey} (the `GetApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *Client) GetApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminUpstreamProvidersProviderKeyRequest(c.Server, providerKey)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminUpstreamProvidersProviderKeyWithBody Update Upstream Provider
+//
+// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *Client) PutApiAdminUpstreamProvidersProviderKeyWithBody(ctx context.Context, providerKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminUpstreamProvidersProviderKeyRequestWithBody(c.Server, providerKey, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutApiAdminUpstreamProvidersProviderKey Update Upstream Provider
+//
+// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *Client) PutApiAdminUpstreamProvidersProviderKey(ctx context.Context, providerKey string, body PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutApiAdminUpstreamProvidersProviderKeyRequest(c.Server, providerKey, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiAdminUsers List Users
 //
 // List users with optional pagination (page, per_page) and filtering (q for username/email prefix, role, locked). Returns total count.
@@ -5201,6 +5451,63 @@ func (c *Client) PutApiAdminUsersUserIdRoles(ctx context.Context, userId int, bo
 	return c.Client.Do(req)
 }
 
+// PostApiAuthOidcProviderLoginWithBody OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *Client) PostApiAuthOidcProviderLoginWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAuthOidcProviderLoginRequestWithBody(c.Server, provider, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAuthOidcProviderLogin OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *Client) PostApiAuthOidcProviderLogin(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAuthOidcProviderLoginRequest(c.Server, provider, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostApiAuthOidcProviderLoginWithFormdataBody OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *Client) PostApiAuthOidcProviderLoginWithFormdataBody(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiAuthOidcProviderLoginRequestWithFormdataBody(c.Server, provider, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetApiAuthProviders List Enabled External Login Providers
 //
 // Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
@@ -5225,7 +5532,7 @@ func (c *Client) GetApiAuthProviders(ctx context.Context, reqEditors ...RequestE
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-func (c *Client) PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(c.Server, provider, contentType, body)
 	if err != nil {
 		return nil, err
@@ -5244,7 +5551,7 @@ func (c *Client) PostApiAuthProvidersProviderAuthorizeWithBody(ctx context.Conte
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-func (c *Client) PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) PostApiAuthProvidersProviderAuthorize(ctx context.Context, provider string, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiAuthProvidersProviderAuthorizeRequest(c.Server, provider, body)
 	if err != nil {
 		return nil, err
@@ -9381,6 +9688,188 @@ func NewDeleteApiAdminTokensTokenPrefixRequest(server string, tokenPrefix string
 	return req, nil
 }
 
+// NewGetApiAdminUpstreamProvidersRequest constructs an http.Request for the GetApiAdminUpstreamProviders method
+func NewGetApiAdminUpstreamProvidersRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/upstream-providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostApiAdminUpstreamProvidersRequest calls the generic PostApiAdminUpstreamProviders builder with application/json body
+func NewPostApiAdminUpstreamProvidersRequest(server string, body PostApiAdminUpstreamProvidersJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAdminUpstreamProvidersRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiAdminUpstreamProvidersRequestWithBody constructs an http.Request for the PostApiAdminUpstreamProviders method, with any body, and a specified content type
+func NewPostApiAdminUpstreamProvidersRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/upstream-providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteApiAdminUpstreamProvidersProviderKeyRequest constructs an http.Request for the DeleteApiAdminUpstreamProvidersProviderKey method
+func NewDeleteApiAdminUpstreamProvidersProviderKeyRequest(server string, providerKey string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "providerKey", providerKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/upstream-providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetApiAdminUpstreamProvidersProviderKeyRequest constructs an http.Request for the GetApiAdminUpstreamProvidersProviderKey method
+func NewGetApiAdminUpstreamProvidersProviderKeyRequest(server string, providerKey string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "providerKey", providerKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/upstream-providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutApiAdminUpstreamProvidersProviderKeyRequest calls the generic PutApiAdminUpstreamProvidersProviderKey builder with application/json body
+func NewPutApiAdminUpstreamProvidersProviderKeyRequest(server string, providerKey string, body PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutApiAdminUpstreamProvidersProviderKeyRequestWithBody(server, providerKey, "application/json", bodyReader)
+}
+
+// NewPutApiAdminUpstreamProvidersProviderKeyRequestWithBody constructs an http.Request for the PutApiAdminUpstreamProvidersProviderKey method, with any body, and a specified content type
+func NewPutApiAdminUpstreamProvidersProviderKeyRequestWithBody(server string, providerKey string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "providerKey", providerKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/admin/upstream-providers/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetApiAdminUsersRequest constructs an http.Request for the GetApiAdminUsers method
 func NewGetApiAdminUsersRequest(server string, params *GetApiAdminUsersParams) (*http.Request, error) {
 	var err error
@@ -9813,6 +10302,64 @@ func NewPutApiAdminUsersUserIdRolesRequestWithBody(server string, userId int, co
 	return req, nil
 }
 
+// NewPostApiAuthOidcProviderLoginRequest calls the generic PostApiAuthOidcProviderLogin builder with application/json body
+func NewPostApiAuthOidcProviderLoginRequest(server string, provider string, body PostApiAuthOidcProviderLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiAuthOidcProviderLoginRequestWithBody(server, provider, "application/json", bodyReader)
+}
+
+// NewPostApiAuthOidcProviderLoginRequestWithFormdataBody calls the generic PostApiAuthOidcProviderLogin builder with application/x-www-form-urlencoded body
+func NewPostApiAuthOidcProviderLoginRequestWithFormdataBody(server string, provider string, body PostApiAuthOidcProviderLoginFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewPostApiAuthOidcProviderLoginRequestWithBody(server, provider, "application/x-www-form-urlencoded", bodyReader)
+}
+
+// NewPostApiAuthOidcProviderLoginRequestWithBody constructs an http.Request for the PostApiAuthOidcProviderLogin method, with any body, and a specified content type
+func NewPostApiAuthOidcProviderLoginRequestWithBody(server string, provider string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/auth/oidc/%s/login", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetApiAuthProvidersRequest constructs an http.Request for the GetApiAuthProviders method
 func NewGetApiAuthProvidersRequest(server string) (*http.Request, error) {
 	var err error
@@ -9841,7 +10388,7 @@ func NewGetApiAuthProvidersRequest(server string) (*http.Request, error) {
 }
 
 // NewPostApiAuthProvidersProviderAuthorizeRequest calls the generic PostApiAuthProvidersProviderAuthorize builder with application/json body
-func NewPostApiAuthProvidersProviderAuthorizeRequest(server string, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody) (*http.Request, error) {
+func NewPostApiAuthProvidersProviderAuthorizeRequest(server string, provider string, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -9852,7 +10399,7 @@ func NewPostApiAuthProvidersProviderAuthorizeRequest(server string, provider Pos
 }
 
 // NewPostApiAuthProvidersProviderAuthorizeRequestWithBody constructs an http.Request for the PostApiAuthProvidersProviderAuthorize method, with any body, and a specified content type
-func NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(server string, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader) (*http.Request, error) {
+func NewPostApiAuthProvidersProviderAuthorizeRequestWithBody(server string, provider string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -13844,6 +14391,69 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /api/admin/tokens/{tokenPrefix} (the `DeleteApiAdminTokensTokenPrefix` operationId).
 	DeleteApiAdminTokensTokenPrefixWithResponse(ctx context.Context, tokenPrefix string, reqEditors ...RequestEditorFn) (*DeleteApiAdminTokensTokenPrefixResponse, error)
 
+	// GetApiAdminUpstreamProvidersWithResponse List Upstream Providers
+	//
+	// P2-1: list every OIDC-in upstream provider (enabled and disabled). client_secret is write-only (client_secret_set bool).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/upstream-providers (the `GetApiAdminUpstreamProviders` operationId).
+	GetApiAdminUpstreamProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminUpstreamProvidersResponse, error)
+
+	// PostApiAdminUpstreamProvidersWithBodyWithResponse Create Upstream Provider
+	//
+	// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+	PostApiAdminUpstreamProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminUpstreamProvidersResponse, error)
+
+	// PostApiAdminUpstreamProvidersWithResponse Create Upstream Provider
+	//
+	// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+	PostApiAdminUpstreamProvidersWithResponse(ctx context.Context, body PostApiAdminUpstreamProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminUpstreamProvidersResponse, error)
+
+	// DeleteApiAdminUpstreamProvidersProviderKeyWithResponse Delete Upstream Provider
+	//
+	// P2-1: remove a registry row. Linked oauth2_subject_mappings rows stay by design (historical links outlive the entry; re-creating the key re-attaches them). Refreshes the login-page provider set.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/admin/upstream-providers/{providerKey} (the `DeleteApiAdminUpstreamProvidersProviderKey` operationId).
+	DeleteApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*DeleteApiAdminUpstreamProvidersProviderKeyResponse, error)
+
+	// GetApiAdminUpstreamProvidersProviderKeyWithResponse Get Upstream Provider
+	//
+	// P2-1: fetch one registry row (client_secret never echoed).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/admin/upstream-providers/{providerKey} (the `GetApiAdminUpstreamProvidersProviderKey` operationId).
+	GetApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*GetApiAdminUpstreamProvidersProviderKeyResponse, error)
+
+	// PutApiAdminUpstreamProvidersProviderKeyWithBodyWithResponse Update Upstream Provider
+	//
+	// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+	PutApiAdminUpstreamProvidersProviderKeyWithBodyWithResponse(ctx context.Context, providerKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminUpstreamProvidersProviderKeyResponse, error)
+
+	// PutApiAdminUpstreamProvidersProviderKeyWithResponse Update Upstream Provider
+	//
+	// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+	PutApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, body PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUpstreamProvidersProviderKeyResponse, error)
+
 	// GetApiAdminUsersWithResponse List Users
 	//
 	// List users with optional pagination (page, per_page) and filtering (q for username/email prefix, role, locked). Returns total count.
@@ -13970,6 +14580,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/admin/users/{userId}/roles (the `PutApiAdminUsersUserIdRoles` operationId).
 	PutApiAdminUsersUserIdRolesWithResponse(ctx context.Context, userId int, body PutApiAdminUsersUserIdRolesJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUsersUserIdRolesResponse, error)
 
+	// PostApiAuthOidcProviderLoginWithBodyWithResponse OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLoginWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error)
+
+	// PostApiAuthOidcProviderLoginWithResponse OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLoginWithResponse(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error)
+
+	// PostApiAuthOidcProviderLoginWithFormdataBodyWithResponse OIDC Upstream Login (registry provider)
+	//
+	// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+	PostApiAuthOidcProviderLoginWithFormdataBodyWithResponse(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error)
+
 	// GetApiAuthProvidersWithResponse List Enabled External Login Providers
 	//
 	// Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
@@ -13986,7 +14623,7 @@ type ClientWithResponsesInterface interface {
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-	PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
+	PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
 
 	// PostApiAuthProvidersProviderAuthorizeWithResponse Start Browser-Bound Social Login
 	//
@@ -13995,7 +14632,7 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-	PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
+	PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider string, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error)
 
 	// PostApiGithubLoginWithBodyWithResponse GitHub OAuth2 Login
 	//
@@ -17109,6 +17746,205 @@ func (r DeleteApiAdminTokensTokenPrefixResponse) ContentType() string {
 	return ""
 }
 
+type GetApiAdminUpstreamProvidersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Providers *[]UpstreamProvider `json:"providers,omitempty"`
+		Status    *string             `json:"status,omitempty"`
+		Total     *int                `json:"total,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminUpstreamProvidersResponse) GetJSON200() *struct {
+	Providers *[]UpstreamProvider `json:"providers,omitempty"`
+	Status    *string             `json:"status,omitempty"`
+	Total     *int                `json:"total,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminUpstreamProvidersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminUpstreamProvidersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminUpstreamProvidersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminUpstreamProvidersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAdminUpstreamProvidersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *UpstreamProvider
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostApiAdminUpstreamProvidersResponse) GetJSON201() *UpstreamProvider {
+	return r.JSON201
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAdminUpstreamProvidersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAdminUpstreamProvidersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAdminUpstreamProvidersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAdminUpstreamProvidersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteApiAdminUpstreamProvidersProviderKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteApiAdminUpstreamProvidersProviderKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteApiAdminUpstreamProvidersProviderKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteApiAdminUpstreamProvidersProviderKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteApiAdminUpstreamProvidersProviderKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetApiAdminUpstreamProvidersProviderKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UpstreamProvider
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetApiAdminUpstreamProvidersProviderKeyResponse) GetJSON200() *UpstreamProvider {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetApiAdminUpstreamProvidersProviderKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiAdminUpstreamProvidersProviderKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiAdminUpstreamProvidersProviderKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetApiAdminUpstreamProvidersProviderKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutApiAdminUpstreamProvidersProviderKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// GetBody returns the raw response body bytes
+func (r PutApiAdminUpstreamProvidersProviderKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutApiAdminUpstreamProvidersProviderKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutApiAdminUpstreamProvidersProviderKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutApiAdminUpstreamProvidersProviderKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetApiAdminUsersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17463,6 +18299,61 @@ func (r PutApiAdminUsersUserIdRolesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutApiAdminUsersUserIdRolesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostApiAuthOidcProviderLoginResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		AccessToken  *string `json:"access_token,omitempty"`
+		ExpiresIn    *int    `json:"expires_in,omitempty"`
+		RefreshToken *string `json:"refresh_token,omitempty"`
+
+		// TokenType Example: Bearer
+		TokenType *string `json:"token_type,omitempty"`
+	}
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostApiAuthOidcProviderLoginResponse) GetJSON200() *struct {
+	AccessToken  *string `json:"access_token,omitempty"`
+	ExpiresIn    *int    `json:"expires_in,omitempty"`
+	RefreshToken *string `json:"refresh_token,omitempty"`
+
+	// TokenType Example: Bearer
+	TokenType *string `json:"token_type,omitempty"`
+} {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r PostApiAuthOidcProviderLoginResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiAuthOidcProviderLoginResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiAuthOidcProviderLoginResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostApiAuthOidcProviderLoginResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23009,6 +23900,111 @@ func (c *ClientWithResponses) DeleteApiAdminTokensTokenPrefixWithResponse(ctx co
 	return ParseDeleteApiAdminTokensTokenPrefixResponse(rsp)
 }
 
+// GetApiAdminUpstreamProvidersWithResponse List Upstream Providers
+//
+// P2-1: list every OIDC-in upstream provider (enabled and disabled). client_secret is write-only (client_secret_set bool).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/upstream-providers (the `GetApiAdminUpstreamProviders` operationId).
+func (c *ClientWithResponses) GetApiAdminUpstreamProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminUpstreamProvidersResponse, error) {
+	rsp, err := c.GetApiAdminUpstreamProviders(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminUpstreamProvidersResponse(rsp)
+}
+
+// PostApiAdminUpstreamProvidersWithBodyWithResponse Create Upstream Provider
+//
+// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+func (c *ClientWithResponses) PostApiAdminUpstreamProvidersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAdminUpstreamProvidersResponse, error) {
+	rsp, err := c.PostApiAdminUpstreamProvidersWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminUpstreamProvidersResponse(rsp)
+}
+
+// PostApiAdminUpstreamProvidersWithResponse Create Upstream Provider
+//
+// P2-1: register an OIDC upstream. provider_key must match ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint). Mutations refresh the login-page provider set immediately.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/admin/upstream-providers (the `PostApiAdminUpstreamProviders` operationId).
+func (c *ClientWithResponses) PostApiAdminUpstreamProvidersWithResponse(ctx context.Context, body PostApiAdminUpstreamProvidersJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAdminUpstreamProvidersResponse, error) {
+	rsp, err := c.PostApiAdminUpstreamProviders(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAdminUpstreamProvidersResponse(rsp)
+}
+
+// DeleteApiAdminUpstreamProvidersProviderKeyWithResponse Delete Upstream Provider
+//
+// P2-1: remove a registry row. Linked oauth2_subject_mappings rows stay by design (historical links outlive the entry; re-creating the key re-attaches them). Refreshes the login-page provider set.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/admin/upstream-providers/{providerKey} (the `DeleteApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *ClientWithResponses) DeleteApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*DeleteApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	rsp, err := c.DeleteApiAdminUpstreamProvidersProviderKey(ctx, providerKey, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteApiAdminUpstreamProvidersProviderKeyResponse(rsp)
+}
+
+// GetApiAdminUpstreamProvidersProviderKeyWithResponse Get Upstream Provider
+//
+// P2-1: fetch one registry row (client_secret never echoed).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/admin/upstream-providers/{providerKey} (the `GetApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *ClientWithResponses) GetApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, reqEditors ...RequestEditorFn) (*GetApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	rsp, err := c.GetApiAdminUpstreamProvidersProviderKey(ctx, providerKey, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiAdminUpstreamProvidersProviderKeyResponse(rsp)
+}
+
+// PutApiAdminUpstreamProvidersProviderKeyWithBodyWithResponse Update Upstream Provider
+//
+// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *ClientWithResponses) PutApiAdminUpstreamProvidersProviderKeyWithBodyWithResponse(ctx context.Context, providerKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	rsp, err := c.PutApiAdminUpstreamProvidersProviderKeyWithBody(ctx, providerKey, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminUpstreamProvidersProviderKeyResponse(rsp)
+}
+
+// PutApiAdminUpstreamProvidersProviderKeyWithResponse Update Upstream Provider
+//
+// P2-1: full-row update keyed by provider_key (immutable -- it keys oauth2_subject_mappings). Empty client_secret keeps the current one. Mutations refresh the login-page provider set immediately.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/admin/upstream-providers/{providerKey} (the `PutApiAdminUpstreamProvidersProviderKey` operationId).
+func (c *ClientWithResponses) PutApiAdminUpstreamProvidersProviderKeyWithResponse(ctx context.Context, providerKey string, body PutApiAdminUpstreamProvidersProviderKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*PutApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	rsp, err := c.PutApiAdminUpstreamProvidersProviderKey(ctx, providerKey, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutApiAdminUpstreamProvidersProviderKeyResponse(rsp)
+}
+
 // GetApiAdminUsersWithResponse List Users
 //
 // List users with optional pagination (page, per_page) and filtering (q for username/email prefix, role, locked). Returns total count.
@@ -23219,6 +24215,51 @@ func (c *ClientWithResponses) PutApiAdminUsersUserIdRolesWithResponse(ctx contex
 	return ParsePutApiAdminUsersUserIdRolesResponse(rsp)
 }
 
+// PostApiAuthOidcProviderLoginWithBodyWithResponse OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *ClientWithResponses) PostApiAuthOidcProviderLoginWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error) {
+	rsp, err := c.PostApiAuthOidcProviderLoginWithBody(ctx, provider, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAuthOidcProviderLoginResponse(rsp)
+}
+
+// PostApiAuthOidcProviderLoginWithResponse OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *ClientWithResponses) PostApiAuthOidcProviderLoginWithResponse(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error) {
+	rsp, err := c.PostApiAuthOidcProviderLogin(ctx, provider, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAuthOidcProviderLoginResponse(rsp)
+}
+
+// PostApiAuthOidcProviderLoginWithFormdataBodyWithResponse OIDC Upstream Login (registry provider)
+//
+// P2-1: exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair: code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/auth/oidc/{provider}/login (the `PostApiAuthOidcProviderLogin` operationId).
+func (c *ClientWithResponses) PostApiAuthOidcProviderLoginWithFormdataBodyWithResponse(ctx context.Context, provider string, body PostApiAuthOidcProviderLoginFormdataRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthOidcProviderLoginResponse, error) {
+	rsp, err := c.PostApiAuthOidcProviderLoginWithFormdataBody(ctx, provider, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiAuthOidcProviderLoginResponse(rsp)
+}
+
 // GetApiAuthProvidersWithResponse List Enabled External Login Providers
 //
 // Public discovery of enabled providers. authorize_url is deprecated and empty; POST to the provider authorize endpoint to start login.
@@ -23241,7 +24282,7 @@ func (c *ClientWithResponses) GetApiAuthProvidersWithResponse(ctx context.Contex
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
+func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
 	rsp, err := c.PostApiAuthProvidersProviderAuthorizeWithBody(ctx, provider, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -23256,7 +24297,7 @@ func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithBodyWithR
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /api/auth/providers/{provider}/authorize (the `PostApiAuthProvidersProviderAuthorize` operationId).
-func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider PostApiAuthProvidersProviderAuthorizeParamsProvider, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
+func (c *ClientWithResponses) PostApiAuthProvidersProviderAuthorizeWithResponse(ctx context.Context, provider string, body PostApiAuthProvidersProviderAuthorizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiAuthProvidersProviderAuthorizeResponse, error) {
 	rsp, err := c.PostApiAuthProvidersProviderAuthorize(ctx, provider, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -26224,6 +27265,129 @@ func ParseDeleteApiAdminTokensTokenPrefixResponse(rsp *http.Response) (*DeleteAp
 	return response, nil
 }
 
+// ParseGetApiAdminUpstreamProvidersResponse parses an HTTP response from a GetApiAdminUpstreamProvidersWithResponse call
+func ParseGetApiAdminUpstreamProvidersResponse(rsp *http.Response) (*GetApiAdminUpstreamProvidersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminUpstreamProvidersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Providers *[]UpstreamProvider `json:"providers,omitempty"`
+			Status    *string             `json:"status,omitempty"`
+			Total     *int                `json:"total,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAdminUpstreamProvidersResponse parses an HTTP response from a PostApiAdminUpstreamProvidersWithResponse call
+func ParsePostApiAdminUpstreamProvidersResponse(rsp *http.Response) (*PostApiAdminUpstreamProvidersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAdminUpstreamProvidersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest UpstreamProvider
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteApiAdminUpstreamProvidersProviderKeyResponse parses an HTTP response from a DeleteApiAdminUpstreamProvidersProviderKeyWithResponse call
+func ParseDeleteApiAdminUpstreamProvidersProviderKeyResponse(rsp *http.Response) (*DeleteApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteApiAdminUpstreamProvidersProviderKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetApiAdminUpstreamProvidersProviderKeyResponse parses an HTTP response from a GetApiAdminUpstreamProvidersProviderKeyWithResponse call
+func ParseGetApiAdminUpstreamProvidersProviderKeyResponse(rsp *http.Response) (*GetApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiAdminUpstreamProvidersProviderKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UpstreamProvider
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParsePutApiAdminUpstreamProvidersProviderKeyResponse parses an HTTP response from a PutApiAdminUpstreamProvidersProviderKeyWithResponse call
+func ParsePutApiAdminUpstreamProvidersProviderKeyResponse(rsp *http.Response) (*PutApiAdminUpstreamProvidersProviderKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutApiAdminUpstreamProvidersProviderKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParseGetApiAdminUsersResponse parses an HTTP response from a GetApiAdminUsersWithResponse call
 func ParseGetApiAdminUsersResponse(rsp *http.Response) (*GetApiAdminUsersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -26409,6 +27573,54 @@ func ParsePutApiAdminUsersUserIdRolesResponse(rsp *http.Response) (*PutApiAdminU
 	response := &PutApiAdminUsersUserIdRolesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePostApiAuthOidcProviderLoginResponse parses an HTTP response from a PostApiAuthOidcProviderLoginWithResponse call
+func ParsePostApiAuthOidcProviderLoginResponse(rsp *http.Response) (*PostApiAuthOidcProviderLoginResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiAuthOidcProviderLoginResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			AccessToken  *string `json:"access_token,omitempty"`
+			ExpiresIn    *int    `json:"expires_in,omitempty"`
+			RefreshToken *string `json:"refresh_token,omitempty"`
+
+			// TokenType Example: Bearer
+			TokenType *string `json:"token_type,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 400:
+		break // No content-type
+
+	case rsp.StatusCode == 403:
+		break // No content-type
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 500:
+		break // No content-type
+
+	case rsp.StatusCode == 502:
+		break // No content-type
+
 	}
 
 	return response, nil
