@@ -210,13 +210,13 @@ TEST(OidcUpstreamAuthService, EndpointOverridesShortCircuitDiscovery)
 {
     FakeTransport transport;  // no discovery reply scripted -> any fetch fails
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
     auto record = makeRecord();
     record.endpointOverrides =
       R"({"authorize":"https://a/authorize","token":"https://a/token","userinfo":"https://a/userinfo"})";
 
     bool done = false;
-    service.resolveEndpoints(record, [&done](bool ok, auto endpoints) {
+    service->resolveEndpoints(record, [&done](bool ok, auto endpoints) {
         EXPECT_TRUE(ok);
         EXPECT_EQ(endpoints.authorize, "https://a/authorize");
         EXPECT_EQ(endpoints.token, "https://a/token");
@@ -238,16 +238,16 @@ TEST(OidcUpstreamAuthService, DiscoveryParsesAndCachesPerIssuer)
       R"("userinfo_endpoint":"https://login.example.com/u"})"};
 
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
     auto record = makeRecord();
 
     int calls = 0;
-    service.resolveEndpoints(record, [&](bool ok, auto endpoints) {
+    service->resolveEndpoints(record, [&](bool ok, auto endpoints) {
         ++calls;
         EXPECT_TRUE(ok);
         EXPECT_EQ(endpoints.authorize, "https://login.example.com/a");
     });
-    service.resolveEndpoints(record, [&](bool ok, auto) {
+    service->resolveEndpoints(record, [&](bool ok, auto) {
         ++calls;
         EXPECT_TRUE(ok);
     });
@@ -266,10 +266,10 @@ TEST(OidcUpstreamAuthService, DiscoveryIssuerMismatchFails)
       R"("token_endpoint":"https://other/t",)"
       R"("userinfo_endpoint":"https://other/u"})"};
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
 
     bool done = false;
-    service.resolveEndpoints(makeRecord(), [&done](bool ok, auto) {
+    service->resolveEndpoints(makeRecord(), [&done](bool ok, auto) {
         EXPECT_FALSE(ok);
         done = true;
     });
@@ -284,11 +284,11 @@ TEST(OidcUpstreamAuthService, LoginHappyPathCreatesLinkedAccount)
       true, 200, R"({"sub":"sub-1","email":"u@example.com","preferred_username":"alice","name":"Alice"})"};
 
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
 
     OidcUpstreamAuthService::LoginResult result;
     bool done = false;
-    service.login(makeRecord(), pinnedEndpoints(), "http://cb", "thecode", captureResult(result, done));
+    service->login(makeRecord(), pinnedEndpoints(), "http://cb", "thecode", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_TRUE(result.errorCode.empty()) << result.errorCode;
     EXPECT_TRUE(result.isNewUser);
@@ -322,10 +322,10 @@ TEST(OidcUpstreamAuthService, LoginExistingMappingDoesNotCreate)
     link.publicSub = "pub7";
     repo->links.push_back(link);
 
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
     OidcUpstreamAuthService::LoginResult result;
     bool done = false;
-    service.login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
+    service->login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_TRUE(result.errorCode.empty()) << result.errorCode;
     EXPECT_FALSE(result.isNewUser);
@@ -342,13 +342,13 @@ TEST(OidcUpstreamAuthService, CustomClaimsMappingAndSubjectFallback)
       true, 200, R"({"uid":"u-9","mail":"x@example.com","login":"bob"})"};
 
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
     auto record = makeRecord();
     record.claimsMapping = R"({"sub":"uid","email":"mail","username":"login"})";
 
     OidcUpstreamAuthService::LoginResult result;
     bool done = false;
-    service.login(record, pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
+    service->login(record, pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_TRUE(result.errorCode.empty()) << result.errorCode;
     EXPECT_EQ(result.username, "u_bob");
@@ -356,7 +356,7 @@ TEST(OidcUpstreamAuthService, CustomClaimsMappingAndSubjectFallback)
     // Missing mapped `sub` is the one hard failure.
     transport.replies["/userinfo"] = {true, 200, R"({"mail":"x@example.com"})"};
     done = false;
-    service.login(record, pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
+    service->login(record, pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_EQ(result.errorCode, "VALIDATION_INVALID_INPUT");
 }
@@ -368,10 +368,10 @@ TEST(OidcUpstreamAuthService, NoMappingWithoutAutoCreateRefuses)
     transport.replies["/userinfo"] = {true, 200, R"({"sub":"sub-2","preferred_username":"n"})"};
 
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, false, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, false, transport.get(), transport.post());
     OidcUpstreamAuthService::LoginResult result;
     bool done = false;
-    service.login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
+    service->login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_EQ(result.errorCode, "AUTH_SOCIAL_ACCOUNT_NOT_LINKED");
     EXPECT_EQ(repo->creates.load(), 0);
@@ -383,10 +383,10 @@ TEST(OidcUpstreamAuthService, UpstreamFailuresMapToNetConnectionFailed)
     transport.replies["/token"] = {true, 400, R"({"error":"invalid_grant"})"};
 
     auto repo = std::make_shared<ImmediateAccountRepository>();
-    OidcUpstreamAuthService service(repo, true, transport.get(), transport.post());
+    auto service = std::make_shared<OidcUpstreamAuthService>(repo, true, transport.get(), transport.post());
     OidcUpstreamAuthService::LoginResult result;
     bool done = false;
-    service.login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
+    service->login(makeRecord(), pinnedEndpoints(), "http://cb", "c", captureResult(result, done));
     EXPECT_TRUE(done);
     EXPECT_EQ(result.errorCode, "NET_CONNECTION_FAILED");
 }
