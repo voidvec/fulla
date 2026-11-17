@@ -503,7 +503,10 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
             auto req = ::drogon::HttpRequest::newHttpRequest();
             req->setMethod(::drogon::Post);
             req->setPath(path);
-            req->addHeader("content-type", "application/x-www-form-urlencoded");
+            // setContentTypeString (not addHeader): drogon then treats the
+            // body as a form and won't append a second default content-type,
+            // which made upstreams skip form parsing entirely.
+            req->setContentTypeString("application/x-www-form-urlencoded");
             req->setBody(std::move(body));
             ::drogon::HttpClient::newHttpClient(host, ::drogon::app().getLoop())
               ->sendRequest(req, [cb = std::make_shared<
