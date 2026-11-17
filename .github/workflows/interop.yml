@@ -169,3 +169,58 @@ jobs:
       - name: Server log on failure
         if: failure()
         run: tail -n 200 /tmp/fulla-server-interop.log || true
+
+  upstream-oidc-e2e:
+    # P2-1b: the REAL-upstream acceptance run. A containerized Keycloak 26
+    # federates into fulla through the registry: admin CRUD registers the
+    # provider, then the full browser-shaped chain runs against the live
+    # IdP (authorize -> login form -> code -> exchange -> first-party tokens
+    # -> userinfo). Catches upstream-facing regressions the hermetic tests
+    # cannot see (it caught the dual content-type header bug on its first
+    # run). See tests/e2e/upstream-oidc/README.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CMAKE_PRESET: linux-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          python -m pip install --upgrade pip conan
+
+      - name: Resolve locked dependencies (Conan)
+        run: |
+          conan profile detect --force
+          conan install . --output-folder=build/linux-release --build=missing \
+            -s build_type=Release -s compiler.cppstd=17
+
+      - name: Add drogon_ctl (Conan package) to PATH
+        run: |
+          data_file=$(find build/linux-release -maxdepth 1 -name 'Drogon-*-data.cmake' | head -n1)
+          drogon_folder=$(grep -E 'set\(drogon_PACKAGE_FOLDER_RELEASE "' "$data_file" | sed -E 's/.*"(.+)".*/\1/')
+          echo "$drogon_folder/bin" >> "$GITHUB_PATH"
+
+      - name: Configure + build server
+        run: |
+          cmake --preset "$CMAKE_PRESET"
+          cmake --build --preset "$CMAKE_PRESET" --target fulla-server
+
+      - name: Start infra containers (script-default names/ports)
+        run: |
+          docker run -d --name fulla-model-pg \
+            -e POSTGRES_USER=fulla_user -e POSTGRES_PASSWORD=123456 \
+            -e POSTGRES_DB=fulla_db -p 55432:5432 postgres:17-alpine
+          docker run -d --name fulla-diag-redis \
+            -p 56379:6379 redis:7-alpine --requirepass 123456
+
+      - name: Keycloak federated-login E2E
+        run: bash tests/e2e/upstream-oidc/run-e2e.sh
+
+      - name: Server + keycloak logs on failure
+        if: failure()
+        run: |
+          docker logs kc-e2e 2>&1 | tail -n 100 || true
+          dir=$(ls -dt /tmp/fulla-oidc-e2e.* 2>/dev/null | head -1)
+          [ -n "$dir" ] && { tail -n 100 "$dir/server.log" || true; tail -n 100 "$dir/logs/drogon.log" || true; } || true
