@@ -533,6 +533,105 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
                 // (external_auth.{key}.redirect_uri, else frontend/callback).
                 return fulla::common::utils::socialRedirectUri(customConfig, key);
             });
+
+        // --------------------------------------------------------------
+        // P2-1c: the three legacy social providers migrate ONTO the
+        // registry. Config stays the FIRST-BOOT seed (INSERT-only: admin
+        // edits to the row win and survive restarts); after that the row
+        // is the runtime source of truth -- admin credential rotation or
+        // an enabled toggle takes effect on the next refresh (60s loop or
+        // any registry mutation) WITHOUT a restart:
+        //   * service credentials (token/userinfo exchanges)
+        //   * the guard's static entry (authorize URL + state binding + 404
+        //     on disabled)
+        //   * the login-page listing (no advertising a 404ing provider)
+        // Rows are only seeded while config credentials are configured; a
+        // deployment that never configured google/wechat/github keeps the
+        // exact pre-P2-1c behavior (nothing seeded, everything disabled).
+        // --------------------------------------------------------------
+        struct LegacySeed
+        {
+            const char *key;
+            const char *displayName;
+            const char *issuer;
+            const char *authorizeEndpoint;
+            const char *scopes;
+        };
+        const std::vector<LegacySeed> legacySeeds = {
+            {"google", "Google", "https://accounts.google.com",
+             "https://accounts.google.com/o/oauth2/v2/auth", "openid email profile"},
+            {"wechat", "WeChat", "https://open.weixin.qq.com",
+             "https://open.weixin.qq.com/connect/qrconnect", "snsapi_login"},
+            {"github", "GitHub", "https://github.com",
+             "https://github.com/login/oauth/authorize", "user:email"},
+        };
+        const bool legacyEnabled[3] = {googleEnabled, wechatEnabled, githubEnabled};
+        const std::string legacyCreds[3][2] = {
+            {googleClientId, googleClientSecret},
+            {wechatAppId, wechatSecret},
+            {githubClientId, githubClientSecret}};
+        for (size_t i = 0; i < legacySeeds.size(); ++i)
+        {
+            const auto &seed = legacySeeds[i];
+            const auto credentialConfigured = [](const std::string &v) {
+                return fulla::common::utils::socialCredentialConfigured(v);
+            };
+            if (!credentialConfigured(legacyCreds[i][0]) ||
+                !credentialConfigured(legacyCreds[i][1]))
+            {
+                continue;  // never configured: no row, legacy behavior
+            }
+            fulla::identity::UpstreamProviderRecord record;
+            record.providerKey = seed.key;
+            record.displayName = seed.displayName;
+            record.issuer = seed.issuer;
+            record.clientId = legacyCreds[i][0];
+            record.clientSecret = legacyCreds[i][1];
+            record.scopes = seed.scopes;
+            // The legacy authorize shapes are pinned verbatim; the row
+            // carries the endpoint for documentation/audit only (the
+            // static guard surface builds URLs from its own table).
+            record.endpointOverrides =
+              std::string("{\"authorize\":\"") + seed.authorizeEndpoint + "\"}";
+            record.enabled = legacyEnabled[i];
+            upstreamRepo->insertRecord(
+              record,
+              [key = std::string(seed.key)](bool ok, const std::string &error, auto) {
+                  // duplicate_key = the admin already owns this row: the
+                  // seed must NOT override admin decisions.
+                  if (!ok && error != "duplicate_key")
+                  {
+                      LOG_WARN << "IdentityAssembly: legacy seed for '" << key
+                               << "' failed (" << error << "); config-derived "
+                                            "behavior stays in effect";
+                  }
+              });
+        }
+        // The applier routes guard updates through the RUNTIME's current
+        // guard (the social mock fixture swaps guards mid-test-process) and
+        // holds only a weak runtime reference (the runtime owns the applier
+        // -- a strong capture would be a self-cycle).
+        std::weak_ptr<fulla::drogon::services::UpstreamProviderRuntime> weakRuntime =
+          upstreamRuntime;
+        upstreamRuntime->setLegacyApplier(
+          [weakRuntime, &googleAuthService, &weChatAuthService, &gitHubAuthService](
+            const std::string &key, const std::string &clientId,
+            const std::string &clientSecret, bool enabled) {
+              if (auto runtime = weakRuntime.lock())
+              {
+                  runtime->updateLegacyGuardEntry(key, clientId, clientSecret, enabled);
+              }
+              if (key == "google")
+                  googleAuthService->setCredentials(clientId, clientSecret);
+              else if (key == "wechat")
+                  weChatAuthService->setCredentials(clientId, clientSecret);
+              else if (key == "github")
+                  gitHubAuthService->setCredentials(clientId, clientSecret);
+              ::drogon::DrClassMap::getSingleInstance<
+                fulla::drogon::controllers::AuthProvidersController>()
+                ->setStaticProviderEnabled(key, enabled);
+          });
+
         upstreamRuntime->refresh();
         ::drogon::app().getLoop()->runEvery(
           60.0, [runtime = upstreamRuntime]() { runtime->refresh(); });

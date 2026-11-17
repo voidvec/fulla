@@ -22,6 +22,8 @@
 #include <fulla/drogon/services/SocialLoginGuard.h>
 #include <json/json.h>
 
+#include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -55,6 +57,26 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
         providerNames_ = std::move(providerNames);
         buildBody();
     }
+    // P2-1c: runtime toggle of a config-static (legacy social) entry from
+    // its registry row -- keeps the login-page listing in lockstep with the
+    // guard when an admin enables/disables the row at runtime. Enabling a
+    // key config never listed adds it (a registry row may enable a provider
+    // the config never configured).
+    void setStaticProviderEnabled(const std::string &provider, bool enabled)
+    {
+        if (enabled)
+        {
+            disabledProviders_.erase(provider);
+            if (std::find(providerNames_.begin(), providerNames_.end(), provider) ==
+                providerNames_.end())
+                providerNames_.push_back(provider);
+        }
+        else
+        {
+            disabledProviders_.insert(provider);
+        }
+        buildBody();
+    }
 
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(AuthProvidersController::list, "/api/auth/providers", ::drogon::Get);
@@ -78,6 +100,7 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
     std::shared_ptr<services::SocialLoginGuard> loginGuard_;
     std::shared_ptr<services::UpstreamProviderRuntime> upstreamRuntime_;
     std::vector<std::string> providerNames_;
+    std::set<std::string> disabledProviders_;
     // Default body is the schema-valid empty answer: when wireIdentityServices
     // early-returns (memory storage / no DB client), setProviders never runs,
     // and the published contract requires the `providers` KEY (empty array =

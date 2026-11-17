@@ -20,11 +20,16 @@ namespace openapi = ::fulla::drogon::observability::openapi;
 // IdentityAssembly runs (registerBeginningAdvice ordering), so the response
 // body is built eagerly at wiring time and served lock-free afterwards.
 // Discovery advertises provider names without reusable authorization URLs.
+// P2-1c: entries disabled via their registry row (runtime toggle) are
+// filtered out so the buttons can never advertise a provider the guard
+// would 404.
 void AuthProvidersController::buildBody()
 {
     Json::Value providers(Json::arrayValue);
     for (const auto &name : providerNames_)
     {
+        if (disabledProviders_.count(name) > 0)
+            continue;
         Json::Value provider;
         provider["provider"] = name;
         provider["authorize_url"] = "";  // Deprecated; never publish a stateless login URL.
