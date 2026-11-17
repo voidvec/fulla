@@ -13,8 +13,12 @@
 #include <fulla/storage/postgres/models/Users.h>
 #include <drogon/orm/Mapper.h>
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <future>
+#include <set>
+#include <thread>
 
 namespace
 {
@@ -239,11 +243,67 @@ struct Fixture
     {
         Json::Value body;
         body["scopes"] = Json::Value(Json::arrayValue);
+        std::set<std::string> expected;
         for (const auto *name : names)
+        {
             body["scopes"].append(name);
-        auto response = http::sendPutJson("/api/admin/clients/" + client + "/scopes", body, bearer);
-        if (!http::statusIs(response, ::drogon::k200OK))
+            expected.insert(name);
+        }
+        const auto path = "/api/admin/clients/" + client + "/scopes";
+        auto update = ::drogon::HttpRequest::newHttpRequest();
+        update->setMethod(::drogon::Put);
+        update->setPath(path);
+        update->setContentTypeCode(::drogon::CT_APPLICATION_JSON);
+        update->addHeader("Authorization", "Bearer " + bearer);
+        update->setBody(Json::writeString(Json::StreamWriterBuilder(), body));
+        const auto updated =
+          http::sharedTestHttpClient()->sendRequest(update, http::fullaTestHttpTimeout());
+        if (
+          updated.first != ::drogon::ReqResult::Ok ||
+          !http::statusIs(updated.second, ::drogon::k200OK)
+        )
             throw std::runtime_error("S04 fixture scope update failed");
+
+        // The update response can precede commit. Observe the committed set
+        // before opening the decision transaction, without replaying the write.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            auto read = ::drogon::HttpRequest::newHttpRequest();
+            read->setMethod(::drogon::Get);
+            read->setPath(path);
+            read->addHeader("Authorization", "Bearer " + bearer);
+            const auto remaining =
+              std::chrono::duration<double>(deadline - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0)
+                break;
+            const auto observed = http::sharedTestHttpClient()->sendRequest(
+              read, (std::min)(remaining, http::fullaTestHttpTimeout())
+            );
+            if (
+              observed.first != ::drogon::ReqResult::Ok ||
+              !http::statusIs(observed.second, ::drogon::k200OK)
+            )
+                throw std::runtime_error("S04 fixture scope visibility read failed");
+            const auto json = observed.second->getJsonObject();
+            if (!json || !json->isObject() || !(*json)["scopes"].isArray())
+                throw std::runtime_error("S04 fixture scope visibility response malformed");
+            std::set<std::string> actual;
+            for (const auto &scope : (*json)["scopes"])
+            {
+                if (!scope.isString())
+                    throw std::runtime_error("S04 fixture scope visibility response malformed");
+                actual.insert(scope.asString());
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline)
+                break;
+            if (actual == expected)
+                return;
+            std::this_thread::sleep_until((std::min)(deadline,
+                                                     now + std::chrono::milliseconds(10)));
+        }
+        throw std::runtime_error("S04 fixture committed scopes not visible before deadline");
     }
 
     OrgConsentDecisionResult decide(
