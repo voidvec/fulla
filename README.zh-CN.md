@@ -87,7 +87,7 @@ graph TD
     common["fulla::common<br/>共享内核 · 端口接口"]
 ```
 
-Conan/CMake 选项 `with_social` / `with_webauthn` 裁剪对应编译面；`with_identity=False` 当前不受支持。关闭 WebAuthn 后，其加密辅助代码及测试仍需要 libcbor，详见 [SDK 运行时契约](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations)。
+Conan/CMake 选项 `with_social` / `with_webauthn` 裁剪对应编译面；`with_identity=False` 当前不受支持。关闭 WebAuthn 后，依赖图、加密实现/测试编译和导出的 SDK 依赖闭包均不再要求 libcbor，详见 [SDK 运行时契约与验证矩阵](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations)。
 
 ### 技术栈
 

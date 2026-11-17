@@ -97,7 +97,7 @@ graph TD
     common["fulla::common<br/>shared kernel · ports"]
 ```
 
-Conan/CMake options `with_social` / `with_webauthn` disable their corresponding compiled surfaces. Identity must remain enabled; `with_identity=False` is unsupported. Disabling WebAuthn currently retains libcbor for the crypto helper and its tests; see the [SDK runtime contract](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations).
+Conan/CMake options `with_social` / `with_webauthn` disable their corresponding compiled surfaces. Identity must remain enabled; `with_identity=False` is unsupported. Disabling WebAuthn removes libcbor from the dependency graph, crypto/test compilation and exported SDK dependency closure; see the [SDK runtime contract and validation matrix](docs/sdk/sdk-runtime-contract.md#5-dependency-declarations).
 
 ### Tech Stack
 

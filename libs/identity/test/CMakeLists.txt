@@ -14,7 +14,7 @@ file(GLOB_RECURSE FULLA_IDENTITY_TEST_SOURCES "*.cc")
 # disabled -- those tests reference symbols (WebAuthnService::*,
 # SocialAuthService::*) that are no longer compiled into fulla::identity.
 if(NOT WITH_WEBAUTHN)
-    list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "WebAuthnServiceTest\\.cc$")
+    list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "(WebAuthnServiceTest|WebAuthnCryptoTest|CborReaderTest)\\.cc$")
 endif()
 if(NOT WITH_SOCIAL)
     list(FILTER FULLA_IDENTITY_TEST_SOURCES EXCLUDE REGEX "SocialAuthServiceTest\\.cc$")
@@ -30,12 +30,12 @@ target_link_libraries(fulla-identity-test
         fulla::common::testing
         GTest::gtest
         GTest::Main
-        # #142: the tests include src/webauthn/{CborReader,
-        # WebAuthnCrypto}.h directly, which include <cbor/...>;
-        # libcbor is PRIVATE on fulla-identity (it must not leak
-        # into the exported package interface), so link it here.
-        libcbor::libcbor
 )
+if(WITH_WEBAUTHN)
+    # Private crypto tests include CBOR headers directly. The identity
+    # library's private dependency does not provide their include paths.
+    target_link_libraries(fulla-identity-test PRIVATE libcbor::libcbor)
+endif()
 
 set_target_properties(fulla-identity-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
