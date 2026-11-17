@@ -1,0 +1,15 @@
+{
+  "default": {},
+  "tuned": {
+    "app.number_of_threads": 2,
+    "app.log.log_level": "WARN",
+    "db_clients.0.number_of_connections": 16,
+    "redis_clients.0.number_of_connections": 16,
+    "plugins.OAuth2Plugin.config.cache.enabled": true
+  },
+  "soak": {
+    "inherits": "tuned",
+    "hodor_from": "apps/server/config/config.prod.json",
+    "rolling_quota_60s": {"all_http_including_observers": 8, "sensitive": 1, "token": 2}
+  }
+}

@@ -33,6 +33,15 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Added
 
+- Add a native-Linux capacity evidence harness with isolated OAuth sessions, full
+  failure/tail retention, strict pilot resource gates, production-limited soak and
+  owned fault controls. Formal results require passing protocol smoke, pilot and
+  resource gates; no new capacity claim is made. Interrupt cleanup reaps owned
+  workers before lease release; setup recovers acknowledged or unacknowledged
+  application transfers, and faults retain each instance's exit evidence.
+  Budget/export gates verify gzip contents, sealed hashes, sample/statistic counts
+  and per-row provenance, rejecting missing, corrupt or reused measurements.
+
 - **Admin console: audit-log CSV export and the claim-mappings editor** (audit wave B,
   closing the frontend legs of two v1.6.0 endpoints): the Audit Logs page gains a
   time-windowed Export CSV action (empty from/to defaults to the last 24h; the
