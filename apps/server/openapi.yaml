@@ -591,6 +591,8 @@ components:
     AuthProvider:
       description: An enabled external login provider. The deprecated authorize_url
         is always empty. Start a browser-bound transaction using the authorize POST.
+        P2-1 registry-configured OIDC upstreams additionally carry display_name
+        and type=oidc.
       properties:
         authorize_url:
           type: string
@@ -598,7 +600,17 @@ components:
           example: ""
         provider:
           type: string
-          enum: [github, google, wechat]
+          description: Config-static social keys (github, google, wechat) or a
+            registry provider key (upstream_providers.provider_key, lowercase
+            [a-z0-9-]).
+        display_name:
+          type: string
+          description: Registry providers only; the login-page button label.
+        type:
+          type: string
+          enum: [oidc]
+          description: Registry providers only; config-static social entries
+            omit this field.
       required:
       - provider
       - authorize_url
@@ -613,6 +625,75 @@ components:
             $ref: '#/components/schemas/AuthProvider'
       required:
       - providers
+      type: object
+    UpstreamProvider:
+      description: 'P2-1: one OIDC-in upstream registry row (public view;
+        client_secret is never echoed).'
+      properties:
+        provider_key:
+          type: string
+          description: Lowercase [a-z0-9-]; keys URLs and
+            oauth2_subject_mappings.provider; immutable after create.
+        display_name:
+          type: string
+        issuer:
+          type: string
+          description: OIDC issuer; endpoints via discovery unless pinned in
+            endpoint_overrides.
+        client_id:
+          type: string
+        client_secret_set:
+          type: boolean
+        scopes:
+          type: string
+          example: openid profile email
+        claims_mapping:
+          type: string
+          description: 'JSON object mapping identity slots to upstream claim
+            names; defaults {"sub":"sub","email":"email","username":"preferred_username","name":"name"}.'
+        endpoint_overrides:
+          type: string
+          description: 'Optional discovery bypass {"authorize":url,"token":url,"userinfo":url}.'
+        enabled:
+          type: boolean
+      required:
+      - provider_key
+      - display_name
+      - issuer
+      - client_id
+      - enabled
+      type: object
+    UpstreamProviderCreate:
+      description: Create/update body for the upstream registry (client_secret
+        write-only; empty on update keeps the current value).
+      properties:
+        provider_key:
+          type: string
+          description: '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$; not github/google/wechat
+            (create only; immutable).'
+        display_name:
+          type: string
+        issuer:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+          writeOnly: true
+        scopes:
+          type: string
+        claims_mapping:
+          type: string
+        endpoint_overrides:
+          type: string
+        enabled:
+          type: boolean
+      required:
+      - provider_key
+      - display_name
+      - issuer
+      - client_id
+      - client_secret
       type: object
     DeviceAuthorizationResponse:
       description: 'RFC 8628 device authorization response. The verification URIs
@@ -1016,6 +1097,138 @@ paths:
       tags:
       - Admin
       - Scopes
+  /api/admin/upstream-providers:
+    get:
+      description: 'P2-1: list every OIDC-in upstream provider (enabled and
+        disabled). client_secret is write-only (client_secret_set bool).'
+      operationId: get_api_admin_upstream_providers
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UpstreamProvider'
+          description: Registry listing
+      summary: List Upstream Providers
+      tags:
+      - Admin
+      - External Auth
+    post:
+      description: 'P2-1: register an OIDC upstream. provider_key must match
+        ^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$ and not collide with the reserved
+        social keys (VALIDATION_RESOURCE_CONFLICT on the UNIQUE constraint).
+        Mutations refresh the login-page provider set immediately.'
+      operationId: post_api_admin_upstream_providers
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamProviderCreate'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamProvider'
+          description: Created
+        '400':
+          description: VALIDATION_MISSING_REQUIRED_FIELD / VALIDATION_FORMAT_ERROR
+        '409':
+          description: VALIDATION_RESOURCE_CONFLICT; provider_key taken
+      summary: Create Upstream Provider
+      tags:
+      - Admin
+      - External Auth
+  /api/admin/upstream-providers/{providerKey}:
+    get:
+      description: 'P2-1: fetch one registry row (client_secret never echoed).'
+      operationId: get_api_admin_upstream_providers__providerKey_
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: providerKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamProvider'
+          description: Registry row
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND
+      summary: Get Upstream Provider
+      tags:
+      - Admin
+      - External Auth
+    put:
+      description: 'P2-1: full-row update keyed by provider_key (immutable --
+        it keys oauth2_subject_mappings). Empty client_secret keeps the
+        current one. Mutations refresh the login-page provider set
+        immediately.'
+      operationId: put_api_admin_upstream_providers__providerKey_
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: providerKey
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamProviderCreate'
+      responses:
+        '200':
+          description: Updated
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND
+      summary: Update Upstream Provider
+      tags:
+      - Admin
+      - External Auth
+    delete:
+      description: 'P2-1: remove a registry row. Linked oauth2_subject_mappings
+        rows stay by design (historical links outlive the entry; re-creating
+        the key re-attaches them). Refreshes the login-page provider set.'
+      operationId: delete_api_admin_upstream_providers__providerKey_
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: providerKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND
+      summary: Delete Upstream Provider
+      tags:
+      - Admin
+      - External Auth
   /api/admin/clients:
     get:
       description: Get a paginated list of registered OAuth2 clients.
@@ -2912,7 +3125,8 @@ paths:
         required: true
         schema:
           type: string
-          enum: [github, google, wechat]
+          description: Config-static social provider (github, google, wechat)
+            or a registry provider key (upstream_providers.provider_key).
       responses:
         '200':
           description: One-time browser-bound authorization transaction
@@ -2936,6 +3150,82 @@ paths:
           description: VALIDATION_RESOURCE_NOT_FOUND; unknown or disabled provider
         '500':
           description: INTERNAL_ERROR; random generation or state storage unavailable
+  /api/auth/oidc/{provider}/login:
+    post:
+      description: 'P2-1: exchange an authorization code from a
+        registry-configured OIDC upstream (upstream_providers row) for a
+        first-party token pair: code -> token endpoint -> userinfo -> claims
+        mapping -> the same find-or-create account flow as
+        google/wechat/github (oauth2_subject_mappings.provider =
+        provider_key). Requires the one-time state from the authorize
+        endpoint, an allowed Origin and the browser binding cookie.'
+      operationId: post_api_auth_oidc__provider__login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, state]
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                state:
+                  type: string
+                  pattern: '^[0-9a-f]{64}$'
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [code, state]
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                state:
+                  type: string
+                  pattern: '^[0-9a-f]{64}$'
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Enabled registry provider key (upstream_providers.provider_key).
+      responses:
+        '200':
+          description: First-party token pair for the upstream-linked account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+        '400':
+          description: VALIDATION_INVALID_INPUT; missing, expired, mismatched or
+            replayed transaction
+        '403':
+          description: AUTH_SOCIAL_ACCOUNT_NOT_LINKED; not linked and auto-create
+            disabled
+        '404':
+          description: VALIDATION_RESOURCE_NOT_FOUND; provider unavailable
+        '500':
+          description: INTERNAL_ERROR; state service unavailable
+        '502':
+          description: NET_CONNECTION_FAILED; upstream token/userinfo endpoint
+            unreachable or rejected the exchange
+      summary: OIDC Upstream Login (registry provider)
+      tags:
+      - External Auth
+      - OIDC Upstream
   /api/github/login:
     post:
       requestBody:

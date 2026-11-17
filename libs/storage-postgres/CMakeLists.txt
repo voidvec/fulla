@@ -105,6 +105,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/PostgresMfaRepository.cc
     src/PostgresWebAuthnRepository.cc
     src/PostgresSocialAccountRepository.cc
+    # P2-1: OIDC-in upstream provider registry (upstream_providers)
+    src/PostgresUpstreamProviderRepository.cc
     src/PostgresRepositoryBase.cc
     src/ClientOwnersRepository.cc
     src/OrgConsentRepository.cc

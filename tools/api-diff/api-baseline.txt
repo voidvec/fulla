@@ -1689,6 +1689,10 @@ static void initApiDocsImpl();
 #include <json/json.h>
 #include <string>
 #include <vector>
+namespace fulla::drogon::services
+{
+class UpstreamProviderRuntime;
+}
 namespace fulla::drogon::controllers
 {
 class AuthProvidersController : public ::drogon::HttpController<AuthProvidersController, false>
@@ -1696,6 +1700,7 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
 public:
 void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
 ;
+void setUpstreamRuntime(std::shared_ptr<services::UpstreamProviderRuntime> runtime);
 void setProviders(std::vector<std::string> providerNames)
 ;
 METHOD_LIST_BEGIN
@@ -1712,6 +1717,7 @@ std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
 const std::string &provider);
 private:
 std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+std::shared_ptr<services::UpstreamProviderRuntime> upstreamRuntime_;
 std::vector<std::string> providerNames_;
 Json::Value cachedBody_{Json::objectValue};
 void buildBody();
@@ -2746,6 +2752,120 @@ static void recordRateLimitSuccess(const ::drogon::HttpRequestPtr &req, const st
 static void recordRateLimitFailure(const ::drogon::HttpRequestPtr &req, const std::string &clientId);
 ::OAuth2Plugin *plugin_ = nullptr;
 ::OAuth2Plugin *resolvePlugin() const;
+};
+}
+=== libs/drogon/include/fulla/drogon/controllers/UpstreamLoginController.h
+#pragma once
+#include <drogon/HttpController.h>
+#include <functional>
+#include <memory>
+#include <string>
+class OAuth2Plugin;
+namespace fulla::drogon::services
+{
+class SocialLoginGuard;
+class UpstreamProviderRuntime;
+}
+namespace fulla::drogon::controllers
+{
+class UpstreamLoginController : public ::drogon::HttpController<UpstreamLoginController, false>
+{
+public:
+static void initApiDocs();
+void setRuntime(std::shared_ptr<services::UpstreamProviderRuntime> runtime)
+;
+std::shared_ptr<services::UpstreamProviderRuntime> runtime() const
+;
+void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
+;
+void setPlugin(OAuth2Plugin *plugin)
+;
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(
+UpstreamLoginController::login,
+"/api/auth/oidc/{provider}/login",
+::drogon::Post,
+::drogon::Options);
+METHOD_LIST_END
+void login(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &provider
+);
+private:
+OAuth2Plugin *resolvePlugin() const;
+void loginValidated(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &provider,
+const std::string &code
+);
+std::shared_ptr<services::UpstreamProviderRuntime> runtime_;
+std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+OAuth2Plugin *plugin_ = nullptr;
+};
+}
+=== libs/drogon/include/fulla/drogon/controllers/UpstreamProviderAdminController.h
+#pragma once
+#include <drogon/HttpController.h>
+#include <functional>
+#include <memory>
+#include <string>
+namespace fulla::drogon::services
+{
+class UpstreamProviderRuntime;
+}
+namespace fulla::drogon::controllers
+{
+class UpstreamProviderAdminController : public ::drogon::HttpController<UpstreamProviderAdminController, false>
+{
+public:
+static void initApiDocs();
+void setRuntime(std::shared_ptr<services::UpstreamProviderRuntime> runtime)
+;
+METHOD_LIST_BEGIN
+ADD_METHOD_TO(
+UpstreamProviderAdminController::list,
+"/api/admin/upstream-providers", ::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+UpstreamProviderAdminController::getOne,
+"/api/admin/upstream-providers/{providerKey}", ::drogon::Get,
+"fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+UpstreamProviderAdminController::create,
+"/api/admin/upstream-providers", ::drogon::Post,
+"fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+UpstreamProviderAdminController::update,
+"/api/admin/upstream-providers/{providerKey}", ::drogon::Put,
+"fulla::drogon::filters::AuthorizationFilter");
+ADD_METHOD_TO(
+UpstreamProviderAdminController::remove,
+"/api/admin/upstream-providers/{providerKey}", ::drogon::Delete,
+"fulla::drogon::filters::AuthorizationFilter");
+METHOD_LIST_END
+void list(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback);
+void getOne(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &providerKey);
+void create(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback);
+void update(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &providerKey);
+void remove(
+const ::drogon::HttpRequestPtr &req,
+std::function<void(const ::drogon::HttpResponsePtr &)> &&callback,
+const std::string &providerKey);
+private:
+static void initApiDocsImpl();
+std::shared_ptr<services::UpstreamProviderRuntime> runtime_;
 };
 }
 === libs/drogon/include/fulla/drogon/controllers/UserAdminController.h
@@ -4088,6 +4208,8 @@ static void confirmReset(const ::drogon::HttpRequestPtr &req, ResponseCallback c
 #include <fulla/identity/SocialLoginStateService.h>
 #include <json/json.h>
 #include <map>
+#include <mutex>
+#include <optional>
 #include <set>
 #include <vector>
 namespace fulla::drogon::services
@@ -4097,6 +4219,14 @@ class SocialLoginGuard : public std::enable_shared_from_this<SocialLoginGuard>
 public:
 using ResponseCallback = std::function<void(const ::drogon::HttpResponsePtr &)>;
 using ValidationCallback = std::function<void(const std::string &, const std::string &)>;
+struct DynamicProvider
+{
+std::string key;
+std::string clientId;
+std::string redirectUri;
+std::string authorizeEndpoint;
+std::string scopes;
+};
 SocialLoginGuard(std::shared_ptr<identity::SocialLoginStateService> states,
 Json::Value config, const std::vector<std::string> &providers,
 bool allowInsecureLoopback);
@@ -4104,6 +4234,8 @@ void authorize(const ::drogon::HttpRequestPtr &req, const std::string &provider,
 ResponseCallback &&callback);
 void validate(const ::drogon::HttpRequestPtr &req, const std::string &provider,
 ValidationCallback &&callback);
+void setDynamicProviders(std::vector<DynamicProvider> providers);
+std::vector<DynamicProvider> dynamicProviders() const;
 static ResponseCallback noStore(ResponseCallback &&callback);
 static void error(const ::drogon::HttpRequestPtr &req, ResponseCallback &&callback,
 const std::string &code);
@@ -4114,14 +4246,83 @@ identity::SocialLoginContext context(const std::string &provider,
 const std::string &binding) const;
 void setBinding(const ::drogon::HttpResponsePtr &response,
 const std::string &binding, int maxAge = 600) const;
+std::optional<DynamicProvider> findDynamic(const std::string &provider) const;
 std::shared_ptr<identity::SocialLoginStateService> states_;
 Json::Value config_;
 std::map<std::string, std::pair<std::string, std::string>> providers_;
 std::set<std::string> origins_;
 bool secure_ = true;
 std::string cookieName_ = "__Host-fulla-social-binding";
+mutable std::mutex dynamicMutex_;
+std::vector<DynamicProvider> dynamicProviders_;
 };
 }
+=== libs/drogon/include/fulla/drogon/services/UpstreamProviderRuntime.h
+#pragma once
+#ifdef WITH_SOCIAL
+#include <fulla/drogon/services/SocialLoginGuard.h>
+#include <fulla/identity/OidcUpstreamAuthService.h>
+#include <chrono>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+namespace fulla::drogon::services
+{
+class UpstreamProviderRuntime : public std::enable_shared_from_this<UpstreamProviderRuntime>
+{
+public:
+using Record = fulla::identity::UpstreamProviderRecord;
+using RecordCallback = std::function<void(bool ok, Record record)>;
+UpstreamProviderRuntime(std::shared_ptr<fulla::identity::IUpstreamProviderRepository> repo,
+std::shared_ptr<fulla::identity::OidcUpstreamAuthService> oidcService,
+std::shared_ptr<SocialLoginGuard> guard,
+std::function<std::string(const std::string &providerKey)> redirectUriFor)
+: repo_(std::move(repo)),
+oidcService_(std::move(oidcService)),
+guard_(std::move(guard)),
+redirectUriFor_(std::move(redirectUriFor))
+;
+void setGuardTarget(std::shared_ptr<SocialLoginGuard> guard)
+;
+void refresh(std::function<void()> &&done = nullptr)
+;
+void findForLogin(const std::string &providerKey, RecordCallback &&cb)
+;
+fulla::identity::OidcUpstreamAuthService::OidcEndpoints endpointsFor(
+const std::string &providerKey) const
+;
+std::vector<Record> enabledSnapshot() const
+;
+private:
+std::vector<SocialLoginGuard::DynamicProvider> buildDynamic(
+const std::vector<Record> &records,
+const std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
+&endpoints) const
+;
+public:
+void commit(std::vector<Record> records,
+std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
+endpoints = {})
+;
+std::shared_ptr<fulla::identity::IUpstreamProviderRepository> repo_;
+std::shared_ptr<fulla::identity::OidcUpstreamAuthService> oidcService_;
+std::shared_ptr<SocialLoginGuard> guard_;
+std::function<std::string(const std::string &)> redirectUriFor_;
+public:
+std::shared_ptr<fulla::identity::IUpstreamProviderRepository> repository() const
+;
+std::shared_ptr<fulla::identity::OidcUpstreamAuthService> oidcService() const
+;
+mutable std::mutex snapshotMutex_;
+std::vector<Record> snapshotRecords_;
+std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
+snapshotEndpoints_;
+};
+}
+#endif
 === libs/drogon/include/fulla/drogon/utils/BrandValidator.h
 #pragma once
 #include <string>
@@ -4969,6 +5170,46 @@ OptionalIntCallback &&cb
 ;
 };
 }
+=== libs/identity/include/fulla/identity/IUpstreamProviderRepository.h
+#pragma once
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+namespace fulla::identity
+{
+struct UpstreamProviderRecord
+{
+int32_t id = 0;
+std::string providerKey;
+std::string displayName;
+std::string issuer;
+std::string clientId;
+std::string clientSecret;
+std::string scopes;
+std::string claimsMapping;
+std::string endpointOverrides;
+bool enabled = true;
+};
+class IUpstreamProviderRepository
+{
+public:
+virtual ~IUpstreamProviderRepository() = default;
+using ListCallback = std::function<void(std::vector<UpstreamProviderRecord> records)>;
+using FindCallback = std::function<void(std::optional<UpstreamProviderRecord> record)>;
+using MutationCallback =
+std::function<void(bool ok, const std::string &error, std::optional<UpstreamProviderRecord> record)>;
+virtual void listAll(ListCallback &&cb) = 0;
+virtual void listEnabled(ListCallback &&cb) = 0;
+virtual void findByKey(const std::string &providerKey, FindCallback &&cb) = 0;
+virtual void insertRecord(const UpstreamProviderRecord &record, MutationCallback &&cb) = 0;
+virtual void updateRecord(const std::string &providerKey,
+const UpstreamProviderRecord &record,
+MutationCallback &&cb) = 0;
+virtual void deleteByKey(const std::string &providerKey, MutationCallback &&cb) = 0;
+};
+}
 === libs/identity/include/fulla/identity/IUserRepository.h
 #pragma once
 #include <functional>
@@ -5160,6 +5401,90 @@ std::shared_ptr<fulla::common::ports::IClock> clock_;
 std::string issuerName_;
 };
 }
+=== libs/identity/include/fulla/identity/OidcUpstreamAuthService.h
+#pragma once
+#ifdef WITH_SOCIAL
+#include <fulla/identity/IUpstreamProviderRepository.h>
+#include <fulla/identity/ISocialAccountRepository.h>
+#include <chrono>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
+namespace fulla::identity
+{
+class OidcUpstreamAuthService : public std::enable_shared_from_this<OidcUpstreamAuthService>
+{
+public:
+using FetchCallback = std::function<void(bool ok, int status, std::string body)>;
+using HttpGet =
+std::function<void(const std::string &url, const std::string &bearer, FetchCallback &&cb)>;
+using HttpPostForm = std::function<
+void(const std::string &url,
+const std::vector<std::pair<std::string, std::string>> &form,
+FetchCallback &&cb)>;
+struct OidcEndpoints
+{
+std::string authorize;
+std::string token;
+std::string userinfo;
+};
+struct LoginResult
+{
+int32_t userId = 0;
+std::string username;
+std::string publicSub;
+std::string errorCode;
+bool isNewUser = false;
+};
+OidcUpstreamAuthService(std::shared_ptr<ISocialAccountRepository> accountRepo,
+bool autoCreate,
+HttpGet httpGet,
+HttpPostForm httpPostForm);
+void resolveEndpoints(const UpstreamProviderRecord &record,
+std::function<void(bool ok, OidcEndpoints endpoints)> &&cb);
+static std::string buildAuthorizeUrl(const UpstreamProviderRecord &record,
+const OidcEndpoints &endpoints,
+const std::string &redirectUri,
+const std::string &state);
+void login(const UpstreamProviderRecord &record,
+const OidcEndpoints &endpoints,
+const std::string &redirectUri,
+const std::string &code,
+std::function<void(LoginResult)> &&cb);
+private:
+struct UpstreamIdentity
+{
+std::string subject;
+std::string email;
+std::string username;
+std::string displayName;
+};
+static bool mapClaims(const std::string &claimsMappingJson,
+const std::string &userinfoBody,
+UpstreamIdentity &out);
+void fetchUserinfo(const UpstreamProviderRecord &record,
+const OidcEndpoints &endpoints,
+const std::string &accessToken,
+std::shared_ptr<std::function<void(LoginResult)>> sharedCb);
+std::shared_ptr<ISocialAccountRepository> accountRepo_;
+bool autoCreate_ = true;
+HttpGet httpGet_;
+HttpPostForm httpPostForm_;
+std::mutex discoveryMutex_;
+struct CachedDiscovery
+{
+OidcEndpoints endpoints;
+bool valid = false;
+std::chrono::steady_clock::time_point fetchedAt{};
+};
+std::map<std::string, CachedDiscovery> discoveryCache_;
+};
+}
+#endif
 === libs/identity/include/fulla/identity/RoleProvider.h
 #pragma once
 #include <fulla/common/ports/IRoleProvider.h>
@@ -7676,6 +8001,34 @@ bool supportsTransactions() const override
 ;
 bool supportsCas() const override
 ;
+};
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/PostgresUpstreamProviderRepository.h
+#pragma once
+#include <fulla/identity/IUpstreamProviderRepository.h>
+#include <drogon/orm/DbClient.h>
+#include <memory>
+namespace fulla::storage::postgres
+{
+class PostgresUpstreamProviderRepository
+: public fulla::identity::IUpstreamProviderRepository,
+public std::enable_shared_from_this<PostgresUpstreamProviderRepository>
+{
+public:
+explicit PostgresUpstreamProviderRepository(::drogon::orm::DbClientPtr dbClient)
+: dbClient_(std::move(dbClient))
+;
+void listAll(ListCallback &&cb) override;
+void listEnabled(ListCallback &&cb) override;
+void findByKey(const std::string &providerKey, FindCallback &&cb) override;
+void insertRecord(const fulla::identity::UpstreamProviderRecord &record,
+MutationCallback &&cb) override;
+void updateRecord(const std::string &providerKey,
+const fulla::identity::UpstreamProviderRecord &record,
+MutationCallback &&cb) override;
+void deleteByKey(const std::string &providerKey, MutationCallback &&cb) override;
+private:
+::drogon::orm::DbClientPtr dbClient_;
 };
 }
 === libs/storage-postgres/include/fulla/storage/postgres/PostgresWebAuthnRepository.h
@@ -11555,6 +11908,180 @@ const bool notNull_;
 };
 static const std::vector<MetaData> metaData_;
 bool dirtyFlag_[5]={ false };
+public:
+static const std::string &sqlForFindingByPrimaryKey()
+;
+static const std::string &sqlForDeletingByPrimaryKey()
+;
+std::string sqlForInserting(bool &needSelection) const
+;
+};
+}
+}
+=== libs/storage-postgres/include/fulla/storage/postgres/models/UpstreamProviders.h
+#pragma once
+#include <drogon/orm/Result.h>
+#include <drogon/orm/Row.h>
+#include <drogon/orm/Field.h>
+#include <drogon/orm/SqlBinder.h>
+#include <drogon/orm/Mapper.h>
+#include <drogon/orm/BaseBuilder.h>
+#ifdef __cpp_impl_coroutine
+#include <drogon/orm/CoroMapper.h>
+#endif
+#include <trantor/utils/Date.h>
+#include <trantor/utils/Logger.h>
+#include <json/json.h>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <vector>
+#include <tuple>
+#include <stdint.h>
+#include <iostream>
+namespace drogon
+{
+namespace orm
+{
+class DbClient;
+using DbClientPtr = std::shared_ptr<DbClient>;
+}
+}
+namespace drogon_model
+{
+namespace fulla_db
+{
+class UpstreamProviders
+{
+public:
+struct Cols
+{
+static const std::string _id;
+static const std::string _provider_key;
+static const std::string _display_name;
+static const std::string _issuer;
+static const std::string _client_id;
+static const std::string _client_secret;
+static const std::string _scopes;
+static const std::string _claims_mapping;
+static const std::string _endpoint_overrides;
+static const std::string _enabled;
+static const std::string _created_at;
+static const std::string _updated_at;
+};
+static const int primaryKeyNumber;
+static const std::string tableName;
+static const bool hasPrimaryKey;
+static const std::string primaryKeyName;
+using PrimaryKeyType = int32_t;
+const PrimaryKeyType &getPrimaryKey() const;
+explicit UpstreamProviders(const drogon::orm::Row &r, const ssize_t indexOffset = 0) noexcept;
+explicit UpstreamProviders(const Json::Value &pJson) noexcept(false);
+UpstreamProviders(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+UpstreamProviders() = default;
+void updateByJson(const Json::Value &pJson) noexcept(false);
+void updateByMasqueradedJson(const Json::Value &pJson,
+const std::vector<std::string> &pMasqueradingVector) noexcept(false);
+static bool validateJsonForCreation(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForCreation(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validateJsonForUpdate(const Json::Value &pJson, std::string &err);
+static bool validateMasqueradedJsonForUpdate(const Json::Value &,
+const std::vector<std::string> &pMasqueradingVector,
+std::string &err);
+static bool validJsonOfField(size_t index,
+const std::string &fieldName,
+const Json::Value &pJson,
+std::string &err,
+bool isForCreation);
+const int32_t &getValueOfId() const noexcept;
+const std::shared_ptr<int32_t> &getId() const noexcept;
+void setId(const int32_t &pId) noexcept;
+const std::string &getValueOfProviderKey() const noexcept;
+const std::shared_ptr<std::string> &getProviderKey() const noexcept;
+void setProviderKey(const std::string &pProviderKey) noexcept;
+void setProviderKey(std::string &&pProviderKey) noexcept;
+const std::string &getValueOfDisplayName() const noexcept;
+const std::shared_ptr<std::string> &getDisplayName() const noexcept;
+void setDisplayName(const std::string &pDisplayName) noexcept;
+void setDisplayName(std::string &&pDisplayName) noexcept;
+const std::string &getValueOfIssuer() const noexcept;
+const std::shared_ptr<std::string> &getIssuer() const noexcept;
+void setIssuer(const std::string &pIssuer) noexcept;
+void setIssuer(std::string &&pIssuer) noexcept;
+const std::string &getValueOfClientId() const noexcept;
+const std::shared_ptr<std::string> &getClientId() const noexcept;
+void setClientId(const std::string &pClientId) noexcept;
+void setClientId(std::string &&pClientId) noexcept;
+const std::string &getValueOfClientSecret() const noexcept;
+const std::shared_ptr<std::string> &getClientSecret() const noexcept;
+void setClientSecret(const std::string &pClientSecret) noexcept;
+void setClientSecret(std::string &&pClientSecret) noexcept;
+const std::string &getValueOfScopes() const noexcept;
+const std::shared_ptr<std::string> &getScopes() const noexcept;
+void setScopes(const std::string &pScopes) noexcept;
+void setScopes(std::string &&pScopes) noexcept;
+const std::string &getValueOfClaimsMapping() const noexcept;
+const std::shared_ptr<std::string> &getClaimsMapping() const noexcept;
+void setClaimsMapping(const std::string &pClaimsMapping) noexcept;
+void setClaimsMapping(std::string &&pClaimsMapping) noexcept;
+const std::string &getValueOfEndpointOverrides() const noexcept;
+const std::shared_ptr<std::string> &getEndpointOverrides() const noexcept;
+void setEndpointOverrides(const std::string &pEndpointOverrides) noexcept;
+void setEndpointOverrides(std::string &&pEndpointOverrides) noexcept;
+const bool &getValueOfEnabled() const noexcept;
+const std::shared_ptr<bool> &getEnabled() const noexcept;
+void setEnabled(const bool &pEnabled) noexcept;
+const ::trantor::Date &getValueOfCreatedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getCreatedAt() const noexcept;
+void setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept;
+const ::trantor::Date &getValueOfUpdatedAt() const noexcept;
+const std::shared_ptr<::trantor::Date> &getUpdatedAt() const noexcept;
+void setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept;
+static size_t getColumnNumber() noexcept ;
+static const std::string &getColumnName(size_t index) noexcept(false);
+Json::Value toJson() const;
+std::string toString() const;
+Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
+private:
+friend drogon::orm::Mapper<UpstreamProviders>;
+friend drogon::orm::BaseBuilder<UpstreamProviders, true, true>;
+friend drogon::orm::BaseBuilder<UpstreamProviders, true, false>;
+friend drogon::orm::BaseBuilder<UpstreamProviders, false, true>;
+friend drogon::orm::BaseBuilder<UpstreamProviders, false, false>;
+#ifdef __cpp_impl_coroutine
+friend drogon::orm::CoroMapper<UpstreamProviders>;
+#endif
+static const std::vector<std::string> &insertColumns() noexcept;
+void outputArgs(drogon::orm::internal::SqlBinder &binder) const;
+const std::vector<std::string> updateColumns() const;
+void updateArgs(drogon::orm::internal::SqlBinder &binder) const;
+void updateId(const uint64_t id);
+std::shared_ptr<int32_t> id_;
+std::shared_ptr<std::string> providerKey_;
+std::shared_ptr<std::string> displayName_;
+std::shared_ptr<std::string> issuer_;
+std::shared_ptr<std::string> clientId_;
+std::shared_ptr<std::string> clientSecret_;
+std::shared_ptr<std::string> scopes_;
+std::shared_ptr<std::string> claimsMapping_;
+std::shared_ptr<std::string> endpointOverrides_;
+std::shared_ptr<bool> enabled_;
+std::shared_ptr<::trantor::Date> createdAt_;
+std::shared_ptr<::trantor::Date> updatedAt_;
+struct MetaData
+{
+const std::string colName_;
+const std::string colType_;
+const std::string colDatabaseType_;
+const ssize_t colLength_;
+const bool isAutoVal_;
+const bool isPrimaryKey_;
+const bool notNull_;
+};
+static const std::vector<MetaData> metaData_;
+bool dirtyFlag_[12]={ false };
 public:
 static const std::string &sqlForFindingByPrimaryKey()
 ;

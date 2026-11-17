@@ -25,6 +25,11 @@
 #include <string>
 #include <vector>
 
+namespace fulla::drogon::services
+{
+class UpstreamProviderRuntime;
+}  // namespace fulla::drogon::services
+
 namespace fulla::drogon::controllers
 {
 
@@ -35,6 +40,11 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
     {
         loginGuard_ = std::move(guard);
     }
+    // P2-1: registry-configured OIDC upstreams merge into the listing at
+    // request time (the runtime's snapshot is refreshed on admin mutations
+    // + a 60s loop, so the login page picks up registry changes without a
+    // restart). May stay null (memory mode / postgres-less deployments).
+    void setUpstreamRuntime(std::shared_ptr<services::UpstreamProviderRuntime> runtime);
     // Called once at startup by IdentityAssembly (before any request can be
     // dispatched — registerBeginningAdvice ordering, see wireController-
     // PluginDependencies' comment on the same mechanism). Builds the response
@@ -66,6 +76,7 @@ class AuthProvidersController : public ::drogon::HttpController<AuthProvidersCon
 
   private:
     std::shared_ptr<services::SocialLoginGuard> loginGuard_;
+    std::shared_ptr<services::UpstreamProviderRuntime> upstreamRuntime_;
     std::vector<std::string> providerNames_;
     // Default body is the schema-valid empty answer: when wireIdentityServices
     // early-returns (memory storage / no DB client), setProviders never runs,

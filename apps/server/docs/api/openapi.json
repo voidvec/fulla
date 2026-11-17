@@ -1459,6 +1459,142 @@
         ]
       }
     },
+    "/api/admin/upstream-providers" : 
+    {
+      "get" : 
+      {
+        "description" : "P2-1 OIDC-in upstream registry. provider_key keys URLs and oauth2_subject_mappings.provider (immutable after create; empty client_secret on update keeps the current one; never echoed). Mutations refresh the login-page provider set immediately.",
+        "operationId" : "get_api_admin_upstream-providers",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "List Upstream Providers",
+        "tags" : 
+        [
+          "Admin",
+          "External Auth"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "post" : 
+      {
+        "description" : "P2-1 OIDC-in upstream registry. provider_key keys URLs and oauth2_subject_mappings.provider (immutable after create; empty client_secret on update keeps the current one; never echoed). Mutations refresh the login-page provider set immediately.",
+        "operationId" : "post_api_admin_upstream-providers",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Create Upstream Provider",
+        "tags" : 
+        [
+          "Admin",
+          "External Auth"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/upstream-providers/{providerKey}" : 
+    {
+      "delete" : 
+      {
+        "description" : "P2-1 OIDC-in upstream registry. provider_key keys URLs and oauth2_subject_mappings.provider (immutable after create; empty client_secret on update keeps the current one; never echoed). Mutations refresh the login-page provider set immediately.",
+        "operationId" : "delete_api_admin_upstream-providers_{providerKey}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Delete Upstream Provider",
+        "tags" : 
+        [
+          "Admin",
+          "External Auth"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "get" : 
+      {
+        "description" : "P2-1 OIDC-in upstream registry. provider_key keys URLs and oauth2_subject_mappings.provider (immutable after create; empty client_secret on update keeps the current one; never echoed). Mutations refresh the login-page provider set immediately.",
+        "operationId" : "get_api_admin_upstream-providers_{providerKey}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Get Upstream Provider",
+        "tags" : 
+        [
+          "Admin",
+          "External Auth"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:read"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      },
+      "put" : 
+      {
+        "description" : "P2-1 OIDC-in upstream registry. provider_key keys URLs and oauth2_subject_mappings.provider (immutable after create; empty client_secret on update keeps the current one; never echoed). Mutations refresh the login-page provider set immediately.",
+        "operationId" : "put_api_admin_upstream-providers_{providerKey}",
+        "responses" : null,
+        "security" : 
+        [
+          {
+            "bearerAuth" : []
+          }
+        ],
+        "summary" : "Update Upstream Provider",
+        "tags" : 
+        [
+          "Admin",
+          "External Auth"
+        ],
+        "x-required-scopes" : 
+        [
+          "roles:write"
+        ],
+        "x-scope-implied-by" : 
+        [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/users" : 
     {
       "get" : 
@@ -1708,11 +1844,132 @@
         ]
       }
     },
+    "/api/auth/oidc/{provider}/login" : 
+    {
+      "post" : 
+      {
+        "description" : "Exchange an authorization code from a registry-configured OIDC upstream (upstream_providers row) for a first-party token pair (P2-1): code -> token endpoint -> userinfo -> claims mapping -> the same find-or-create account flow as google/wechat/github (oauth2_subject_mappings.provider = provider_key). Requires the one-time state from the authorize endpoint, an allowed Origin and the browser binding cookie.",
+        "operationId" : "post_api_auth_oidc_{provider}_login",
+        "parameters" : 
+        [
+          {
+            "description" : "Enabled registry provider key (upstream_providers.provider_key)",
+            "in" : "path",
+            "name" : "provider",
+            "required" : true,
+            "schema" : 
+            {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : 
+        {
+          "content" : 
+          {
+            "application/json" : 
+            {
+              "schema" : 
+              {
+                "properties" : 
+                {
+                  "code" : 
+                  {
+                    "minLength" : 1,
+                    "type" : "string"
+                  },
+                  "state" : 
+                  {
+                    "pattern" : "^[0-9a-f]{64}$",
+                    "type" : "string"
+                  }
+                },
+                "required" : 
+                [
+                  "code",
+                  "state"
+                ],
+                "type" : "object"
+              }
+            },
+            "application/x-www-form-urlencoded" : 
+            {
+              "schema" : 
+              {
+                "properties" : 
+                {
+                  "code" : 
+                  {
+                    "minLength" : 1,
+                    "type" : "string"
+                  },
+                  "state" : 
+                  {
+                    "pattern" : "^[0-9a-f]{64}$",
+                    "type" : "string"
+                  }
+                },
+                "required" : 
+                [
+                  "code",
+                  "state"
+                ],
+                "type" : "object"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : 
+        {
+          "200" : 
+          {
+            "content" : 
+            {
+              "application/json" : 
+              {
+                "schema" : 
+                {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "First-party token pair for the upstream-linked account"
+          },
+          "400" : 
+          {
+            "description" : "Missing, expired, mismatched or replayed transaction"
+          },
+          "403" : 
+          {
+            "description" : "Not linked to a local account and auto-create disabled"
+          },
+          "404" : 
+          {
+            "description" : "Provider unavailable"
+          },
+          "500" : 
+          {
+            "description" : "State service unavailable"
+          },
+          "502" : 
+          {
+            "description" : "Failed to contact the upstream token/userinfo endpoints"
+          }
+        },
+        "summary" : "OIDC Upstream Login (registry provider)",
+        "tags" : 
+        [
+          "External Auth",
+          "OIDC Upstream"
+        ]
+      }
+    },
     "/api/auth/providers" : 
     {
       "get" : 
       {
-        "description" : "Public discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is deprecated and empty; POST to the provider authorize endpoint for a browser-bound login.",
+        "description" : "Public discovery of the external login providers this deployment currently offers (v1.4.0 provider tiers; P2-1 registry-configured OIDC upstreams carry type=oidc and display_name). The login page renders its provider buttons from this response; an empty list means external login is disabled. authorize_url is deprecated and empty; POST to the provider authorize endpoint for a browser-bound login.",
         "operationId" : "get_api_auth_providers",
         "responses" : 
         {

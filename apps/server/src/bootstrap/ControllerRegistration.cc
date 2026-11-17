@@ -11,6 +11,9 @@
 #ifdef WITH_SOCIAL
 #include <fulla/drogon/controllers/GoogleController.h>
 #include <fulla/drogon/controllers/WeChatController.h>
+// P2-1: generic OIDC-in federation (registry upstreams) + its admin CRUD.
+#include <fulla/drogon/controllers/UpstreamLoginController.h>
+#include <fulla/drogon/controllers/UpstreamProviderAdminController.h>
 #endif  // WITH_SOCIAL
 // M5 Task 30: OrganizationController moved to the product app
 // (apps/server/src/organization/, namespace `organization`).
@@ -67,6 +70,13 @@ void registerAllControllers()
     );
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::WeChatController>()
+    );
+    // P2-1: generic OIDC-in federation (registry upstreams) + its admin CRUD.
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::UpstreamLoginController>()
+    );
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::UpstreamProviderAdminController>()
     );
 #endif  // WITH_SOCIAL
     drogon::app().registerController(std::make_shared<::organization::OrganizationController>());

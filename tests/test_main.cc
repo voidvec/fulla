@@ -54,6 +54,9 @@ static void flushGcovIfInstrumented()
 #ifdef WITH_SOCIAL
 #include <fulla/drogon/controllers/GoogleController.h>
 #include <fulla/drogon/controllers/WeChatController.h>
+// P2-1: OIDC-in upstream federation endpoints (login exchange + admin).
+#include <fulla/drogon/controllers/UpstreamLoginController.h>
+#include <fulla/drogon/controllers/UpstreamProviderAdminController.h>
 #endif  // WITH_SOCIAL
 // M5 Task 30: OrganizationController moved to the product app
 // (apps/server/src/organization/, namespace `organization`).
@@ -413,6 +416,13 @@ int main(int argc, char **argv)
     drogon::app().registerController(
       std::make_shared<fulla::drogon::controllers::WeChatController>()
     );
+    // P2-1: generic OIDC-in federation (registry upstreams) + its admin CRUD.
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::UpstreamLoginController>()
+    );
+    drogon::app().registerController(
+      std::make_shared<fulla::drogon::controllers::UpstreamProviderAdminController>()
+    );
 #endif  // WITH_SOCIAL
     drogon::app().registerController(std::make_shared<::organization::OrganizationController>());
     drogon::app().registerController(std::make_shared<::organization::OrgMemberController>());
@@ -504,6 +514,11 @@ int main(int argc, char **argv)
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     fulla::drogon::controllers::AuthProvidersController::initApiDocs();
+#ifdef WITH_SOCIAL
+    // P2-1: OIDC-in upstream federation endpoints (login exchange + admin).
+    fulla::drogon::controllers::UpstreamLoginController::initApiDocs();
+    fulla::drogon::controllers::UpstreamProviderAdminController::initApiDocs();
+#endif  // WITH_SOCIAL
     // #43: OrganizationController (product-app level).
     ::organization::OrganizationController::initApiDocs();
     ::organization::OrgMemberController::initApiDocs();

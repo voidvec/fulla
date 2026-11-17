@@ -164,3 +164,19 @@ endpoint or account-link state contract changes.
 - POST /api/google/login added the new required request property `state`
 - POST /api/wechat/login added the new required request property `code`
 - POST /api/wechat/login added the new required request property `state`
+
+## 2026-11-16 · P2-1a OIDC-in upstream registry opens the provider enum (PR #347)
+
+The `provider` path parameter on the authorize endpoint (and the login-page
+AuthProvidersResponse) drops the closed `enum: [github, google, wechat]` in
+favor of a documented open string: P2-1 registry-configured upstreams
+(upstream_providers.provider_key) are dynamic per deployment and cannot be
+enumerated in a static spec. oasdiff flags enum-value removal as breaking,
+but the RUNTIME contract only WIDENS — every previously valid value still
+resolves exactly as before, and unknown keys keep failing closed (404
+before any upstream contact). Same widening applies to the authorize
+response schema. All three SDKs are regenerated in the same PR.
+
+- in API POST /api/auth/providers/{provider}/authorize removed the enum value `github` from the `path` request parameter `provider`
+- in API POST /api/auth/providers/{provider}/authorize removed the enum value `google` from the `path` request parameter `provider`
+- in API POST /api/auth/providers/{provider}/authorize removed the enum value `wechat` from the `path` request parameter `provider`

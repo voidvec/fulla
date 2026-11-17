@@ -7,13 +7,12 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.post_api_auth_providers_provider_authorize_body import PostApiAuthProvidersProviderAuthorizeBody
-from ...models.post_api_auth_providers_provider_authorize_provider import PostApiAuthProvidersProviderAuthorizeProvider
 from ...models.social_login_authorization import SocialLoginAuthorization
 from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
-    provider: PostApiAuthProvidersProviderAuthorizeProvider,
+    provider: str,
     *,
     body: PostApiAuthProvidersProviderAuthorizeBody | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -81,7 +80,7 @@ def _build_response(
 
 
 def sync_detailed(
-    provider: PostApiAuthProvidersProviderAuthorizeProvider,
+    provider: str,
     *,
     client: AuthenticatedClient | Client,
     body: PostApiAuthProvidersProviderAuthorizeBody | Unset = UNSET,
@@ -95,7 +94,8 @@ def sync_detailed(
     token is required.
 
     Args:
-        provider (PostApiAuthProvidersProviderAuthorizeProvider):
+        provider (str): Config-static social provider (github, google, wechat) or a registry
+            provider key (upstream_providers.provider_key).
         body (PostApiAuthProvidersProviderAuthorizeBody | Unset): Optional empty initialization
             body.
 
@@ -120,7 +120,7 @@ def sync_detailed(
 
 
 def sync(
-    provider: PostApiAuthProvidersProviderAuthorizeProvider,
+    provider: str,
     *,
     client: AuthenticatedClient | Client,
     body: PostApiAuthProvidersProviderAuthorizeBody | Unset = UNSET,
@@ -134,7 +134,8 @@ def sync(
     token is required.
 
     Args:
-        provider (PostApiAuthProvidersProviderAuthorizeProvider):
+        provider (str): Config-static social provider (github, google, wechat) or a registry
+            provider key (upstream_providers.provider_key).
         body (PostApiAuthProvidersProviderAuthorizeBody | Unset): Optional empty initialization
             body.
 
@@ -154,7 +155,7 @@ def sync(
 
 
 async def asyncio_detailed(
-    provider: PostApiAuthProvidersProviderAuthorizeProvider,
+    provider: str,
     *,
     client: AuthenticatedClient | Client,
     body: PostApiAuthProvidersProviderAuthorizeBody | Unset = UNSET,
@@ -168,7 +169,8 @@ async def asyncio_detailed(
     token is required.
 
     Args:
-        provider (PostApiAuthProvidersProviderAuthorizeProvider):
+        provider (str): Config-static social provider (github, google, wechat) or a registry
+            provider key (upstream_providers.provider_key).
         body (PostApiAuthProvidersProviderAuthorizeBody | Unset): Optional empty initialization
             body.
 
@@ -191,7 +193,7 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    provider: PostApiAuthProvidersProviderAuthorizeProvider,
+    provider: str,
     *,
     client: AuthenticatedClient | Client,
     body: PostApiAuthProvidersProviderAuthorizeBody | Unset = UNSET,
@@ -205,7 +207,8 @@ async def asyncio(
     token is required.
 
     Args:
-        provider (PostApiAuthProvidersProviderAuthorizeProvider):
+        provider (str): Config-static social provider (github, google, wechat) or a registry
+            provider key (upstream_providers.provider_key).
         body (PostApiAuthProvidersProviderAuthorizeBody | Unset): Optional empty initialization
             body.
 

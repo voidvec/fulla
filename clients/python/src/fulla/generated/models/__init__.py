@@ -1,7 +1,7 @@
 """Contains all the data models used in inputs/outputs"""
 
 from .auth_provider import AuthProvider
-from .auth_provider_provider import AuthProviderProvider
+from .auth_provider_type import AuthProviderType
 from .auth_providers_response import AuthProvidersResponse
 from .delete_api_me_applications_client_id_response_200 import DeleteApiMeApplicationsClientIdResponse200
 from .delete_api_me_organizations_slug_consent_requests_request_id_response_200 import (
@@ -44,6 +44,7 @@ from .get_api_admin_scopes_resources_response_200_resources_item import (
 )
 from .get_api_admin_scopes_response_200 import GetApiAdminScopesResponse200
 from .get_api_admin_scopes_response_200_scopes_item import GetApiAdminScopesResponse200ScopesItem
+from .get_api_admin_upstream_providers_response_200 import GetApiAdminUpstreamProvidersResponse200
 from .get_api_admin_users_locked import GetApiAdminUsersLocked
 from .get_api_admin_users_user_id_response_200 import GetApiAdminUsersUserIdResponse200
 from .get_api_admin_users_user_id_roles_response_200 import GetApiAdminUsersUserIdRolesResponse200
@@ -147,8 +148,10 @@ from .post_api_admin_tokens_revoke_by_client_body import PostApiAdminTokensRevok
 from .post_api_admin_tokens_revoke_by_user_body import PostApiAdminTokensRevokeByUserBody
 from .post_api_admin_users_body import PostApiAdminUsersBody
 from .post_api_admin_users_user_id_enable_body import PostApiAdminUsersUserIdEnableBody
+from .post_api_auth_oidc_provider_login_data_body import PostApiAuthOidcProviderLoginDataBody
+from .post_api_auth_oidc_provider_login_json_body import PostApiAuthOidcProviderLoginJsonBody
+from .post_api_auth_oidc_provider_login_response_200 import PostApiAuthOidcProviderLoginResponse200
 from .post_api_auth_providers_provider_authorize_body import PostApiAuthProvidersProviderAuthorizeBody
-from .post_api_auth_providers_provider_authorize_provider import PostApiAuthProvidersProviderAuthorizeProvider
 from .post_api_me_applications_body import PostApiMeApplicationsBody
 from .post_api_me_applications_body_client_type import PostApiMeApplicationsBodyClientType
 from .post_api_me_applications_client_id_rotate_secret_body import PostApiMeApplicationsClientIdRotateSecretBody
@@ -244,6 +247,8 @@ from .social_login_token_response import SocialLoginTokenResponse
 from .token_request import TokenRequest
 from .token_request_grant_type import TokenRequestGrantType
 from .token_response import TokenResponse
+from .upstream_provider import UpstreamProvider
+from .upstream_provider_create import UpstreamProviderCreate
 from .user_info_response import UserInfoResponse
 from .user_info_response_org_ctx import UserInfoResponseOrgCtx
 from .web_authn_assertion_credential import WebAuthnAssertionCredential
@@ -253,8 +258,8 @@ from .web_authn_registration_credential_response import WebAuthnRegistrationCred
 
 __all__ = (
     "AuthProvider",
-    "AuthProviderProvider",
     "AuthProvidersResponse",
+    "AuthProviderType",
     "DeleteApiMeApplicationsClientIdResponse200",
     "DeleteApiMeOrganizationsSlugConsentRequestsRequestIdResponse200",
     "DeleteApiMeOrganizationsSlugConsentsClientIdResponse200",
@@ -282,6 +287,7 @@ __all__ = (
     "GetApiAdminScopesResourcesResponse200ResourcesItem",
     "GetApiAdminScopesResponse200",
     "GetApiAdminScopesResponse200ScopesItem",
+    "GetApiAdminUpstreamProvidersResponse200",
     "GetApiAdminUsersLocked",
     "GetApiAdminUsersUserIdResponse200",
     "GetApiAdminUsersUserIdRolesResponse200",
@@ -353,8 +359,10 @@ __all__ = (
     "PostApiAdminTokensRevokeByUserBody",
     "PostApiAdminUsersBody",
     "PostApiAdminUsersUserIdEnableBody",
+    "PostApiAuthOidcProviderLoginDataBody",
+    "PostApiAuthOidcProviderLoginJsonBody",
+    "PostApiAuthOidcProviderLoginResponse200",
     "PostApiAuthProvidersProviderAuthorizeBody",
-    "PostApiAuthProvidersProviderAuthorizeProvider",
     "PostApiMeApplicationsBody",
     "PostApiMeApplicationsBodyClientType",
     "PostApiMeApplicationsClientIdRotateSecretBody",
@@ -432,6 +440,8 @@ __all__ = (
     "TokenRequest",
     "TokenRequestGrantType",
     "TokenResponse",
+    "UpstreamProvider",
+    "UpstreamProviderCreate",
     "UserInfoResponse",
     "UserInfoResponseOrgCtx",
     "WebAuthnAssertionCredential",

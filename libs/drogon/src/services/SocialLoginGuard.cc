@@ -144,13 +144,13 @@ void SocialLoginGuard::error(const ::drogon::HttpRequestPtr &req, ResponseCallba
 }
 
 std::string SocialLoginGuard::requestError(const ::drogon::HttpRequestPtr &req,
-                                          const std::string &provider) const
+                             const std::string &provider) const
 {
     const auto &origin = req->getHeader("origin");
     if (origin.empty() || origins_.count(origin) == 0 ||
         req->getHeader("sec-fetch-site") == "cross-site")
         return "AUTHZ_ACCESS_DENIED";
-    if (providers_.count(provider) == 0)
+    if (providers_.count(provider) == 0 && !findDynamic(provider))
         return "VALIDATION_RESOURCE_NOT_FOUND";
     if (!states_)
         return "INTERNAL_ERROR";
@@ -160,8 +160,45 @@ std::string SocialLoginGuard::requestError(const ::drogon::HttpRequestPtr &req,
 identity::SocialLoginContext SocialLoginGuard::context(
   const std::string &provider, const std::string &binding) const
 {
-    const auto &config = providers_.at(provider);
-    return {provider, config.first, config.second, states_->digest(binding), "login"};
+    if (providers_.count(provider) > 0)
+    {
+        const auto &config = providers_.at(provider);
+        return {provider, config.first, config.second, states_->digest(binding), "login"};
+    }
+    // P2-1 registry upstream: same context shape (provider, client_id,
+    // redirect_uri, binding digest) so the state service and consume-time
+    // verification are identical for config-static and registry providers.
+    const auto dynamic = findDynamic(provider);
+    if (dynamic)
+    {
+        return {provider, dynamic->clientId, dynamic->redirectUri,
+                states_->digest(binding), "login"};
+    }
+    return {provider, "", "", states_->digest(binding), "login"};
+}
+
+void SocialLoginGuard::setDynamicProviders(std::vector<DynamicProvider> providers)
+{
+    std::lock_guard<std::mutex> lock(dynamicMutex_);
+    dynamicProviders_ = std::move(providers);
+}
+
+std::vector<SocialLoginGuard::DynamicProvider> SocialLoginGuard::dynamicProviders() const
+{
+    std::lock_guard<std::mutex> lock(dynamicMutex_);
+    return dynamicProviders_;
+}
+
+std::optional<SocialLoginGuard::DynamicProvider> SocialLoginGuard::findDynamic(
+  const std::string &provider) const
+{
+    std::lock_guard<std::mutex> lock(dynamicMutex_);
+    for (const auto &entry : dynamicProviders_)
+    {
+        if (entry.key == provider)
+            return entry;
+    }
+    return std::nullopt;
 }
 
 void SocialLoginGuard::setBinding(const ::drogon::HttpResponsePtr &response,
@@ -218,13 +255,39 @@ void SocialLoginGuard::authorize(const ::drogon::HttpRequestPtr &req,
           }
           Json::Value body;
           body["state"] = state;
-          body["redirect_uri"] = self->providers_.at(provider).second;
-          body["authorize_url"] = controllers::social_detail::buildSocialAuthorizeUrl(self->config_, provider, state);
-          if (body["authorize_url"].asString().empty())
+          std::string authorizeUrl;
+          if (self->providers_.count(provider) > 0)
+          {
+              body["redirect_uri"] = self->providers_.at(provider).second;
+              authorizeUrl =
+                controllers::social_detail::buildSocialAuthorizeUrl(self->config_, provider, state);
+          }
+          else
+          {
+              // P2-1 registry upstream: build from the pre-resolved
+              // endpoint snapshot (no I/O on this path).
+              const auto dynamic = self->findDynamic(provider);
+              if (dynamic)
+              {
+                  body["redirect_uri"] = dynamic->redirectUri;
+                  authorizeUrl = dynamic->authorizeEndpoint +
+                                 "?response_type=code&client_id=" +
+                                 ::drogon::utils::urlEncodeComponent(dynamic->clientId) +
+                                 "&redirect_uri=" +
+                                 ::drogon::utils::urlEncodeComponent(dynamic->redirectUri) +
+                                 "&scope=" +
+                                 ::drogon::utils::urlEncodeComponent(
+                                   dynamic->scopes.empty() ? "openid profile email"
+                                                           : dynamic->scopes) +
+                                 "&state=" + ::drogon::utils::urlEncodeComponent(state);
+              }
+          }
+          if (authorizeUrl.empty())
           {
               error(req, std::move(callback), "INTERNAL_ERROR");
               return;
           }
+          body["authorize_url"] = authorizeUrl;
           body["expires_in"] = 600;
           auto response = ::drogon::HttpResponse::newHttpJsonResponse(body);
           self->setBinding(response, binding);

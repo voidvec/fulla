@@ -4,6 +4,10 @@
 
 #include "SocialAuthorizeUrl.h"
 
+#ifdef WITH_SOCIAL
+#include <fulla/drogon/services/UpstreamProviderRuntime.h>
+#endif  // WITH_SOCIAL
+
 #include <drogon/drogon.h>
 #include <json/json.h>
 
@@ -30,6 +34,16 @@ void AuthProvidersController::buildBody()
     cachedBody_["providers"] = std::move(providers);
 }
 
+void AuthProvidersController::setUpstreamRuntime(
+  std::shared_ptr<services::UpstreamProviderRuntime> runtime)
+{
+#ifdef WITH_SOCIAL
+    upstreamRuntime_ = std::move(runtime);
+#else
+    (void)runtime;
+#endif
+}
+
 void AuthProvidersController::list(
   const ::drogon::HttpRequestPtr & /*req*/,
   std::function<void(const ::drogon::HttpResponsePtr &)> &&callback
@@ -37,8 +51,23 @@ void AuthProvidersController::list(
 {
     // Always 200 — an empty providers array is a valid, meaningful answer
     // (external login disabled), not an error. No auth, no DB, no per-
-    // request work: the body is the startup snapshot.
-    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(cachedBody_);
+    // request work: the body is the startup snapshot merged (in memory)
+    // with the registry runtime's last-refresh snapshot.
+    Json::Value body = cachedBody_;
+#ifdef WITH_SOCIAL
+    if (upstreamRuntime_)
+    {
+        for (const auto &record : upstreamRuntime_->enabledSnapshot())
+        {
+            Json::Value provider;
+            provider["provider"] = record.providerKey;
+            provider["display_name"] = record.displayName;
+            provider["type"] = "oidc";
+            body["providers"].append(std::move(provider));
+        }
+    }
+#endif
+    auto resp = ::drogon::HttpResponse::newHttpJsonResponse(body);
     resp->setStatusCode(::drogon::k200OK);
     resp->addHeader("Cache-Control", "no-store");
     callback(resp);
@@ -73,10 +102,12 @@ void AuthProvidersController::initApiDocs()
         ep.summary = "List Enabled External Login Providers";
         ep.description =
           "Public discovery of the external login providers this deployment "
-          "currently offers (v1.4.0 provider tiers). The login page renders "
-          "its provider buttons from this response; an empty list means "
-          "external login is disabled. authorize_url is deprecated and empty; "
-          "POST to the provider authorize endpoint for a browser-bound login.";
+          "currently offers (v1.4.0 provider tiers; P2-1 registry-configured "
+          "OIDC upstreams carry type=oidc and display_name). The login page "
+          "renders its provider buttons from this response; an empty list "
+          "means external login is disabled. authorize_url is deprecated and "
+          "empty; POST to the provider authorize endpoint for a browser-bound "
+          "login.";
         ep.tags = {"External Auth"};
         ep.requiresAuth = false;
         ep.responses = {{200, "Enabled providers with deprecated empty authorize_url"}};

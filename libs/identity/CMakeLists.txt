@@ -59,6 +59,7 @@ set(IDENTITY_SOURCES
     $<$<BOOL:${WITH_SOCIAL}>:src/social/GoogleAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/WeChatAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/GitHubAuthService.cc>
+    $<$<BOOL:${WITH_SOCIAL}>:src/social/OidcUpstreamAuthService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/SocialLinkService.cc>
     $<$<BOOL:${WITH_SOCIAL}>:src/social/SocialLoginStateService.cc>
     # Session

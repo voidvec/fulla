@@ -25,6 +25,11 @@
 #include <fulla/drogon/controllers/EmailTemplateAdminController.h>
 #include <fulla/drogon/controllers/AuditController.h>
 #include <fulla/drogon/controllers/AuthProvidersController.h>
+#ifdef WITH_SOCIAL
+// P2-1: OIDC-in upstream federation endpoints (login exchange + admin).
+#include <fulla/drogon/controllers/UpstreamLoginController.h>
+#include <fulla/drogon/controllers/UpstreamProviderAdminController.h>
+#endif  // WITH_SOCIAL
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
 #include <fulla/drogon/authz/ResourceScopeRegistry.h>
 #include <OrganizationController.h>  // #43: product-app org controller scope decls
@@ -295,6 +300,11 @@ int main(int argc, char *argv[])
     fulla::drogon::controllers::AuditController::initApiDocs();
     fulla::drogon::controllers::UserSelfServiceController::initApiDocs();
     fulla::drogon::controllers::AuthProvidersController::initApiDocs();
+#ifdef WITH_SOCIAL
+    // P2-1: OIDC-in upstream federation endpoints (login exchange + admin).
+    fulla::drogon::controllers::UpstreamLoginController::initApiDocs();
+    fulla::drogon::controllers::UpstreamProviderAdminController::initApiDocs();
+#endif  // WITH_SOCIAL
     // #43: OrganizationController (product-app level, namespace `organization`).
     ::organization::OrganizationController::initApiDocs();
     ::organization::OrgMemberController::initApiDocs();
