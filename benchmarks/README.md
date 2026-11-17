@@ -1,5 +1,9 @@
 # Fulla HTTP performance benchmarks
 
+For the separate current-product capacity/soak harness, see
+[capacity/README.md](capacity/README.md). No accepted current-product capacity
+baseline is published; functional smoke is not a capacity result.
+
 This directory holds the **reproducible, out-of-process** HTTP benchmarks for
 Fulla — the Phase 0 "credibility baseline" of the productization plan. Its
 purpose is to turn the load-bearing performance claims (QPS / latency /

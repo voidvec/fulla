@@ -1,0 +1,37 @@
+name: Capacity Harness Checks
+
+# Functional driver checks only. Shared runners never produce capacity results.
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'benchmarks/capacity/**'
+      - '.github/workflows/capacity-tools.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'benchmarks/capacity/**'
+      - '.github/workflows/capacity-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capacity-tools-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  behavior:
+    name: Driver behavior (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Check import syntax
+        run: python -m compileall -q benchmarks/capacity
+      - name: Check protocol, deadlines, isolation and admission behavior
+        run: python -m unittest discover -s benchmarks/capacity -v
