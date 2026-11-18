@@ -464,7 +464,10 @@ void RedisCachedTokenRepository::introspectToken(
                 const auto expires = std::min<int64_t>(fresh->exp, cacheUntil);
                 if (expires <= std::time(nullptr) || fresh->nbf > std::time(nullptr))
                 {
-                    finish(inactive());
+                    // The authoritative introspect path does not enforce nbf;
+                    // the cache must not render a stricter validity verdict
+                    // than its source of truth. Skip the fill, serve fresh.
+                    finish(fresh);
                     return;
                 }
                 guardedFill(

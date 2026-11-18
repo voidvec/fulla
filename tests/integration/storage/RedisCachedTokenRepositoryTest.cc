@@ -447,6 +447,75 @@ DROGON_TEST(Integration_P2_Storage_RedisCachedTokenRepository_Introspect_N2_Disc
 }
 
 // ===========================================================================
+// Test: introspecting a valid token whose nbf is ahead of the current clock
+// reading must serve the authoritative ACTIVE result (the Postgres introspect
+// path enforces only revoked/expired, never nbf). The not-yet-cacheable
+// snapshot is simply not filled. Regression for the S07 tuned-smoke
+// inactive_token: the guarded-fill nbf check used to finish(inactive()),
+// making the cache-enabled arm stricter than its source of truth whenever
+// the issuance-time clock reading ran ahead of a later reading.
+// ===========================================================================
+DROGON_TEST(Integration_P2_Storage_RedisCachedTokenRepository_Introspect_FutureNbf_AuthoritativeActive)
+{
+    auto redis = getRedisOrNull();
+    if (!redis)
+    {
+        LOG_INFO << "[skip] Redis unavailable — token cache test skipped";
+        return;
+    }
+
+    const std::string hash = uniqueHash();
+    evictTokenKeys(hash);
+
+    auto fake = std::make_shared<CountingFakeTokenRepo>();
+    auto token = makeAccessToken(hash);
+    token.notBefore = std::time(nullptr) + 3600;
+    fake->accessStore[hash] = token;
+
+    auto decorator = std::make_shared<RedisCachedTokenRepository>(fake, redis);
+
+    // Warm the access cache exactly as client_credentials issuance does
+    // (saveAccessToken), so the N2 gate would pass if a fill were attempted.
+    waitForVoid([&](auto cb) { decorator->saveAccessToken(token, std::move(cb)); });
+    REQUIRE(waitForRedisKey(redis, "fulla:cache:token:access:" + hash));
+
+    auto intro1 = waitForIntro([&](auto cb) { decorator->introspectToken(hash, std::move(cb)); });
+    REQUIRE(intro1.has_value());
+    CHECK(intro1->active == true);
+    CHECK(fake->introspectTokenCalls.load() == 1);
+
+    // The future-nbf snapshot must NOT be cached: bounded absence check.
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            std::promise<int> p;
+            auto f = p.get_future();
+            redis->execCommandAsync(
+              [&p](const ::drogon::nosql::RedisResult &r) {
+                  p.set_value(static_cast<int>(r.asInteger()));
+              },
+              [&p](const ::drogon::nosql::RedisException &) { p.set_value(-1); },
+              "EXISTS fulla:cache:token:introspect:%s", hash.c_str()
+            );
+            REQUIRE(f.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+            if (f.get() == 1)
+                FAIL("future-nbf introspection snapshot was cached");
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    // Still authoritative-active on the next call, and the impl is consulted
+    // again (nothing was cached).
+    auto intro2 = waitForIntro([&](auto cb) { decorator->introspectToken(hash, std::move(cb)); });
+    REQUIRE(intro2.has_value());
+    CHECK(intro2->active == true);
+    CHECK(fake->introspectTokenCalls.load() == 2);
+
+    evictTokenKeys(hash);
+}
+
+// ===========================================================================
 // Test 4 (soft-fail): a null Redis client makes the decorator a pure
 // pass-through. The backing impl is consulted on every call (no caching).
 // ===========================================================================
