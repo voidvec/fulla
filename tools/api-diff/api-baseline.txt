@@ -1687,6 +1687,8 @@ static void initApiDocsImpl();
 #include <drogon/HttpController.h>
 #include <fulla/drogon/services/SocialLoginGuard.h>
 #include <json/json.h>
+#include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 namespace fulla::drogon::services
@@ -1702,6 +1704,8 @@ void setSocialLoginGuard(std::shared_ptr<services::SocialLoginGuard> guard)
 ;
 void setUpstreamRuntime(std::shared_ptr<services::UpstreamProviderRuntime> runtime);
 void setProviders(std::vector<std::string> providerNames)
+;
+void setStaticProviderEnabled(const std::string &provider, bool enabled)
 ;
 METHOD_LIST_BEGIN
 ADD_METHOD_TO(AuthProvidersController::list, "/api/auth/providers", ::drogon::Get);
@@ -1719,6 +1723,7 @@ private:
 std::shared_ptr<services::SocialLoginGuard> loginGuard_;
 std::shared_ptr<services::UpstreamProviderRuntime> upstreamRuntime_;
 std::vector<std::string> providerNames_;
+std::set<std::string> disabledProviders_;
 Json::Value cachedBody_{Json::objectValue};
 void buildBody();
 public:
@@ -4236,6 +4241,9 @@ void validate(const ::drogon::HttpRequestPtr &req, const std::string &provider,
 ValidationCallback &&callback);
 void setDynamicProviders(std::vector<DynamicProvider> providers);
 std::vector<DynamicProvider> dynamicProviders() const;
+void updateStaticProvider(
+const std::string &provider, const std::string &clientId,
+const std::string &clientSecret, bool enabled);
 static ResponseCallback noStore(ResponseCallback &&callback);
 static void error(const ::drogon::HttpRequestPtr &req, ResponseCallback &&callback,
 const std::string &code);
@@ -4249,12 +4257,19 @@ const std::string &binding, int maxAge = 600) const;
 std::optional<DynamicProvider> findDynamic(const std::string &provider) const;
 std::shared_ptr<identity::SocialLoginStateService> states_;
 Json::Value config_;
-std::map<std::string, std::pair<std::string, std::string>> providers_;
+struct StaticEntry
+{
+std::string clientId;
+std::string clientSecret;
+std::string redirectUri;
+};
+std::map<std::string, StaticEntry> providers_;
 std::set<std::string> origins_;
 bool secure_ = true;
 std::string cookieName_ = "__Host-fulla-social-binding";
 mutable std::mutex dynamicMutex_;
 std::vector<DynamicProvider> dynamicProviders_;
+mutable std::mutex staticMutex_;
 };
 }
 === libs/drogon/include/fulla/drogon/services/UpstreamProviderRuntime.h
@@ -4262,6 +4277,7 @@ std::vector<DynamicProvider> dynamicProviders_;
 #ifdef WITH_SOCIAL
 #include <fulla/drogon/services/SocialLoginGuard.h>
 #include <fulla/identity/OidcUpstreamAuthService.h>
+#include <array>
 #include <chrono>
 #include <functional>
 #include <map>
@@ -4285,7 +4301,18 @@ oidcService_(std::move(oidcService)),
 guard_(std::move(guard)),
 redirectUriFor_(std::move(redirectUriFor))
 ;
+using LegacyApplier = std::function<
+void(const std::string &key, const std::string &clientId,
+const std::string &clientSecret, bool enabled)>;
+static bool isLegacySocialKey(const std::string &key)
+;
+void setLegacyApplier(LegacyApplier applier)
+;
 void setGuardTarget(std::shared_ptr<SocialLoginGuard> guard)
+;
+void updateLegacyGuardEntry(
+const std::string &key, const std::string &clientId,
+const std::string &clientSecret, bool enabled)
 ;
 void refresh(std::function<void()> &&done = nullptr)
 ;
@@ -4311,6 +4338,7 @@ std::shared_ptr<fulla::identity::IUpstreamProviderRepository> repo_;
 std::shared_ptr<fulla::identity::OidcUpstreamAuthService> oidcService_;
 std::shared_ptr<SocialLoginGuard> guard_;
 std::function<std::string(const std::string &)> redirectUriFor_;
+LegacyApplier legacyApplier_;
 public:
 std::shared_ptr<fulla::identity::IUpstreamProviderRepository> repository() const
 ;
@@ -4320,6 +4348,8 @@ mutable std::mutex snapshotMutex_;
 std::vector<Record> snapshotRecords_;
 std::map<std::string, fulla::identity::OidcUpstreamAuthService::OidcEndpoints>
 snapshotEndpoints_;
+mutable std::mutex legacyMutex_;
+std::map<std::string, std::array<std::string, 2>> legacyState_;
 };
 }
 #endif
@@ -5571,6 +5601,8 @@ std::string redirectUri
 void setAccountRepository(std::shared_ptr<ISocialAccountRepository> repo)
 ;
 void setAutoCreate(bool allow) ;
+void setCredentials(std::string clientId, std::string clientSecret)
+;
 void login(const std::string &code, std::function<void(GoogleLoginResult)> &&callback);
 private:
 std::shared_ptr<IOAuthHttpClient> httpClient_;
@@ -5610,6 +5642,8 @@ std::string secret
 void setAccountRepository(std::shared_ptr<ISocialAccountRepository> repo)
 ;
 void setAutoCreate(bool allow) ;
+void setCredentials(std::string appId, std::string secret)
+;
 void login(const std::string &code, std::function<void(WeChatLoginResult)> &&callback);
 private:
 std::shared_ptr<IOAuthHttpClient> httpClient_;
@@ -5643,6 +5677,8 @@ std::string clientId,
 std::string clientSecret
 );
 void setAutoCreate(bool allow) ;
+void setCredentials(std::string clientId, std::string clientSecret)
+;
 void login(const std::string &code, std::function<void(GitHubLoginResult)> &&callback);
 void fetchProfile(
 const std::string &code,

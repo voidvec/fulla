@@ -45,6 +45,17 @@ class SocialLoginGuard : public std::enable_shared_from_this<SocialLoginGuard>
     void setDynamicProviders(std::vector<DynamicProvider> providers);
     // Snapshot of the current dynamic set (login-page listing).
     std::vector<DynamicProvider> dynamicProviders() const;
+    // P2-1c: hot-update a CONFIG-STATIC provider from its registry row
+    // (the runtime applies this on refresh; admin edits take effect without
+    // a restart). enabled=false removes the key entirely (authorize and
+    // validate answer 404 exactly like a never-configured provider); an
+    // enabled row for a key config never configured ENABLES it (redirect
+    // follows the shared per-key callback convention). The client_id
+    // participates in the state binding, so changing it un-binds any
+    // in-flight transactions issued under the old credential.
+    void updateStaticProvider(
+      const std::string &provider, const std::string &clientId,
+      const std::string &clientSecret, bool enabled);
     static ResponseCallback noStore(ResponseCallback &&callback);
     static void error(const ::drogon::HttpRequestPtr &req, ResponseCallback &&callback,
                       const std::string &code);
@@ -60,12 +71,21 @@ class SocialLoginGuard : public std::enable_shared_from_this<SocialLoginGuard>
     std::optional<DynamicProvider> findDynamic(const std::string &provider) const;
     std::shared_ptr<identity::SocialLoginStateService> states_;
     Json::Value config_;
-    std::map<std::string, std::pair<std::string, std::string>> providers_;
+    // P2-1c: runtime-mutable (registry rows drive the three legacy social
+    // keys); guard every access with staticMutex_.
+    struct StaticEntry
+    {
+        std::string clientId;
+        std::string clientSecret;
+        std::string redirectUri;
+    };
+    std::map<std::string, StaticEntry> providers_;
     std::set<std::string> origins_;
     bool secure_ = true;
     std::string cookieName_ = "__Host-fulla-social-binding";
     mutable std::mutex dynamicMutex_;
     std::vector<DynamicProvider> dynamicProviders_;
+    mutable std::mutex staticMutex_;
 };
 
 }  // namespace fulla::drogon::services

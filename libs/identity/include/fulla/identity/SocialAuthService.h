@@ -137,8 +137,18 @@ class GoogleAuthService
     // #70: gate for first-login auto account creation (assembly-level
     // global switch external_auth.auto_create_on_first_login, default
     // true). When false, a NoMapping lookup ends with
-    // AUTH_SOCIAL_ACCOUNT_NOT_LINKED instead of creating an account.
+    // AUTH_SOCIAL_ACCOUNT_NOT_LINKED instead of creating a new account.
     void setAutoCreate(bool allow) { autoCreate_ = allow; }
+
+    // P2-1c: hot credential swap from the upstream registry (admin edits the
+    // google row at runtime; the runtime applies it on refresh). Same
+    // not-configured semantics as the constructor guard: placeholder/YOUR_*
+    // values leave the service in the NotConfigured state.
+    void setCredentials(std::string clientId, std::string clientSecret)
+    {
+        clientId_ = std::move(clientId);
+        clientSecret_ = std::move(clientSecret);
+    }
 
     /**
      * @brief Exchange an authorization code for Google userinfo.
@@ -234,6 +244,14 @@ class WeChatAuthService
 
     void setAutoCreate(bool allow) { autoCreate_ = allow; }
 
+    // P2-1c: hot credential swap from the upstream registry (see
+    // GoogleAuthService::setCredentials).
+    void setCredentials(std::string appId, std::string secret)
+    {
+        appId_ = std::move(appId);
+        secret_ = std::move(secret);
+    }
+
     /**
      * @brief Exchange an authorization code for WeChat userinfo.
      * @param code Authorization code from WeChat's OAuth2 callback.
@@ -321,6 +339,14 @@ class GitHubAuthService
     // NoMapping lookup ends with AUTH_SOCIAL_ACCOUNT_NOT_LINKED instead
     // of creating an account; ALREADY-LINKED users are unaffected.
     void setAutoCreate(bool allow) { autoCreate_ = allow; }
+
+    // P2-1c: hot credential swap from the upstream registry (see
+    // GoogleAuthService::setCredentials).
+    void setCredentials(std::string clientId, std::string clientSecret)
+    {
+        clientId_ = std::move(clientId);
+        clientSecret_ = std::move(clientSecret);
+    }
 
     /**
      * @brief Exchange an authorization code for a GitHub profile, then

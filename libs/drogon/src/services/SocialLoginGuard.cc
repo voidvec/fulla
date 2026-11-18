@@ -121,9 +121,13 @@ SocialLoginGuard::SocialLoginGuard(std::shared_ptr<identity::SocialLoginStateSer
         const auto redirect = controllers::social_detail::socialRedirectUri(config_, provider);
         if (!callbacks.insert(originAndPath(redirect)).second)
             throw std::invalid_argument("Enabled social providers require distinct callback paths");
-        const auto id = config_["external_auth"][provider]
-                          .get(provider == "wechat" ? "appid" : "client_id", "").asString();
-        providers_.emplace(provider, std::make_pair(id, redirect));
+        const auto &block = config_["external_auth"][provider];
+        const auto id = block.get(provider == "wechat" ? "appid" : "client_id", "").asString();
+        // P2-1c: the secret participates in authorize-URL building (the
+        // not-configured gate) and becomes hot-updatable from the registry.
+        const auto secret =
+          block.get(provider == "wechat" ? "secret" : "client_secret", "").asString();
+        providers_.emplace(provider, StaticEntry{id, secret, redirect});
     }
 }
 
@@ -150,8 +154,11 @@ std::string SocialLoginGuard::requestError(const ::drogon::HttpRequestPtr &req,
     if (origin.empty() || origins_.count(origin) == 0 ||
         req->getHeader("sec-fetch-site") == "cross-site")
         return "AUTHZ_ACCESS_DENIED";
-    if (providers_.count(provider) == 0 && !findDynamic(provider))
-        return "VALIDATION_RESOURCE_NOT_FOUND";
+    {
+        std::lock_guard<std::mutex> lock(staticMutex_);
+        if (providers_.count(provider) == 0 && !findDynamic(provider))
+            return "VALIDATION_RESOURCE_NOT_FOUND";
+    }
     if (!states_)
         return "INTERNAL_ERROR";
     return {};
@@ -160,10 +167,14 @@ std::string SocialLoginGuard::requestError(const ::drogon::HttpRequestPtr &req,
 identity::SocialLoginContext SocialLoginGuard::context(
   const std::string &provider, const std::string &binding) const
 {
-    if (providers_.count(provider) > 0)
     {
-        const auto &config = providers_.at(provider);
-        return {provider, config.first, config.second, states_->digest(binding), "login"};
+        std::lock_guard<std::mutex> lock(staticMutex_);
+        auto it = providers_.find(provider);
+        if (it != providers_.end())
+        {
+            return {provider, it->second.clientId, it->second.redirectUri,
+                    states_->digest(binding), "login"};
+        }
     }
     // P2-1 registry upstream: same context shape (provider, client_id,
     // redirect_uri, binding digest) so the state service and consume-time
@@ -175,6 +186,36 @@ identity::SocialLoginContext SocialLoginGuard::context(
                 states_->digest(binding), "login"};
     }
     return {provider, "", "", states_->digest(binding), "login"};
+}
+
+void SocialLoginGuard::updateStaticProvider(
+  const std::string &provider, const std::string &clientId,
+  const std::string &clientSecret, bool enabled)
+{
+    std::lock_guard<std::mutex> lock(staticMutex_);
+    auto it = providers_.find(provider);
+    if (!enabled)
+    {
+        if (it != providers_.end())
+            providers_.erase(it);
+        return;
+    }
+    if (it == providers_.end())
+    {
+        // A registry row may ENABLE a provider config never configured
+        // (the P2-1c promise: DB-driven). The redirect follows the shared
+        // per-key convention (external_auth.{key}.redirect_uri override,
+        // else frontend + /callback/{key}); distinct-callback uniqueness
+        // holds by construction of that convention.
+        StaticEntry entry;
+        entry.clientId = clientId;
+        entry.clientSecret = clientSecret;
+        entry.redirectUri = controllers::social_detail::socialRedirectUri(config_, provider);
+        providers_.emplace(provider, std::move(entry));
+        return;
+    }
+    it->second.clientId = clientId;
+    it->second.clientSecret = clientSecret;
 }
 
 void SocialLoginGuard::setDynamicProviders(std::vector<DynamicProvider> providers)
@@ -256,11 +297,23 @@ void SocialLoginGuard::authorize(const ::drogon::HttpRequestPtr &req,
           Json::Value body;
           body["state"] = state;
           std::string authorizeUrl;
-          if (self->providers_.count(provider) > 0)
+          // P2-1c: static entries are runtime-mutable (registry rows drive
+          // the three legacy social keys) -- snapshot under the lock and
+          // build the URL from the CURRENT credentials, byte-identical to
+          // the config-based shapes.
+          std::optional<StaticEntry> staticEntry;
           {
-              body["redirect_uri"] = self->providers_.at(provider).second;
-              authorizeUrl =
-                controllers::social_detail::buildSocialAuthorizeUrl(self->config_, provider, state);
+              std::lock_guard<std::mutex> lock(self->staticMutex_);
+              auto it = self->providers_.find(provider);
+              if (it != self->providers_.end())
+                  staticEntry = it->second;
+          }
+          if (staticEntry)
+          {
+              body["redirect_uri"] = staticEntry->redirectUri;
+              authorizeUrl = controllers::social_detail::buildSocialAuthorizeUrlWithCredentials(
+                provider, staticEntry->clientId, staticEntry->clientSecret,
+                staticEntry->redirectUri, state);
           }
           else
           {

@@ -46,6 +46,47 @@ inline std::string socialRedirectUri(const Json::Value &config, const std::strin
     return common::utils::socialRedirectUri(config, provider);
 }
 
+// P2-1c: explicit-credential variants. The registry is the runtime source
+// of truth for the three legacy providers (config only seeds it on first
+// boot); these builders emit the EXACT same URL shapes as the config-based
+// versions below — byte-for-byte, tests pin the param order/scope strings.
+inline std::string buildSocialAuthorizeUrlWithCredentials(
+  const std::string &provider, const std::string &clientId, const std::string &clientSecret,
+  const std::string &redirectUri, const std::string &state)
+{
+    if (state.empty() || redirectUri.empty())
+        return "";
+    const auto credentialConfigured = [](const std::string &v) {
+        return common::utils::socialCredentialConfigured(v);
+    };
+    if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
+        return "";
+    const std::string encodedRedirect = ::drogon::utils::urlEncode(redirectUri);
+    const std::string encodedState = ::drogon::utils::urlEncode(state);
+    const std::string stateParam = "&state=" + encodedState;
+
+    if (provider == "github")
+    {
+        return "https://github.com/login/oauth/authorize?client_id=" + ::drogon::utils::urlEncode(clientId) +
+               "&scope=user%3Aemail" + stateParam +
+               "&redirect_uri=" + encodedRedirect;
+    }
+    if (provider == "google")
+    {
+        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + ::drogon::utils::urlEncode(clientId) +
+               "&response_type=code&scope=openid%20email%20profile" + stateParam +
+               "&redirect_uri=" + encodedRedirect;
+    }
+    if (provider == "wechat")
+    {
+        return "https://open.weixin.qq.com/connect/qrconnect?appid=" + ::drogon::utils::urlEncode(clientId) +
+               "&redirect_uri=" + encodedRedirect +
+               "&response_type=code&scope=snsapi_login" + stateParam +
+               "#wechat_redirect";
+    }
+    return "";
+}
+
 inline std::string buildSocialAuthorizeUrl(const Json::Value &config,
                                           const std::string &provider, const std::string &state)
 {
@@ -54,47 +95,17 @@ inline std::string buildSocialAuthorizeUrl(const Json::Value &config,
     const auto &externalAuth = config["external_auth"];
     if (!externalAuth.isMember(provider) || !externalAuth[provider].isObject())
         return "";
-    const auto credentialConfigured = [](const std::string &v) {
-        return common::utils::socialCredentialConfigured(v);
-    };
     const std::string redirectUri = socialRedirectUri(config, provider);
-    const std::string encodedRedirect = ::drogon::utils::urlEncode(redirectUri);
-    const std::string encodedState = ::drogon::utils::urlEncode(state);
-    const std::string stateParam = "&state=" + encodedState;
 
-    if (provider == "github")
-    {
-        const std::string clientId = externalAuth["github"].get("client_id", "").asString();
-        const std::string clientSecret = externalAuth["github"].get("client_secret", "").asString();
-        if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
-            return "";
-        return "https://github.com/login/oauth/authorize?client_id=" + ::drogon::utils::urlEncode(clientId) +
-               "&scope=user%3Aemail" + stateParam +
-               "&redirect_uri=" + encodedRedirect;
-    }
-    if (provider == "google")
-    {
-        const std::string clientId = externalAuth["google"].get("client_id", "").asString();
-        const std::string clientSecret =
-          externalAuth["google"].get("client_secret", "").asString();
-        if (!credentialConfigured(clientId) || !credentialConfigured(clientSecret))
-            return "";
-        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + ::drogon::utils::urlEncode(clientId) +
-               "&response_type=code&scope=openid%20email%20profile" + stateParam +
-               "&redirect_uri=" + encodedRedirect;
-    }
     if (provider == "wechat")
     {
-        const std::string appId = externalAuth["wechat"].get("appid", "").asString();
-        const std::string secret = externalAuth["wechat"].get("secret", "").asString();
-        if (!credentialConfigured(appId) || !credentialConfigured(secret))
-            return "";
-        return "https://open.weixin.qq.com/connect/qrconnect?appid=" + ::drogon::utils::urlEncode(appId) +
-               "&redirect_uri=" + encodedRedirect +
-               "&response_type=code&scope=snsapi_login" + stateParam +
-               "#wechat_redirect";
+        return buildSocialAuthorizeUrlWithCredentials(
+          "wechat", externalAuth["wechat"].get("appid", "").asString(),
+          externalAuth["wechat"].get("secret", "").asString(), redirectUri, state);
     }
-    return "";
+    return buildSocialAuthorizeUrlWithCredentials(
+      provider, externalAuth[provider].get("client_id", "").asString(),
+      externalAuth[provider].get("client_secret", "").asString(), redirectUri, state);
 }
 
 inline std::string buildSocialAuthorizeUrl(const std::string &provider, const std::string &state)
