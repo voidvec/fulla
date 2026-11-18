@@ -718,6 +718,57 @@ export async function setupAuthenticatedMocks(page: Page) {
     }
   })
 
+  // Upstream identity providers (P2-1d console). In-memory CRUD mirroring
+  // the server contract: the secret never travels back (client_secret_set
+  // bool only, empty on PUT keeps it); reserved social keys reject CREATE
+  // with the 400 the server answers.
+  const upstreamProviders = [
+    { provider_key: 'entra-prod', display_name: 'Entra ID (Prod)', issuer: 'https://login.microsoftonline.com/tenant/v2.0', client_id: 'cid-entra', client_secret_set: true, scopes: 'openid profile email', claims_mapping: '', endpoint_overrides: '', enabled: true },
+    { provider_key: 'github', display_name: 'GitHub', issuer: 'https://github.com', client_id: 'gh-seeded', client_secret_set: true, scopes: 'user:email', claims_mapping: '', endpoint_overrides: '{"authorize":"https://github.com/login/oauth/authorize"}', enabled: true },
+    { provider_key: 'keycloak-dev', display_name: 'Keycloak (Dev)', issuer: 'http://localhost:18080/realms/dev', client_id: 'kc-dev', client_secret_set: true, scopes: 'openid', claims_mapping: '', endpoint_overrides: '', enabled: false },
+  ]
+  await page.route('**/api/admin/upstream-providers**', async (route) => {
+    const method = route.request().method()
+    const url = new URL(route.request().url())
+    const keyMatch = url.pathname.match(/\/upstream-providers\/([^/]+)$/)
+    if (method === 'GET' && !keyMatch) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'success', providers: upstreamProviders, total: upstreamProviders.length }),
+      })
+    } else if (method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}')
+      if (['google', 'wechat', 'github'].includes(body.provider_key)) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'VALIDATION_FORMAT_ERROR', message: 'reserved key' } }),
+        })
+        return
+      }
+      const created = { client_secret_set: true, scopes: 'openid profile email', claims_mapping: '', endpoint_overrides: '', enabled: true, ...body }
+      upstreamProviders.push(created)
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) })
+    } else if (method === 'PUT' && keyMatch) {
+      const target = upstreamProviders.find((p) => p.provider_key === decodeURIComponent(keyMatch[1]))
+      if (!target) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_RESOURCE_NOT_FOUND', message: 'not found' } }) })
+        return
+      }
+      const body = JSON.parse(route.request().postData() || '{}')
+      if (body.client_secret) target.client_secret_set = true
+      Object.assign(target, body, { client_secret: undefined })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success', provider_key: target.provider_key }) })
+    } else if (method === 'DELETE' && keyMatch) {
+      const idx = upstreamProviders.findIndex((p) => p.provider_key === decodeURIComponent(keyMatch[1]))
+      if (idx >= 0) upstreamProviders.splice(idx, 1)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'success' }) })
+    } else {
+      await route.fulfill({ status: 405, body: '' })
+    }
+  })
+
   // Audit logs
   await page.route('**/api/admin/logs**', async (route) => {
     await route.fulfill({
