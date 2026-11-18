@@ -9,23 +9,39 @@
 // from the concrete log-based emitter.
 //
 // The port is generic (incrementCounter(name, labels, value)); this adapter
-// formats name + labels into the SAME "[METRIC] <name> key=value ..." log line
-// the legacy Metrics::* statics produced, so output semantics are unchanged.
+// exports counters and gauges through drogon::plugin::PromExporter (the
+// production backend named in the IMetrics port contract) AND retains the
+// "[METRIC] <name> key=value ..." log line the legacy Metrics::* statics
+// produced, so log-scraping consumers are unchanged. When no PromExporter
+// plugin is configured the adapter degrades to log-only.
 // (The legacy Metrics class is retained for now as the OperationTimer RAII
 // helper's backing; this adapter is the new primary emission path.)
+//
+// observeHistogram stays log-only: drogon's monitoring Histogram demands
+// explicit bucket boundaries and spins an event-loop thread per metric,
+// and no production call site observes histograms through this port yet.
 
 #include <fulla/common/ports/IMetrics.h>
 
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
+
+namespace drogon::monitoring
+{
+class CollectorBase;
+}
 
 namespace fulla::drogon::adapters
 {
 
 /**
- * @brief Forwards IMetrics calls to Drogon's LOG_ emitter, formatting
- * name + labels into the same "[METRIC] <name> k=v ..." line the legacy
- * Metrics statics produced. Stateless; safe to share one instance across
- * threads (LOG_ is thread-safe, no shared mutable state).
+ * @brief Exports IMetrics counters/gauges via PromExporter and forwards
+ * every call to Drogon's LOG_ emitter as a "[METRIC] <name> k=v ..." line.
+ * One instance may be shared across threads; the collector cache is
+ * mutex-guarded and the underlying collectors are thread-safe.
  */
 class DrogonMetrics : public fulla::common::ports::IMetrics
 {
@@ -47,6 +63,18 @@ class DrogonMetrics : public fulla::common::ports::IMetrics
       const fulla::common::ports::MetricLabels &labels,
       double value
     ) override;
+
+  private:
+    std::shared_ptr<::drogon::monitoring::CollectorBase> resolveCollector(
+      const std::string &name,
+      const std::function<
+        std::shared_ptr<::drogon::monitoring::CollectorBase>()> &create);
+
+    std::mutex mutex_;
+    std::unordered_map<
+      std::string,
+      std::shared_ptr<::drogon::monitoring::CollectorBase>>
+      collectors_;
 };
 
 }  // namespace fulla::drogon::adapters
