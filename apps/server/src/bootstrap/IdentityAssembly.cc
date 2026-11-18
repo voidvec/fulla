@@ -610,11 +610,14 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         // The applier routes guard updates through the RUNTIME's current
         // guard (the social mock fixture swaps guards mid-test-process) and
         // holds only a weak runtime reference (the runtime owns the applier
-        // -- a strong capture would be a self-cycle).
+        // -- a strong capture would be a self-cycle). The three services
+        // are function-local statics (process lifetime) and are referenced
+        // WITHOUT capture -- lambdas cannot capture statics and do not need
+        // to.
         std::weak_ptr<fulla::drogon::services::UpstreamProviderRuntime> weakRuntime =
           upstreamRuntime;
         upstreamRuntime->setLegacyApplier(
-          [weakRuntime, &googleAuthService, &weChatAuthService, &gitHubAuthService](
+          [weakRuntime](
             const std::string &key, const std::string &clientId,
             const std::string &clientSecret, bool enabled) {
               if (auto runtime = weakRuntime.lock())
