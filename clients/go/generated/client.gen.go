@@ -621,7 +621,7 @@ type LoginRequest struct {
 	// ClientId Matches the requesting app (required for code issuance).
 	ClientId *string `json:"client_id,omitempty"`
 
-	// CodeChallenge PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (fulla-portal, fulla-admin-console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
+	// CodeChallenge PKCE code challenge (RFC 7636). REQUIRED for all authorization_code clients when auth.require_pkce is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
 	CodeChallenge *string `json:"code_challenge,omitempty"`
 
 	// CodeChallengeMethod S256 (recommended) or plain.
@@ -1421,7 +1421,7 @@ type GetOauth2AuthorizeParams struct {
 	// State Opaque value to maintain state between request and callback (recommended)
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 
-	// CodeChallenge PKCE code challenge (RFC 7636). Required for public clients when auth.require_pkce_for_public is enabled (default true).
+	// CodeChallenge PKCE code challenge (RFC 7636). Required for all clients when auth.require_pkce is enabled (default true).
 	CodeChallenge *string `form:"code_challenge,omitempty" json:"code_challenge,omitempty"`
 
 	// CodeChallengeMethod PKCE code challenge method ('plain' or 'S256')

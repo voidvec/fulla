@@ -236,16 +236,16 @@ struct OAuth2ControllerDocs
               ::fulla::drogon::observability::openapi::ParameterLocation::QUERY;
             stateParam.required = false;
 
-            // PKCE (RFC 7636 / F-011): code_challenge is REQUIRED for PUBLIC
-            // clients (fulla-portal, fulla-admin-console) when require_pkce_for_public
-            // is enabled (default). The matching code_verifier goes on the
+            // PKCE (RFC 7636 / F-011): code_challenge is REQUIRED for all
+            // authorization_code clients when require_pkce is enabled
+            // (default). The matching code_verifier goes on the
             // /oauth2/token exchange. Declared in the generated openapi.json
             // so client generators emit PKCE-aware clients.
             ::fulla::drogon::observability::openapi::ParameterInfo codeChallengeParam;
             codeChallengeParam.name = "code_challenge";
             codeChallengeParam.description =
-              "PKCE code challenge (RFC 7636). Required for PUBLIC clients when "
-              "auth.require_pkce_for_public is enabled (default true).";
+              "PKCE code challenge (RFC 7636). Required for all clients when "
+              "auth.require_pkce is enabled (default true).";
             codeChallengeParam.type =
               ::fulla::drogon::observability::openapi::ParameterType::STRING;
             codeChallengeParam.location =
@@ -960,19 +960,19 @@ void SessionController::login(
 
                   // === CHECK 4: PKCE enforcement ===
                   // F-011 (RFC 9700 2.1.1): PKCE is MANDATORY for all
-                  // authorization_code clients; auth.require_pkce_for_public
+                  // authorization_code clients; auth.require_pkce
                   // can still opt a deployment out explicitly.
                   bool requirePkce = true;
                   if (
                     customCfg.isMember("auth") &&
-                    customCfg["auth"].isMember("require_pkce_for_public")
+                    customCfg["auth"].isMember("require_pkce")
                   )
                   {
-                      requirePkce = customCfg["auth"]["require_pkce_for_public"].asBool();
+                      requirePkce = customCfg["auth"]["require_pkce"].asBool();
                   }
                   if (requirePkce && codeChallenge.empty())
                   {
-                      LOG_WARN << "[SECURITY] PUBLIC client " << clientId
+                      LOG_WARN << "[SECURITY] client " << clientId
                                << " login without PKCE (enforcement enabled)";
                       // The guard above already verified redirect_uri is
                       // registered, so the error goes straight back to the
@@ -981,7 +981,7 @@ void SessionController::login(
                         callback,
                         redirectUri,
                         "invalid_request",
-                        "PKCE (code_challenge) is required for public clients",
+                        "PKCE (code_challenge) is required",
                         state
                       );
                       return;
@@ -1508,10 +1508,10 @@ void SessionController::consent(
         bool requirePkce = true;
         if (
           customCfg.isMember("auth") &&
-          customCfg["auth"].isMember("require_pkce_for_public")
+          customCfg["auth"].isMember("require_pkce")
         )
         {
-            requirePkce = customCfg["auth"]["require_pkce_for_public"].asBool();
+            requirePkce = customCfg["auth"]["require_pkce"].asBool();
         }
         if (requirePkce && codeChallenge.empty())
         {

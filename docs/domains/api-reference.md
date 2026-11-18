@@ -34,8 +34,8 @@ Used to request user authorization and obtain an authorization code.
 | `redirect_uri` | Yes | Callback URL (must match exactly) | `http://localhost:5173/callback` |
 | `scope` | No | Requested scope | `openid profile` |
 | `state` | Recommended | Random string for CSRF protection | `xyz123` |
-| `code_challenge` | No | PKCE code challenge (mandatory by default for PUBLIC clients) | `dBjftJeZ4CVK...` |
-| `code_challenge_method` | No | `plain` or `S256` (defaults to `plain` when a challenge is provided) | `S256` |
+| `code_challenge` | No | PKCE code challenge (mandatory by default for all clients, `auth.require_pkce`) | `dBjftJeZ4CVK...` |
+| `code_challenge_method` | No | Must be `S256` (`plain` is rejected; required whenever a challenge is provided) | `S256` |
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
 | `prompt` | No | OIDC prompt values, space-separated: `none`/`login`/`consent`/`select_account` (§3.1.2.1). `none` forbids any UI; `login` forces re-authentication; `consent` forces the consent page. Combining `none` with other values → 400 | `none` |
 | `max_age` | No | Maximum allowable age of authentication (seconds). If the session auth_time exceeds the limit → forced re-authentication | `3600` |

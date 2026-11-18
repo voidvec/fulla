@@ -21,7 +21,7 @@
 --   (run-scenario.sh automatically uses -t == -c for this scenario)
 --
 -- Key constraints (verified against codebase):
---   * PKCE is MANDATORY (F-011 / RFC 9700 §2.1.1): require_pkce_for_public=true
+--   * PKCE is MANDATORY (F-011 / RFC 9700 §2.1.1): require_pkce=true
 --     in all shipped configs. The /login step MUST send code_challenge (S256),
 --     and the /token step MUST send the matching code_verifier.
 --   * json=true makes /login return {"code":"...","location":"..."} instead of

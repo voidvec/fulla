@@ -94,4 +94,4 @@ Automatically after changes to auth flow code (controllers, filters, token handl
 - PostgreSQL + Redis storage
 - Supports WeChat/Google external providers
 - RBAC permission system with Redis cache
-- PKCE required for public clients
+- PKCE required for all authorization_code clients (`auth.require_pkce`, default on)

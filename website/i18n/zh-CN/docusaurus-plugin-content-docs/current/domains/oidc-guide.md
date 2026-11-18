@@ -192,4 +192,4 @@ A: 与 Access Token 一致，默认 1 小时。
 A: 定期从 JWKS 端点刷新公钥。当验证失败时，先尝试刷新 JWKS 再重试验证。
 
 **Q: 是否支持 PKCE？**
-A: 支持。PKCE (RFC 7636) 已实现并默认对 PUBLIC 客户端强制启用（同时支持 `plain` 与 `S256`）。SPA 和移动端客户端应使用 `S256`。
+A: 支持。PKCE (RFC 7636) 已实现并默认对所有 authorization_code 客户端强制启用（仅支持 `S256`，`plain` 被拒绝）。SPA 和移动端客户端必须使用 `S256`。

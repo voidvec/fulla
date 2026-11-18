@@ -57,7 +57,7 @@ keeps its separate one-time state flow.
 ## 4. Best-Practice Recommendations
 
 - **HTTPS**: Production **must** enable HTTPS/TLS; without it, OAuth2 offers no security whatsoever.
-- **PKCE**: Mobile/SPA clients should enable PKCE (Proof Key for Code Exchange) — this backend implements it and enforces it by default for PUBLIC clients, supporting both `plain` and `S256`.
+- **PKCE**: Mobile/SPA clients should enable PKCE (Proof Key for Code Exchange) — this backend implements it and enforces it by default for **all** authorization_code clients (`auth.require_pkce`; S256 only — `plain` is rejected).
 - **IP allowlist**: For high-privilege clients, restrict the source IPs allowed to redeem tokens.
 
 ## 5. Token Storage Security

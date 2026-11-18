@@ -205,4 +205,4 @@ A: The same as the access token — 1 hour by default.
 A: Refresh the public keys from the JWKS endpoint periodically. When verification fails, refresh the JWKS first, then retry the verification.
 
 **Q: Is PKCE supported?**
-A: Yes. PKCE (RFC 7636) is implemented and enforced by default for PUBLIC clients (both `plain` and `S256` are supported). SPA and mobile clients should use `S256`.
+A: Yes. PKCE (RFC 7636) is implemented and enforced by default for all authorization_code clients (S256 only — `plain` is rejected). SPA and mobile clients must use `S256`.

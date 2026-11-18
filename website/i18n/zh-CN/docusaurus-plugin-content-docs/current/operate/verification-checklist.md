@@ -193,7 +193,7 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
 
 ### 3.1 获取管理员令牌
 
-`fulla-admin-console` 是 **PUBLIC 客户端**（`token_endpoint_auth_method=none`，无 client_secret，不支持 password grant），令牌必须走 **授权码 + PKCE** 两步流程（F-011：PUBLIC 客户端强制 PKCE）。以下等价于 `scripts/backend/test-admin-endpoints.sh` 的 setup 步骤：
+`fulla-admin-console` 是 **PUBLIC 客户端**（`token_endpoint_auth_method=none`，无 client_secret，不支持 password grant），令牌必须走 **授权码 + PKCE** 两步流程（F-011：所有客户端强制 PKCE）。以下等价于 `scripts/backend/test-admin-endpoints.sh` 的 setup 步骤：
 
 ```bash
 # 1) 登录换取授权码（表单编码；code_challenge = BASE64URL(SHA256(code_verifier))）

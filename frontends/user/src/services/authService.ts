@@ -53,7 +53,8 @@ export const authService = {
   /**
    * U-4 (browser-e2e 2026-09-08): true when THIS SPA holds the PKCE
    * verifier FOR THIS FLOW — the stash's `state` must equal the `state` the
-   * callback was reached with. PKCE is force-enabled server-side, so
+   * callback was reached with. The token endpoint requires the matching
+   * code_verifier for any code issued with a code_challenge, so
    * redeeming a code without the matching verifier would only burn the
    * one-time code that belongs to the flow's real initiator (an external
    * app that drove the user through authorize). CallbackPage uses this to
@@ -66,7 +67,7 @@ export const authService = {
   },
   async login(username: string, password: string, scope = 'openid profile email'): Promise<LoginResult> {
     // PKCE (RFC 7636): generate a verifier/challenge pair so the backend's
-    // `require_pkce_for_public` enforcement (F-011) does not reject the login.
+    // `require_pkce` enforcement (F-011) does not reject the login.
     // The verifier stays in this closure — `json:'true'` makes /oauth2/login
     // return JSON (not a browser redirect), so the page does not reload and
     // the closure survives to the token-exchange step below.

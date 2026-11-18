@@ -605,7 +605,7 @@ inline std::optional<Json::Value> loginAsUserTokensOnce(
         }
     }
 
-    // F-011: PKCE is mandatory (auth.require_pkce_for_public defaults true),
+    // F-011: PKCE is mandatory (auth.require_pkce defaults true),
     // so this recipe always runs the S256 flow. generateSecureToken(32)
     // yields a 43-char base64url string -- a valid RFC 7636 §4.1 verifier
     // charset-wise -- and CryptoUtils::computeCodeChallenge matches the

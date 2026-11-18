@@ -544,7 +544,7 @@ export type LoginRequest = {
      */
     state?: string;
     /**
-     * PKCE code challenge (RFC 7636). REQUIRED for PUBLIC clients (fulla-portal, fulla-admin-console) when auth.require_pkce_for_public is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
+     * PKCE code challenge (RFC 7636). REQUIRED for all authorization_code clients when auth.require_pkce is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on the /oauth2/token exchange.
      */
     code_challenge?: string;
     /**
@@ -4893,7 +4893,7 @@ export type GetOauth2AuthorizeData = {
          */
         state?: string;
         /**
-         * PKCE code challenge (RFC 7636). Required for public clients when auth.require_pkce_for_public is enabled (default true).
+         * PKCE code challenge (RFC 7636). Required for all clients when auth.require_pkce is enabled (default true).
          */
         code_challenge?: string;
         /**
