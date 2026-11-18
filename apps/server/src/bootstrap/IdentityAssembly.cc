@@ -573,9 +573,8 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         for (size_t i = 0; i < legacySeeds.size(); ++i)
         {
             const auto &seed = legacySeeds[i];
-            const auto credentialConfigured = [](const std::string &v) {
-                return fulla::common::utils::socialCredentialConfigured(v);
-            };
+            // Reuses the enclosing credentialConfigured lambda (line ~223);
+            // MSVC C4456 shadows it if redeclared here.
             if (!credentialConfigured(legacyCreds[i][0]) ||
                 !credentialConfigured(legacyCreds[i][1]))
             {
