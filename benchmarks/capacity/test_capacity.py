@@ -409,6 +409,113 @@ class ProtocolTests(unittest.TestCase):
             self.user().authorize_consent()
         self.assertEqual(caught.exception.kind, "id_token_nonce_or_subject")
 
+    def test_idle_connection_is_rebuilt_before_send(self):
+        session = Session(self.target)
+        self.sessions.append(session)
+        session.request("first", "GET", "/.well-known/openid-configuration")
+        first = session.connection
+        # Emulate the server's 60s idle close while the client still holds
+        # what it believes is a usable keep-alive socket.
+        first.sock.shutdown(socket.SHUT_RDWR)
+        session.last_activity = (
+            time.monotonic() - session.IDLE_RECONNECT_SECONDS - 1
+        )
+        session.request("second", "GET", "/.well-known/openid-configuration")
+        self.assertIsNot(session.connection, first)
+        self.assertEqual(session.idle_reconnects, 1)
+
+    def test_hot_connection_is_reused_without_reconnect(self):
+        session = Session(self.target)
+        self.sessions.append(session)
+        session.request("first", "GET", "/.well-known/openid-configuration")
+        first = session.connection
+        session.request("second", "GET", "/.well-known/openid-configuration")
+        self.assertIs(session.connection, first)
+        self.assertEqual(session.idle_reconnects, 0)
+
+    def test_idle_reconnects_are_retained_in_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.runner(tmp)
+            run.users[0].session.IDLE_RECONNECT_SECONDS = -1
+            result = run.execute()
+            self.assertEqual(result["status"], "passed")
+            self.assertGreater(result["idle_reconnects"], 0)
+            self.assertEqual(
+                result["result"]["flow"]["event_count_mismatch"], False
+            )
+
+    def test_early_failure_does_not_claim_collected_telemetry(self):
+        from unittest.mock import Mock
+
+        from observe import Sampler
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.runner(tmp)
+            run.telemetry = Sampler({}, Path(tmp) / "observer.gz")
+            run.users[0].prepare = Mock(
+                side_effect=ProtocolError("login_shape", "login", 400)
+            )
+            with self.assertRaises(ProtocolError):
+                run.execute()
+            result = json.loads((run.out / "result.json").read_text())
+            self.assertEqual(result["status"], "incomplete")
+            self.assertEqual(result["telemetry_status"], "not_collected")
+            self.assertNotIn("telemetry.jsonl.gz", result.get("artifacts", {}))
+
+    def test_observer_control_and_metrics_sessions_are_paced(self):
+        from unittest.mock import Mock, patch
+
+        import observe
+        from observe import Sampler
+
+        now = [0.0]
+        pacer = Pacer(
+            True,
+            clock=lambda: now[0],
+            sleep=lambda n: now.__setitem__(0, now[0] + n),
+        )
+        paced_paths = []
+        original_wait = pacer.wait
+
+        def recording_wait(path, cancel_event=None):
+            paced_paths.append(path)
+            return original_wait(path, cancel_event=cancel_event)
+
+        pacer.wait = recording_wait
+        fixture = {
+            "target": self.target,
+            "db": {"database": "fulla_s07_pace", "host": "127.0.0.1"},
+            "redis_port": 1,
+            "redis_password": "",
+            "server_pid": 1,
+            "profile": "default",
+        }
+        constructed = []
+        real_session = observe.Session
+
+        class RecordingSession(real_session):
+            def __init__(self, *args, **kwargs):
+                constructed.append(kwargs.get("pace"))
+                super().__init__(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sampler = Sampler(
+                fixture, Path(tmp) / "t.gz", interval=0.05, pacer=pacer
+            )
+            with (
+                patch.object(observe, "Session", RecordingSession),
+                patch.object(observe, "Database", return_value=Mock(stats=lambda: {})),
+                patch.object(observe, "Redis", return_value=Mock(command=lambda *a: "")),
+                patch.object(observe, "process_stats", return_value={}),
+            ):
+                sampler.start()
+                time.sleep(0.3)
+                sampler.stop()
+            self.assertEqual(sampler.errors, 0)
+            self.assertEqual(len(constructed), 2)
+            self.assertTrue(all(pace is not None for pace in constructed))
+            self.assertIn("/.well-known/openid-configuration", paced_paths)
+
     def test_standalone_boundary_request_has_absolute_deadline(self):
         self.server.trickle = True
         client = Session(self.target, timeout=0.04)
@@ -559,6 +666,7 @@ class ProtocolTests(unittest.TestCase):
             observer.thread.ident = 1
             observer.thread.is_alive.return_value = False
             observer.session = None
+            observer.control_session = None
             observer.samples = 2
             observer.errors = 0
             observer.failure_type = None
