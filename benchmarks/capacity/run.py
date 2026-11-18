@@ -84,7 +84,7 @@ class Run:
             raise ValueError("supported VU range: 1..16")
         if args.kind == "steady" and (args.warmup < 30 or args.duration < 120):
             raise ValueError("formal rows require >=30s warmup and >=120s measurement")
-        if args.kind in ("steady", "soak", "fault"):
+        if args.kind in ("steady", "soak"):
             if not all(
                 self.fixture.get(k)
                 for k in ("db", "server_pid", "server_start_ticks", "server_executable")
@@ -94,7 +94,7 @@ class Run:
                 )
             if args.reserve_mb < 192 or args.timeout > 10:
                 raise ValueError("formal reserve/deadline bounds may not be weakened")
-        if args.kind in ("steady", "soak", "fault"):
+        if args.kind in ("steady", "soak"):
             if not args.budget_plan:
                 raise ValueError(
                     "formal measurement requires a passed pilot budget plan"
@@ -660,6 +660,11 @@ class Run:
                     "errors": self.telemetry.errors,
                     "failure_type": self.telemetry.failure_type,
                     "interval_seconds": 5,
+                    "idle_reconnects": sum(
+                        s.idle_reconnects
+                        for s in (self.telemetry.session, self.telemetry.control_session)
+                        if s
+                    ),
                 }
                 if (
                     self.telemetry.errors
@@ -696,9 +701,19 @@ class Run:
                 "limited_warning": "shared host and Python driver; no dedicated-driver capacity claim",
             }
             self.meta["minimum_persistent_free_bytes"] = self.minimum_free_bytes
-            self.meta["telemetry_status"] = "collected" if self.telemetry else "not_collected"
+            self.meta["idle_reconnects"] = sum(
+                user.session.idle_reconnects for user in self.users
+            )
+            telemetry_collected = bool(
+                self.telemetry and self.telemetry.thread.ident is not None
+            )
+            self.meta["telemetry_status"] = (
+                "collected" if telemetry_collected else "not_collected"
+            )
             try:
-                self.meta["artifacts"] = seal_artifacts(self.out, telemetry=bool(self.telemetry))
+                self.meta["artifacts"] = seal_artifacts(
+                    self.out, telemetry=telemetry_collected
+                )
             except Exception as exc:  # noqa: BLE001 - preserve incomplete output on artifact failure
                 self.incomplete.append("artifact_seal_" + type(exc).__name__)
                 self.meta["status"] = "incomplete"

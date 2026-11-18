@@ -103,13 +103,13 @@ class Sampler:
         if self.thread.is_alive():
             raise RuntimeError("observer did not stop within its deadline")
 
+    def _pace(self):
+        if not self.pacer:
+            return None
+        return lambda path: self.pacer.wait(path, cancel_event=self.stop_event)
+
     def metrics_work(self):
-        pace = (
-            (lambda path: self.pacer.wait(path, cancel_event=self.stop_event))
-            if self.pacer
-            else None
-        )
-        session = Session(self.fixture["target"], timeout=5, pace=pace)
+        session = Session(self.fixture["target"], timeout=5, pace=self._pace())
         self.session = session
         try:
             while not self.stop_event.wait(60):
@@ -151,7 +151,7 @@ class Sampler:
 
         db = Database(self.fixture)
         redis = Redis(self.fixture["redis_port"], self.fixture["redis_password"])
-        control = Session(self.fixture["target"], timeout=5)
+        control = Session(self.fixture["target"], timeout=5, pace=self._pace())
         self.control_session = control
         stream = self.output.open("xb")
         zipped = gzip.GzipFile(fileobj=stream, mode="wb", compresslevel=3, mtime=0)
@@ -237,9 +237,10 @@ class Sampler:
             self.stop_event.set()
             if self.session:
                 self.session.interrupt()
-            self.metrics_thread.join(timeout=6)
-            if self.metrics_thread.is_alive():
-                self.fail("metrics_shutdown_timeout")
+            if self.metrics_thread is not None:
+                self.metrics_thread.join(timeout=6)
+                if self.metrics_thread.is_alive():
+                    self.fail("metrics_shutdown_timeout")
             control.close()
             redis.close()
             zipped.close()

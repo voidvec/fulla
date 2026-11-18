@@ -68,6 +68,11 @@ def pkce() -> tuple[str, str]:
 
 
 class Session:
+    # The fixture server closes keep-alive connections idle for 60s
+    # (idle_connection_timeout, never overridden by the harness). Rebuild a
+    # connection before that boundary so paced gaps never send on a dead socket.
+    IDLE_RECONNECT_SECONDS = 45.0
+
     def __init__(self, target: str, timeout: float = 5, record=None, pace=None):
         url = urlsplit(target)
         if (
@@ -87,6 +92,8 @@ class Session:
         self.pace = pace
         self.cookies: dict[str, str] = {}
         self.connection = None
+        self.last_activity = 0.0
+        self.idle_reconnects = 0
         self.before_send = None
         self.record_start = None
         self.stage_prefix = ""
@@ -138,6 +145,13 @@ class Session:
         if self.record_start:
             self.record_start(stage, started)
         try:
+            if (
+                self.connection is not None
+                and time.monotonic() - self.last_activity
+                > self.IDLE_RECONNECT_SECONDS
+            ):
+                self.close()
+                self.idle_reconnects += 1
             if self.connection is None:
                 cls = (
                     http.client.HTTPSConnection
@@ -224,6 +238,7 @@ class Session:
             self.close()
             raise ProtocolError(error, stage, status) from None
         finally:
+            self.last_activity = time.monotonic()
             _deadlines.remove(self)
             with self.state_lock:
                 self.active_connection = self.active_socket = None
