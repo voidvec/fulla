@@ -928,7 +928,15 @@ void log(fulla::common::ports::LogLevel level, const std::string &message) overr
 === libs/drogon/include/fulla/drogon/adapters/DrogonMetrics.h
 #pragma once
 #include <fulla/common/ports/IMetrics.h>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
+namespace drogon::monitoring
+{
+class CollectorBase;
+}
 namespace fulla::drogon::adapters
 {
 class DrogonMetrics : public fulla::common::ports::IMetrics
@@ -949,6 +957,16 @@ const std::string &name,
 const fulla::common::ports::MetricLabels &labels,
 double value
 ) override;
+private:
+std::shared_ptr<::drogon::monitoring::CollectorBase> resolveCollector(
+const std::string &name,
+const std::function<
+std::shared_ptr<::drogon::monitoring::CollectorBase>()> &create);
+std::mutex mutex_;
+std::unordered_map<
+std::string,
+std::shared_ptr<::drogon::monitoring::CollectorBase>>
+collectors_;
 };
 }
 === libs/drogon/include/fulla/drogon/adapters/DrogonOAuthHttpClient.h

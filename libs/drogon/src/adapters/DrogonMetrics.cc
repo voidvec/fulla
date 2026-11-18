@@ -1,14 +1,22 @@
 #include <fulla/drogon/adapters/DrogonMetrics.h>
 
 #include <drogon/drogon.h>
+#include <drogon/plugins/PromExporter.h>
+#include <drogon/utils/monitoring/Collector.h>
+#include <drogon/utils/monitoring/Counter.h>
+#include <drogon/utils/monitoring/Gauge.h>
 
+#include <algorithm>
 #include <sstream>
+#include <vector>
 
 namespace fulla::drogon::adapters
 {
 
 namespace
 {
+namespace dm = ::drogon::monitoring;
+
 // Format the metric name + labels into the same "[METRIC] <name> k=v ..."
 // log line the legacy fulla::drogon::observability::Metrics statics
 // produced, so output consumers (log scrapers, PromExporter readers) see no
@@ -28,7 +36,72 @@ std::string formatMetric(
     oss << " val=" << value;
     return oss.str();
 }
+
+// MetricLabels is an unordered_map; collectors require one stable label
+// order per metric name, so sort the keys on every call.
+std::vector<std::string> labelNames(
+  const fulla::common::ports::MetricLabels &labels)
+{
+    std::vector<std::string> names;
+    names.reserve(labels.size());
+    for (const auto &kv : labels)
+    {
+        names.push_back(kv.first);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+std::vector<std::string> labelValues(
+  const fulla::common::ports::MetricLabels &labels,
+  const std::vector<std::string> &names)
+{
+    std::vector<std::string> values;
+    values.reserve(names.size());
+    for (const auto &n : names)
+    {
+        values.push_back(labels.at(n));
+    }
+    return values;
+}
 }  // namespace
+
+std::shared_ptr<dm::CollectorBase> DrogonMetrics::resolveCollector(
+  const std::string &name,
+  const std::function<std::shared_ptr<dm::CollectorBase>()> &create)
+{
+    std::lock_guard<std::mutex> guard(mutex_);
+    auto it = collectors_.find(name);
+    if (it != collectors_.end())
+    {
+        return it->second;
+    }
+    auto plugin = ::drogon::app().getPlugin<::drogon::plugin::PromExporter>();
+    if (!plugin)
+    {
+        return nullptr;
+    }
+    std::shared_ptr<dm::CollectorBase> collector;
+    try
+    {
+        collector = plugin->getCollector(name);
+    }
+    catch (...)
+    {
+        collector = create();
+        try
+        {
+            plugin->registerCollector(collector);
+        }
+        catch (...)
+        {
+            // Another DrogonMetrics instance registered the same name first.
+            collector = plugin->getCollector(name);
+        }
+    }
+    collectors_.emplace(name, collector);
+    return collector;
+}
 
 void DrogonMetrics::incrementCounter(
   const std::string &name,
@@ -36,6 +109,24 @@ void DrogonMetrics::incrementCounter(
   double value
 )
 {
+    // Export is best-effort: a collector/label mismatch must never break
+    // the request path; the [METRIC] log line below remains the fallback.
+    try
+    {
+        auto names = labelNames(labels);
+        auto collector = resolveCollector(name, [&]() {
+            return std::make_shared<dm::Collector<dm::Counter>>(
+              name, name, names);
+        });
+        if (auto typed =
+              std::dynamic_pointer_cast<dm::Collector<dm::Counter>>(collector))
+        {
+            typed->metric(labelValues(labels, names))->increment(value);
+        }
+    }
+    catch (...)
+    {
+    }
     try
     {
         LOG_INFO << formatMetric(name, labels, value);
@@ -53,6 +144,21 @@ void DrogonMetrics::setGauge(
 {
     try
     {
+        auto names = labelNames(labels);
+        auto collector = resolveCollector(name, [&]() {
+            return std::make_shared<dm::Collector<dm::Gauge>>(name, name, names);
+        });
+        if (auto typed =
+              std::dynamic_pointer_cast<dm::Collector<dm::Gauge>>(collector))
+        {
+            typed->metric(labelValues(labels, names))->set(value);
+        }
+    }
+    catch (...)
+    {
+    }
+    try
+    {
         LOG_INFO << formatMetric(name, labels, value);
     }
     catch (...)
@@ -66,6 +172,7 @@ void DrogonMetrics::observeHistogram(
   double value
 )
 {
+    // Log-only: see the header note on Histogram bucket/loop requirements.
     try
     {
         LOG_INFO << formatMetric(name, labels, value);
