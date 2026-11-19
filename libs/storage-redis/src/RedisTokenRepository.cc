@@ -273,12 +273,13 @@ void RedisTokenRepository::introspectToken(
               return;
           }
 
-          // Check if token is revoked or expired
+          // Check if token is revoked, expired, or not yet valid
           bool revoked = json["revoked"].asBool();
           int64_t expiresAt = json["expires_at"].asInt64();
           int64_t now = std::time(nullptr);
 
-          if (revoked || expiresAt < now)
+          const auto notBefore = json.get("not_before", Json::Int64{0}).asInt64();
+          if (revoked || expiresAt < now || notBefore > now)
           {
               TokenIntrospection introspection;
               introspection.active = false;
