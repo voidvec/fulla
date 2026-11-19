@@ -13,6 +13,16 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Breaking changes (security hardening; next MINOR)
 
+- Renamed the `custom_config.auth.require_pkce_for_public` key to
+  `auth.require_pkce` so the name matches the behavior: when enabled (the
+  default), PKCE is required for **all** authorization_code clients, not only
+  PUBLIC ones — it never distinguished client_type. The old key is no longer
+  read (hard cut, same policy as the v1.6.0 `allow_pkce_plain` removal);
+  deployments that set `require_pkce_for_public` explicitly must rename the
+  key or it silently falls back to the secure default `true`. The rejection
+  error_description changed from "PKCE (code_challenge) is required for
+  public clients" to "PKCE (code_challenge) is required".
+
 - Bind GitHub/Google/WeChat login to one-time, browser-bound Redis state before
   upstream exchange or account writes. Discovery retains an empty deprecated
   `authorize_url`; use the new provider authorize POST (204 cookie initialization,

@@ -214,8 +214,8 @@ fi
 # PBKDF2 rehash (AuthService.cc:94-122); we warm up BEFORE timed runs so that
 # CPU cost lands in warmup, not measured throughput.
 #
-# S256 PKCE is REQUIRED here (F-011 / RFC 9700 §2.1.1): fulla-portal is PUBLIC and
-# require_pkce_for_public=true in all shipped configs, so a login without
+# S256 PKCE is REQUIRED here (F-011 / RFC 9700 §2.1.1): require_pkce=true in
+# all shipped configs (all client types), so a login without
 # code_challenge is rejected. Each user gets its own code_verifier + the derived
 # S256 code_challenge.
 warmup_bench_users() {

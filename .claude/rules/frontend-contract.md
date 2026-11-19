@@ -12,7 +12,8 @@ globs:
 
 ## 认证与 token
 
-- **PKCE 对 PUBLIC 客户端强制**（全部 4 份 config + 代码默认 `require_pkce_for_public=true`）。
+- **PKCE 对所有 authorization_code 客户端强制**（全部 5 份 config + 代码默认 `require_pkce=true`；
+  旧键 `require_pkce_for_public` 已更名，行为不变——本就不区分 client_type）。
   任何登录/authorize 流程的前端调用必须带 `code_challenge`；`state` 须 8–512 字符。
 - **PKCE verifier 只能在 MFA 验证成功后清除**：`/oauth2/token` 对带 challenge 的 code 拒绝空
   verifier——进门就清 = 错一次码后重试必死。

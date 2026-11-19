@@ -31,7 +31,7 @@ fulla 中令牌如何签发、存活与消亡：三类令牌、真正落库的�
 
 | 授权类型 | 签发 | 说明 |
 |---|---|---|
-| `authorization_code`（+ PKCE，PUBLIC 客户端强制） | access + refresh（含 `openid` 时加 id_token） | 授权码单次使用、原子消费（见 §5） |
+| `authorization_code`（+ PKCE，默认对所有客户端强制） | access + refresh（含 `openid` 时加 id_token） | 授权码单次使用、原子消费（见 §5） |
 | `refresh_token` | 新 access + **新** refresh | 旧 refresh 被撤销；家族 id 继承（§4） |
 | `client_credentials` | 仅 access（M2M，无用户） | 仅 CONFIDENTIAL 客户端；组织所属应用的令牌还保存 `org_id`（v1.4.0），可用时通过 introspection 暴露，subject 为 `client:<client_id>` |
 | `device_code` | 用户批准后签发 access + refresh | 按 RFC 8628 轮询 |

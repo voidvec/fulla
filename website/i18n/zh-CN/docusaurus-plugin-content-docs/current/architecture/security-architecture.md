@@ -55,7 +55,7 @@ GitHub/Google/微信登录在任何上游交换或账号写入之前，都要求
 ## 4. 最佳实践建议
 
 - **HTTPS**: 生产环境 **必须** 启用 HTTPS/TLS，否则 OAuth2 毫无安全性可言。
-- **PKCE**: 对于移动端/SPA 客户端，建议开启 PKCE (Proof Key for Code Exchange) 模式（本后端已实现并对 PUBLIC 客户端默认强制启用，支持 `plain` 与 `S256`）。
+- **PKCE**: 对于移动端/SPA 客户端，建议开启 PKCE (Proof Key for Code Exchange) 模式（本后端已实现并对**所有** authorization_code 客户端默认强制启用，`auth.require_pkce`；仅支持 `S256`，`plain` 被拒绝）。
 - **IP 白名单**: 对于高权限 Client，建议限制 Token 兑换的源 IP。
 
 ## 5. Token 存储安全 (Token Storage)

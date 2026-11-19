@@ -129,20 +129,21 @@ DROGON_TEST(Integration_P1_Login_EmailVerification_Field)
 
 /**
  * Test: PKCE enforcement config - verify the mechanism exists
- * When require_pkce_for_public is NOT set, PUBLIC clients can login without PKCE
+ * With auth.require_pkce enabled (the default; the test config sets it
+ * true explicitly), no client can login without a code_challenge
  */
 DROGON_TEST(Integration_P1_Login_PKCE_Config_Exists)
 {
     // Verify the config mechanism works
     auto customCfg = drogon::app().getCustomConfig();
 
-    // F-011 (RFC 9700 §2.1.1): PKCE is now required by default for all
-    // authorization_code clients. The test config sets require_pkce_for_public
-    // = true (previously it was off/false).
+    // F-011 (RFC 9700 §2.1.1): PKCE is required by default for all
+    // authorization_code clients. The test config sets require_pkce
+    // = true explicitly.
     bool requirePkce = true;
-    if (customCfg.isMember("auth") && customCfg["auth"].isMember("require_pkce_for_public"))
+    if (customCfg.isMember("auth") && customCfg["auth"].isMember("require_pkce"))
     {
-        requirePkce = customCfg["auth"]["require_pkce_for_public"].asBool();
+        requirePkce = customCfg["auth"]["require_pkce"].asBool();
     }
     // In test config, PKCE MUST be enforced (F-011 hardening).
     CHECK(requirePkce == true);

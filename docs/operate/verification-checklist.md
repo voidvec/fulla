@@ -202,7 +202,7 @@ WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
 
 ### 3.1 Obtain an Admin Token
 
-`fulla-admin-console` is a **PUBLIC client** (`token_endpoint_auth_method=none`, no client_secret, password grant not supported). Tokens must go through the two-step **authorization code + PKCE** flow (F-011: PKCE is mandatory for PUBLIC clients). The following is equivalent to the setup step in `scripts/backend/test-admin-endpoints.sh`:
+`fulla-admin-console` is a **PUBLIC client** (`token_endpoint_auth_method=none`, no client_secret, password grant not supported). Tokens must go through the two-step **authorization code + PKCE** flow (F-011: PKCE is mandatory for all clients). The following is equivalent to the setup step in `scripts/backend/test-admin-endpoints.sh`:
 
 ```bash
 # 1) Log in to obtain an authorization code (form-encoded; code_challenge = BASE64URL(SHA256(code_verifier)))

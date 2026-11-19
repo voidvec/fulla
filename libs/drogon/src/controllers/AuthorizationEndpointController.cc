@@ -888,7 +888,7 @@ void AuthorizationEndpointController::authorize(
                       }
 
                       // Review finding #1: mirror SessionController::login's
-                      // CHECK 3 -- with auth.require_pkce_for_public enabled,
+                      // CHECK 3 -- with auth.require_pkce enabled,
                       // the silent re-authorization path must not issue codes
                       // without a code_challenge either (previously only the
                       // login path enforced this, so a returning user's
@@ -899,10 +899,10 @@ void AuthorizationEndpointController::authorize(
                       bool requirePkce = true;
                       if (
                         customConfig.isMember("auth") &&
-                        customConfig["auth"].isMember("require_pkce_for_public")
+                        customConfig["auth"].isMember("require_pkce")
                       )
                       {
-                          requirePkce = customConfig["auth"]["require_pkce_for_public"].asBool();
+                          requirePkce = customConfig["auth"]["require_pkce"].asBool();
                       }
                       if (requirePkce && codeChallenge.empty())
                       {
@@ -914,7 +914,7 @@ void AuthorizationEndpointController::authorize(
                             buildAuthorizeErrorRedirect(
                               redirectUri,
                               "invalid_request",
-                              "PKCE (code_challenge) is required for public clients",
+                              "PKCE (code_challenge) is required",
                               state
                             )
                           );

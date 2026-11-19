@@ -119,7 +119,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginError.value = null
     try {
       // PKCE (RFC 7636): generate a verifier/challenge pair so the backend's
-      // `require_pkce_for_public` enforcement (F-011) does not reject the
+      // `require_pkce` enforcement (F-011) does not reject the
       // login. The verifier stays in this closure — `json:'true'` makes
       // /oauth2/login return JSON (not a browser redirect), so the page does
       // not reload and the closure survives to the token-exchange step below.

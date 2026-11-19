@@ -4334,7 +4334,7 @@
             }
           },
           {
-            "description" : "PKCE code challenge (RFC 7636). Required for PUBLIC clients when auth.require_pkce_for_public is enabled (default true).",
+            "description" : "PKCE code challenge (RFC 7636). Required for all clients when auth.require_pkce is enabled (default true).",
             "in" : "query",
             "name" : "code_challenge",
             "required" : false,

@@ -77,7 +77,7 @@ auto sharedCb = std::make_shared<std::function<void(const ResultType &)>>(
 - ORM Criteria for queries (no string concatenation)
 - Passwords: PBKDF2-SHA256, 310k iterations, random salt; client secrets/tokens: salted SHA-256 (`TokenCrypto::hashToken`)
 - Token TTL: access 1h, refresh 30d
-- PKCE required for public clients
+- PKCE required for all authorization_code clients (`auth.require_pkce`, default on)
 - Rate limiting on login/token/password-reset endpoints
 
 ## Testing

@@ -7,9 +7,9 @@
  * the challenge with the authorization request, and later proves possession
  * of the verifier at the token endpoint.
  *
- * The backend enforces PKCE for all PUBLIC clients when
- * `auth.require_pkce_for_public` is true (the default), so the login flow
- * is rejected at SessionController CHECK 3 (F-011 / RFC 9700 §2.1.1) if
+ * The backend enforces PKCE for all authorization_code clients when
+ * `auth.require_pkce` is true (the default), so the login flow
+ * is rejected at SessionController CHECK 4 (F-011 / RFC 9700 §2.1.1) if
  * no `code_challenge` is provided.
  */
 

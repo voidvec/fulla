@@ -35,7 +35,7 @@ All grants converge on `TokenService` (libs/oauth2):
 
 | Grant | Mints | Notes |
 |---|---|---|
-| `authorization_code` (+ PKCE, mandatory for PUBLIC clients) | access + refresh (+ id_token if `openid`) | The code is single-use with atomic consume (see §5) |
+| `authorization_code` (+ PKCE, mandatory by default for all clients) | access + refresh (+ id_token if `openid`) | The code is single-use with atomic consume (see §5) |
 | `refresh_token` | new access + **new** refresh | Old refresh is revoked; family id is inherited (§4) |
 | `client_credentials` | access only (M2M, no user) | CONFIDENTIAL clients only; for organization-owned applications the token additionally stores `org_id` (v1.4.0), exposed via introspection when available — the subject is `client:<client_id>` |
 | `device_code` | access + refresh after user approval | Polling per RFC 8628 |

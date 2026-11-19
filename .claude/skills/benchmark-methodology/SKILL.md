@@ -25,8 +25,8 @@ description: fulla 基准测试方法论——wrk Lua 线程模型、场景有�
   （端点测试）不能当性能场景来源——只有成功路径的请求形状可复用。
 - 种子用户不能全用 admin/admin（渐进锁定 5/10/15/20 次）；refresh 池按 VU 独立、每 token 用
   一次。
-- PKCE 对 PUBLIC 客户端强制（见 frontend-contract rule）——no-PKCE 变体需临时改
-  `require_pkce_for_public`。
+- PKCE 对所有 authorization_code 客户端强制（见 frontend-contract rule）——no-PKCE 变体需临时改
+  `require_pkce`。
 - docker compose 栈**不会自动 seed**（initdb 不递归子目录；MigrationRunner 只跑 schema）——
   新脚本要自己 `psql -f seed/*.sql`（带重试循环，/health/ready=200 不代表表已建）。
 - 冷启动计时从 `compose up` 命令**前**起算（up 会阻塞到依赖 healthy，晚起算 = 数字虚低）。

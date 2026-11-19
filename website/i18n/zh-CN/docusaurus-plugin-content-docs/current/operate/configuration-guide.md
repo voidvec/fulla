@@ -187,7 +187,7 @@ token / introspect / revoke / device-code 轮询四个端点共享一个进程�
 ```json
 "custom_config": {
   "auth": {
-    "require_pkce_for_public": true,
+    "require_pkce": true,
     "allow_http_redirect_uri": true,
     "rate_limit": {
       "max_failures": 30,

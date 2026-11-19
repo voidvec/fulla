@@ -264,7 +264,7 @@
         },
         "auth": {
             "require_email_verification": true,
-            "require_pkce_for_public": true,
+            "require_pkce": true,
             "allow_http_redirect_uri": false,
             "rate_limit_trust_forwarded_for": true,
             "rate_limit": {

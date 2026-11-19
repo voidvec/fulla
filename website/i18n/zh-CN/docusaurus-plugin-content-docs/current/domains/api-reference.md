@@ -34,8 +34,8 @@
 | `redirect_uri` | 是 | 回调地址 (需完全匹配) | `http://localhost:5173/callback` |
 | `scope` | 否 | 申请的权限范围 | `openid profile` |
 | `state` | 建议 | 防止 CSRF 的随机串 | `xyz123` |
-| `code_challenge` | 否 | PKCE code challenge（PUBLIC 客户端默认强制） | `dBjftJeZ4CVK...` |
-| `code_challenge_method` | 否 | `plain` 或 `S256`（提供 challenge 时默认 `plain`） | `S256` |
+| `code_challenge` | 否 | PKCE code challenge（默认对所有客户端强制，`auth.require_pkce`） | `dBjftJeZ4CVK...` |
+| `code_challenge_method` | 否 | 必须为 `S256`（`plain` 被拒绝；提供 challenge 时必填） | `S256` |
 | `nonce` | 否 | OIDC nonce（防重放），openid scope 时回显到 id_token | `n-0S6_WzA2Mj` |
 | `prompt` | 否 | OIDC 提示值，空格分隔：`none`/`login`/`consent`/`select_account`（§3.1.2.1）。`none` 禁止 UI；`login` 强制重认证；`consent` 强制同意页。`none` 与其他值并用 → 400 | `none` |
 | `max_age` | 否 | 认证最大允許年齡（秒）。session auth_time 超齡 → 強制重认证 | `3600` |
