@@ -257,7 +257,7 @@ void MemoryTokenRepository::introspectToken(
         const OAuth2AccessToken &accessToken = it->second;
 
         // Check if token is revoked or expired
-        if (accessToken.revoked || accessToken.expiresAt <= now)
+        if (accessToken.revoked || accessToken.expiresAt <= now || accessToken.notBefore > now)
         {
             TokenIntrospection introspection;
             introspection.active = false;

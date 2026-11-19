@@ -2,6 +2,8 @@
 #include <drogon/drogon.h>
 #include <atomic>
 
+#include "AccessTokenTimestamps.h"
+
 #include <fulla/storage/postgres/models/Oauth2AccessTokens.h>
 #include <fulla/storage/postgres/models/Oauth2RefreshTokens.h>
 
@@ -44,6 +46,7 @@ void PostgresTokenRepository::saveAccessToken(const OAuth2AccessToken &token, Vo
         newToken.setScope(token.scope);
         newToken.setExpiresAt(token.expiresAt);
         newToken.setRevoked(token.revoked);
+        detail::assignAccessTokenTimestamps(newToken, token, std::chrono::system_clock::now());
         // F-016: persist the issuer stamped at issuance (previously never
         // written, so every row carried the schema's hardcoded default).
         newToken.setIssuer(token.issuer);
@@ -251,10 +254,7 @@ void insertPair(
         row.setRevoked(at.revoked);
         row.setIssuer(at.issuer);
         row.setAudience(at.audience);
-        if (at.issuedAt)
-            row.setIssuedAt(at.issuedAt);
-        if (at.notBefore)
-            row.setNotBefore(at.notBefore);
+        detail::assignAccessTokenTimestamps(row, at, std::chrono::system_clock::now());
         if (at.orgId)
             row.setOrgId(*at.orgId);
         mapper.insert(
@@ -499,6 +499,8 @@ void PostgresTokenRepository::getAccessToken(const std::string &token, AccessTok
               t.scope = row.getValueOfScope();
               t.expiresAt = row.getValueOfExpiresAt();
               t.revoked = row.getValueOfRevoked();
+              t.issuedAt = row.getValueOfIssuedAt();
+              t.notBefore = row.getValueOfNotBefore();
               // v1.4.0 M1: org binding round-trips (NULL -> nullopt).
               t.orgId = row.getOrgId() ? std::optional<int32_t>(*row.getOrgId())
                                        : std::nullopt;
@@ -861,7 +863,9 @@ void PostgresTokenRepository::introspectToken(
                   return;
               }
               const auto &row = rows.front();
-              if (row.getValueOfRevoked() || row.getValueOfExpiresAt() <= std::time(nullptr))
+              const auto now = std::time(nullptr);
+              if (row.getValueOfRevoked() || row.getValueOfExpiresAt() <= now ||
+                  row.getValueOfNotBefore() > now)
               {
                   inactive();
                   return;

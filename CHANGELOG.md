@@ -58,6 +58,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- Persist and read back access-token `issued_at`/`not_before` consistently in PostgreSQL. Zero-valued inputs use one captured application second instead of rounded database defaults, preventing newly issued tokens from being temporarily inactive. Memory, Redis and PostgreSQL access-token introspection reject future `not_before` values (#342).
+
 - Honor WebAuthn-disabled builds throughout Conan, crypto/test compilation and build/install SDK exports: libcbor is no longer required when the feature is OFF. Validate all supported social/WebAuthn combinations, preserve full-feature route baselines, and check trimmed routes and real external SDK consumers.
   The runtime probe uses the test target's explicit configuration and migration resources on all generators, isolates its listener environment, and SDK consumers reset the libcbor discovery cache when toggling the feature back ON.
   Social-disabled test collection also excludes the upstream-provider HTTP fixture, whose helpers require the social services.
