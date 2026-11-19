@@ -71,6 +71,12 @@ const router = createRouter({
           component: () => import('../pages/claimmappings/ClaimMappingsPage.vue'),
         },
         {
+          // P2-1d: upstream identity-provider registry console
+          path: 'upstream-providers',
+          name: 'upstream-providers',
+          component: () => import('../pages/upstream/UpstreamProvidersPage.vue'),
+        },
+        {
           path: 'logs',
           name: 'logs',
           component: () => import('../pages/logs/LogsPage.vue'),
