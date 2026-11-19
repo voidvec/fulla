@@ -1,12 +1,28 @@
 # OAuth2 可观测性设计文档 (Observability)
 
-本系统集成了完整的 Prometheus 监控指标与结构化上下文日志，支持生产环境的实时监控与问题排查。
+本系统通过 IMetrics 适配器提供 Prometheus 指标，并提供带上下文的结构化指标日志，供监控与问题排查使用。
 
 ## 1. Prometheus Metrics
 
-系统通过 Exporter 暴露标准的 Prometheus 指标。
+PromExporter 插件在 `/metrics` 暴露已注册的 collector。IMetrics 适配器（`DrogonMetrics`）在首次使用时懒注册 Counter 与 Gauge collector，无需配置即可导出；它不会将 `[METRIC]` 日志转换为 Prometheus 序列。
 
 ### 1.1 指标列表
+
+有界缓存计数器是唯一带固定标签白名单的指标族。四套官方配置预注册该计数器，递增不依赖 INFO 日志等级：
+
+| 指标名称 | 类型 | 标签 (Labels) | 说明 |
+|----------|------|--------------|------|
+| `fulla_cache_total` | Counter | `repo`, `outcome` | 缓存查询结果；`repo` 仅为 `token`、`client`、`owner_status`，`outcome` 仅为 `hit`、`miss`、`error`。最多九条序列，不包含用户、客户端 ID 或令牌标签。 |
+
+自定义配置须在现有 `drogon::plugin::PromExporter` 配置中加入该 collector：
+
+```json
+{"path":"/metrics","collectors":[{"name":"fulla_cache_total","help":"Cache lookup outcomes","type":"counter","labels":["repo","outcome"]}]}
+```
+
+保留其他已有 collector。缺少或不兼容的 collector 不影响认证运行，但不会导出该计数器。白名单之外的标签值与非法递增会被拒绝，不会创建序列。
+
+其余 IMetrics Counter 与 Gauge 采用懒注册，无需配置：
 
 | 指标名称 | 类型 | 标签 (Labels) | 说明 |
 |----------|------|--------------|------|
@@ -16,14 +32,15 @@
 | `oauth2_introspect_errors_total` | Counter | `client_id`, `error` | Introspection 错误次数 |
 | `oauth2_revocation_requests_total` | Counter | `client_id` | Token Revocation 请求总数 |
 | `oauth2_revocation_errors_total` | Counter | `client_id`, `error` | Revocation 错误次数 |
-| `oauth2_latency_seconds` | Histogram | `operation`, `storage` | 关键步骤（含存储后端）耗时分布 |
 | `oauth2_active_tokens` | Gauge | — | 当前活跃（未过期）Token 估算值 |
 
-> 指标由 `libs/drogon/src/observability/Metrics.cc` 与 `libs/drogon/src/adapters/DrogonMetrics.cc` 统一发射（经 `LOG_INFO` 的 `[METRIC]` 结构化日志，供 PromExporter/日志采集端消费），定义见 `libs/drogon/include/fulla/drogon/observability/Metrics.h`。
+`oauth2_latency_seconds`（Histogram，标签 `operation`、`storage`）仍为纯日志：drogon 的 Histogram 需要显式分桶边界，且目前尚无生产调用点经该端口观测 Histogram。
+
+> 上述适配器指标同时由 `libs/drogon/src/adapters/DrogonMetrics.cc` 经 `LOG_INFO` 发射 `[METRIC]` 结构化日志，与导出相互独立。`libs/drogon/src/observability/Metrics.cc` 中的 legacy 静态方法发射相同日志格式，但未接入 exporter；定义见 `libs/drogon/include/fulla/drogon/observability/Metrics.h`。
 
 ### 1.2 监控面板示例 (Grafana)
 
-建议配置以下面板：
+推荐面板（耗时 Histogram 仍为纯日志，需要日志转指标流水线）：
 
 - **QPS & Error Rate**: `rate(oauth2_requests_total[1m])` vs `rate(oauth2_login_failures_total[1m])`
 - **P99 Latency**: `histogram_quantile(0.99, rate(oauth2_latency_seconds_bucket[1m]))`

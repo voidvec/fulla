@@ -130,7 +130,15 @@
             "name": "drogon::plugin::PromExporter",
             "dependencies": [],
             "config": {
-                "path": "/metrics"
+                "path": "/metrics",
+                "collectors": [
+                    {
+                        "name": "fulla_cache_total",
+                        "help": "Cache lookup outcomes",
+                        "type": "counter",
+                        "labels": ["repo", "outcome"]
+                    }
+                ]
             }
         },
         {

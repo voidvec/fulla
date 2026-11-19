@@ -58,6 +58,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- Export the bounded `fulla_cache_total{repo,outcome}` counter through the existing Prometheus exporter via a dedicated whitelist path, independently of INFO logging and without double-counting against the generic IMetrics counter/gauge export (#343). The four official configurations register the counter; custom configurations must register the same collector explicitly. Missing exporters remain optional; non-whitelisted label values and invalid increments never create series.
+
 - Persist and read back access-token `issued_at`/`not_before` consistently in PostgreSQL. Zero-valued inputs use one captured application second instead of rounded database defaults, preventing newly issued tokens from being temporarily inactive. Memory, Redis and PostgreSQL access-token introspection reject future `not_before` values (#342).
 
 - Honor WebAuthn-disabled builds throughout Conan, crypto/test compilation and build/install SDK exports: libcbor is no longer required when the feature is OFF. Validate all supported social/WebAuthn combinations, preserve full-feature route baselines, and check trimmed routes and real external SDK consumers.

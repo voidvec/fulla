@@ -1,12 +1,28 @@
 # OAuth2 Observability Design
 
-The system integrates complete Prometheus monitoring metrics and structured, context-aware logging, supporting real-time monitoring and troubleshooting in production.
+The system provides Prometheus metrics through the IMetrics adapter and structured, context-aware metric logs for monitoring and troubleshooting.
 
 ## 1. Prometheus Metrics
 
-The system exposes standard Prometheus metrics through an exporter.
+The PromExporter plugin exposes registered collectors at `/metrics`. The IMetrics adapter (`DrogonMetrics`) registers counter and gauge collectors lazily on first use, so they are exported without configuration. It does not convert `[METRIC]` log lines into Prometheus series.
 
 ### 1.1 Metric List
+
+The bounded cache counter is the only family with a fixed label whitelist. The four official configurations pre-register it, and it is updated independently of the INFO log level:
+
+| Metric | Type | Labels | Description |
+|----------|------|--------------|------|
+| `fulla_cache_total` | Counter | `repo`, `outcome` | Cache lookup outcomes; `repo` is `token`, `client`, or `owner_status`; `outcome` is `hit`, `miss`, or `error`. At most nine series; no user, client ID or token labels. |
+
+Custom configurations must add this collector to the existing `drogon::plugin::PromExporter` configuration:
+
+```json
+{"path":"/metrics","collectors":[{"name":"fulla_cache_total","help":"Cache lookup outcomes","type":"counter","labels":["repo","outcome"]}]}
+```
+
+Preserve any other configured collectors. A missing or incompatible collector leaves authentication operational but does not export this counter. Non-whitelisted label values and invalid increments are rejected without creating series.
+
+Other IMetrics counters and gauges are registered lazily and need no configuration:
 
 | Metric | Type | Labels | Description |
 |----------|------|--------------|------|
@@ -16,14 +32,15 @@ The system exposes standard Prometheus metrics through an exporter.
 | `oauth2_introspect_errors_total` | Counter | `client_id`, `error` | Introspection errors |
 | `oauth2_revocation_requests_total` | Counter | `client_id` | Total token revocation requests |
 | `oauth2_revocation_errors_total` | Counter | `client_id`, `error` | Revocation errors |
-| `oauth2_latency_seconds` | Histogram | `operation`, `storage` | Latency distribution of key steps (including storage backend) |
 | `oauth2_active_tokens` | Gauge | — | Current estimate of active (unexpired) tokens |
 
-> Metrics are emitted uniformly by `libs/drogon/src/observability/Metrics.cc` and `libs/drogon/src/adapters/DrogonMetrics.cc` (as `[METRIC]` structured logs via `LOG_INFO`, consumed by PromExporter/log collectors); definitions live in `libs/drogon/include/fulla/drogon/observability/Metrics.h`.
+`oauth2_latency_seconds` (Histogram, labels `operation`, `storage`) remains log-only: drogon's Histogram requires explicit bucket boundaries, and no production call site observes histograms through this port yet.
+
+> All adapter metrics also emit `[METRIC]` structured logs via `LOG_INFO` from `libs/drogon/src/adapters/DrogonMetrics.cc`, independently of the export. The legacy statics in `libs/drogon/src/observability/Metrics.cc` emit the same log format but are not wired to the exporter; their definitions live in `libs/drogon/include/fulla/drogon/observability/Metrics.h`.
 
 ### 1.2 Sample Dashboard Panels (Grafana)
 
-Recommended panels:
+Recommended panels (the latency histogram requires a log-to-metric pipeline because histograms stay log-only):
 
 - **QPS & Error Rate**: `rate(oauth2_requests_total[1m])` vs `rate(oauth2_login_failures_total[1m])`
 - **P99 Latency**: `histogram_quantile(0.99, rate(oauth2_latency_seconds_bucket[1m]))`
