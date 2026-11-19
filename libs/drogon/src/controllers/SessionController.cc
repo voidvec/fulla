@@ -1,3 +1,5 @@
+#include "PasswordLoginSessionState.h"
+
 #include <mutex>
 #include <fulla/drogon/controllers/SessionController.h>
 #include <fulla/drogon/authz/OrgContextGate.h>
@@ -706,55 +708,14 @@ void SessionController::login(
                        ) mutable {
         if (success)
         {
-            // PR #157 review MAJOR 1: Session::insert uses std::map semantics
-            // (existing key -> silent no-op), so EVERY re-writable login-state
-            // key must be erased before its insert. Without this, a second
-            // login on a live session kept the PREVIOUS account's userId/sub
-            // (codes minted for the wrong subject) and the previous amr (a
-            // "pwd mfa" left by an earlier MFA login would ride along on a
-            // password-only re-login -- exactly the #144 amr-elevation bug via
-            // a different path). The stale first-factor PKCE challenge and the
-            // MFA-pending marker are cleared for the same reason.
-            req->session()->erase("userId");
-            req->session()->insert("userId", std::to_string(internalId));
-            // #55: also remember the PUBLIC subject (the id_token sub) on the
-            // session. endSession needs it to attribute the logout to a user
-            // for backchannel notification -- the internal id above does not
-            // match oauth2_access_tokens.user_id (which stores public_sub).
-            req->session()->erase("sub");
-            req->session()->insert("sub", publicSub);
-            // F-021/F-022 (OIDC Core §2/§3.1.3.7): record the auth_time and
-            // amr on the session so the authorization-code issuance paths
-            // (silent re-auth in AuthorizationEndpointController, the
-            // /oauth2/consent handler here) can thread them onto the code,
-            // and so the id_token eventually carries auth_time/acr/amr.
-            // Password-only login = amr "pwd"; the MFA verify handler
-            // (MfaController::verifyLogin) appends "mfa" and refreshes
-            // auth_time when the second factor completes.
+            detail::setPasswordLoginSubject(*req->session(), internalId, publicSub);
             auto nowSecs = std::chrono::duration_cast<std::chrono::seconds>(
                              std::chrono::system_clock::now().time_since_epoch()
             )
                              .count();
-            req->session()->erase("auth_time");
-            req->session()->insert("auth_time", static_cast<int64_t>(nowSecs));
-            req->session()->erase("amr");
-            req->session()->insert("amr", std::string("pwd"));
-            // #144: a fresh password login is the newest authentication
-            // state -- drop any stale MFA-pending marker (e.g. MFA was
-            // administratively disabled while a session sat at the challenge
-            // screen; without this the authorize gate would redirect that
-            // session to /login forever).
-            req->session()->erase("mfa_pending");
-            // #145: symmetric stale-marker cleanup for the password-change
-            // flag (Session::insert never overwrites, so a stale true must be
-            // erased explicitly; it is re-inserted below only when still set
-            // in the users row).
-            req->session()->erase("must_change_password");
-            // A fresh authentication is a privilege boundary -- rotate the
-            // session identifier so a pre-login id cannot be replayed against
-            // the authenticated session (fixation defense; Drogon keeps the
-            // old slot alive for 10s for in-flight requests).
-            req->session()->changeSessionIdToClient();
+            detail::setPasswordLoginClaimsAndRotate(
+              *req->session(), static_cast<int64_t>(nowSecs)
+            );
 
             // Audit: login success
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(

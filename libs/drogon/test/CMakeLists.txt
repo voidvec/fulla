@@ -11,6 +11,9 @@ cmake_minimum_required(VERSION 3.16)
 find_package(GTest CONFIG REQUIRED)
 
 file(GLOB_RECURSE FULLA_DROGON_TEST_SOURCES "*.cc")
+# The real-Session fixture has its own event loop and compiled main.
+list(REMOVE_ITEM FULLA_DROGON_TEST_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/PasswordLoginSessionStateTest.cc")
 
 add_executable(fulla-drogon-test ${FULLA_DROGON_TEST_SOURCES})
 
@@ -36,3 +39,16 @@ oauth2_apply_gcov(fulla-drogon-test)
 
 include(GoogleTest)
 gtest_discover_tests(fulla-drogon-test)
+
+# Run all real-Session cases in one process: Drogon starts and stops once.
+# This target registers only its private loopback handler, with no DB/plugins.
+add_executable(fulla-password-login-session-test PasswordLoginSessionStateTest.cc)
+target_link_libraries(fulla-password-login-session-test PRIVATE fulla::drogon GTest::gtest)
+set_target_properties(fulla-password-login-session-test PROPERTIES
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+oauth2_apply_compat(fulla-password-login-session-test)
+oauth2_apply_warnings(fulla-password-login-session-test)
+oauth2_apply_gcov(fulla-password-login-session-test)
+oauth2_apply_sanitizer(fulla-password-login-session-test)
+add_test(NAME PasswordLoginSessionState COMMAND fulla-password-login-session-test)
+set_tests_properties(PasswordLoginSessionState PROPERTIES TIMEOUT 60)
