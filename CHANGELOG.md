@@ -56,6 +56,12 @@ Changelog entries are written in English (see CONTRIBUTING).
   PR template section), so the v1.5.0-style silent skip cannot recur.
 
 
+### Changed
+
+- Share private HTTP response and metrics presentation for authorization-code and
+  refresh-token results, preserving existing JSON, status codes, headers and
+  grant-specific metrics. Authentication, token rotation and storage flows are unchanged.
+
 ### Fixed
 
 - Export the bounded `fulla_cache_total{repo,outcome}` counter through the existing Prometheus exporter via a dedicated whitelist path, independently of INFO logging and without double-counting against the generic IMetrics counter/gauge export (#343). The four official configurations register the counter; custom configurations must register the same collector explicitly. Missing exporters remain optional; non-whitelisted label values and invalid increments never create series.
