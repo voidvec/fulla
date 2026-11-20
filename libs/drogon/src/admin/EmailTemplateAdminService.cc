@@ -1,4 +1,5 @@
 #include <fulla/drogon/admin/EmailTemplateAdminService.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/error/ErrorResponder.h>
@@ -318,7 +319,7 @@ void EmailTemplateAdminService::upsertTemplate(
             Criteria(TemplateModel::Cols::_locale, CompareOperator::EQ, locale),
           [req, cb, db, key, locale, subject, bodyHtml, bodyText](const std::vector<TemplateModel> &rows) {
               auto respondSaved = [req, cb, key, locale]() {
-                  audit(req, "email_template_updated", key + "/" + locale);
+                  audit(req, ::fulla::common::observability::audit_events::kEmailTemplateUpdated, key + "/" + locale);
                   Json::Value out;
                   out["status"] = "success";
                   out["message"] = "Template saved";
@@ -468,7 +469,7 @@ void EmailTemplateAdminService::testSend(
                   Mapper<AuditModel> auditMapper(db);
                   auditMapper.count(
                     Criteria(AuditModel::Cols::_action, CompareOperator::EQ,
-                             std::string("email_test_sent")) &&
+                             std::string(::fulla::common::observability::audit_events::kEmailTestSent)) &&
                       Criteria(AuditModel::Cols::_actor_id, CompareOperator::EQ, adminSub) &&
                       Criteria(AuditModel::Cols::_timestamp, CompareOperator::GT,
                                ::trantor::Date(cutoff * 1000000)),
@@ -522,7 +523,7 @@ void EmailTemplateAdminService::testSend(
                                               "test-send delivery failed");
                                             return;
                                         }
-                                        audit(req, "email_test_sent", key + "/" + locale);
+                                        audit(req, ::fulla::common::observability::audit_events::kEmailTestSent, key + "/" + locale);
                                         Json::Value out;
                                         out["status"] = "success";
                                         out["message"] = "Test email sent";

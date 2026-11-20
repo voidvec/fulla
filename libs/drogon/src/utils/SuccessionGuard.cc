@@ -3,6 +3,7 @@
 // failures to the caller's done() exactly once.
 
 #include <fulla/drogon/utils/SuccessionGuard.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
@@ -75,7 +76,7 @@ void processNextOrg(
                       {
                           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                             plugin->getAuditSink(),
-                            "org_successor_auto_effected",
+                            ::fulla::common::observability::audit_events::kOrgSuccessorAutoEffected,
                             "success",
                             req,
                             "",

@@ -1,4 +1,5 @@
 #include "IdentityAssembly.h"
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/common/observability/AuditEvent.h>
 #include <fulla/drogon/adapters/BackchannelLogoutNotifier.h>
@@ -204,7 +205,7 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
                  << " presented a non-increasing signCount — assertion rejected "
                     "(possible cloned authenticator)";
         fulla::common::observability::AuditEvent event;
-        event.action = "webauthn_clone_detected";
+        event.action = ::fulla::common::observability::audit_events::kWebauthnCloneDetected;
         event.outcome = "failure";
         event.actorType = "user";
         event.actorId = std::to_string(userId);

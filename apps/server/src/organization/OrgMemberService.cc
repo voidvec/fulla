@@ -1,4 +1,5 @@
 #include <fulla/drogon/http/OnceResponse.h>
+#include <fulla/common/observability/AuditActions.h>
 #include "OrgMemberService.h"
 #include "../openplatform/OpenPlatformConfig.h"
 
@@ -318,7 +319,7 @@ void insertOrgRow(
                                     req, cb, "DB_QUERY_ERROR", "create org: commit failed");
                                   return;
                               }
-                              audit(req, "organization_created", slug, std::to_string(orgId));
+                              audit(req, ::fulla::common::observability::audit_events::kOrganizationCreated, slug, std::to_string(orgId));
                               Json::Value json;
                               json["slug"] = slug;
                               json["role"] = "owner";
@@ -894,7 +895,7 @@ void OrgMemberService::removeMember(
                                           respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "membership not found");
                                           return;
                                       }
-                                      audit(req, selfRemoval ? "org_member_left" : "org_member_removed",
+                                      audit(req, selfRemoval ? ::fulla::common::observability::audit_events::kOrgMemberLeft : ::fulla::common::observability::audit_events::kOrgMemberRemoved,
                                         org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                       Json::Value json;
                                       json["message"] = "Member removed";
@@ -1061,7 +1062,7 @@ void proceedWithInvitationInsert(
                                             "invite: commit failed");
                                           return;
                                       }
-                                      audit(req, "org_invitation_created", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
+                                      audit(req, ::fulla::common::observability::audit_events::kOrgInvitationCreated, org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                       // Fire-and-forget delivery (same pattern as
                                       // EmailVerificationService): with SMTP
                                       // configured the invitee gets the token by
@@ -1220,7 +1221,7 @@ void OrgMemberService::revokeInvitation(
                                     respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "invitation not found");
                                     return;
                                 }
-                                audit(req, "org_invitation_revoked", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
+                                audit(req, ::fulla::common::observability::audit_events::kOrgInvitationRevoked, org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                                 Json::Value json;
                                 json["message"] = "Invitation revoked";
                                 (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -1358,7 +1359,7 @@ void OrgMemberService::revokeOrgConsents(
                                   "no active organization consents for this client");
                                 return;
                             }
-                            audit(req, "org_consent_revoked",
+                            audit(req, ::fulla::common::observability::audit_events::kOrgConsentRevoked,
                               org.getValueOfSlug() + ":" + clientId, std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
@@ -1455,7 +1456,7 @@ void OrgMemberService::nominateSuccessor(
                                         "nominate successor: write failed");
                                       return;
                                   }
-                                  audit(req, "org_successor_nominated",
+                                  audit(req, ::fulla::common::observability::audit_events::kOrgSuccessorNominated,
                                     org.getValueOfSlug() + ":" + std::to_string(targetUserId), std::to_string(org.getValueOfId()));
                                   Json::Value json;
                                   json["slug"] = org.getValueOfSlug();
@@ -1511,7 +1512,7 @@ void OrgMemberService::withdrawSuccessionNomination(
                                   "no pending successor nomination");
                                 return;
                             }
-                            audit(req, "org_successor_nomination_withdrawn",
+                            audit(req, ::fulla::common::observability::audit_events::kOrgSuccessorNominationWithdrawn,
                               org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
@@ -1576,7 +1577,7 @@ void OrgMemberService::acceptSuccession(
                                   "succession no longer pending or the swap failed; retry");
                                 return;
                             }
-                            audit(req, "org_successor_accepted", org.getValueOfSlug(), std::to_string(org.getValueOfId()));
+                            audit(req, ::fulla::common::observability::audit_events::kOrgSuccessorAccepted, org.getValueOfSlug(), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["slug"] = org.getValueOfSlug();
                             json["owner_user_id"] = caller.id;
@@ -1910,7 +1911,7 @@ void OrgMemberService::fileConsentRequest(
                                                       (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
                                                       return;
                                                   }
-                                                  audit(req, "org_consent_request_filed",
+                                                  audit(req, ::fulla::common::observability::audit_events::kOrgConsentRequestFiled,
                                                     org.getValueOfSlug() + ":" + clientId, std::to_string(org.getValueOfId()));
                                                   Json::Value json = requestToJson(row);
                                                   json["message"] =
@@ -2097,7 +2098,7 @@ void decideConsentRequest(
                             if (!unchanged)
                                 audit(
                                   req,
-                                  rejected ? "org_consent_request_rejected"
+                                  rejected ? ::fulla::common::observability::audit_events::kOrgConsentRequestRejected
                                            : "org_consent_request_approved",
                                   org.getValueOfSlug() + ":" + result.clientId,
                                   std::to_string(org.getValueOfId())
@@ -2238,7 +2239,7 @@ void OrgMemberService::withdrawConsentRequest(
                                   "consent request not found");
                                 return;
                             }
-                            audit(req, "org_consent_request_withdrawn",
+                            audit(req, ::fulla::common::observability::audit_events::kOrgConsentRequestWithdrawn,
                               org.getValueOfSlug() + ":" + std::to_string(requestId), std::to_string(org.getValueOfId()));
                             Json::Value json;
                             json["id"] = static_cast<Json::Int64>(requestId);

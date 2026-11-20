@@ -1,4 +1,5 @@
 #include <fulla/drogon/admin/RoleScopeAdminService.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/authz/RolePermissionResolver.h>
@@ -507,7 +508,7 @@ void RoleScopeAdminService::putRolePermissions(
                                 {
                                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                       plugin->getAuditSink(),
-                                      "role_permissions_updated",
+                                      ::fulla::common::observability::audit_events::kRolePermissionsUpdated,
                                       "success",
                                       req,
                                       "",
@@ -790,7 +791,7 @@ void RoleScopeAdminService::createClaimMapping(
         mapper.insert(
           row,
           [req, cb](const ClaimMappings &inserted) {
-              auditClaimMapping(req, "claim_mapping_created",
+              auditClaimMapping(req, ::fulla::common::observability::audit_events::kClaimMappingCreated,
                                 std::to_string(inserted.getValueOfId()));
               Json::Value json;
               json["status"] = "success";
@@ -860,7 +861,7 @@ void RoleScopeAdminService::updateClaimMapping(
                   updateMapper.update(
                     row,
                     [req, cb, id](const std::size_t) {
-                        auditClaimMapping(req, "claim_mapping_updated", std::to_string(id));
+                        auditClaimMapping(req, ::fulla::common::observability::audit_events::kClaimMappingUpdated, std::to_string(id));
                         Json::Value json;
                         json["status"] = "success";
                         json["message"] = "Claim mapping updated";
@@ -921,7 +922,7 @@ void RoleScopeAdminService::deleteClaimMapping(
                   respondError(req, cb, "VALIDATION_RESOURCE_NOT_FOUND", "claim mapping not found");
                   return;
               }
-              auditClaimMapping(req, "claim_mapping_deleted", std::to_string(id));
+              auditClaimMapping(req, ::fulla::common::observability::audit_events::kClaimMappingDeleted, std::to_string(id));
               Json::Value json;
               json["status"] = "success";
               json["message"] = "Claim mapping deleted";
@@ -1158,7 +1159,7 @@ void RoleScopeAdminService::updateScope(
                 {
                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                       plugin->getAuditSink(),
-                      "scope_updated",
+                      ::fulla::common::observability::audit_events::kScopeUpdated,
                       "success",
                       req,
                       "",

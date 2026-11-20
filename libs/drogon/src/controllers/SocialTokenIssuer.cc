@@ -1,4 +1,5 @@
 #include <fulla/drogon/controllers/SocialTokenIssuer.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/controllers/GitHubController.h>
 #include <drogon/drogon.h>
 
@@ -132,7 +133,7 @@ void issueTokensForRegisteredClient(
           // check and pre-approve this client for scopes the user was never
           // prompted for — see this header's top comment).
           fulla::common::observability::AuditEvent event;
-          event.action = "SOCIAL_LOGIN_TOKEN_ISSUED";
+          event.action = ::fulla::common::observability::audit_events::kSocialLoginTokenIssued;
           event.outcome = "success";
           event.actorType = "user";
           event.actorId = userPublicSub;

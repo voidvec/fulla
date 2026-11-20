@@ -1,6 +1,7 @@
 #include "PasswordLoginSessionState.h"
 
 #include <mutex>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/controllers/SessionController.h>
 #include <fulla/drogon/authz/OrgContextGate.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
@@ -720,7 +721,7 @@ void SessionController::login(
             // Audit: login success
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              "login_success",
+              ::fulla::common::observability::audit_events::kLoginSuccess,
               "success",
               req,
               publicSub,
@@ -1201,7 +1202,7 @@ void SessionController::login(
             // Audit: login failure
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              "login_failure",
+              ::fulla::common::observability::audit_events::kLoginFailure,
               "failure",
               req,
               username,
@@ -2031,7 +2032,7 @@ void SessionController::changePasswordForced(
               {
                   ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                     ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                    "password_change_failed",
+                    ::fulla::common::observability::audit_events::kPasswordChangeFailed,
                     "failure",
                     req,
                     sessSub,
@@ -2162,7 +2163,7 @@ void SessionController::changePasswordForced(
                                     }
                                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                      "password_changed",
+                                      ::fulla::common::observability::audit_events::kPasswordChanged,
                                       "success",
                                       req,
                                       sessSub,

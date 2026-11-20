@@ -1,4 +1,5 @@
 #include <fulla/drogon/controllers/MfaController.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/identity/TotpUtils.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/MfaBackupCodes.h>
@@ -145,7 +146,7 @@ void attemptBackupCode(
                     }
                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                      "mfa_backup_code_used",
+                      ::fulla::common::observability::audit_events::kMfaBackupCodeUsed,
                       "success",
                       req,
                       publicSub,
@@ -463,7 +464,7 @@ void MfaController::verifySetup(
                     }
                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                      "mfa_enabled",
+                      ::fulla::common::observability::audit_events::kMfaEnabled,
                       "success",
                       req,
                       userId,
@@ -549,7 +550,7 @@ void MfaController::verifySetup(
                     [sharedCb, codesJson, userId, req](const size_t) {
                         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                           ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                          "mfa_enabled",
+                          ::fulla::common::observability::audit_events::kMfaEnabled,
                           "success",
                           req,
                           userId,
@@ -974,7 +975,7 @@ void MfaController::verifyLogin(
 
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  "mfa_verified",
+                                  ::fulla::common::observability::audit_events::kMfaVerified,
                                   "success",
                                   req,
                                   publicSub,
@@ -984,7 +985,7 @@ void MfaController::verifyLogin(
 
                                 Json::Value json = tokenResult;
                                 json["message"] = "MFA verification successful";
-                                json["mfa_verified"] = true;
+                                json[::fulla::common::observability::audit_events::kMfaVerified] = true;
                                 // P0-3 (#257): surface the backup-code state
                                 // when the second factor was a backup code.
                                 if (*backupRemaining >= 0)
@@ -1289,7 +1290,7 @@ void MfaController::verifyLogin(
                                           ::drogon::app()
                                             .getPlugin<::OAuth2Plugin>()
                                             ->getAuditSink(),
-                                          "mfa_verified",
+                                          ::fulla::common::observability::audit_events::kMfaVerified,
                                           "success",
                                           req,
                                           publicSub,
@@ -1299,7 +1300,7 @@ void MfaController::verifyLogin(
 
                                       Json::Value json = tokenResult;
                                       json["message"] = "MFA verification successful";
-                                      json["mfa_verified"] = true;
+                                      json[::fulla::common::observability::audit_events::kMfaVerified] = true;
 
                                       auto clearDb = ::drogon::app().getDbClient();
                                       auto sendSuccess = [sharedCb, req, json]() {

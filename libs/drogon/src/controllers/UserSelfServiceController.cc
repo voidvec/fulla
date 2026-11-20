@@ -1,4 +1,5 @@
 #include <fulla/drogon/controllers/UserSelfServiceController.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/validation/RuleSet.h>
 #include <fulla/storage/postgres/models/Oauth2AccessTokens.h>
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
@@ -172,7 +173,7 @@ void UserSelfServiceController::getProfile(
                   json["username"] = user.getValueOfUsername();
                   json["email"] = user.getValueOfEmail().empty() ? "" : user.getValueOfEmail();
                   json["email_verified"] = user.getValueOfEmailVerified();
-                  json["mfa_enabled"] = user.getValueOfMfaEnabled();
+                  json[::fulla::common::observability::audit_events::kMfaEnabled] = user.getValueOfMfaEnabled();
                   json["must_change_password"] = user.getValueOfMustChangePassword();
                   // V033 profile minimal set (empty string = not set).
                   json["display_name"] = user.getValueOfDisplayName();
@@ -353,7 +354,7 @@ void UserSelfServiceController::updateProfile(
                         [sharedCb, req, userId](const std::size_t) {
                             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                              "profile_updated",
+                              ::fulla::common::observability::audit_events::kProfileUpdated,
                               "success",
                               req,
                               userId,
@@ -479,7 +480,7 @@ void UserSelfServiceController::changePassword(
               {
                   ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                     ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                    "password_change_failed",
+                    ::fulla::common::observability::audit_events::kPasswordChangeFailed,
                     "failure",
                     req,
                     userId,
@@ -540,7 +541,7 @@ void UserSelfServiceController::changePassword(
                             [sharedCb, userId, req](const ::drogon::orm::Result &) {
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  "password_changed",
+                                  ::fulla::common::observability::audit_events::kPasswordChanged,
                                   "success",
                                   req,
                                   userId,
@@ -556,7 +557,7 @@ void UserSelfServiceController::changePassword(
                             [sharedCb, userId, req](const ::drogon::orm::DrogonDbException &) {
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  "password_changed",
+                                  ::fulla::common::observability::audit_events::kPasswordChanged,
                                   "success",
                                   req,
                                   userId,
@@ -577,7 +578,7 @@ void UserSelfServiceController::changePassword(
                             [sharedCb, userId, req](const ::drogon::orm::Result &) {
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  "password_changed",
+                                  ::fulla::common::observability::audit_events::kPasswordChanged,
                                   "success",
                                   req,
                                   userId,
@@ -592,7 +593,7 @@ void UserSelfServiceController::changePassword(
                             [sharedCb, userId, req](const ::drogon::orm::DrogonDbException &) {
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  "password_changed",
+                                  ::fulla::common::observability::audit_events::kPasswordChanged,
                                   "success",
                                   req,
                                   userId,
@@ -853,7 +854,7 @@ void UserSelfServiceController::revokeAuthorizedApp(
                       [sharedCb, userId, clientId, req](const ::drogon::orm::Result &) {
                           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                            "app_authorization_revoked",
+                            ::fulla::common::observability::audit_events::kAppAuthorizationRevoked,
                             "success",
                             req,
                             userId,
@@ -869,7 +870,7 @@ void UserSelfServiceController::revokeAuthorizedApp(
                       [sharedCb, userId, clientId, req](const ::drogon::orm::DrogonDbException &) {
                           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                            "app_authorization_revoked",
+                            ::fulla::common::observability::audit_events::kAppAuthorizationRevoked,
                             "success",
                             req,
                             userId,
@@ -1007,7 +1008,7 @@ void UserSelfServiceController::deleteAccount(
                                                     ::drogon::app()
                                                       .getPlugin<::OAuth2Plugin>()
                                                       ->getAuditSink(),
-                                                    "account_deleted",
+                                                    ::fulla::common::observability::audit_events::kAccountDeleted,
                                                     "success",
                                                     req,
                                                     userId,
@@ -1577,7 +1578,7 @@ void UserSelfServiceController::linkSocialAccount(
                         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                           plugin->getAuditSink(),
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
-                            ? "social_account_linked"
+                            ? ::fulla::common::observability::audit_events::kSocialAccountLinked
                             : "social_account_link_failed",
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? "success"
@@ -1667,7 +1668,7 @@ void UserSelfServiceController::unlinkSocialAccount(
                         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                           plugin->getAuditSink(),
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
-                            ? "social_account_unlinked"
+                            ? ::fulla::common::observability::audit_events::kSocialAccountUnlinked
                             : "social_account_unlink_blocked",
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? "success"
