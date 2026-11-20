@@ -880,9 +880,8 @@ void ClientManagementService::updateClientScopes(
               }
 
               remaining->store(static_cast<int>(scopes.size()));
-              // Construct every insert Mapper before issuing any INSERT so a
-              // construction failure leaves the transaction pristine (it
-              // rolls back on scope exit with no partial writes).
+              // DELETE has completed. Every caught preparation failure must
+              // roll it back before releasing the transaction references.
               std::vector<Mapper<Oauth2ClientScopes>> insertMappers;
               try
               {
@@ -891,61 +890,58 @@ void ClientManagementService::updateClientScopes(
                   {
                       insertMappers.emplace_back(transaction);
                   }
+                  for (size_t i = 0; i < scopes.size(); ++i)
+                  {
+                      const auto &scopeName = scopes[i];
+                      Oauth2ClientScopes scopeRow;
+                      scopeRow.setClientId(clientId);
+                      scopeRow.setScopeName(scopeName);
+                      insertMappers[i].insert(
+                        scopeRow,
+                        [scopeName, remaining, state](const Oauth2ClientScopes &) {
+                            {
+                                std::lock_guard<std::mutex> lock(state->mu);
+                                state->insertedScopes.push_back(scopeName);
+                            }
+                            // The success response waits for the commit callback;
+                            // the transaction commits once every insert callback
+                            // (the last transaction references) has returned.
+                            remaining->fetch_sub(1);
+                        },
+                        [cb, req, remaining, state](const ::drogon::orm::DrogonDbException &e) {
+                            if (remaining->fetch_sub(1) == 1 && !state->responded.exchange(true))
+                            {
+                                respondError(
+                                  req,
+                                  cb,
+                                  "DB_QUERY_ERROR",
+                                  std::string("Failed to assign some scopes: ") + e.base().what()
+                                );
+                            }
+                        }
+                      );
+                  }
               }
               catch (const std::exception &e)
               {
-                  if (!state->responded.exchange(true))
+                  const bool respond = !state->responded.exchange(true);
+                  transaction->rollback();
+                  if (respond)
                   {
                       respondError(
-                        req,
-                        cb,
-                        "DB_QUERY_ERROR",
+                        req, cb, "DB_QUERY_ERROR",
                         std::string("Failed to assign some scopes: ") + e.what()
                       );
                   }
-                  return;
               }
               catch (...)
               {
-                  if (!state->responded.exchange(true))
+                  const bool respond = !state->responded.exchange(true);
+                  transaction->rollback();
+                  if (respond)
                   {
-                      respondError(
-                        req, cb, "DB_QUERY_ERROR", "Failed to assign some scopes"
-                      );
+                      respondError(req, cb, "DB_QUERY_ERROR", "Failed to assign some scopes");
                   }
-                  return;
-              }
-
-              for (size_t i = 0; i < scopes.size(); ++i)
-              {
-                  const auto &scopeName = scopes[i];
-                  Oauth2ClientScopes scopeRow;
-                  scopeRow.setClientId(clientId);
-                  scopeRow.setScopeName(scopeName);
-                  insertMappers[i].insert(
-                    scopeRow,
-                    [scopeName, remaining, state](const Oauth2ClientScopes &) {
-                        {
-                            std::lock_guard<std::mutex> lock(state->mu);
-                            state->insertedScopes.push_back(scopeName);
-                        }
-                        // The success response waits for the commit callback;
-                        // the transaction commits once every insert callback
-                        // (the last transaction references) has returned.
-                        remaining->fetch_sub(1);
-                    },
-                    [cb, req, remaining, state](const ::drogon::orm::DrogonDbException &e) {
-                        if (remaining->fetch_sub(1) == 1 && !state->responded.exchange(true))
-                        {
-                            respondError(
-                              req,
-                              cb,
-                              "DB_QUERY_ERROR",
-                              std::string("Failed to assign some scopes: ") + e.base().what()
-                            );
-                        }
-                    }
-                  );
               }
           },
           [req, cb, state](const ::drogon::orm::DrogonDbException &e) {
@@ -963,7 +959,9 @@ void ClientManagementService::updateClientScopes(
     }
     catch (const std::exception &e)
     {
-        if (!state->responded.exchange(true))
+        const bool respond = !state->responded.exchange(true);
+        transaction->rollback();
+        if (respond)
         {
             respondError(
               req,
@@ -975,7 +973,9 @@ void ClientManagementService::updateClientScopes(
     }
     catch (...)
     {
-        if (!state->responded.exchange(true))
+        const bool respond = !state->responded.exchange(true);
+        transaction->rollback();
+        if (respond)
         {
             respondError(req, cb, "DB_QUERY_ERROR", "Failed to clear existing scopes");
         }

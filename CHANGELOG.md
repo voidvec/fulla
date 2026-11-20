@@ -80,6 +80,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- Roll back a scope replacement on caught preparation or submission failures so a failed request cannot commit its preceding DELETE. Scope-order regressions now require successful fixture setup and valid readback.
+
 - `PUT /api/admin/clients/{clientId}/scopes` now responds only after the scope-replace transaction commits (#360, found in the PR #348 deep review). Previously the 200 went out when the last INSERT completed — before the destructor-time COMMIT — so a caller that immediately issued a grant or a scopes GET could observe the old scope set, and a `validateClient` cache miss in that window could refill the cache with the stale set for a full TTL. Both success branches (empty and non-empty scope sets) now respond from the transaction commit callback, after the cache invalidation; a failed COMMIT returns `DB_QUERY_ERROR`, and statement failures keep their existing single error response. Response body shape is unchanged.
 
 - Export the bounded `fulla_cache_total{repo,outcome}` counter through the existing Prometheus exporter via a dedicated whitelist path, independently of INFO logging and without double-counting against the generic IMetrics counter/gauge export (#343). The four official configurations register the counter; custom configurations must register the same collector explicitly. Missing exporters remain optional; non-whitelisted label values and invalid increments never create series.
