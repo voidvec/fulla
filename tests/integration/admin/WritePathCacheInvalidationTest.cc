@@ -28,12 +28,15 @@
 
 #include <fulla/drogon/admin/ClientManagementService.h>
 #include <fulla/drogon/admin/UserAdminService.h>
+#include <fulla/storage/postgres/models/Oauth2ClientScopes.h>
 
 #include <algorithm>
 #include <chrono>
 #include <future>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -112,14 +115,56 @@ struct RecordingSink
 template <typename Invoke>
 ::drogon::HttpResponsePtr waitResponse(Invoke &&invoke)
 {
-    std::promise<::drogon::HttpResponsePtr> p;
-    auto f = p.get_future();
+    auto p = std::make_shared<std::promise<::drogon::HttpResponsePtr>>();
+    auto f = p->get_future();
     auto cb = std::make_shared<std::function<void(const ::drogon::HttpResponsePtr &)>>(
-      [&p](const ::drogon::HttpResponsePtr &resp) { p.set_value(resp); });
+      [p](const ::drogon::HttpResponsePtr &resp) { p->set_value(resp); });
     invoke(std::move(cb));
     if (f.wait_for(std::chrono::seconds(10)) != std::future_status::timeout)
         return f.get();
     return nullptr;
+}
+
+std::optional<std::string> createScopeClient()
+{
+    Json::Value json;
+    json["name"] = "scope-order-" + ::drogon::utils::getUuid();
+    json["client_type"] = "CONFIDENTIAL";
+    json["redirect_uris"] = "http://127.0.0.1:9999/callback";
+    Json::StreamWriterBuilder writer;
+    auto response = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::createClient(
+          jsonRequest(::drogon::Post, "/api/admin/clients", Json::writeString(writer, json)),
+          std::move(cb));
+    });
+    if (!response || response->getStatusCode() != ::drogon::k201Created)
+        return std::nullopt;
+    auto body = response->getJsonObject();
+    if (!body || !(*body)["client_id"].isString() || (*body)["client_id"].asString().empty())
+        return std::nullopt;
+    return (*body)["client_id"].asString();
+}
+
+std::optional<std::vector<std::string>> readScopeClient(const std::string &clientId)
+{
+    auto response = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::getClientScopes(
+          jsonRequest(::drogon::Get, "/api/admin/clients/" + clientId + "/scopes"),
+          std::move(cb), clientId);
+    });
+    if (!response || response->getStatusCode() != ::drogon::k200OK)
+        return std::nullopt;
+    auto body = response->getJsonObject();
+    if (!body || !(*body)["scopes"].isArray())
+        return std::nullopt;
+    std::vector<std::string> scopes;
+    for (const auto &scope : (*body)["scopes"])
+    {
+        if (!scope.isString())
+            return std::nullopt;
+        scopes.push_back(scope.asString());
+    }
+    return scopes;
 }
 
 // Fire-and-forget SQL for setup/cleanup (waits for completion, ignores result).
@@ -355,37 +400,10 @@ DROGON_TEST(Integration_P0_Admin_ScopesPut_RespondsAfterCommit)
     ::fulla::drogon::ClientCacheInvalidator::instance().registerHook(
       [sink](const std::string &clientId) { sink->add(clientId); });
 
-    const std::string clientId = "scopeord_cli_" + uniqueSuffix();
-    if (!runSql(
-          db,
-          "INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt) "
-          "VALUES ($1, 'CONFIDENTIAL', 'x', 'y')",
-          clientId))
-    {
-        LOG_ERROR << "[setup] throwaway client insert failed — aborting test";
-        CHECK(true);
-        return;
-    }
+    const auto created = createScopeClient();
+    REQUIRE(created.has_value());
+    const std::string clientId = *created;
 
-    auto getScopes = [&]() -> std::vector<std::string> {
-        auto resp = waitResponse([&](ClientAdmin::ResponseCallback cb) {
-            ClientAdmin::getClientScopes(
-              jsonRequest(::drogon::Get, "/api/admin/clients/" + clientId + "/scopes"),
-              std::move(cb),
-              clientId);
-        });
-        std::vector<std::string> out;
-        if (resp && resp->getStatusCode() == ::drogon::k200OK)
-        {
-            auto json = resp->getJsonObject();
-            if (json && (*json)["scopes"].isArray())
-            {
-                for (const auto &s : (*json)["scopes"])
-                    out.push_back(s.asString());
-            }
-        }
-        return out;
-    };
     auto putScopes = [&](const std::string &body) -> ::drogon::HttpResponsePtr {
         return waitResponse([&](ClientAdmin::ResponseCallback cb) {
             ClientAdmin::updateClientScopes(
@@ -406,9 +424,10 @@ DROGON_TEST(Integration_P0_Admin_ScopesPut_RespondsAfterCommit)
     REQUIRE(body != nullptr);
     CHECK((*body)["scopes"].isArray());
     CHECK((*body)["scopes"].size() == 2);
-    auto seen = getScopes();  // no sleep/poll — commit must already be durable
-    std::sort(seen.begin(), seen.end());
-    CHECK(seen == std::vector<std::string>({"openid", "profile"}));
+    auto seen = readScopeClient(clientId);
+    REQUIRE(seen.has_value());
+    std::sort(seen->begin(), seen->end());
+    CHECK(*seen == std::vector<std::string>({"openid", "profile"}));
 
     // --- Empty-scopes branch: same commit-before-response contract.
     sink->reset();
@@ -420,9 +439,118 @@ DROGON_TEST(Integration_P0_Admin_ScopesPut_RespondsAfterCommit)
     REQUIRE(body != nullptr);
     CHECK((*body)["scopes"].isArray());
     CHECK((*body)["scopes"].empty());
-    CHECK(getScopes().empty());
+    const auto empty = readScopeClient(clientId);
+    REQUIRE(empty.has_value());
+    CHECK(empty->empty());
 
-    // Cleanup (scopes first — FK).
-    runSql(db, "DELETE FROM oauth2_client_scopes WHERE client_id = $1", clientId);
-    runSql(db, "DELETE FROM oauth2_clients WHERE client_id = $1", clientId);
+    const auto removed = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::deleteClient(
+          jsonRequest(::drogon::Delete, "/api/admin/clients/" + clientId), std::move(cb), clientId);
+    });
+    REQUIRE(removed != nullptr);
+    CHECK(removed->getStatusCode() == ::drogon::k200OK);
+}
+
+// Exercise the real framework rollback contract after a completed DELETE.
+// This does not inject faults into the service or into noexcept Mapper code.
+DROGON_TEST(Integration_P0_Admin_ScopesPreparationFailure_RollbackPreservesRows)
+{
+    auto db = dbOrNull();
+    if (!db)
+        return;
+    using Scope = ::drogon_model::fulla_db::Oauth2ClientScopes;
+    using Rows = std::vector<Scope>;
+
+    const auto created = createScopeClient();
+    REQUIRE(created.has_value());
+    const std::string clientId = *created;
+    auto response = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::updateClientScopes(
+          jsonRequest(::drogon::Put, "/api/admin/clients/" + clientId + "/scopes",
+                      R"({"scopes":["openid","profile"]})"),
+          std::move(cb), clientId);
+    });
+    REQUIRE(response != nullptr);
+    REQUIRE(response->getStatusCode() == ::drogon::k200OK);
+    auto initial = readScopeClient(clientId);
+    REQUIRE(initial.has_value());
+    std::sort(initial->begin(), initial->end());
+    REQUIRE(*initial == std::vector<std::string>({"openid", "profile"}));
+
+    auto deleted = std::make_shared<std::promise<bool>>();
+    auto deletedFuture = deleted->get_future();
+    {
+        auto transaction = db->newTransaction();
+        try
+        {
+            ::drogon::orm::Mapper<Scope> mapper(transaction);
+            mapper.deleteBy(
+              ::drogon::orm::Criteria(Scope::Cols::_client_id,
+                                     ::drogon::orm::CompareOperator::EQ, clientId),
+              [transaction, deleted](const size_t affected) {
+                  try
+                  {
+                      throw std::runtime_error("scope preparation failure probe");
+                  }
+                  catch (const std::runtime_error &)
+                  {
+                      transaction->rollback();
+                      deleted->set_value(affected == 2);
+                  }
+              },
+              [transaction, deleted](const ::drogon::orm::DrogonDbException &) {
+                  transaction->rollback();
+                  deleted->set_value(false);
+              });
+        }
+        catch (...)
+        {
+            transaction->rollback();
+            deleted->set_value(false);
+        }
+    }
+    REQUIRE(deletedFuture.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    REQUIRE(deletedFuture.get());
+
+    // A normal MVCC read could see old rows before a pending COMMIT/ROLLBACK.
+    // FOR UPDATE waits for the DELETE's lock, so it checks the final outcome.
+    auto selected = std::make_shared<std::promise<std::optional<Rows>>>();
+    auto selectedFuture = selected->get_future();
+    try
+    {
+        ::drogon::orm::Mapper<Scope> mapper(db);
+        mapper.forUpdate().findBy(
+          ::drogon::orm::Criteria(Scope::Cols::_client_id,
+                                 ::drogon::orm::CompareOperator::EQ, clientId),
+          [selected](const Rows &rows) { selected->set_value(rows); },
+          [selected](const ::drogon::orm::DrogonDbException &) {
+              selected->set_value(std::nullopt);
+          });
+    }
+    catch (...)
+    {
+        selected->set_value(std::nullopt);
+    }
+    REQUIRE(selectedFuture.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    const auto rows = selectedFuture.get();
+    REQUIRE(rows.has_value());
+    std::vector<std::string> actual;
+    for (const auto &row : *rows)
+        actual.push_back(row.getValueOfScopeName());
+    std::sort(actual.begin(), actual.end());
+    CHECK(actual == *initial);
+
+    response = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::updateClientScopes(
+          jsonRequest(::drogon::Put, "/api/admin/clients/" + clientId + "/scopes",
+                      R"({"scopes":[]})"), std::move(cb), clientId);
+    });
+    REQUIRE(response != nullptr);
+    REQUIRE(response->getStatusCode() == ::drogon::k200OK);
+    response = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+        ClientAdmin::deleteClient(
+          jsonRequest(::drogon::Delete, "/api/admin/clients/" + clientId), std::move(cb), clientId);
+    });
+    REQUIRE(response != nullptr);
+    CHECK(response->getStatusCode() == ::drogon::k200OK);
 }
