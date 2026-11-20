@@ -1,6 +1,7 @@
 #include <fulla/drogon/controllers/TokenEndpointController.h>
 
 #include "TokenGrantResponse.h"
+#include "TokenSuccessPayload.h"
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
@@ -1356,12 +1357,9 @@ void TokenEndpointController::token(
                         // ITokenRepository) instead of getStorage()->saveAccessToken.
                         plugin->saveAccessToken(
                           token, [sharedCb, tokenStr, grantedScope, accessTokenTtl]() {
-                              Json::Value json;
-                              json["access_token"] = tokenStr;
-                              json["token_type"] = "Bearer";
-                              json["expires_in"] = (Json::Int64)accessTokenTtl;
-                              json["scope"] = grantedScope;
-                              // No refresh_token for client_credentials
+                              Json::Value json = detail::buildClientCredentialsTokenPayload(
+                                tokenStr, accessTokenTtl, grantedScope
+                              );
                               auto resp = ::drogon::HttpResponse::newHttpJsonResponse(json);
                               if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                                   m->incrementCounter(
@@ -1763,15 +1761,9 @@ void TokenEndpointController::token(
                                       (*sharedCb)(resp);
                                       return;
                                   }
-                                  Json::Value json;
-                                  json["access_token"] = accessTokenStr;
-                                  json["token_type"] = "Bearer";
-                                  json["expires_in"] = (Json::Int64)accessTokenTtl;
-                                  json["refresh_token"] = refreshTokenStr;
-                                  if (!scope.empty())
-                                  {
-                                      json["scope"] = scope;
-                                  }
+                                  Json::Value json = detail::buildDeviceTokenPayload(
+                                    accessTokenStr, accessTokenTtl, refreshTokenStr, scope
+                                  );
                                   // F-025 (OIDC Core §5/§12): device_code grant
                                   // with an openid scope issues an id_token,
                                   // signed via the plugin helper (the device

@@ -820,90 +820,166 @@ void ClientManagementService::updateClientScopes(
     // same Mapper<T> API -- the only raw-SQL exemption here would be none; we
     // use Mapper deleteBy + insert on the transaction connection).
     auto transaction = db->newTransaction();
-    // Invalidation must fire AFTER the commit, not after the last statement:
-    // a DEL issued pre-commit lets a concurrent validateClient miss read the
-    // OLD allowedScopes (cached row includes them) and refill the cache with
-    // the stale set for a full TTL. The commit callback fires when the
-    // transaction actually commits; a rolled-back one skips the DEL (nothing
-    // changed → the cached state is still correct).
-    transaction->setCommitCallback([clientId](bool committed) {
-        if (committed)
-            fulla::drogon::ClientCacheInvalidator::instance().invalidate(clientId);
-    });
-    Mapper<Oauth2ClientScopes> mapper(transaction);
-    mapper.deleteBy(
-      Criteria(Oauth2ClientScopes::Cols::_client_id, CompareOperator::EQ, clientId),
-      [cb, req, clientId, scopes, transaction](const size_t) {
-          if (scopes.empty())
+
+    // #360: the success response AND the cache invalidation must both fire
+    // AFTER the commit, not after the last statement. Drogon commits when the
+    // last transaction reference drops (destructor-time COMMIT); responding
+    // at last-INSERT let a caller that immediately issues a grant or a scopes
+    // GET observe the OLD set, and a validateClient cache miss in that window
+    // refilled the cache with the stale set for a full TTL. A rolled-back
+    // transaction never fires this callback (statement-error paths respond
+    // themselves); a failed COMMIT fires it with committed=false. `responded`
+    // guarantees exactly one response across the error and commit paths.
+    struct CommitState
+    {
+        std::atomic<bool> responded{false};
+        std::mutex mu;
+        std::vector<std::string> insertedScopes;
+    };
+    auto state = std::make_shared<CommitState>();
+    transaction->setCommitCallback(
+      [clientId, req, cb, state](bool committed) {
+          if (state->responded.exchange(true))
+              return;
+          if (!committed)
           {
-              Json::Value json;
-              json["status"] = "success";
-              json["message"] = "Scopes updated";
-              json["scopes"] = Json::Value(Json::arrayValue);
-              (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+              respondError(req, cb, "DB_QUERY_ERROR", "Failed to commit scope update");
               return;
           }
-
-          auto remaining = std::make_shared<std::atomic<int>>(static_cast<int>(scopes.size()));
-          auto insertedScopes = std::make_shared<std::vector<std::string>>();
-          auto mu = std::make_shared<std::mutex>();
-
-          for (const auto &scopeName : scopes)
+          // Invalidate BEFORE responding: a caller that re-reads on 200 must
+          // not hit the stale cached row.
+          fulla::drogon::ClientCacheInvalidator::instance().invalidate(clientId);
+          Json::Value json;
+          json["status"] = "success";
+          json["message"] = "Scopes updated";
+          Json::Value scopesJson(Json::arrayValue);
           {
-              Oauth2ClientScopes scopeRow;
-              scopeRow.setClientId(clientId);
-              scopeRow.setScopeName(scopeName);
-              Mapper<Oauth2ClientScopes> insertMapper(transaction);
-              insertMapper.insert(
-                scopeRow,
-                [cb, clientId, scopeName, remaining, insertedScopes, mu](const Oauth2ClientScopes &) {
-                    {
-                        std::lock_guard<std::mutex> lock(*mu);
-                        insertedScopes->push_back(scopeName);
-                    }
-                    if (remaining->fetch_sub(1) == 1)
-                    {
-                        // All inserts done. Invalidation defers to the commit
-                        // callback registered above; the response goes out now
-                        // (same ordering as before relative to the caller).
-                        Json::Value json;
-                        json["status"] = "success";
-                        json["message"] = "Scopes updated";
-                        Json::Value scopesJson(Json::arrayValue);
-                        {
-                            std::lock_guard<std::mutex> lock(*mu);
-                            for (const auto &s : *insertedScopes)
+              std::lock_guard<std::mutex> lock(state->mu);
+              for (const auto &s : state->insertedScopes)
+              {
+                  scopesJson.append(s);
+              }
+          }
+          json["scopes"] = scopesJson;
+          (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
+      });
+
+    auto remaining = std::make_shared<std::atomic<int>>(0);
+    try
+    {
+        Mapper<Oauth2ClientScopes> mapper(transaction);
+        mapper.deleteBy(
+          Criteria(Oauth2ClientScopes::Cols::_client_id, CompareOperator::EQ, clientId),
+          [cb, req, clientId, scopes, transaction, state, remaining](const size_t) {
+              if (scopes.empty())
+              {
+                  // Nothing to insert; releasing the last transaction
+                  // reference commits the DELETE, and the commit callback
+                  // responds with the empty set.
+                  return;
+              }
+
+              remaining->store(static_cast<int>(scopes.size()));
+              // DELETE has completed. Every caught preparation failure must
+              // roll it back before releasing the transaction references.
+              std::vector<Mapper<Oauth2ClientScopes>> insertMappers;
+              try
+              {
+                  insertMappers.reserve(scopes.size());
+                  for (size_t i = 0; i < scopes.size(); ++i)
+                  {
+                      insertMappers.emplace_back(transaction);
+                  }
+                  for (size_t i = 0; i < scopes.size(); ++i)
+                  {
+                      const auto &scopeName = scopes[i];
+                      Oauth2ClientScopes scopeRow;
+                      scopeRow.setClientId(clientId);
+                      scopeRow.setScopeName(scopeName);
+                      insertMappers[i].insert(
+                        scopeRow,
+                        [scopeName, remaining, state](const Oauth2ClientScopes &) {
                             {
-                                scopesJson.append(s);
+                                std::lock_guard<std::mutex> lock(state->mu);
+                                state->insertedScopes.push_back(scopeName);
+                            }
+                            // The success response waits for the commit callback;
+                            // the transaction commits once every insert callback
+                            // (the last transaction references) has returned.
+                            remaining->fetch_sub(1);
+                        },
+                        [cb, req, remaining, state](const ::drogon::orm::DrogonDbException &e) {
+                            if (remaining->fetch_sub(1) == 1 && !state->responded.exchange(true))
+                            {
+                                respondError(
+                                  req,
+                                  cb,
+                                  "DB_QUERY_ERROR",
+                                  std::string("Failed to assign some scopes: ") + e.base().what()
+                                );
                             }
                         }
-                        json["scopes"] = scopesJson;
-                        (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
-                    }
-                },
-                [cb, req, remaining](const ::drogon::orm::DrogonDbException &e) {
-                    if (remaining->fetch_sub(1) == 1)
-                    {
-                        respondError(
-                          req,
-                          cb,
-                          "DB_QUERY_ERROR",
-                          std::string("Failed to assign some scopes: ") + e.base().what()
-                        );
-                    }
-                }
-              );
+                      );
+                  }
+              }
+              catch (const std::exception &e)
+              {
+                  const bool respond = !state->responded.exchange(true);
+                  transaction->rollback();
+                  if (respond)
+                  {
+                      respondError(
+                        req, cb, "DB_QUERY_ERROR",
+                        std::string("Failed to assign some scopes: ") + e.what()
+                      );
+                  }
+              }
+              catch (...)
+              {
+                  const bool respond = !state->responded.exchange(true);
+                  transaction->rollback();
+                  if (respond)
+                  {
+                      respondError(req, cb, "DB_QUERY_ERROR", "Failed to assign some scopes");
+                  }
+              }
+          },
+          [req, cb, state](const ::drogon::orm::DrogonDbException &e) {
+              if (!state->responded.exchange(true))
+              {
+                  respondError(
+                    req,
+                    cb,
+                    "DB_QUERY_ERROR",
+                    std::string("Failed to clear existing scopes: ") + e.base().what()
+                  );
+              }
           }
-      },
-      [req, cb](const ::drogon::orm::DrogonDbException &e) {
-          respondError(
-            req,
-            cb,
-            "DB_QUERY_ERROR",
-            std::string("Failed to clear existing scopes: ") + e.base().what()
-          );
-      }
-    );
+        );
+    }
+    catch (const std::exception &e)
+    {
+        const bool respond = !state->responded.exchange(true);
+        transaction->rollback();
+        if (respond)
+        {
+            respondError(
+              req,
+              cb,
+              "DB_QUERY_ERROR",
+              std::string("Failed to clear existing scopes: ") + e.what()
+            );
+        }
+    }
+    catch (...)
+    {
+        const bool respond = !state->responded.exchange(true);
+        transaction->rollback();
+        if (respond)
+        {
+            respondError(req, cb, "DB_QUERY_ERROR", "Failed to clear existing scopes");
+        }
+    }
 }
 
 }  // namespace fulla::drogon::admin
