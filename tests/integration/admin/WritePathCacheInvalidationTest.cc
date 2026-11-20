@@ -35,7 +35,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 // ClientCacheInvalidator was promoted to the public include tree in v1.4.0
@@ -176,18 +175,6 @@ bool insertThrowawayUser(const ::drogon::orm::DbClientPtr &db, ThrowawayUser &ou
     return out.id > 0 && !out.publicSub.empty();
 }
 
-// Poll until the sink records the subject (commit-deferred invalidation).
-bool waitForRecord(std::shared_ptr<RecordingSink> sink, const std::string &needle, int timeoutMs = 2000)
-{
-    for (int waited = 0; waited < timeoutMs; waited += 25)
-    {
-        if (sink->count(needle) > 0)
-            return true;
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-    }
-    return sink->count(needle) > 0;
-}
-
 }  // namespace
 
 // ===========================================================================
@@ -326,8 +313,11 @@ DROGON_TEST(Integration_P0_Admin_WritePathCacheInvalidation_ClientCommitOrdered)
     CHECK(resp->getStatusCode() == ::drogon::k200OK);
     CHECK(sink->count(clientId) >= 1);  // synchronous — no poll needed
 
-    // --- updateClientScopes: invalidation is deferred to the commit callback;
-    // it must STILL fire (a lost DEL pins the old allowedScopes for 300s).
+    // --- updateClientScopes: invalidation AND the 200 both fire from the
+    // commit callback (#360), invalidation first. By the time the response
+    // arrives the DEL must already be recorded — no polling allowed: a poll
+    // would mask a pre-commit response (the old defect let a concurrent
+    // validateClient refill the cache with the stale set for a full TTL).
     sink->reset();
     resp = waitResponse([&](ClientAdmin::ResponseCallback cb) {
         ClientAdmin::updateClientScopes(
@@ -338,7 +328,99 @@ DROGON_TEST(Integration_P0_Admin_WritePathCacheInvalidation_ClientCommitOrdered)
     });
     REQUIRE(resp != nullptr);
     CHECK(resp->getStatusCode() == ::drogon::k200OK);
-    CHECK(waitForRecord(sink, clientId));
+    CHECK(sink->count(clientId) >= 1);  // synchronous — commit preceded the 200
+
+    // Cleanup (scopes first — FK).
+    runSql(db, "DELETE FROM oauth2_client_scopes WHERE client_id = $1", clientId);
+    runSql(db, "DELETE FROM oauth2_clients WHERE client_id = $1", clientId);
+}
+
+// ===========================================================================
+// #360: updateClientScopes must respond only AFTER the transaction commits.
+// A caller that receives 200 and immediately re-reads the scopes must see the
+// NEW set — both for a non-empty replacement and for the empty-scopes branch.
+// Before the fix the 200 went out at last-INSERT (pre destructor-time COMMIT),
+// so the immediate GET could observe the old rows.
+// ===========================================================================
+DROGON_TEST(Integration_P0_Admin_ScopesPut_RespondsAfterCommit)
+{
+    auto db = dbOrNull();
+    if (!db)
+    {
+        LOG_INFO << "[skip] DB unavailable — scopes commit-ordering test skipped";
+        return;
+    }
+
+    auto sink = std::make_shared<RecordingSink>();
+    ::fulla::drogon::ClientCacheInvalidator::instance().registerHook(
+      [sink](const std::string &clientId) { sink->add(clientId); });
+
+    const std::string clientId = "scopeord_cli_" + uniqueSuffix();
+    if (!runSql(
+          db,
+          "INSERT INTO oauth2_clients (client_id, client_type, client_secret, salt) "
+          "VALUES ($1, 'CONFIDENTIAL', 'x', 'y')",
+          clientId))
+    {
+        LOG_ERROR << "[setup] throwaway client insert failed — aborting test";
+        CHECK(true);
+        return;
+    }
+
+    auto getScopes = [&]() -> std::vector<std::string> {
+        auto resp = waitResponse([&](ClientAdmin::ResponseCallback cb) {
+            ClientAdmin::getClientScopes(
+              jsonRequest(::drogon::Get, "/api/admin/clients/" + clientId + "/scopes"),
+              std::move(cb),
+              clientId);
+        });
+        std::vector<std::string> out;
+        if (resp && resp->getStatusCode() == ::drogon::k200OK)
+        {
+            auto json = resp->getJsonObject();
+            if (json && (*json)["scopes"].isArray())
+            {
+                for (const auto &s : (*json)["scopes"])
+                    out.push_back(s.asString());
+            }
+        }
+        return out;
+    };
+    auto putScopes = [&](const std::string &body) -> ::drogon::HttpResponsePtr {
+        return waitResponse([&](ClientAdmin::ResponseCallback cb) {
+            ClientAdmin::updateClientScopes(
+              jsonRequest(::drogon::Put, "/api/admin/clients/" + clientId + "/scopes", body),
+              std::move(cb),
+              clientId);
+        });
+    };
+
+    // --- Non-empty replacement: the immediate GET must see the new set, and
+    // the response body must echo it.
+    sink->reset();
+    auto resp = putScopes(R"({"scopes":["openid","profile"]})");
+    REQUIRE(resp != nullptr);
+    CHECK(resp->getStatusCode() == ::drogon::k200OK);
+    CHECK(sink->count(clientId) >= 1);  // invalidation preceded the response
+    auto body = resp->getJsonObject();
+    REQUIRE(body != nullptr);
+    CHECK((*body)["scopes"].isArray());
+    CHECK((*body)["scopes"].size() == 2);
+    auto seen = getScopes();  // no sleep/poll — commit must already be durable
+    std::sort(seen.begin(), seen.end());
+    CHECK(seen == std::vector<std::string>({"openid", "profile"}));
+
+    // --- Empty-scopes branch: same commit-before-response contract.
+    sink->reset();
+    resp = putScopes(R"({"scopes":[]})");
+    REQUIRE(resp != nullptr);
+    CHECK(resp->getStatusCode() == ::drogon::k200OK);
+    CHECK(sink->count(clientId) >= 1);
+    body = resp->getJsonObject();
+    REQUIRE(body != nullptr);
+    CHECK((*body)["scopes"].isArray());
+    CHECK((*body)["scopes"].empty());
+    CHECK(getScopes().empty());
 
     // Cleanup (scopes first — FK).
     runSql(db, "DELETE FROM oauth2_client_scopes WHERE client_id = $1", clientId);
