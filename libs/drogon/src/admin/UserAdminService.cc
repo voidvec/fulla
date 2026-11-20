@@ -1,4 +1,5 @@
 #include <fulla/drogon/admin/UserAdminService.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/validation/RuleSet.h>
 
 #include <fulla/storage/postgres/models/Users.h>
@@ -189,7 +190,7 @@ void finishDeleteResponse(
 )
 {
     auditFromRequest(
-      req, "user_delete", tokensRevoked ? "success" : "partial", "user", std::to_string(id)
+      req, ::fulla::common::observability::audit_events::kUserDelete, tokensRevoked ? "success" : "partial", "user", std::to_string(id)
     );
     Json::Value json;
     json["status"] = "success";
@@ -721,7 +722,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
               auto assignedMu = std::make_shared<std::mutex>();
               auto sendCreated =
                 [cb, req, newId, inserted, assigned, assignedMu](const std::vector<std::string> &requested) {
-                    auditFromRequest(req, "user_create", "success", "user", std::to_string(newId));
+                    auditFromRequest(req, ::fulla::common::observability::audit_events::kUserCreate, "success", "user", std::to_string(newId));
                     std::vector<std::string> assignedCopy;
                     {
                         std::lock_guard<std::mutex> lock(*assignedMu);
@@ -1119,7 +1120,7 @@ void UserAdminService::updateUser(
                                 // flow tokens under the numeric id — DEL both.
                                 fulla::drogon::UserCacheInvalidator::instance().invalidateUser(
                                   std::to_string(id), publicSub);
-                                auditFromRequest(req, "user_update", "success", "user", std::to_string(id));
+                                auditFromRequest(req, ::fulla::common::observability::audit_events::kUserUpdate, "success", "user", std::to_string(id));
                                 Json::Value json;
                                 json["status"] = "success";
                                 json["message"] = "User updated successfully";

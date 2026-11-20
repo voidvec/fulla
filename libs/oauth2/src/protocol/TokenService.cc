@@ -1,4 +1,5 @@
 #include <fulla/oauth2/protocol/TokenService.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/common/model/Subject.h>
 #include <fulla/oauth2/pkce/Pkce.h>
@@ -440,7 +441,7 @@ void TokenService::exchangeCodeForToken(
                       if (tokenStr.empty() || refreshTokenStr.empty() || familyId.empty())
                       {
                           self->audit(
-                            "token_issued", "failure", authCode.userId, "token", ""
+                            ::fulla::common::observability::audit_events::kTokenIssued, "failure", authCode.userId, "token", ""
                           );
                           callback(makeError("server_error", "Token generation failed"));
                           return;
@@ -496,7 +497,7 @@ void TokenService::exchangeCodeForToken(
                                 // them anyway would be a silent failure
                                 // (introspection/refresh lookups all miss).
                                 self->audit(
-                                  "token_issued",
+                                  ::fulla::common::observability::audit_events::kTokenIssued,
                                   "failure",
                                   authCode.userId,
                                   "token",
@@ -620,13 +621,13 @@ void TokenService::exchangeCodeForToken(
                                       {
                                           json["id_token"] = idToken;
                                       }
-                                      self->audit("token_issued", "success", actorId, "token", "");
+                                      self->audit(::fulla::common::observability::audit_events::kTokenIssued, "success", actorId, "token", "");
                                       callback(json);
                                   });
                                 return;
                             }
 
-                            self->audit("token_issued", "success", authCode.userId, "token", "");
+                            self->audit(::fulla::common::observability::audit_events::kTokenIssued, "success", authCode.userId, "token", "");
                             callback(json);
                         }
                       );
@@ -683,7 +684,7 @@ void TokenService::refreshAccessToken(
         )
         {
             self->audit(
-              "refresh_token_reuse_detected",
+              ::fulla::common::observability::audit_events::kRefreshTokenReuseDetected,
               "failure",
               result.token->userId,
               "token_family",
@@ -798,7 +799,7 @@ void TokenService::refreshAccessToken(
                                 return;
                             }
                             self
-                              ->audit("token_refreshed", "success", storedRt->userId, "token", "");
+                              ->audit(::fulla::common::observability::audit_events::kTokenRefreshed, "success", storedRt->userId, "token", "");
                             Json::Value json;
                             json["access_token"] = newTokenStr;
                             json["token_type"] = "Bearer";
@@ -876,7 +877,7 @@ void TokenService::refreshAccessToken(
           if (!self->subjectNormalizer_)
           {
               self->audit(
-                "refresh_subject_normalization_failed",
+                ::fulla::common::observability::audit_events::kRefreshSubjectNormalizationFailed,
                 "failure",
                 storedRt->userId,
                 "token",
@@ -892,7 +893,7 @@ void TokenService::refreshAccessToken(
                 if (!normalized || normalized->empty())
                 {
                     self->audit(
-                      "refresh_subject_normalization_failed",
+                      ::fulla::common::observability::audit_events::kRefreshSubjectNormalizationFailed,
                       "failure",
                       storedRt->userId,
                       "token",

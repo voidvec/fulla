@@ -1,4 +1,5 @@
 #include <fulla/drogon/services/PasswordResetService.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/validation/RuleSet.h>
 
 #include <fulla/storage/postgres/models/PasswordResetTokens.h>
@@ -272,7 +273,7 @@ void PasswordResetService::confirmReset(
                       auto respond = [sharedCb, req, userId]() {
                           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                            "password_reset",
+                            ::fulla::common::observability::audit_events::kPasswordReset,
                             "success",
                             req,
                             std::to_string(userId),

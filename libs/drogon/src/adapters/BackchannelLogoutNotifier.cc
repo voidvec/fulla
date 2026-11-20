@@ -1,4 +1,5 @@
 #include <fulla/drogon/adapters/BackchannelLogoutNotifier.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/common/observability/AuditEvent.h>
 #include <fulla/oauth2/protocol/LogoutToken.h>
@@ -43,7 +44,7 @@ void recordBackchannelAudit(
     fulla::common::observability::AuditEvent ev;
     ev.actorType = "system";
     ev.actorId = subject;
-    ev.action = "backchannel_logout";
+    ev.action = ::fulla::common::observability::audit_events::kBackchannelLogout;
     ev.targetType = "client";
     ev.targetId = clientId;
     ev.outcome = ok ? "success" : "failure";
