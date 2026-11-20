@@ -985,7 +985,7 @@ void MfaController::verifyLogin(
 
                                 Json::Value json = tokenResult;
                                 json["message"] = "MFA verification successful";
-                                json[::fulla::common::observability::audit_events::kMfaVerified] = true;
+                                json["mfa_verified"] = true;
                                 // P0-3 (#257): surface the backup-code state
                                 // when the second factor was a backup code.
                                 if (*backupRemaining >= 0)
@@ -1300,7 +1300,7 @@ void MfaController::verifyLogin(
 
                                       Json::Value json = tokenResult;
                                       json["message"] = "MFA verification successful";
-                                      json[::fulla::common::observability::audit_events::kMfaVerified] = true;
+                                      json["mfa_verified"] = true;
 
                                       auto clearDb = ::drogon::app().getDbClient();
                                       auto sendSuccess = [sharedCb, req, json]() {

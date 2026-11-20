@@ -56,8 +56,8 @@ TEST(AuditActionsTest, NamesMatchSnakeCaseGrammar)
         {
             continue;  // documented historical-casing outlier
         }
-        EXPECT_FALSE(event.empty()) << "empty audit event name";
-        EXPECT_FALSE(std::isupper(static_cast<unsigned char>(event.front())))
+        ASSERT_FALSE(event.empty()) << "empty audit event name";
+        EXPECT_TRUE(event.front() >= 'a' && event.front() <= 'z')
             << event << ": must start lowercase";
         EXPECT_EQ(event.find("__"), std::string_view::npos) << event << ": double underscore";
         EXPECT_NE(event.back(), '_') << event << ": trailing underscore";
@@ -74,6 +74,10 @@ TEST(AuditActionsTest, SpotPinsMatchTheStoredV1Trail)
     // Exact strings the audit_logs.action column already contains; a
     // changed constant here breaks existing queries (v1.x keeps them).
     EXPECT_STREQ(ae::kLoginSuccess, "login_success");
+    EXPECT_STREQ(ae::kClientResumed, "client_resumed");
+    EXPECT_STREQ(ae::kSocialAccountLinkFailed, "social_account_link_failed");
+    EXPECT_STREQ(ae::kSocialAccountUnlinkBlocked, "social_account_unlink_blocked");
+    EXPECT_STREQ(ae::kOrgConsentRequestApproved, "org_consent_request_approved");
     EXPECT_STREQ(ae::kTokenIssued, "token_issued");
     EXPECT_STREQ(ae::kTokenRefreshed, "token_refreshed");
     EXPECT_STREQ(ae::kRefreshTokenReuseDetected, "refresh_token_reuse_detected");
@@ -86,6 +90,10 @@ TEST(AuditActionsTest, SpotPinsMatchTheStoredV1Trail)
 
 TEST(AuditActionsTest, IsKnownEventAnswersMembership)
 {
+    for (auto event : ae::kAllEvents)
+    {
+        EXPECT_TRUE(ae::isKnownEvent(event)) << event;
+    }
     EXPECT_TRUE(ae::isKnownEvent("login_success"));
     EXPECT_TRUE(ae::isKnownEvent(ae::kSocialLoginTokenIssued));
     EXPECT_FALSE(ae::isKnownEvent("login_succes"));   // typo'd
