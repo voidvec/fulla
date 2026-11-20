@@ -74,6 +74,10 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 - Extract password-login session subject and authentication-state writes into private helpers, preserving overwrite order, the authentication timestamp read, stale-marker cleanup and session-ID rotation. Add real-session and HTTP relogin regression coverage without changing login policy or public APIs.
 
+- Share private success-payload construction for client-credentials and device
+  grants, preserving scope presence, refresh-token fields and signed 64-bit
+  lifetimes. Device signing, persistence and HTTP/metrics handling remain in place.
+
 ### Fixed
 
 - Export the bounded `fulla_cache_total{repo,outcome}` counter through the existing Prometheus exporter via a dedicated whitelist path, independently of INFO logging and without double-counting against the generic IMetrics counter/gauge export (#343). The four official configurations register the counter; custom configurations must register the same collector explicitly. Missing exporters remain optional; non-whitelisted label values and invalid increments never create series.
