@@ -127,6 +127,10 @@ TEST(CacheCounter, ProductionAdapterCanRunBeforeServerStartup)
       metrics.incrementCounter("fulla_cache_total", {{"repo", "token"}, {"outcome", "hit"}})
     );
     EXPECT_NO_THROW(metrics.incrementCounter("other_counter", {}));
+    EXPECT_NO_THROW(
+      metrics.setGauge("fulla_cache_total", {{"repo", "token"}, {"outcome", "hit"}}, 1)
+    );
+    EXPECT_NO_THROW(metrics.setGauge("other_gauge", {}, 1));
 }
 
 TEST(CacheCounter, OfficialProfilesRegisterTheSameUniqueCollector)

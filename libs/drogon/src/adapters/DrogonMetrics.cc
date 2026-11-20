@@ -177,14 +177,18 @@ void DrogonMetrics::setGauge(
 {
     try
     {
-        auto names = labelNames(labels);
-        auto collector = resolveCollector(name, [&]() {
-            return std::make_shared<dm::Collector<dm::Gauge>>(name, name, names);
-        });
-        if (auto typed =
-              std::dynamic_pointer_cast<dm::Collector<dm::Gauge>>(collector))
+        // The reserved counter family cannot be registered through another type.
+        if (name != "fulla_cache_total")
         {
-            typed->metric(labelValues(labels, names))->set(value);
+            auto names = labelNames(labels);
+            auto collector = resolveCollector(name, [&]() {
+                return std::make_shared<dm::Collector<dm::Gauge>>(name, name, names);
+            });
+            if (auto typed =
+                  std::dynamic_pointer_cast<dm::Collector<dm::Gauge>>(collector))
+            {
+                typed->metric(labelValues(labels, names))->set(value);
+            }
         }
     }
     catch (...)

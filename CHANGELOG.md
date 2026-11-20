@@ -76,6 +76,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Fixed
 
+- Keep the reserved `fulla_cache_total` family from being registered or modified through the Gauge API when its collector is missing or misconfigured. Add running-adapter regression coverage for bounded cache routing and generic metric export.
+
 - Export the bounded `fulla_cache_total{repo,outcome}` counter through the existing Prometheus exporter via a dedicated whitelist path, independently of INFO logging and without double-counting against the generic IMetrics counter/gauge export (#343). The four official configurations register the counter; custom configurations must register the same collector explicitly. Missing exporters remain optional; non-whitelisted label values and invalid increments never create series.
 
 - Persist and read back access-token `issued_at`/`not_before` consistently in PostgreSQL. Zero-valued inputs use one captured application second instead of rounded database defaults, preventing newly issued tokens from being temporarily inactive. Memory, Redis and PostgreSQL access-token introspection reject future `not_before` values (#342).
