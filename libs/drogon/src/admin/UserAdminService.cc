@@ -213,7 +213,7 @@ Json::Value userRowToListJson(const Users &row)
     user["username"] = row.getValueOfUsername();
     user["email"] = row.getValueOfEmail();
     user["email_verified"] = row.getValueOfEmailVerified();
-    user[::fulla::common::observability::audit_events::kMfaEnabled] = row.getValueOfMfaEnabled();
+    user["mfa_enabled"] = row.getValueOfMfaEnabled();
     user["must_change_password"] = row.getValueOfMustChangePassword();
     return user;
 }
@@ -630,7 +630,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
         !jsonMemberHasType(*jsonBody, "password", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email_verified", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, ::fulla::common::observability::audit_events::kMfaEnabled, isBoolVal) ||
+        !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal))
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "One or more fields have an invalid type");
@@ -645,7 +645,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
     std::string password = jsonBody->get("password", "").asString();
     std::string email = jsonBody->get("email", "").asString();
     bool emailVerified = jsonBody->get("email_verified", false).asBool();
-    bool mfaEnabled = jsonBody->get(::fulla::common::observability::audit_events::kMfaEnabled, false).asBool();
+    bool mfaEnabled = jsonBody->get("mfa_enabled", false).asBool();
     // #145: opt-in forced password change for admin-created users (the admin
     // knows the initial password, so it can be flagged for replacement at
     // first login). Default false: existing API consumers keep their behavior.
@@ -937,7 +937,7 @@ void UserAdminService::getUser(
               json["username"] = row.getValueOfUsername();
               json["email"] = row.getValueOfEmail();
               json["email_verified"] = row.getValueOfEmailVerified();
-              json[::fulla::common::observability::audit_events::kMfaEnabled] = row.getValueOfMfaEnabled();
+              json["mfa_enabled"] = row.getValueOfMfaEnabled();
               json["must_change_password"] = row.getValueOfMustChangePassword();
               json["failed_login_count"] = row.getValueOfFailedLoginCount();
               int64_t lockedUntil = row.getValueOfLockedUntil();
@@ -1025,7 +1025,7 @@ void UserAdminService::updateUser(
     if (!jsonMemberHasType(*jsonBody, "email", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email_verified", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "username", isStringVal) ||
-        !jsonMemberHasType(*jsonBody, ::fulla::common::observability::audit_events::kMfaEnabled, isBoolVal) ||
+        !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "locked", isBoolVal))
     {
@@ -1035,7 +1035,7 @@ void UserAdminService::updateUser(
     bool hasEmail = jsonBody->isMember("email");
     bool hasEmailVerified = jsonBody->isMember("email_verified");
     bool hasUsername = jsonBody->isMember("username");
-    bool hasMfaEnabled = jsonBody->isMember(::fulla::common::observability::audit_events::kMfaEnabled);
+    bool hasMfaEnabled = jsonBody->isMember("mfa_enabled");
     bool hasMustChangePassword = jsonBody->isMember("must_change_password");
     bool hasLocked = jsonBody->isMember("locked");
     bool locking = hasLocked && (*jsonBody)["locked"].asBool();
@@ -1093,7 +1093,7 @@ void UserAdminService::updateUser(
                       }
                       if (hasMfaEnabled)
                       {
-                          rowLocal.setMfaEnabled((*jsonBody)[::fulla::common::observability::audit_events::kMfaEnabled].asBool());
+                          rowLocal.setMfaEnabled((*jsonBody)["mfa_enabled"].asBool());
                       }
                       if (hasMustChangePassword)
                       {

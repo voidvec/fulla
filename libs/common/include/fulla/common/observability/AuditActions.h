@@ -1,26 +1,8 @@
-// AuditActions.h
-//
-// P2-2 batch A: the single source of truth for every audit EVENT name the
-// product emits (the audit_logs.action column). Before this header the
-// ~55 names lived as scattered string literals across 20+ files — the
-// P2-2 webhook subscriptions need them as a CLOSED, spellable set (event
-// filters validate against exactly these constants), and drift between
-// emitters and filters would be silent.
-//
-// Contract:
-//   * Names are lower_snake_case verbs/verb-phrases (subject_action).
-//   * ONE historical outlier keeps its on-the-wire casing verbatim:
-//     SOCIAL_LOGIN_TOKEN_ISSUED (landed uppercase in v1.6.0; changing the
-//     stored value would break existing audit queries — normalize only
-//     with a migration, tracked for v2.0).
-//   * The constexpr kAllEvents array is the complete closed set — adding
-//     a name without registering it in kAllEvents fails the unit test
-//     (AuditActionsTest), which also fails if any constant's value drifts
-//     out of the set's snake_case grammar.
-//
-// This header is in the common layer on purpose: both the Drogon-side
-// emitters and the upcoming webhook delivery service (no Drogon dep)
-// consume it.
+// Audit event vocabulary shared by emitters and event-name consumers.
+// Values preserve the stored audit trail, including the historical uppercase
+// SOCIAL_LOGIN_TOKEN_ISSUED value. This registry does not restrict the sink's
+// string interface: register new action constants in kAllEvents and review
+// production emitters for completeness. Tests check registered values only.
 
 #pragma once
 
@@ -41,7 +23,7 @@ inline constexpr char kTokenRefreshed[] = "token_refreshed";
 inline constexpr char kTokenRevoked[] = "token_revoked";
 inline constexpr char kRefreshTokenReuseDetected[] = "refresh_token_reuse_detected";
 inline constexpr char kRefreshSubjectNormalizationFailed[] = "refresh_subject_normalization_failed";
-// Historical casing kept verbatim — see the header contract note.
+// Historical stored casing is preserved.
 inline constexpr char kSocialLoginTokenIssued[] = "SOCIAL_LOGIN_TOKEN_ISSUED";
 
 // ---- MFA / WebAuthn -----------------------------------------------------
@@ -60,7 +42,9 @@ inline constexpr char kPasswordReset[] = "password_reset";
 inline constexpr char kProfileUpdated[] = "profile_updated";
 inline constexpr char kAccountDeleted[] = "account_deleted";
 inline constexpr char kSocialAccountLinked[] = "social_account_linked";
+inline constexpr char kSocialAccountLinkFailed[] = "social_account_link_failed";
 inline constexpr char kSocialAccountUnlinked[] = "social_account_unlinked";
+inline constexpr char kSocialAccountUnlinkBlocked[] = "social_account_unlink_blocked";
 inline constexpr char kAppAuthorizationRevoked[] = "app_authorization_revoked";
 
 // ---- admin surface -------------------------------------------------------
@@ -77,6 +61,7 @@ inline constexpr char kEmailTestSent[] = "email_test_sent";
 inline constexpr char kAuditExported[] = "audit_exported";
 inline constexpr char kClientRegistered[] = "client_registered";
 inline constexpr char kClientSuspended[] = "client_suspended";
+inline constexpr char kClientResumed[] = "client_resumed";
 
 // ---- open platform (self-registered applications) ------------------------
 inline constexpr char kApplicationCreated[] = "application_created";
@@ -96,6 +81,7 @@ inline constexpr char kOrgInvitationRevoked[] = "org_invitation_revoked";
 inline constexpr char kOrgConsentRevoked[] = "org_consent_revoked";
 inline constexpr char kOrgConsentRequestFiled[] = "org_consent_request_filed";
 inline constexpr char kOrgConsentRequestRejected[] = "org_consent_request_rejected";
+inline constexpr char kOrgConsentRequestApproved[] = "org_consent_request_approved";
 inline constexpr char kOrgConsentRequestWithdrawn[] = "org_consent_request_withdrawn";
 inline constexpr char kOrgSuccessorNominated[] = "org_successor_nominated";
 inline constexpr char kOrgSuccessorAccepted[] = "org_successor_accepted";
@@ -106,7 +92,7 @@ inline constexpr char kOrgSuccessorAutoEffected[] = "org_successor_auto_effected
 // Byte-sorted by VALUE (uppercase SOCIAL_LOGIN_TOKEN_ISSUED sorts first);
 // the unit test enforces membership and ordering so binary-search
 // validation stays available.
-inline constexpr std::array<std::string_view, 57> kAllEvents{
+inline constexpr std::array<std::string_view, 61> kAllEvents{
   kSocialLoginTokenIssued,
   kAccountDeleted,
   kAppAuthorizationRevoked,
@@ -120,6 +106,7 @@ inline constexpr std::array<std::string_view, 57> kAllEvents{
   kClaimMappingDeleted,
   kClaimMappingUpdated,
   kClientRegistered,
+  kClientResumed,
   kClientSuspended,
   kEmailTemplateUpdated,
   kEmailTestSent,
@@ -128,6 +115,7 @@ inline constexpr std::array<std::string_view, 57> kAllEvents{
   kMfaBackupCodeUsed,
   kMfaEnabled,
   kMfaVerified,
+  kOrgConsentRequestApproved,
   kOrgConsentRequestFiled,
   kOrgConsentRequestRejected,
   kOrgConsentRequestWithdrawn,
@@ -152,7 +140,9 @@ inline constexpr std::array<std::string_view, 57> kAllEvents{
   kRefreshTokenReuseDetected,
   kRolePermissionsUpdated,
   kScopeUpdated,
+  kSocialAccountLinkFailed,
   kSocialAccountLinked,
+  kSocialAccountUnlinkBlocked,
   kSocialAccountUnlinked,
   kTokenIssued,
   kTokenRefreshed,
@@ -166,10 +156,10 @@ inline constexpr std::array<std::string_view, 57> kAllEvents{
   kWebauthnRegistered,
 };
 
-static_assert(kAllEvents.size() == 57, "register new audit events in kAllEvents");
+static_assert(kAllEvents.size() == 61, "register new audit events in kAllEvents");
 
 // True iff `name` is a member of the closed set (the webhook subscription
-// validator calls this; emitters should use the constants directly).
+// validator can use this; emitters should use the constants directly).
 inline constexpr bool isKnownEvent(std::string_view name)
 {
     for (auto event : kAllEvents)

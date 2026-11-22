@@ -68,6 +68,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Changed
 
+- Centralize all 61 existing audit action values without changing stored events; keep JSON field names independent of the event registry.
+
 - Share private HTTP response and metrics presentation for authorization-code and
   refresh-token results, preserving existing JSON, status codes, headers and
   grant-specific metrics. Authentication, token rotation and storage flows are unchanged.

@@ -173,7 +173,7 @@ void UserSelfServiceController::getProfile(
                   json["username"] = user.getValueOfUsername();
                   json["email"] = user.getValueOfEmail().empty() ? "" : user.getValueOfEmail();
                   json["email_verified"] = user.getValueOfEmailVerified();
-                  json[::fulla::common::observability::audit_events::kMfaEnabled] = user.getValueOfMfaEnabled();
+                  json["mfa_enabled"] = user.getValueOfMfaEnabled();
                   json["must_change_password"] = user.getValueOfMustChangePassword();
                   // V033 profile minimal set (empty string = not set).
                   json["display_name"] = user.getValueOfDisplayName();
@@ -1579,7 +1579,7 @@ void UserSelfServiceController::linkSocialAccount(
                           plugin->getAuditSink(),
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? ::fulla::common::observability::audit_events::kSocialAccountLinked
-                            : "social_account_link_failed",
+                            : ::fulla::common::observability::audit_events::kSocialAccountLinkFailed,
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? "success"
                             : "failure",
@@ -1669,7 +1669,7 @@ void UserSelfServiceController::unlinkSocialAccount(
                           plugin->getAuditSink(),
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? ::fulla::common::observability::audit_events::kSocialAccountUnlinked
-                            : "social_account_unlink_blocked",
+                            : ::fulla::common::observability::audit_events::kSocialAccountUnlinkBlocked,
                           result.status == ::fulla::identity::SocialLinkOpStatus::Ok
                             ? "success"
                             : "failure",

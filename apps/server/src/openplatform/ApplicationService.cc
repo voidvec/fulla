@@ -1842,7 +1842,7 @@ void ApplicationService::setStatus(
                     // visible immediately (the 3s TTL only bounds cross-path drift).
                     if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>())
                         plugin->invalidateOwnerStatusCache();
-                    audit(req, suspended ? ::fulla::common::observability::audit_events::kClientSuspended : "client_resumed", clientId);
+                    audit(req, suspended ? ::fulla::common::observability::audit_events::kClientSuspended : ::fulla::common::observability::audit_events::kClientResumed, clientId);
                     if (suspended)
                     {
                         // Review M5: "suspended = no new codes or tokens" must

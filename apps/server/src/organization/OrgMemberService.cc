@@ -2099,7 +2099,7 @@ void decideConsentRequest(
                                 audit(
                                   req,
                                   rejected ? ::fulla::common::observability::audit_events::kOrgConsentRequestRejected
-                                           : "org_consent_request_approved",
+                                           : ::fulla::common::observability::audit_events::kOrgConsentRequestApproved,
                                   org.getValueOfSlug() + ":" + result.clientId,
                                   std::to_string(org.getValueOfId())
                                 );
