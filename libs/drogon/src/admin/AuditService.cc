@@ -1,4 +1,5 @@
 #include <fulla/drogon/admin/AuditService.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/storage/postgres/models/AuditLogs.h>
 #include <fulla/storage/postgres/models/Users.h>
@@ -541,7 +542,7 @@ void AuditService::exportLogs(const ::drogon::HttpRequestPtr &req, ResponseCallb
                               }
                               ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                 plugin->getAuditSink(),
-                                "audit_exported",
+                                ::fulla::common::observability::audit_events::kAuditExported,
                                 "success",
                                 req,
                                 "",

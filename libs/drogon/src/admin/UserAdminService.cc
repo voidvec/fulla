@@ -1,4 +1,5 @@
 #include <fulla/drogon/admin/UserAdminService.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/validation/RuleSet.h>
 
 #include <fulla/storage/postgres/models/Users.h>
@@ -189,7 +190,7 @@ void finishDeleteResponse(
 )
 {
     auditFromRequest(
-      req, "user_delete", tokensRevoked ? "success" : "partial", "user", std::to_string(id)
+      req, ::fulla::common::observability::audit_events::kUserDelete, tokensRevoked ? "success" : "partial", "user", std::to_string(id)
     );
     Json::Value json;
     json["status"] = "success";
@@ -212,7 +213,7 @@ Json::Value userRowToListJson(const Users &row)
     user["username"] = row.getValueOfUsername();
     user["email"] = row.getValueOfEmail();
     user["email_verified"] = row.getValueOfEmailVerified();
-    user["mfa_enabled"] = row.getValueOfMfaEnabled();
+    user[::fulla::common::observability::audit_events::kMfaEnabled] = row.getValueOfMfaEnabled();
     user["must_change_password"] = row.getValueOfMustChangePassword();
     return user;
 }
@@ -629,7 +630,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
         !jsonMemberHasType(*jsonBody, "password", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email_verified", isBoolVal) ||
-        !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
+        !jsonMemberHasType(*jsonBody, ::fulla::common::observability::audit_events::kMfaEnabled, isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal))
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "One or more fields have an invalid type");
@@ -644,7 +645,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
     std::string password = jsonBody->get("password", "").asString();
     std::string email = jsonBody->get("email", "").asString();
     bool emailVerified = jsonBody->get("email_verified", false).asBool();
-    bool mfaEnabled = jsonBody->get("mfa_enabled", false).asBool();
+    bool mfaEnabled = jsonBody->get(::fulla::common::observability::audit_events::kMfaEnabled, false).asBool();
     // #145: opt-in forced password change for admin-created users (the admin
     // knows the initial password, so it can be flagged for replacement at
     // first login). Default false: existing API consumers keep their behavior.
@@ -721,7 +722,7 @@ void UserAdminService::createUser(const ::drogon::HttpRequestPtr &req, ResponseC
               auto assignedMu = std::make_shared<std::mutex>();
               auto sendCreated =
                 [cb, req, newId, inserted, assigned, assignedMu](const std::vector<std::string> &requested) {
-                    auditFromRequest(req, "user_create", "success", "user", std::to_string(newId));
+                    auditFromRequest(req, ::fulla::common::observability::audit_events::kUserCreate, "success", "user", std::to_string(newId));
                     std::vector<std::string> assignedCopy;
                     {
                         std::lock_guard<std::mutex> lock(*assignedMu);
@@ -936,7 +937,7 @@ void UserAdminService::getUser(
               json["username"] = row.getValueOfUsername();
               json["email"] = row.getValueOfEmail();
               json["email_verified"] = row.getValueOfEmailVerified();
-              json["mfa_enabled"] = row.getValueOfMfaEnabled();
+              json[::fulla::common::observability::audit_events::kMfaEnabled] = row.getValueOfMfaEnabled();
               json["must_change_password"] = row.getValueOfMustChangePassword();
               json["failed_login_count"] = row.getValueOfFailedLoginCount();
               int64_t lockedUntil = row.getValueOfLockedUntil();
@@ -1024,7 +1025,7 @@ void UserAdminService::updateUser(
     if (!jsonMemberHasType(*jsonBody, "email", isStringVal) ||
         !jsonMemberHasType(*jsonBody, "email_verified", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "username", isStringVal) ||
-        !jsonMemberHasType(*jsonBody, "mfa_enabled", isBoolVal) ||
+        !jsonMemberHasType(*jsonBody, ::fulla::common::observability::audit_events::kMfaEnabled, isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "must_change_password", isBoolVal) ||
         !jsonMemberHasType(*jsonBody, "locked", isBoolVal))
     {
@@ -1034,7 +1035,7 @@ void UserAdminService::updateUser(
     bool hasEmail = jsonBody->isMember("email");
     bool hasEmailVerified = jsonBody->isMember("email_verified");
     bool hasUsername = jsonBody->isMember("username");
-    bool hasMfaEnabled = jsonBody->isMember("mfa_enabled");
+    bool hasMfaEnabled = jsonBody->isMember(::fulla::common::observability::audit_events::kMfaEnabled);
     bool hasMustChangePassword = jsonBody->isMember("must_change_password");
     bool hasLocked = jsonBody->isMember("locked");
     bool locking = hasLocked && (*jsonBody)["locked"].asBool();
@@ -1092,7 +1093,7 @@ void UserAdminService::updateUser(
                       }
                       if (hasMfaEnabled)
                       {
-                          rowLocal.setMfaEnabled((*jsonBody)["mfa_enabled"].asBool());
+                          rowLocal.setMfaEnabled((*jsonBody)[::fulla::common::observability::audit_events::kMfaEnabled].asBool());
                       }
                       if (hasMustChangePassword)
                       {
@@ -1119,7 +1120,7 @@ void UserAdminService::updateUser(
                                 // flow tokens under the numeric id — DEL both.
                                 fulla::drogon::UserCacheInvalidator::instance().invalidateUser(
                                   std::to_string(id), publicSub);
-                                auditFromRequest(req, "user_update", "success", "user", std::to_string(id));
+                                auditFromRequest(req, ::fulla::common::observability::audit_events::kUserUpdate, "success", "user", std::to_string(id));
                                 Json::Value json;
                                 json["status"] = "success";
                                 json["message"] = "User updated successfully";

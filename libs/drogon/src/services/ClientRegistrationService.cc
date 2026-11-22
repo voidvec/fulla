@@ -1,4 +1,5 @@
 #include <fulla/drogon/services/ClientRegistrationService.h>
+#include <fulla/common/observability/AuditActions.h>
 
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/storage/postgres/models/Oauth2Clients.h>
@@ -285,7 +286,7 @@ void ClientRegistrationService::registerClient(
 
               ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                 ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                "client_registered",
+                ::fulla::common::observability::audit_events::kClientRegistered,
                 "success",
                 req,
                 "",
@@ -298,7 +299,7 @@ void ClientRegistrationService::registerClient(
           [sharedCb, req](const DrogonDbException &e) {
               ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                 ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                "client_registered",
+                ::fulla::common::observability::audit_events::kClientRegistered,
                 "failure",
                 req,
                 "",

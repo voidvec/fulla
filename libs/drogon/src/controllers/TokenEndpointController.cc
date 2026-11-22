@@ -2,6 +2,7 @@
 
 #include "TokenGrantResponse.h"
 #include "TokenSuccessPayload.h"
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/storage/postgres/ClientOwnersRepository.h>
@@ -917,7 +918,7 @@ void TokenEndpointController::revoke(
                       plugin->revokeRefreshToken(token, [clientId, token, callback = std::move(callback)]() mutable {
                           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                            "token_revoked",
+                            ::fulla::common::observability::audit_events::kTokenRevoked,
                             "success",
                             nullptr,
                             clientId,
