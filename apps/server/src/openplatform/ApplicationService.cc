@@ -29,6 +29,8 @@
 #include <set>
 #include <sstream>
 
+namespace ae = ::fulla::common::observability::audit_events;
+
 // v1.4.0 open platform service (see ApplicationService.h). All DB access is
 // Mapper + Criteria (db-operations.md); no JOINs — fan-out queries; every
 // Mapper<...> constructor guarded; every failure reaches (*sharedCb); all
@@ -746,7 +748,7 @@ void insertApplication(
                                           "application creation commit failed");
                                         return;
                                     }
-                                    audit(req, ::fulla::common::observability::audit_events::kApplicationCreated, clientId,
+                                    audit(req, ae::kApplicationCreated, clientId,
                                       orgId ? std::to_string(*orgId) : "");
                                     // Review C2: every client write invalidates the
                                     // Redis client cache or a rotated/created row
@@ -1489,7 +1491,7 @@ void ApplicationService::rotateSecret(
                                 [req, cb, clientId, secret, ownerOrgId](const std::size_t) {
                                     ::fulla::drogon::ClientCacheInvalidator::instance()
                                       .invalidate(clientId);
-                                    audit(req, ::fulla::common::observability::audit_events::kApplicationSecretRotated, clientId, ownerOrgId);
+                                    audit(req, ae::kApplicationSecretRotated, clientId, ownerOrgId);
                                     Json::Value json;
                                     json["client_id"] = clientId;
                                     // Shown EXACTLY once (design §3/§8).
@@ -1602,7 +1604,7 @@ void ApplicationService::transfer(
                         Mapper<OwnerModel>(db).update(
                           updated,
                           [req, cb, clientId](const std::size_t) {
-                              audit(req, ::fulla::common::observability::audit_events::kApplicationTransferred, clientId);
+                              audit(req, ae::kApplicationTransferred, clientId);
                               Json::Value json;
                               json["message"] = "Application transferred to personal ownership";
                               (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -1687,7 +1689,7 @@ void ApplicationService::transfer(
                                                     Mapper<OwnerModel>(db).update(
                                                       updated,
                                                       [req, cb, clientId, orgId](const std::size_t) {
-                                                          audit(req, ::fulla::common::observability::audit_events::kApplicationTransferred,
+                                                          audit(req, ae::kApplicationTransferred,
                                                             clientId, std::to_string(orgId));
                                                           Json::Value json;
                                                           json["message"] =
@@ -1775,7 +1777,7 @@ void ApplicationService::remove(
                                 [req, cb, clientId, ownerOrgId](const std::size_t) {
                                     ::fulla::drogon::ClientCacheInvalidator::instance()
                                       .invalidate(clientId);
-                                    audit(req, ::fulla::common::observability::audit_events::kApplicationDeleted, clientId, ownerOrgId);
+                                    audit(req, ae::kApplicationDeleted, clientId, ownerOrgId);
                                     Json::Value json;
                                     json["message"] = "Application deleted";
                                     (*cb)(::drogon::HttpResponse::newHttpJsonResponse(json));
@@ -1842,7 +1844,7 @@ void ApplicationService::setStatus(
                     // visible immediately (the 3s TTL only bounds cross-path drift).
                     if (auto *plugin = ::drogon::app().getPlugin<::OAuth2Plugin>())
                         plugin->invalidateOwnerStatusCache();
-                    audit(req, suspended ? ::fulla::common::observability::audit_events::kClientSuspended : ::fulla::common::observability::audit_events::kClientResumed, clientId);
+                    audit(req, suspended ? ae::kClientSuspended : ae::kClientResumed, clientId);
                     if (suspended)
                     {
                         // Review M5: "suspended = no new codes or tokens" must

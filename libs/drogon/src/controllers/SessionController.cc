@@ -42,6 +42,8 @@
 #include <fulla/identity/AuthService.h>
 #include <fulla/identity/SessionManager.h>
 
+namespace ae = ::fulla::common::observability::audit_events;
+
 // Phase 1.5d (Task 39): `using namespace oauth2;` was removed -- this TU
 // has no actual oauth2:: symbol references (all calls are fully qualified
 // ::fulla::...). The directive previously compiled only because
@@ -721,7 +723,7 @@ void SessionController::login(
             // Audit: login success
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              ::fulla::common::observability::audit_events::kLoginSuccess,
+              ae::kLoginSuccess,
               "success",
               req,
               publicSub,
@@ -1202,7 +1204,7 @@ void SessionController::login(
             // Audit: login failure
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              ::fulla::common::observability::audit_events::kLoginFailure,
+              ae::kLoginFailure,
               "failure",
               req,
               username,
@@ -2032,7 +2034,7 @@ void SessionController::changePasswordForced(
               {
                   ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                     ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                    ::fulla::common::observability::audit_events::kPasswordChangeFailed,
+                    ae::kPasswordChangeFailed,
                     "failure",
                     req,
                     sessSub,
@@ -2163,7 +2165,7 @@ void SessionController::changePasswordForced(
                                     }
                                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                      ::fulla::common::observability::audit_events::kPasswordChanged,
+                                      ae::kPasswordChanged,
                                       "success",
                                       req,
                                       sessSub,

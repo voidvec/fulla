@@ -17,6 +17,8 @@
 #include <cctype>
 #include <vector>
 
+namespace ae = ::fulla::common::observability::audit_events;
+
 namespace fulla::drogon::admin
 {
 
@@ -319,7 +321,7 @@ void EmailTemplateAdminService::upsertTemplate(
             Criteria(TemplateModel::Cols::_locale, CompareOperator::EQ, locale),
           [req, cb, db, key, locale, subject, bodyHtml, bodyText](const std::vector<TemplateModel> &rows) {
               auto respondSaved = [req, cb, key, locale]() {
-                  audit(req, ::fulla::common::observability::audit_events::kEmailTemplateUpdated, key + "/" + locale);
+                  audit(req, ae::kEmailTemplateUpdated, key + "/" + locale);
                   Json::Value out;
                   out["status"] = "success";
                   out["message"] = "Template saved";
@@ -469,7 +471,7 @@ void EmailTemplateAdminService::testSend(
                   Mapper<AuditModel> auditMapper(db);
                   auditMapper.count(
                     Criteria(AuditModel::Cols::_action, CompareOperator::EQ,
-                             std::string(::fulla::common::observability::audit_events::kEmailTestSent)) &&
+                             std::string(ae::kEmailTestSent)) &&
                       Criteria(AuditModel::Cols::_actor_id, CompareOperator::EQ, adminSub) &&
                       Criteria(AuditModel::Cols::_timestamp, CompareOperator::GT,
                                ::trantor::Date(cutoff * 1000000)),
@@ -523,7 +525,7 @@ void EmailTemplateAdminService::testSend(
                                               "test-send delivery failed");
                                             return;
                                         }
-                                        audit(req, ::fulla::common::observability::audit_events::kEmailTestSent, key + "/" + locale);
+                                        audit(req, ae::kEmailTestSent, key + "/" + locale);
                                         Json::Value out;
                                         out["status"] = "success";
                                         out["message"] = "Test email sent";

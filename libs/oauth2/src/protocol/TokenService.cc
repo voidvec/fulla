@@ -7,6 +7,8 @@
 
 #include <chrono>
 
+namespace ae = ::fulla::common::observability::audit_events;
+
 namespace fulla::oauth2::protocol
 {
 
@@ -441,7 +443,7 @@ void TokenService::exchangeCodeForToken(
                       if (tokenStr.empty() || refreshTokenStr.empty() || familyId.empty())
                       {
                           self->audit(
-                            ::fulla::common::observability::audit_events::kTokenIssued, "failure", authCode.userId, "token", ""
+                            ae::kTokenIssued, "failure", authCode.userId, "token", ""
                           );
                           callback(makeError("server_error", "Token generation failed"));
                           return;
@@ -497,7 +499,7 @@ void TokenService::exchangeCodeForToken(
                                 // them anyway would be a silent failure
                                 // (introspection/refresh lookups all miss).
                                 self->audit(
-                                  ::fulla::common::observability::audit_events::kTokenIssued,
+                                  ae::kTokenIssued,
                                   "failure",
                                   authCode.userId,
                                   "token",
@@ -621,13 +623,15 @@ void TokenService::exchangeCodeForToken(
                                       {
                                           json["id_token"] = idToken;
                                       }
-                                      self->audit(::fulla::common::observability::audit_events::kTokenIssued, "success", actorId, "token", "");
+                                      self->audit(
+                                        ae::kTokenIssued, "success", actorId, "token", ""
+                                      );
                                       callback(json);
                                   });
                                 return;
                             }
 
-                            self->audit(::fulla::common::observability::audit_events::kTokenIssued, "success", authCode.userId, "token", "");
+                            self->audit(ae::kTokenIssued, "success", authCode.userId, "token", "");
                             callback(json);
                         }
                       );
@@ -684,7 +688,7 @@ void TokenService::refreshAccessToken(
         )
         {
             self->audit(
-              ::fulla::common::observability::audit_events::kRefreshTokenReuseDetected,
+              ae::kRefreshTokenReuseDetected,
               "failure",
               result.token->userId,
               "token_family",
@@ -799,7 +803,9 @@ void TokenService::refreshAccessToken(
                                 return;
                             }
                             self
-                              ->audit(::fulla::common::observability::audit_events::kTokenRefreshed, "success", storedRt->userId, "token", "");
+                              ->audit(
+                                ae::kTokenRefreshed, "success", storedRt->userId, "token", ""
+                              );
                             Json::Value json;
                             json["access_token"] = newTokenStr;
                             json["token_type"] = "Bearer";
@@ -877,7 +883,7 @@ void TokenService::refreshAccessToken(
           if (!self->subjectNormalizer_)
           {
               self->audit(
-                ::fulla::common::observability::audit_events::kRefreshSubjectNormalizationFailed,
+                ae::kRefreshSubjectNormalizationFailed,
                 "failure",
                 storedRt->userId,
                 "token",
@@ -893,7 +899,7 @@ void TokenService::refreshAccessToken(
                 if (!normalized || normalized->empty())
                 {
                     self->audit(
-                      ::fulla::common::observability::audit_events::kRefreshSubjectNormalizationFailed,
+                      ae::kRefreshSubjectNormalizationFailed,
                       "failure",
                       storedRt->userId,
                       "token",

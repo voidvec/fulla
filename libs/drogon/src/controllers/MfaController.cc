@@ -17,6 +17,8 @@
 
 #include <fulla/storage/postgres/models/Users.h>
 
+namespace ae = ::fulla::common::observability::audit_events;
+
 using namespace ::drogon::orm;
 
 namespace fulla::drogon::controllers
@@ -146,7 +148,7 @@ void attemptBackupCode(
                     }
                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                      ::fulla::common::observability::audit_events::kMfaBackupCodeUsed,
+                      ae::kMfaBackupCodeUsed,
                       "success",
                       req,
                       publicSub,
@@ -464,7 +466,7 @@ void MfaController::verifySetup(
                     }
                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                      ::fulla::common::observability::audit_events::kMfaEnabled,
+                      ae::kMfaEnabled,
                       "success",
                       req,
                       userId,
@@ -550,7 +552,7 @@ void MfaController::verifySetup(
                     [sharedCb, codesJson, userId, req](const size_t) {
                         ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                           ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                          ::fulla::common::observability::audit_events::kMfaEnabled,
+                          ae::kMfaEnabled,
                           "success",
                           req,
                           userId,
@@ -975,7 +977,7 @@ void MfaController::verifyLogin(
 
                                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                  ::fulla::common::observability::audit_events::kMfaVerified,
+                                  ae::kMfaVerified,
                                   "success",
                                   req,
                                   publicSub,
@@ -1290,7 +1292,7 @@ void MfaController::verifyLogin(
                                           ::drogon::app()
                                             .getPlugin<::OAuth2Plugin>()
                                             ->getAuditSink(),
-                                          ::fulla::common::observability::audit_events::kMfaVerified,
+                                          ae::kMfaVerified,
                                           "success",
                                           req,
                                           publicSub,
