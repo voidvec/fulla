@@ -6574,7 +6574,7 @@ Custom configurations must add this collector to the existing `drogon::plugin::P
 {"path":"/metrics","collectors":[{"name":"fulla_cache_total","help":"Cache lookup outcomes","type":"counter","labels":["repo","outcome"]}]}
 ```
 
-Preserve any other configured collectors. A missing or incompatible collector leaves authentication operational but does not export this counter. Non-whitelisted label values and invalid increments are rejected without creating series.
+Preserve any other configured collectors. A missing or incompatible collector leaves authentication operational but does not export this counter. Non-whitelisted label values and invalid increments are rejected without creating series. The Gauge API never registers or mutates `fulla_cache_total`: `setGauge` with that name is a no-op in every collector state (missing, counter, or gauge), so a misconfigured deployment cannot create a gauge series for the reserved family.
 
 Other IMetrics counters and gauges are registered lazily and need no configuration:
 
