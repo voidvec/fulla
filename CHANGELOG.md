@@ -68,7 +68,7 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 ### Changed
 
-- Centralize all 61 existing audit action values without changing stored events; keep JSON field names independent of the event registry.
+- Centralize all 61 existing audit action values without changing stored events; keep JSON field names independent of the event registry. A new static-check guard (`tools/arch-guard/audit_event_guard.py`, with selftest) fails CI when a declared constant is missing from `kAllEvents` or an audit emitter passes an action string literal.
 
 - Share private HTTP response and metrics presentation for authorization-code and
   refresh-token results, preserving existing JSON, status codes, headers and

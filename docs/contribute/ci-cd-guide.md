@@ -95,7 +95,7 @@ Classification used below:
 
 The single entry point that chains the three gates via `needs` (see the tree in §1):
 
-- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, the tracked-markdown link gate, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
+- **`static-checks`** (ubuntu-24.04, 10 min) — source-only, no compilation: `arch_guard.py` (domain libs stay framework-agnostic), `double_move_guard.py` (#183 crash guard), `audit_event_guard.py` (audit registry/emitter drift), `migration_check.py`, `api_diff.py` (SemVer over exported SDK headers vs `tools/api-diff/api-baseline.txt`), test naming validator, `drogon_macro_bool_check.py`, `manage-parity-check.sh`, the tracked-markdown link gate, OpenAPI spec validation + the spec governance gate (routes == docs == `openapi.yaml`, version sync).
 - **`frontend`** — calls `_frontend.yml` (see §3.3 and §4).
 - **`build-test`** — calls `_build-test.yml` as a `{linux, windows, macos}` matrix (`fail-fast: false`; each leg 60 min, `-DFULLA_WERROR=ON` everywhere; see §3.2 and §5).
 - **`sdk-smoke`** — calls `_sdk-smoke.yml` after build-test (see §3.4).
