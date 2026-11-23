@@ -1,8 +1,9 @@
 // Audit event vocabulary shared by emitters and event-name consumers.
 // Values preserve the stored audit trail, including the historical uppercase
-// SOCIAL_LOGIN_TOKEN_ISSUED value. This registry does not restrict the sink's
-// string interface: register new action constants in kAllEvents and review
-// production emitters for completeness. Tests check registered values only.
+// SOCIAL_LOGIN_TOKEN_ISSUED value. The sink interface stays string-based, so
+// the compiler cannot reject drift: tools/arch-guard/audit_event_guard.py
+// (CI static checks) enforces that every declared constant is registered in
+// kAllEvents and that audit emitters pass registry constants, not literals.
 
 #pragma once
 
@@ -88,9 +89,9 @@ inline constexpr char kOrgSuccessorAccepted[] = "org_successor_accepted";
 inline constexpr char kOrgSuccessorNominationWithdrawn[] = "org_successor_nomination_withdrawn";
 inline constexpr char kOrgSuccessorAutoEffected[] = "org_successor_auto_effected";
 
-// The CLOSED set (webhook event filters validate against exactly this).
-// Byte-sorted by VALUE (uppercase SOCIAL_LOGIN_TOKEN_ISSUED sorts first);
-// the unit test enforces membership and ordering so binary-search
+// The closed set: every declared constant, no more and no less. Byte-sorted
+// by VALUE (uppercase SOCIAL_LOGIN_TOKEN_ISSUED sorts first); AuditActionsTest
+// and the arch-guard both enforce membership and ordering, so binary-search
 // validation stays available.
 inline constexpr std::array<std::string_view, 61> kAllEvents{
   kSocialLoginTokenIssued,
@@ -158,8 +159,8 @@ inline constexpr std::array<std::string_view, 61> kAllEvents{
 
 static_assert(kAllEvents.size() == 61, "register new audit events in kAllEvents");
 
-// True iff `name` is a member of the closed set (the webhook subscription
-// validator can use this; emitters should use the constants directly).
+// True iff `name` is a registered event value. No production caller yet;
+// emitters should use the constants directly instead of validating strings.
 inline constexpr bool isKnownEvent(std::string_view name)
 {
     for (auto event : kAllEvents)
