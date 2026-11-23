@@ -8,23 +8,24 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
-#include <string>
-#include <vector>
 #include <sstream>
+#include <string>
 #include <thread>
+#include <vector>
 
+// Runs against the configured server: the official configuration registers
+// fulla_cache_total as a Counter. Missing/misconfigured collector states are
+// covered as unit tests in libs/drogon/test/CacheCounterTest.cc, where the
+// reserved family can be exercised without a second server configuration.
 namespace
 {
 namespace monitoring = ::drogon::monitoring;
 using Exporter = ::drogon::plugin::PromExporter;
 using Counter = monitoring::Collector<monitoring::Counter>;
-using Gauge = monitoring::Collector<monitoring::Gauge>;
 using Labels = ::fulla::common::ports::MetricLabels;
 using Snapshot = std::map<std::string, double>;
 
@@ -93,28 +94,8 @@ DROGON_TEST(Integration_P2_Plugin_DrogonMetrics_BoundedCacheRouting)
         REQUIRE(exporter != nullptr);
         const auto configured = lookup(*exporter, "fulla_cache_total");
         const auto counter = std::dynamic_pointer_cast<Counter>(configured);
-        const char *setting = std::getenv("FULLA_TEST_CACHE_SCHEMA");
-        const std::string schema = setting ? setting : "configured";
-        // Default CI must exercise a real configured family, never optional-missing.
-        if (schema == "configured")
-        {
-            REQUIRE(counter != nullptr);
-            REQUIRE((counter->labelsNames() == std::vector<std::string>{"repo", "outcome"}));
-        }
-        else if (schema == "missing")
-            REQUIRE(configured == nullptr);
-        else if (schema == "reversed")
-        {
-            REQUIRE(counter != nullptr);
-            REQUIRE((counter->labelsNames() == std::vector<std::string>{"outcome", "repo"}));
-        }
-        else if (schema == "gauge")
-            REQUIRE(std::dynamic_pointer_cast<Gauge>(configured) != nullptr);
-        else
-        {
-            FAIL("Unknown isolated cache schema profile");
-            return;
-        }
+        REQUIRE(counter != nullptr);
+        REQUIRE((counter->labelsNames() == std::vector<std::string>{"repo", "outcome"}));
 
         ::fulla::drogon::adapters::DrogonMetrics metrics;
         const auto original = snapshot(configured);
@@ -132,39 +113,32 @@ DROGON_TEST(Integration_P2_Plugin_DrogonMetrics_BoundedCacheRouting)
               std::numeric_limits<double>::infinity(),
               std::numeric_limits<double>::quiet_NaN()})
             metrics.incrementCounter("fulla_cache_total", valid, value);
+        // The Gauge API must not register or mutate the reserved family.
         metrics.setGauge("fulla_cache_total", {{"arbitrary", "must-not-create"}}, 7);
         metrics.setGauge("fulla_cache_total", valid, 8);
         REQUIRE(lookup(*exporter, "fulla_cache_total") == configured);
         REQUIRE((snapshot(configured) == original));
-        double expectedCache = 0;
-        if (schema == "configured")
-            expectedCache = counter->metric({"owner_status", "error"})->collect().at(0).value + 1;
+
+        const double expectedCache =
+          counter->metric({"owner_status", "error"})->collect().at(0).value + 1;
         metrics.incrementCounter("fulla_cache_total", valid);
         REQUIRE(lookup(*exporter, "fulla_cache_total") == configured);
-        if (schema == "configured")
+        CHECK(counter->metric({"owner_status", "error"})->collect().at(0).value == expectedCache);
+        CHECK(counter->collect().size() <= 9);
+        for (const auto &group : counter->collect())
         {
+            const auto &labels = group.metric->labels();
+            REQUIRE(labels.size() == 2);
+            CHECK(labels[0].first == "repo");
+            CHECK(labels[1].first == "outcome");
             CHECK(
-              counter->metric({"owner_status", "error"})->collect().at(0).value == expectedCache
+              (labels[0].second == "token" || labels[0].second == "client" ||
+               labels[0].second == "owner_status")
             );
-            CHECK(counter->collect().size() <= 9);
-            for (const auto &group : counter->collect())
-            {
-                const auto &labels = group.metric->labels();
-                REQUIRE(labels.size() == 2);
-                CHECK(labels[0].first == "repo");
-                CHECK(labels[1].first == "outcome");
-                CHECK(
-                  (labels[0].second == "token" || labels[0].second == "client" ||
-                   labels[0].second == "owner_status")
-                );
-                CHECK(
-                  (labels[1].second == "hit" || labels[1].second == "miss" ||
-                   labels[1].second == "error")
-                );
-            }
+            CHECK((
+              labels[1].second == "hit" || labels[1].second == "miss" || labels[1].second == "error"
+            ));
         }
-        else
-            CHECK((snapshot(configured) == original));
 
         // Preserve the generic export behavior merged by #343.
         const auto suffix =
@@ -178,7 +152,10 @@ DROGON_TEST(Integration_P2_Plugin_DrogonMetrics_BoundedCacheRouting)
         metrics.setGauge(peerGauge, {{"kind", "peer"}}, 7);
         const auto exportedCounter =
           std::dynamic_pointer_cast<Counter>(lookup(*exporter, peerCounter));
-        const auto exportedGauge = std::dynamic_pointer_cast<Gauge>(lookup(*exporter, peerGauge));
+        const auto exportedGauge =
+          std::dynamic_pointer_cast<monitoring::Collector<monitoring::Gauge>>(
+            lookup(*exporter, peerGauge)
+          );
         REQUIRE(exportedCounter != nullptr);
         REQUIRE(exportedGauge != nullptr);
         CHECK(exportedCounter->metric({"peer"})->collect().at(0).value == 5);
@@ -205,12 +182,12 @@ DROGON_TEST(Integration_P2_Plugin_DrogonMetrics_BoundedCacheRouting)
             const std::string body(response.second->getBody());
             visible = hasSample(body, peerCounter, {"kind=\"peer\""}, 5) &&
                       hasSample(body, peerGauge, {"kind=\"peer\""}, 7) &&
-                      (schema != "configured" || hasSample(
-                                                   body,
-                                                   "fulla_cache_total",
-                                                   {"repo=\"owner_status\"", "outcome=\"error\""},
-                                                   expectedCache
-                                                 ));
+                      hasSample(
+                        body,
+                        "fulla_cache_total",
+                        {"repo=\"owner_status\"", "outcome=\"error\""},
+                        expectedCache
+                      );
             const auto now = std::chrono::steady_clock::now();
             if (now >= deadline)
             {
@@ -223,9 +200,7 @@ DROGON_TEST(Integration_P2_Plugin_DrogonMetrics_BoundedCacheRouting)
                                                      now + std::chrono::milliseconds(50)));
         }
         CHECK(visible);
-        std::cout << "[cache-routing] schema=" << schema
-                  << " real_collector=" << (schema == "configured") << " scrape_visible=" << visible
-                  << '\n';
+        std::cout << "[cache-routing] real_collector=true scrape_visible=" << visible << '\n';
     }
     catch (const std::exception &error)
     {
