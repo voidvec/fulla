@@ -22,6 +22,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(fulla-full-stack-smoke LANGUAGES CXX)
 
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/Sanitizers.cmake")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -72,6 +74,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Drogon::Drogon
     OpenSSL::Crypto
 )
+oauth2_apply_sanitizer(${PROJECT_NAME})
 
 # Record where the foreign consumer actually resolved the SDK. Matrix checks
 # use this for both build-tree and installed-prefix consumption; a prefix on

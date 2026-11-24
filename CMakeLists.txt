@@ -163,6 +163,11 @@ endif()
 if(BUILD_EXAMPLES)
     set(_sdk_smoke_gen_platform "")
     set(_sdk_smoke_feature_options "")
+    set(_sdk_smoke_build_options "-DFULLA_SANITIZER=${FULLA_SANITIZER}")
+    if(NOT CMAKE_CONFIGURATION_TYPES)
+        list(APPEND _sdk_smoke_build_options
+            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+    endif()
     if(NOT WITH_WEBAUTHN)
         # A separate consumer configure does not inherit outer cache values.
         # Prove that OFF exports are consumable without finding libcbor.
@@ -188,6 +193,7 @@ if(BUILD_EXAMPLES)
                 "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"
                 "-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/fulla-cmake"
                 ${_sdk_smoke_feature_options}
+                ${_sdk_smoke_build_options}
             --test-command "${CMAKE_CTEST_COMMAND}" -C "$<CONFIG>" --output-on-failure
     )
     set_tests_properties(SdkSmoke.FullStack PROPERTIES LABELS "SdkSmoke")
