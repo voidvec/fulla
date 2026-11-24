@@ -33,9 +33,14 @@
 
 #include "ContractFixtures.h"
 
+#include <chrono>
+#include <cstdint>
+#include <future>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace fulla::test::contract;
 using fulla::storage::memory::MemoryIdentityRepository;
@@ -248,6 +253,34 @@ DROGON_TEST(
 // ===========================================================================
 // Memory
 // ===========================================================================
+
+DROGON_TEST(
+  Integration_P0_Contract_Functional_UserInfoRepository_Memory_GetRoles_IntegerIdMatchesStringKey
+)
+{
+    auto repo = std::make_shared<MemoryIdentityRepository>();
+    Json::Value adminCfg;
+    adminCfg["42"] = Json::Value(Json::arrayValue);
+    adminCfg["42"].append("support");
+    adminCfg["42"].append("billing");
+    repo->initAdminRoles(adminCfg);
+
+    const auto readRoles = [repo](const auto &key) {
+        auto completion = std::make_shared<std::promise<std::vector<std::string>>>();
+        auto result = completion->get_future();
+        repo->getRoles(key, [completion](std::vector<std::string> roles) {
+            completion->set_value(std::move(roles));
+        });
+        if (result.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+            throw std::runtime_error("Memory role query did not complete");
+        return result.get();
+    };
+    const std::vector<std::string> configuredRoles{"support", "billing"};
+    CHECK(readRoles(int32_t{42}) == configuredRoles);
+    CHECK(readRoles(std::string("42")) == configuredRoles);
+    const std::vector<std::string> defaultRoles{"user"};
+    CHECK(readRoles(int32_t{43}) == defaultRoles);
+}
 
 DROGON_TEST(
   Integration_P0_Contract_Functional_UserInfoRepository_Memory_MappedUser_SyntheticClaimsWithConfiguredRoles
