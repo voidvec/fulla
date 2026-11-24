@@ -68,6 +68,17 @@ jobs:
           python3 tools/arch-guard/double_move_guard.py --selftest
           python3 tools/arch-guard/double_move_guard.py
 
+      - name: Check audit event registry and emitters (audit_event_guard)
+        # The AuditActions.h registry is the contract between emitters and
+        # event-name consumers, but neither the compiler nor the unit tests
+        # catch a declared-but-unregistered constant or a bare string literal
+        # passed as the action argument. This guard closes both drift paths;
+        # only the action position is checked, so literal target/outcome
+        # arguments stay legal.
+        run: |
+          python3 tools/arch-guard/audit_event_guard.py --selftest
+          python3 tools/arch-guard/audit_event_guard.py
+
       - name: Check Migration Hygiene (migration-check)
         # Guards the assumptions both migration executors rely on but never
         # verify: V<NNN> zero-padded contiguous naming, idempotent/non-

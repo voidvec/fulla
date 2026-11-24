@@ -1,4 +1,5 @@
 #include <fulla/drogon/controllers/WebAuthnController.h>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
@@ -381,7 +382,7 @@ void WebAuthnController::registerFinish(
                 }
                 ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                   ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                  "webauthn_registered",
+                  ::fulla::common::observability::audit_events::kWebauthnRegistered,
                   "success",
                   req,
                   subject,
@@ -575,7 +576,7 @@ void WebAuthnController::authenticateFinish(
             result->credentialId.empty() ? input.rawId : result->credentialId;
           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-            "webauthn_authenticated",
+            ::fulla::common::observability::audit_events::kWebauthnAuthenticated,
             "success",
             req,
             result->publicSub,
@@ -726,7 +727,7 @@ void WebAuthnController::deleteCredential(
                       }
                       ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                         ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                        "webauthn_credential_deleted",
+                        ::fulla::common::observability::audit_events::kWebauthnCredentialDeleted,
                         "success",
                         req,
                         subject,

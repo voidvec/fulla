@@ -1,6 +1,7 @@
 #include "PasswordLoginSessionState.h"
 
 #include <mutex>
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/controllers/SessionController.h>
 #include <fulla/drogon/authz/OrgContextGate.h>
 #include <fulla/drogon/utils/ConsentCsrfSlots.h>
@@ -40,6 +41,8 @@
 // wiring/fallback contract).
 #include <fulla/identity/AuthService.h>
 #include <fulla/identity/SessionManager.h>
+
+namespace ae = ::fulla::common::observability::audit_events;
 
 // Phase 1.5d (Task 39): `using namespace oauth2;` was removed -- this TU
 // has no actual oauth2:: symbol references (all calls are fully qualified
@@ -720,7 +723,7 @@ void SessionController::login(
             // Audit: login success
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              "login_success",
+              ae::kLoginSuccess,
               "success",
               req,
               publicSub,
@@ -1201,7 +1204,7 @@ void SessionController::login(
             // Audit: login failure
             ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
               ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-              "login_failure",
+              ae::kLoginFailure,
               "failure",
               req,
               username,
@@ -2031,7 +2034,7 @@ void SessionController::changePasswordForced(
               {
                   ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                     ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                    "password_change_failed",
+                    ae::kPasswordChangeFailed,
                     "failure",
                     req,
                     sessSub,
@@ -2162,7 +2165,7 @@ void SessionController::changePasswordForced(
                                     }
                                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                                      "password_changed",
+                                      ae::kPasswordChanged,
                                       "success",
                                       req,
                                       sessSub,

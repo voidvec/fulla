@@ -94,7 +94,7 @@ concurrency:
 
 单一入口，经 `needs` 串联三道门（见 §1 树）：
 
-- **`static-checks`**（ubuntu-24.04，10 分钟）——纯源码、不编译：`arch_guard.py`（domain 库保持框架无关）、`double_move_guard.py`（#183 崩溃守卫）、`migration_check.py`、`api_diff.py`（对导出 SDK 头与 `tools/api-diff/api-baseline.txt` 的 SemVer 守卫）、测试命名校验、`drogon_macro_bool_check.py`、`manage-parity-check.sh`、入库 Markdown 链接门、OpenAPI 规范校验 + 规范治理门（路由 == 文档 == `openapi.yaml`，版本同步）。
+- **`static-checks`**（ubuntu-24.04，10 分钟）——纯源码、不编译：`arch_guard.py`（domain 库保持框架无关）、`double_move_guard.py`（#183 崩溃守卫）、`audit_event_guard.py`（审计事件注册表/发射点漂移）、`migration_check.py`、`api_diff.py`（对导出 SDK 头与 `tools/api-diff/api-baseline.txt` 的 SemVer 守卫）、测试命名校验、`drogon_macro_bool_check.py`、`manage-parity-check.sh`、入库 Markdown 链接门、OpenAPI 规范校验 + 规范治理门（路由 == 文档 == `openapi.yaml`，版本同步）。
 - **`frontend`**——调用 `_frontend.yml`（见 §3.3 与 §4）。
 - **`build-test`**——以 `{linux, windows, macos}` 矩阵调用 `_build-test.yml`（`fail-fast: false`；每腿 60 分钟，全部 `-DFULLA_WERROR=ON`；见 §3.2 与 §5）。
 - **`sdk-smoke`**——build-test 之后调用 `_sdk-smoke.yml`（见 §3.4）。

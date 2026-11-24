@@ -1,4 +1,5 @@
 #include "OrganizationService.h"
+#include <fulla/common/observability/AuditActions.h>
 #include <fulla/drogon/adapters/DrogonAuditSink.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/drogon/utils/BrandValidator.h>
@@ -14,6 +15,8 @@
 #include <limits>
 #include <map>
 #include <regex>
+
+namespace ae = ::fulla::common::observability::audit_events;
 
 namespace organization
 {
@@ -248,7 +251,7 @@ void insertAdminOrgRow(
       [cb, slug, req](const Organizations &inserted) {
           ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
             ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-            "organization_created",
+            ae::kOrganizationCreated,
             "success",
             req,
             "",
@@ -375,7 +378,8 @@ void OrganizationService::transferOwnership(
                               "UPDATE organization_members SET role = 'admin' "
                               "WHERE organization_id = $1 AND role = 'owner' AND user_id <> $2",
                               [req, cb, org, slug, targetUserId](const Result &) {
-                                  audit(req, "org_ownership_transferred", slug, std::to_string(org.getValueOfId()));
+                                  audit(req, ae::kOrgOwnershipTransferred, slug,
+                                    std::to_string(org.getValueOfId()));
                                   Json::Value json;
                                   json["slug"] = slug;
                                   json["organization_id"] = org.getValueOfId();
@@ -577,7 +581,7 @@ void deleteMembership(
               }
               ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                 ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
-                "org_member_removed",
+                ae::kOrgMemberRemoved,
                 "success",
                 req,
                 "",
@@ -699,7 +703,7 @@ void OrganizationService::updateOrg(
                   updateMapper.update(
                     row,
                     [req, cb, slug](const std::size_t) {
-                        auditOrg(req, "org_updated", slug);
+                        auditOrg(req, ae::kOrgUpdated, slug);
                         Json::Value json;
                         json["status"] = "success";
                         json["message"] = "Organization updated";
@@ -762,7 +766,7 @@ void OrganizationService::deleteOrg(
                 [req, cb, db, slug, orgId](
                   const std::shared_ptr<::drogon::orm::Transaction> &txn) {
                     auto respondDeleted = [req, cb, slug, orgId]() {
-                        auditOrg(req, "org_deleted", slug);
+                        auditOrg(req, ae::kOrgDeleted, slug);
                         Json::Value json;
                         json["status"] = "success";
                         json["message"] = "Organization deleted";
