@@ -6,11 +6,8 @@
 #include <drogon/plugins/PromExporter.h>
 #include <drogon/utils/monitoring/Collector.h>
 #include <drogon/utils/monitoring/Counter.h>
-#include <drogon/utils/monitoring/Gauge.h>
 
-#include <algorithm>
 #include <sstream>
-#include <vector>
 
 namespace fulla::drogon::adapters
 {
@@ -39,38 +36,12 @@ std::string formatMetric(
     return oss.str();
 }
 
-// MetricLabels is an unordered_map; collectors require one stable label
-// order per metric name, so sort the keys on every call.
-std::vector<std::string> labelNames(
-  const fulla::common::ports::MetricLabels &labels)
-{
-    std::vector<std::string> names;
-    names.reserve(labels.size());
-    for (const auto &kv : labels)
-    {
-        names.push_back(kv.first);
-    }
-    std::sort(names.begin(), names.end());
-    return names;
-}
-
-std::vector<std::string> labelValues(
-  const fulla::common::ports::MetricLabels &labels,
-  const std::vector<std::string> &names)
-{
-    std::vector<std::string> values;
-    values.reserve(names.size());
-    for (const auto &n : names)
-    {
-        values.push_back(labels.at(n));
-    }
-    return values;
-}
 }  // namespace
 
 std::shared_ptr<dm::CollectorBase> DrogonMetrics::resolveCollector(
   const std::string &name,
-  const std::function<std::shared_ptr<dm::CollectorBase>()> &create)
+  const std::function<std::shared_ptr<dm::CollectorBase>()> &create
+)
 {
     std::lock_guard<std::mutex> guard(mutex_);
     auto it = collectors_.find(name);
@@ -119,7 +90,7 @@ void DrogonMetrics::incrementCounter(
 {
     // Export is best-effort: a collector/label mismatch must never break
     // the request path; the [METRIC] log line below remains the fallback.
-    if (name == "fulla_cache_total")
+    if (detail::isReservedCacheFamily(name))
     {
         // The bounded cache family goes through the whitelist helper ONLY:
         // the generic path would double-count it and admit unbounded label
@@ -145,15 +116,13 @@ void DrogonMetrics::incrementCounter(
     {
         try
         {
-            auto names = labelNames(labels);
+            auto names = detail::labelNames(labels);
             auto collector = resolveCollector(name, [&]() {
-                return std::make_shared<dm::Collector<dm::Counter>>(
-                  name, name, names);
+                return std::make_shared<dm::Collector<dm::Counter>>(name, name, names);
             });
-            if (auto typed =
-                  std::dynamic_pointer_cast<dm::Collector<dm::Counter>>(collector))
+            if (auto typed = std::dynamic_pointer_cast<dm::Collector<dm::Counter>>(collector))
             {
-                typed->metric(labelValues(labels, names))->increment(value);
+                typed->metric(detail::labelValues(labels, names))->increment(value);
             }
         }
         catch (...)
@@ -177,14 +146,13 @@ void DrogonMetrics::setGauge(
 {
     try
     {
-        auto names = labelNames(labels);
-        auto collector = resolveCollector(name, [&]() {
-            return std::make_shared<dm::Collector<dm::Gauge>>(name, name, names);
-        });
-        if (auto typed =
-              std::dynamic_pointer_cast<dm::Collector<dm::Gauge>>(collector))
+        auto &app = ::drogon::app();
+        if (app.isRunning())
         {
-            typed->metric(labelValues(labels, names))->set(value);
+            auto *exporter = dynamic_cast<::drogon::plugin::PromExporter *>(
+              app.getPlugin("drogon::plugin::PromExporter")
+            );
+            detail::setGaugeSample(exporter, name, labels, value);
         }
     }
     catch (...)
