@@ -28,6 +28,8 @@ on:
       - "apps/server/**"
       - "tests/**"
       - "cmake/**"
+      - "tools/sanitizers/tsan-dependencies.profile"
+      - "tools/sanitizers/verify_tsan_dependencies.py"
       - "CMakePresets.json"
       - ".github/workflows/sanitizer.yml"
   push:
@@ -37,6 +39,8 @@ on:
       - "apps/server/**"
       - "tests/**"
       - "cmake/**"
+      - "tools/sanitizers/tsan-dependencies.profile"
+      - "tools/sanitizers/verify_tsan_dependencies.py"
       - "CMakePresets.json"
   schedule:
     # tsan-nightly's documented cadence (see the job comment above). The
@@ -201,8 +205,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.conan2
-          key: conan-${{ runner.os }}-v1-cpp17-debug-${{ hashFiles('conanfile.py', 'conan.lock') }}
+          key: conan-${{ runner.os }}-tsan-deps-v1-cpp17-debug-${{ hashFiles('conanfile.py', 'conan.lock', 'tools/sanitizers/tsan-dependencies.profile') }}
           restore-keys: |
+            conan-${{ runner.os }}-tsan-deps-v1-cpp17-debug-
             conan-${{ runner.os }}-v1-cpp17-debug-
 
       - name: Prepare ccache (compile cache)
@@ -217,27 +222,20 @@ jobs:
 
       - name: Configure CMake using Conan (Debug + thread)
         run: |
+          mkdir -p "build/$PRESET"
           conan install . --output-folder=build/$PRESET --build=missing \
-            -s build_type=Debug -s compiler.cppstd=17
-          # Two-legged drogon_ctl discovery (see the ASan/UBSan job above).
-          DROGON_BIN_DIR="$(find ~/.conan2/p -name drogon_ctl -type f -executable -printf '%h\n' | head -1)"
-          if [ -z "$DROGON_BIN_DIR" ]; then
-            data_file=$(find "build/$PRESET" -maxdepth 1 -name 'Drogon-*-data.cmake' | head -n1)
-            if [ -n "$data_file" ]; then
-              drogon_folder=$(grep -E 'set\(drogon_PACKAGE_FOLDER_DEBUG "' "$data_file" | sed -E 's/.*"(.+)".*/\1/')
-              if [ -n "$drogon_folder" ] && [ -x "$drogon_folder/bin/drogon_ctl" ]; then
-                DROGON_BIN_DIR="$drogon_folder/bin"
-              fi
-            fi
-          fi
-          if [ -z "$DROGON_BIN_DIR" ]; then
-            echo "::error::drogon_ctl not found (neither in Conan cache nor via Drogon-*-data.cmake)"
-            exit 1
-          fi
+            -s build_type=Debug -s compiler.cppstd=17 \
+            -pr:h default -pr:h tools/sanitizers/tsan-dependencies.profile \
+            --format=json --out-file="build/$PRESET/conan-tsan-graph.json"
+          DROGON_BIN_DIR="$(python3 tools/sanitizers/verify_tsan_dependencies.py \
+            "build/$PRESET/conan-tsan-graph.json" --print-drogon-bin)"
           echo "$DROGON_BIN_DIR" >> "$GITHUB_PATH"
+          export PATH="$DROGON_BIN_DIR:$PATH"
           ccache -M 2G
           ccache -z
           cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          python3 tools/sanitizers/verify_tsan_dependencies.py \
+            "build/$PRESET/conan-tsan-graph.json" --build-dir "build/$PRESET"
 
       - name: Build
         run: cmake --build --preset "$PRESET"
@@ -272,6 +270,12 @@ jobs:
             psql -h localhost -U fulla_user -d fulla_db -f "$f"
           done
 
+      - name: Require ten consecutive real-Session TSan passes
+        working-directory: build/${{ env.PRESET }}
+        run: >-
+          ctest -C Debug -R '^PasswordLoginSessionState$'
+          --repeat until-fail:10 --no-tests=error --output-on-failure --timeout 60
+
       - name: Run tests (ctest, full suite)
         working-directory: build/${{ env.PRESET }}
         env:
@@ -283,6 +287,18 @@ jobs:
         # a login-retry sequence can exceed the old 300s ceiling, and ctest
         # then reported the whole suite as (Timeout).
         run: ctest -C Debug --output-on-failure --timeout 900
+
+      - name: Upload TSan dependency provenance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tsan-dependency-provenance
+          path: |
+            build/${{ env.PRESET }}/conan-tsan-graph.json
+            build/${{ env.PRESET }}/libs/drogon/test/CMakeFiles/fulla-password-login-session-test.dir/link.txt
+            build/${{ env.PRESET }}/tests/CMakeFiles/fulla-tests.dir/link.txt
+            build/${{ env.PRESET }}/apps/server/CMakeFiles/fulla-server.dir/link.txt
+          if-no-files-found: warn
 
       - name: Upload TSan logs on failure
         if: failure()
