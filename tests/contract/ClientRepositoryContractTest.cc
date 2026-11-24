@@ -36,6 +36,10 @@
 
 #include "ContractFixtures.h"
 
+#include <chrono>
+#include <future>
+#include <memory>
+#include <optional>
 #include <string>
 
 using namespace fulla::oauth2::repository;
@@ -344,6 +348,33 @@ DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Memory_InitFromC
     REQUIRE(client.has_value());
     REQUIRE(client->redirectUris.size() == 1u);
     CHECK(client->redirectUris[0] == "http://localhost/single");
+}
+
+DROGON_TEST(
+  Integration_P0_Contract_Functional_ClientRepository_Memory_InitFromConfig_RedirectUri_ArrayPreservesAllValues
+)
+{
+    auto repo = std::make_shared<fulla::storage::memory::MemoryClientRepository>();
+    const std::string firstUri = "http://127.0.0.1:9987/callback";
+    const std::string secondUri = "http://127.0.0.1:9987/alternate";
+    Json::Value cfg;
+    cfg["array-uri-client"]["client_type"] = "PUBLIC";
+    cfg["array-uri-client"]["redirect_uri"] = Json::Value(Json::arrayValue);
+    cfg["array-uri-client"]["redirect_uri"].append(firstUri);
+    cfg["array-uri-client"]["redirect_uri"].append(secondUri);
+    repo->initFromConfig(cfg);
+
+    auto completion = std::make_shared<std::promise<std::optional<OAuth2Client>>>();
+    auto result = completion->get_future();
+    repo->getClient("array-uri-client", [completion](std::optional<OAuth2Client> client) {
+        completion->set_value(std::move(client));
+    });
+    REQUIRE(result.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    const auto client = result.get();
+    REQUIRE(client.has_value());
+    REQUIRE(client->redirectUris.size() == 2u);
+    CHECK(client->redirectUris[0] == firstUri);
+    CHECK(client->redirectUris[1] == secondUri);
 }
 
 DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Memory_InitFromConfig_AllowedScopes_SingleString)
