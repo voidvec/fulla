@@ -187,6 +187,7 @@ jobs:
     timeout-minutes: 90
     env:
       PRESET: linux-release-tsan
+      TZ: UTC
       # suppressions: documented trantor-internal races (tools/sanitizers/
       # tsan.supp — created 2026-11-09 after tsan-nightly's first real run;
       # see the file for the per-race evidence and the triage policy).
@@ -222,6 +223,9 @@ jobs:
 
       - name: Configure CMake using Conan (Debug + thread)
         run: |
+          date '+Test timezone: %Z %z'
+          readlink -f /etc/localtime
+          test "$(date +%z)" = "+0000"
           mkdir -p "build/$PRESET"
           conan install . --output-folder=build/$PRESET --build=missing \
             -s build_type=Debug -s compiler.cppstd=17 \
@@ -298,6 +302,9 @@ jobs:
             build/${{ env.PRESET }}/libs/drogon/test/CMakeFiles/fulla-password-login-session-test.dir/link.txt
             build/${{ env.PRESET }}/tests/CMakeFiles/fulla-tests.dir/link.txt
             build/${{ env.PRESET }}/apps/server/CMakeFiles/fulla-server.dir/link.txt
+            build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/flags.make
+            build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/link.txt
+            build/${{ env.PRESET }}/examples/full-stack-host/fulla-sdk-dependencies-*.txt
           if-no-files-found: warn
 
       - name: Upload TSan logs on failure
@@ -308,4 +315,6 @@ jobs:
           path: |
             build/${{ env.PRESET }}/Testing/
             build/${{ env.PRESET }}/apps/server/logs/
+            build/${{ env.PRESET }}/tests/feature-surface-server.log
+            build/${{ env.PRESET }}/examples/full-stack-host/Testing/Temporary/
           if-no-files-found: ignore
