@@ -99,6 +99,19 @@ re-auth when the session's `auth_time` is older. `auth_time`, `amr`, and
 stamped into the id_token — see
 [Configuration Guide §6](../operate/configuration-guide.md).
 
+### What a relying-party login does once the SSO session has ended
+
+Token refreshes do not extend the SSO session. An access/refresh token pair
+stays valid for its own lifetime, but once the SSO session has ended (idle
+expiry or `session_max_age`), `/oauth2/authorize` treats the user as signed
+out again and sends them to the login page with the authorize request
+preserved on the URL — the same thing happens on `prompt=login` or when
+`max_age` is exceeded. The user signs in once more (a fresh SSO session with
+a fresh `auth_time` and `amr`) and the authorization resumes, so the relying
+party still receives its response. This is why a user who remains signed in
+to the portal is asked to sign in again when an application they come back to
+the next day starts a login.
+
 ## 4. What sessions are NOT
 
 - Token revocation surfaces (revoke by token / client / user) act on
