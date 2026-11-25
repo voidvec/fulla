@@ -35,6 +35,7 @@ export default {
     loading: 'Loading...',
     dismiss: 'Dismiss',
     cancel: 'Cancel',
+    save: 'Save',
     backToLogin: 'Back to Login',
     goToLogin: 'Go to Login',
     redirectingToLogin: 'Redirecting to login...',
@@ -390,6 +391,19 @@ export default {
       requestOrgAuthNoOrgs:
         'Join an organization before requesting organization authorization for this app.',
       requestOrgAuthSuccess: 'Request submitted — awaiting a manager decision',
+      // T1.3 (UF-04a): edit modal (PATCH with only the dirty fields).
+      edit: 'Edit',
+      editTitle: 'Edit "{app}"',
+      saving: 'Saving...',
+      updated: 'Application "{app}" updated',
+      grants: 'Allowed grant types',
+      grantsHint: 'authorization_code and refresh_token are available to every app; client_credentials requires a CONFIDENTIAL client.',
+      grantsRequired: 'At least one grant type must remain selected',
+      editScopesHint: 'Leave blank to keep the current scopes',
+      editLogoHint: 'Leave blank to keep the current logo',
+      clearLogo: 'Remove the logo',
+      suspendedFrozen: 'This application is suspended — configuration changes are frozen until an administrator resumes it',
+      invalidRedirectUri: 'Invalid redirect URI "{uri}": must be a valid https URL (loopback hosts may use http)',
     },
     organizations: {
       title: 'My Organizations',
