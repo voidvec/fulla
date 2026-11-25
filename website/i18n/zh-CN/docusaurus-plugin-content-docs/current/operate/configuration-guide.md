@@ -123,6 +123,40 @@ OAuth2 插件的 `config.storage_type` 决定持久化后端：
 `auth.min_password_length`，撤销全部令牌，清除该标志）。`PUT /api/me/password`
 同样会清除该标志。管理员对存量账号设置的该标志在该用户下次登录时生效。
 
+## 4c. 授权端点的登录 / 授权确认跳转目标
+
+当 `/oauth2/authorize` 需要用户参与时（未登录、被强制重新认证，或需要授权确认），
+它会重定向到登录页 / 授权确认页。目标这样解析：
+
+1. `config.oauth2.login_url` / `config.oauth2.consent_url`——非空值生效。两者都可以
+   用环境变量 `FULLA_OAUTH2_LOGIN_URL` 与 `FULLA_OAUTH2_CONSENT_URL` 设置。
+2. 否则使用后端相对路径 `/login` | `/consent`——保持不变的默认值。后端自己提供
+   `/login`；它不提供 `GET /consent`（那一页是 SPA 的路由）。
+
+只有在网关把前后端放到同一个 origin 上时，默认值才会落到 SPA。在生产栈的 nginx
+或 Helm ingress 之后，`/login` 与 `/consent` 都被路由到前端，因此那里无需任何
+配置。没有统一网关的栈——`deploy/docker/docker-compose.yml`（后端在 5555，SPA 在
+8080）——必须告诉后端这两页在哪里，所以该文件把这两个变量都设成了 SPA 的地址。
+凡是 SPA 与访问 `/oauth2/authorize` 的 origin 不同的部署，都应照此设置：
+
+```bash
+FULLA_OAUTH2_LOGIN_URL=https://portal.example.com/login
+FULLA_OAUTH2_CONSENT_URL=https://portal.example.com/consent
+```
+
+在这类部署里若保持默认值，授权端点会把浏览器送到后端自己的登录页（没有样式：
+其内联样式会被后端 CSP 拦截），需要授权确认时则送到一个 404。
+
+配置的 URL 本身可能已带有 query string；此时授权参数会以 `&` 而非 `?` 追加。
+非字符串与空值视为"未设置"，而不会在 `asString()` 处抛出。环境变量覆盖不会创建
+新键，所以每份随附配置都把这两个键带为空串。变量已设置、但所加载的配置文件里
+没有对应键时，启动会报告，而不是静默忽略（见 deployment.md 的"后端配置"）。
+
+相关说明：SPA 的授权确认页提交 `POST /oauth2/consent` 时带 `json=true`，并根据
+返回 JSON 的 `location` 字段让浏览器自行导航——原生表单 POST + 302 会被 Chrome 的
+`form-action` 强制拦截（它同样会检查表单提交之后的重定向）。对非 JSON 调用方，
+302 契约仍是默认行为。
+
 ## 5. 客户端令牌端点认证方式（F-017）
 
 每个客户端通过 `oauth2_clients.token_endpoint_auth_method` 列声明其在

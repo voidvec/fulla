@@ -364,6 +364,11 @@ FULLA_REDIS_PASSWORD=<same as REDIS_PASSWORD>
 
 # CORS / OAuth callbacks (HTTPS domain required, otherwise browser requests are blocked)
 FULLA_FRONTEND_URL=https://your-domain.com
+# Optional: where /oauth2/authorize sends a user who has to sign in or approve a client.
+# Empty = /login and /consent on the API's own origin, which the gateway routes to the SPA;
+# set both only when the SPA is served from another origin.
+# FULLA_OAUTH2_LOGIN_URL=https://your-domain.com/login
+# FULLA_OAUTH2_CONSENT_URL=https://your-domain.com/consent
 FULLA_CORS_ALLOW_ORIGINS=https://your-domain.com
 # ⚠ FULLA_VUE_REDIRECT_URI and VITE_REDIRECT_URI must be identical
 FULLA_VUE_REDIRECT_URI=https://your-domain.com/callback
@@ -567,6 +572,7 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_REDIS_PASSWORD` | Redis password | (must be set) |
 | `FULLA_LISTEN_PORT` | Backend listen port | 5555 |
 | `FULLA_FRONTEND_URL` | Frontend URL (used for redirects etc.) | http://localhost:5173 |
+| `FULLA_OAUTH2_LOGIN_URL` / `FULLA_OAUTH2_CONSENT_URL` | Absolute URLs of the login / consent pages the authorize endpoint redirects to (optional) | (empty = the backend-relative `/login` and `/consent`) |
 | `FULLA_CORS_ALLOW_ORIGINS` | CORS allowed origins (comma-separated; overrides the JSON array) | localhost list from config |
 | `FULLA_PORTAL_REDIRECT_URI` | fulla-portal OAuth callback URI (legacy alias: `FULLA_VUE_REDIRECT_URI`) | localhost value from config |
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth callback URI | localhost value from config |
@@ -591,6 +597,8 @@ The backend overrides configuration-file values with environment variables (prec
 > **Email mode note**: real SMTP sending is enabled only when all three of `FULLA_SMTP_HOST` + `FULLA_SMTP_USER` + `FULLA_SMTP_PASSWORD` are non-empty; otherwise email is only written to the backend log. See "Email service (SMTP) configuration notes" above.
 >
 > **CORS array override**: `FULLA_CORS_ALLOW_ORIGINS` is a comma-separated string (e.g. `https://a.com,https://b.com`) that the backend splits into a JSON array at startup to override `custom_config.cors.allow_origins` from `config.prod.json`. The CORS validation code requires this field to be an array, so you **must** use the comma-separated form — never write it as a JSON array literal.
+
+> **Overrides only land on keys the config file carries**: an environment variable replaces the value of an existing key; it never creates one. A variable that is set but has no matching key in the loaded config file is reported at startup (`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`) — it used to be a silent no-op. `FULLA_ISSUER` is the common case: `config.prod.json` carries `custom_config.metadata.issuer` and the development `config.json` does not, so the variable only takes effect with a config that has the key.
 
 ### Nginx configuration
 

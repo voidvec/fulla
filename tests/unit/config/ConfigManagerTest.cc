@@ -148,6 +148,58 @@ DROGON_TEST(Unit_P0_ConfigManager_EnvOverride_GoogleRedirect)
     unsetenv("FULLA_GOOGLE_REDIRECT_URI");
 }
 
+// The authorize endpoint's login/consent redirect targets can be overridden
+// from the environment. An override only lands on a key the config file
+// already carries (getJsonPointer never creates the path), so every shipped
+// config anchors both keys as empty strings.
+DROGON_TEST(Unit_P1_ConfigManager_EnvOverride_Oauth2LoginAndConsentUrls)
+{
+    setenv("FULLA_OAUTH2_LOGIN_URL", "https://sso.example.com/sign-in", 1);
+    setenv("FULLA_OAUTH2_CONSENT_URL", "https://sso.example.com/approve", 1);
+
+    std::string configPath = "./config.json";
+    if (!std::filesystem::exists(configPath))
+        configPath = "../config.json";
+    if (!std::filesystem::exists(configPath))
+        configPath = "../../config.json";
+    if (!std::filesystem::exists(configPath))
+        configPath = "../../../config.json";
+
+    Json::Value config;
+    CHECK(fulla::common::config::ConfigManager::load(configPath, config) == true);
+
+    CHECK(config["custom_config"]["oauth2"]["login_url"].asString() ==
+          "https://sso.example.com/sign-in");
+    CHECK(config["custom_config"]["oauth2"]["consent_url"].asString() ==
+          "https://sso.example.com/approve");
+
+    unsetenv("FULLA_OAUTH2_LOGIN_URL");
+    unsetenv("FULLA_OAUTH2_CONSENT_URL");
+}
+
+// A rule whose key the config does not carry must not create that key, and
+// must leave the rest of the config untouched. applyEnvOverrides reports the
+// miss on stderr (it used to be a silent no-op); its effect on the config is
+// what this case pins.
+DROGON_TEST(Unit_P1_ConfigManager_EnvOverride_MissingAnchorIsNotCreated)
+{
+    setenv("FULLA_OAUTH2_LOGIN_URL", "https://sso.example.com/sign-in", 1);
+
+    Json::Value config;
+    config["custom_config"]["frontend"]["url"] = "http://localhost:5173";
+    const std::vector<fulla::common::config::EnvOverride> rules = {
+        {"custom_config.oauth2.login_url", "FULLA_OAUTH2_LOGIN_URL", false},
+    };
+
+    fulla::common::config::ConfigManager::applyEnvOverrides(config, rules);
+
+    CHECK(config["custom_config"].isMember("oauth2") == false);
+    CHECK(config["custom_config"]["frontend"]["url"].asString() ==
+          "http://localhost:5173");
+
+    unsetenv("FULLA_OAUTH2_LOGIN_URL");
+}
+
 // Verifies the "[name=OAuth2Plugin]" named-element lookup decouples the
 // FULLA_VUE_REDIRECT_URI override from plugin array ordering. Each config
 // file inserts different plugins (Hodor/AccessLogger) so a numeric index would

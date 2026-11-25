@@ -14,6 +14,7 @@
 
 #include <drogon/drogon_test.h>
 #include <drogon/drogon.h>
+#include <fulla/drogon/utils/PortalUrl.h>
 #include <json/json.h>
 
 #include "HttpTestClient.h"
@@ -120,4 +121,48 @@ DROGON_TEST(Integration_P1_Authorize_ValidRequest_NoSession_RedirectsToLogin)
     // NOT a 400 (the request is valid; the user just isn't authenticated yet).
     CHECK((code == drogon::k302Found || code == drogon::k200OK));
     CHECK(code != drogon::k400BadRequest);
+}
+
+// ---------------------------------------------------------------------------
+// The authorize login/consent targets are configurable
+// (custom_config.oauth2.login_url / consent_url, also from the environment).
+// The DEFAULTS must stay what they always were -- the backend-relative
+// "/login" and "/consent" -- because running code depends on them: the
+// embedded host example and the browser demo drive the backend's own login
+// form, and the capacity harness checks the consent redirect against the
+// configured consent_url. The shipped configs carry both keys as "" so that
+// the overrides land; "" has to read as "not set", or the redirect target
+// would be an empty string.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_Authorize_LoginRedirectDefaultIsBackendLogin)
+{
+    AUTHORIZE_SKIP_GUARD;
+
+    const Json::Value customConfig = drogon::app().getCustomConfig();
+    REQUIRE(customConfig.isMember("oauth2"));
+    CHECK(customConfig["oauth2"]["login_url"].isString());
+    CHECK(customConfig["oauth2"]["login_url"].asString().empty());
+    CHECK(customConfig["oauth2"]["consent_url"].isString());
+    CHECK(customConfig["oauth2"]["consent_url"].asString().empty());
+    CHECK(::fulla::drogon::utils::authorizeLoginUrl() == "/login");
+    CHECK(::fulla::drogon::utils::authorizeConsentUrl() == "/consent");
+
+    // A configured target may already carry a query string; the first
+    // authorize parameter is then appended with '&'.
+    CHECK(::fulla::drogon::utils::authorizeUrlQuerySeparator("/login") == '?');
+    CHECK(
+      ::fulla::drogon::utils::authorizeUrlQuerySeparator("https://sso.example.com/a?x=1") ==
+      '&'
+    );
+
+    auto resp = sendGet(
+      "/oauth2/authorize?response_type=code&client_id=fulla-admin-console"
+      "&redirect_uri=http://127.0.0.1:5174/admin/callback&scope=openid"
+      "&state=validstate1234"
+      "&code_challenge=authorize-http-test-challenge-fixed-padding__&code_challenge_method=S256");
+    REQUIRE(resp != nullptr);
+    CHECK(statusIs(resp, drogon::k302Found));
+    // The expected target is spelled out, not derived through the helper
+    // under test.
+    CHECK(resp->getHeader("Location").find("/login?client_id=") == 0);
 }
