@@ -599,6 +599,8 @@ The backend overrides configuration-file values with environment variables (prec
 > **CORS array override**: `FULLA_CORS_ALLOW_ORIGINS` is a comma-separated string (e.g. `https://a.com,https://b.com`) that the backend splits into a JSON array at startup to override `custom_config.cors.allow_origins` from `config.prod.json`. The CORS validation code requires this field to be an array, so you **must** use the comma-separated form — never write it as a JSON array literal.
 
 > **Overrides only land on keys the config file carries**: an environment variable replaces the value of an existing key; it never creates one. A variable that is set but has no matching key in the loaded config file is reported at startup (`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`) — it used to be a silent no-op. `FULLA_ISSUER` is the common case: `config.prod.json` carries `custom_config.metadata.issuer` and the development `config.json` does not, so the variable only takes effect with a config that has the key.
+>
+> **Read from the process environment only**: `FULLA_SIGNING_KEY`, `FULLA_JWT_KEY_PATH`, `FULLA_AUTO_MIGRATE`, `FULLA_BOOTSTRAP_ADMIN_PASSWORD`, `FULLA_BOOTSTRAP_ADMIN_EMAIL`, the `FULLA_SMTP_*` variables and `DETAILED_VALIDATION_ERRORS` are not read from a `.env` file. Pass them through the container / orchestrator environment (`env_file:` / `environment:`). A value that only sits in a mounted `.env` file is reported at startup and ignored — it used to be ignored silently. See the configuration guide, "`.env` file vs. process environment".
 
 ### Nginx configuration
 

@@ -19,6 +19,15 @@ of the rules the refactor established:
       ``Mapper<`` construction points under apps/server/src (comment-stripped,
       same caliber as R1-R3) must stay <= the frozen baseline. Lower the
       baseline when the count drops; NEVER raise it.
+  R5  Production code must NOT call ``getenv()`` directly. Every read of the
+      process environment goes through ``ConfigManager`` (``getEnv`` /
+      ``getProcessEnv``): the one place that knows about the ``.env`` file
+      and reports a key that was set through the wrong channel. With direct
+      reads the two sources were decided differently by different readers --
+      ``FULLA_ENV`` honored ``.env`` in two places and ignored it in two
+      others. ``libs/common/src/config/ConfigManager.cc`` implements the
+      accessors and is the single exempt file. R5 scans every ``libs/*/include``
+      and ``libs/*/src`` tree plus ``apps/server/src``.
 
 Only production code is scanned (each lib's ``include/`` and ``src/`` trees).
 The ``test/`` and ``testing/`` trees are intentionally excluded: unit tests may
@@ -72,6 +81,19 @@ RE_MAPPER_CONSTRUCTION = re.compile(r'\bMapper\s*<')
 # production sources). Direction remains DOWN only -- lower the constant
 # when the count drops, never raise it back.
 R4_MAPPER_BASELINE = 69
+
+# R5: a direct process-environment read (`getenv(...)`, with or without the
+# std:: qualifier).
+RE_GETENV_CALL = re.compile(r'\b(?:std::)?getenv\s*\(')
+
+# R5 scope: every library's public and private sources, plus the server.
+R5_LIB_ROOT = Path("libs")
+R5_LIB_SUBDIRS = ("include", "src")
+R5_SERVER_SRC = Path("apps") / "server" / "src"
+# Unit-test trees are not production code (env-mutating fixtures live there).
+R5_NON_PRODUCTION_PARTS = ("test", "testing")
+# The one file allowed to call getenv(): it implements the accessors.
+R5_GETENV_EXEMPT = "libs/common/src/config/ConfigManager.cc"
 
 
 class Violation(NamedTuple):
@@ -200,6 +222,55 @@ def scan_file(lib: str, path: Path, root: Path) -> List[Violation]:
     return violations
 
 
+def iter_env_read_files(root: Path) -> Iterable[Path]:
+    """Yield the production source files scanned for R5.
+
+    Every library's include/ and src/ trees plus apps/server/src, with the
+    test/ and testing/ trees left out.
+    """
+    libs = root / R5_LIB_ROOT
+    if not libs.is_dir():
+        raise FileNotFoundError(f"guarded directory not found: {libs}")
+    for lib_dir in sorted(p for p in libs.iterdir() if p.is_dir()):
+        for sub in R5_LIB_SUBDIRS:
+            sub_dir = lib_dir / sub
+            if not sub_dir.is_dir():
+                continue
+            for path in sorted(sub_dir.rglob("*")):
+                if not (path.is_file() and path.suffix in SOURCE_SUFFIXES):
+                    continue
+                parts = path.relative_to(sub_dir).parts
+                if any(part in R5_NON_PRODUCTION_PARTS for part in parts):
+                    continue
+                yield path
+    app_src = root / R5_SERVER_SRC
+    if not app_src.is_dir():
+        raise FileNotFoundError(f"guarded directory not found: {app_src}")
+    for path in sorted(app_src.rglob("*")):
+        if path.is_file() and path.suffix in SOURCE_SUFFIXES:
+            yield path
+
+
+def scan_env_reads(files: Iterable[Path], root: Path) -> List[Violation]:
+    """R5: direct getenv() calls in production code.
+
+    Same caliber as R1-R3 (comment-stripped source text), so a comment that
+    merely mentions getenv() does not trip the guard.
+    """
+    violations: List[Violation] = []
+    for path in files:
+        if path.relative_to(root).as_posix() == R5_GETENV_EXEMPT:
+            continue
+        cleaned = strip_comments(path.read_text(encoding="utf-8", errors="replace"))
+        rel = path.relative_to(root).as_posix()
+        for lineno, line in enumerate(cleaned.splitlines(), start=1):
+            if RE_GETENV_CALL.search(line):
+                violations.append(
+                    Violation("R5 (read the process environment through ConfigManager)", Path(rel), lineno, line.strip())
+                )
+    return violations
+
+
 def main(argv: List[str]) -> int:
     parser = argparse.ArgumentParser(description="Fulla Domain layering guard")
     default_root = Path(__file__).resolve().parents[2]
@@ -218,11 +289,13 @@ def main(argv: List[str]) -> int:
     print(f"root: {root}")
     print(f"scanning libs: {', '.join(DOMAIN_LIBS)} (include/, src/)")
     print("scanning apps/server/src for R4 (Mapper construction cap)")
+    print("scanning libs/*/include, libs/*/src and apps/server/src for R5 (direct getenv())")
     print("")
 
     try:
         files = list(iter_source_files(root))
         mapper_points = count_mapper_points(root)
+        env_read_files = list(iter_env_read_files(root))
     except FileNotFoundError as exc:
         print(f"[ERROR] {exc}")
         return 2
@@ -230,8 +303,10 @@ def main(argv: List[str]) -> int:
     violations: List[Violation] = []
     for lib, path in files:
         violations.extend(scan_file(lib, path, root))
+    violations.extend(scan_env_reads(env_read_files, root))
 
     print(f"scanned {len(files)} source files.")
+    print(f"scanned {len(env_read_files)} production sources for R5.")
 
     # R4: registered-exception cap on direct Mapper construction in
     # apps/server product services (#222). Only exceeding the frozen
@@ -258,6 +333,8 @@ def main(argv: List[str]) -> int:
         print("Rules: Domain (common/oauth2/identity) forbids <drogon/...> and")
         print("drogon::orm; oauth2 and identity must not include each other;")
         print("apps/server/src direct Mapper constructions are capped (R4).")
+        print("production code reads the process environment only through")
+        print("ConfigManager, never getenv() directly (R5).")
         return 1
 
     print("[PASS] 架构守卫检查通过 (all Domain layering rules satisfied).")

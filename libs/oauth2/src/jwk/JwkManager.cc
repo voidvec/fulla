@@ -1,3 +1,4 @@
+#include <fulla/common/config/ConfigManager.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -90,7 +91,7 @@ bool JwkManager::init(const Json::Value &config)
         return false;
     }
 
-    const char *keyEnv = std::getenv("FULLA_SIGNING_KEY");
+    const char *keyEnv = fulla::common::config::ConfigManager::getProcessEnv("FULLA_SIGNING_KEY");
     if (keyEnv && std::strlen(keyEnv) > 0)
     {
         KeyEntry entry;
@@ -108,7 +109,7 @@ bool JwkManager::init(const Json::Value &config)
         }
     }
 
-    const char *keyPathEnv = std::getenv("FULLA_JWT_KEY_PATH");
+    const char *keyPathEnv = fulla::common::config::ConfigManager::getProcessEnv("FULLA_JWT_KEY_PATH");
     if (keyPathEnv && std::strlen(keyPathEnv) > 0)
     {
         std::ifstream file(keyPathEnv);
@@ -170,7 +171,10 @@ bool JwkManager::init(const Json::Value &config)
     // depth: ConfigManager::validate() gates this earlier; this catches any
     // path that bypasses validation). init() false makes the caller abort.
     {
-        const char *fullaEnv = std::getenv("FULLA_ENV");
+        // Read through ConfigManager so .env and the process environment are
+        // decided the same way here as in the server assembly: a FULLA_ENV
+        // set only in .env used to be missed by this very check.
+        const char *fullaEnv = fulla::common::config::ConfigManager::getEnv("FULLA_ENV");
         if (fullaEnv && std::string(fullaEnv) == "production")
         {
             log(

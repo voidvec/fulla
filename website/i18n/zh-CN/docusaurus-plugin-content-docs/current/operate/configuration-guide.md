@@ -29,6 +29,34 @@
 
 专用测试 `EnvInjectionVerify`（`EnvConfigTest.cc`）保证该逻辑正确。
 
+### `.env` 文件与进程环境
+
+`loadDotEnv()` 把 `.env` 文件（相对工作目录按 `.env`、`../.env`、`../../.env`
+搜索）解析到**内存**中；它从不把这些值导出到进程环境。读取这份结果的有两个入口，
+生产代码中的每一次读取都必须经过其中之一（arch-guard 规则 R5）：
+
+- **能读到 `.env`**（`ConfigManager::getEnv`）：`.env` 优先于进程环境。上面的配置
+  覆盖以及 `FULLA_ENV` 用的是它。
+- **只读进程环境**（`ConfigManager::getProcessEnv`）：不查 `.env` 文件。对于承载
+  凭据或决定启动行为、必须来自真实环境变量（由容器 / 编排器注入）的键，这是有意
+  为之：`FULLA_SIGNING_KEY`、`FULLA_JWT_KEY_PATH`、`FULLA_AUTO_MIGRATE`、
+  `FULLA_BOOTSTRAP_ADMIN_PASSWORD`、`FULLA_BOOTSTRAP_ADMIN_EMAIL`、`FULLA_SMTP_*`
+  一族以及 `DETAILED_VALIDATION_ERRORS`。
+
+第二组里的键如果写在了 `.env` 里，会被**忽略**，并且启动时会报告：
+
+```
+[ConfigManager] WARNING: FULLA_AUTO_MIGRATE is set in .env but is read from the process environment only; export it as a real environment variable (the .env value is ignored)
+```
+
+此前它是被静默忽略的。生产环境缺少签名密钥时的报错，对 `FULLA_SIGNING_KEY` /
+`FULLA_JWT_KEY_PATH` 也说的是同一件事。
+
+`FULLA_ENV` 在所有地方的读取方式现在是一致的。此前它有两处认 `.env`、两处不认，
+于是只写在 `.env` 里的 `production` 会跳过签名密钥与客户端注册表检查。当 `.env`
+与进程环境对它的取值不一致时，所有读取方都以 `.env` 的值为准，并且启动时会报告
+这一分歧——请把 `FULLA_ENV` 只放在一个地方。
+
 ## 2. Docker 部署
 
 仓库内置 `docker-compose.yml` 编排全栈（详解见 [Docker 部署](docker-deployment.md)）。

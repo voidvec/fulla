@@ -598,6 +598,8 @@ curl -k https://localhost/admin/
 > **CORS 数组覆盖**：`FULLA_CORS_ALLOW_ORIGINS` 是逗号分隔的字符串（如 `https://a.com,https://b.com`），后端启动时自动分割成 JSON 数组覆盖 `config.prod.json` 的 `custom_config.cors.allow_origins`。CORS 校验代码要求该字段是数组，因此**必须**用逗号分隔形式，不要写成 JSON 数组字面量。
 
 > **覆盖只作用于配置文件里已有的键**：环境变量替换的是已有键的值，不会创建新键。变量已设置、但所加载的配置文件里没有对应键时，启动会报告（`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`）——此前这是静默无效的。`FULLA_ISSUER` 是最常见的例子：`config.prod.json` 有 `custom_config.metadata.issuer`，而开发用的 `config.json` 没有，因此该变量只在带这个键的配置下生效。
+>
+> **只从进程环境读取**：`FULLA_SIGNING_KEY`、`FULLA_JWT_KEY_PATH`、`FULLA_AUTO_MIGRATE`、`FULLA_BOOTSTRAP_ADMIN_PASSWORD`、`FULLA_BOOTSTRAP_ADMIN_EMAIL`、`FULLA_SMTP_*` 一族以及 `DETAILED_VALIDATION_ERRORS` 不会从 `.env` 文件读取。请通过容器 / 编排器环境（`env_file:` / `environment:`）传入。只写在挂载的 `.env` 文件里的值会被忽略，启动时会报告——此前是被静默忽略的。见配置指南的"`.env` 文件与进程环境"。
 
 ### Nginx 配置
 
