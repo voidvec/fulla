@@ -1,4 +1,5 @@
 #include "PasswordLoginSessionState.h"
+#include "ForcedPasswordChangeSessionState.h"
 
 #include <mutex>
 #include <fulla/common/observability/AuditActions.h>
@@ -2224,21 +2225,15 @@ void SessionController::changePasswordForced(
                                     // marker was ever set for it).
                                     if (req->session())
                                     {
-                                        req->session()->erase("must_change_password");
-                                        req->session()->erase("userId");
-                                        req->session()->erase("sub");
-                                        req->session()->erase("auth_time");
-                                        req->session()->erase("amr");
-                                        req->session()->erase("mfa_pending");
-                                        req->session()->erase("mfa_code_challenge");
-                                        req->session()->erase("mfa_code_challenge_method");
                                         // Rotate the session identifier too:
                                         // the anonymous remnant must not be
                                         // replayable against any future login
                                         // on this browser (fixation defense;
                                         // the old id stays valid 10s for
                                         // in-flight requests only).
-                                        req->session()->changeSessionIdToClient();
+                                        detail::clearForcedPasswordChangeSessionAndRotate(
+                                          *req->session()
+                                        );
                                     }
                                     ::fulla::drogon::adapters::DrogonAuditSink::logFromRequest(
                                       ::drogon::app().getPlugin<::OAuth2Plugin>()->getAuditSink(),
