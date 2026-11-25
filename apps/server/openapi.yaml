@@ -835,7 +835,7 @@ components:
           description: Space-separated (optional).
         state:
           type: string
-          description: Opaque value maintained between request and callback (recommended).
+          description: Opaque value preserved after one standard callback query decode, including delimiters and literal percent sequences (recommended).
         code_challenge:
           type: string
           description: PKCE code challenge (RFC 7636). REQUIRED for all
@@ -5874,7 +5874,7 @@ paths:
         required: false
         schema:
           type: string
-      - description: Opaque value to maintain state between request and callback (recommended)
+      - description: Opaque state (authorize requires 8-512 bytes). Query-component encoded on redirects and preserved after one standard query decode, including delimiters.
         in: query
         name: state
         required: false
@@ -5966,7 +5966,7 @@ paths:
         required: true
         schema:
           type: string
-      - description: Opaque value to maintain state
+      - description: Opaque state, query-component encoded and preserved after one standard callback query decode.
         in: query
         name: state
         required: false
@@ -6327,7 +6327,7 @@ paths:
         required: false
         schema:
           type: string
-      - description: Opaque value echoed back to the post_logout_redirect_uri.
+      - description: Opaque value echoed without change after one standard post-logout callback query decode; encode the input as one query component.
         in: query
         name: state
         required: false
@@ -6383,7 +6383,7 @@ paths:
         required: false
         schema:
           type: string
-      - description: Opaque state value.
+      - description: Opaque state echoed without change after one standard callback query decode.
         in: query
         name: state
         required: false

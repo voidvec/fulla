@@ -34,14 +34,14 @@ namespace
   const std::string &state
 )
 {
-    // Review NIT #5: urlEncode `error` for defensive consistency with the
-  // error_description/state params (encoded on the next lines). OAuth2 error
-  // values are ASCII-safe tokens today, so this is belt-and-suspenders.
-  std::string location = redirectUri + "?error=" + ::drogon::utils::urlEncode(error);
+    // Each value belongs to the verified callback query, not a complete URI.
+    std::string location =
+      redirectUri + ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+      "error=" + ::drogon::utils::urlEncodeComponent(error);
     if (!description.empty())
-        location += "&error_description=" + ::drogon::utils::urlEncode(description);
+        location += "&error_description=" + ::drogon::utils::urlEncodeComponent(description);
     if (!state.empty())
-        location += "&state=" + ::drogon::utils::urlEncode(state);
+        location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
     return ::drogon::HttpResponse::newRedirectionResponse(location);
 }
 }  // namespace
@@ -91,8 +91,8 @@ void AuthorizationEndpointController::initApiDocsImpl()
         fulla::drogon::observability::openapi::ParameterLocation::QUERY,
         false},
        {"state",
-        "Opaque value to maintain state between request and callback "
-        "(recommended)",
+        "Opaque state (authorize requires 8-512 bytes). Query-component encoded on "
+        "redirects and preserved after one standard query decode, including delimiters.",
         fulla::drogon::observability::openapi::ParameterType::STRING,
         fulla::drogon::observability::openapi::ParameterLocation::QUERY,
         false},
@@ -249,33 +249,6 @@ void AuthorizationEndpointController::authorize(
         auto resp = ::drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(::drogon::k400BadRequest);
         resp->setBody("state parameter must be between 8 and 512 characters.");
-        callback(resp);
-        return;
-    }
-
-    if (
-      state.find('?') != std::string::npos || state.find('#') != std::string::npos ||
-      state.find('&') != std::string::npos
-    )
-    {
-        LOG_WARN << "Authorization request has potentially malicious state parameter (contains URL "
-                    "delimiters) for client: "
-                 << clientId << ", state: " << state.substr(0, 20) << "...";
-        if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-            m->incrementCounter(
-              "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-              static_cast<double>(400)
-            );
-        if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
-            m->incrementCounter(
-              "oauth2_login_failures_total",
-              fulla::common::ports::MetricLabels{{"reason", "suspicious_state_parameter"}}
-            );
-
-        auto resp = ::drogon::HttpResponse::newHttpResponse();
-        resp->setStatusCode(::drogon::k400BadRequest);
-        resp->setBody("state parameter contains invalid characters.");
         callback(resp);
         return;
     }
@@ -549,30 +522,30 @@ void AuthorizationEndpointController::authorize(
                     std::string location =
                       loginUrl +
                       ::fulla::drogon::utils::authorizeUrlQuerySeparator(loginUrl) +
-                      "client_id=" + ::drogon::utils::urlEncode(clientId) +
-                      "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
-                      "&scope=" + ::drogon::utils::urlEncode(scope) +
-                      "&state=" + ::drogon::utils::urlEncode(state) +
-                      "&response_type=" + ::drogon::utils::urlEncode(responseType);
+                      "client_id=" + ::drogon::utils::urlEncodeComponent(clientId) +
+                      "&redirect_uri=" + ::drogon::utils::urlEncodeComponent(redirectUri) +
+                      "&scope=" + ::drogon::utils::urlEncodeComponent(scope) +
+                      "&state=" + ::drogon::utils::urlEncodeComponent(state) +
+                      "&response_type=" + ::drogon::utils::urlEncodeComponent(responseType);
                     // Review finding #1: carry the PKCE triple into the login
                     // screen so login.csp's hidden fields can hand it back to
                     // SessionController::login (which already threads it into
                     // generateAuthorizationCode).
                     if (!codeChallenge.empty())
                     {
-                        location += "&code_challenge=" + ::drogon::utils::urlEncode(codeChallenge) +
+                        location += "&code_challenge=" + ::drogon::utils::urlEncodeComponent(codeChallenge) +
                                     "&code_challenge_method=" +
-                                    ::drogon::utils::urlEncode(codeChallengeMethod);
+                                    ::drogon::utils::urlEncodeComponent(codeChallengeMethod);
                     }
                     if (!nonce.empty())
-                        location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
+                        location += "&nonce=" + ::drogon::utils::urlEncodeComponent(nonce);
                     // v1.4.0 M1: carry the org context hint through the
                     // login round trip; the login POST re-runs the same
                     // OrgContextGate before issuing the code.
                     {
                         const std::string orgRef = req->getParameter("org_id");
                         if (!orgRef.empty())
-                            location += "&org_id=" + ::drogon::utils::urlEncode(orgRef);
+                            location += "&org_id=" + ::drogon::utils::urlEncodeComponent(orgRef);
                     }
                     auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                     callback(resp);
@@ -624,26 +597,26 @@ void AuthorizationEndpointController::authorize(
                     std::string location =
                       loginUrl +
                       ::fulla::drogon::utils::authorizeUrlQuerySeparator(loginUrl) +
-                      "client_id=" + ::drogon::utils::urlEncode(clientId) +
-                      "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
-                      "&scope=" + ::drogon::utils::urlEncode(scope) +
-                      "&state=" + ::drogon::utils::urlEncode(state) +
-                      "&response_type=" + ::drogon::utils::urlEncode(responseType);
+                      "client_id=" + ::drogon::utils::urlEncodeComponent(clientId) +
+                      "&redirect_uri=" + ::drogon::utils::urlEncodeComponent(redirectUri) +
+                      "&scope=" + ::drogon::utils::urlEncodeComponent(scope) +
+                      "&state=" + ::drogon::utils::urlEncodeComponent(state) +
+                      "&response_type=" + ::drogon::utils::urlEncodeComponent(responseType);
                     if (!codeChallenge.empty())
                     {
-                        location += "&code_challenge=" + ::drogon::utils::urlEncode(codeChallenge) +
+                        location += "&code_challenge=" + ::drogon::utils::urlEncodeComponent(codeChallenge) +
                                     "&code_challenge_method=" +
-                                    ::drogon::utils::urlEncode(codeChallengeMethod);
+                                    ::drogon::utils::urlEncodeComponent(codeChallengeMethod);
                     }
                     if (!nonce.empty())
-                        location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
+                        location += "&nonce=" + ::drogon::utils::urlEncodeComponent(nonce);
                     // v1.4.0 M1: carry the org context hint through the
                     // login round trip; the login POST re-runs the same
                     // OrgContextGate before issuing the code.
                     {
                         const std::string orgRef = req->getParameter("org_id");
                         if (!orgRef.empty())
-                            location += "&org_id=" + ::drogon::utils::urlEncode(orgRef);
+                            location += "&org_id=" + ::drogon::utils::urlEncodeComponent(orgRef);
                     }
                     auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                     callback(resp);
@@ -805,11 +778,11 @@ void AuthorizationEndpointController::authorize(
                           std::string location =
                             consentUrl +
                             ::fulla::drogon::utils::authorizeUrlQuerySeparator(consentUrl) +
-                            "client_id=" + ::drogon::utils::urlEncode(clientId) +
-                            "&user_id=" + ::drogon::utils::urlEncode(publicSub) +
-                            "&scope=" + ::drogon::utils::urlEncode(scope) +
-                            "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
-                            "&state=" + ::drogon::utils::urlEncode(state);
+                            "client_id=" + ::drogon::utils::urlEncodeComponent(clientId) +
+                            "&user_id=" + ::drogon::utils::urlEncodeComponent(publicSub) +
+                            "&scope=" + ::drogon::utils::urlEncodeComponent(scope) +
+                            "&redirect_uri=" + ::drogon::utils::urlEncodeComponent(redirectUri) +
+                            "&state=" + ::drogon::utils::urlEncodeComponent(state);
                           // Review finding #1: the consent screen (frontend
                           // ConsentPage.vue) echoes these query params back to
                           // POST /oauth2/consent, whose handler already reads
@@ -817,12 +790,12 @@ void AuthorizationEndpointController::authorize(
                           if (!codeChallenge.empty())
                           {
                               location +=
-                                "&code_challenge=" + ::drogon::utils::urlEncode(codeChallenge) +
+                                "&code_challenge=" + ::drogon::utils::urlEncodeComponent(codeChallenge) +
                                 "&code_challenge_method=" +
-                                ::drogon::utils::urlEncode(codeChallengeMethod);
+                                ::drogon::utils::urlEncodeComponent(codeChallengeMethod);
                           }
                           if (!nonce.empty())
-                              location += "&nonce=" + ::drogon::utils::urlEncode(nonce);
+                              location += "&nonce=" + ::drogon::utils::urlEncodeComponent(nonce);
                           // F1 (consent auth): mint a SERVER-side random CSRF
                           // nonce for the consent round-trip. The consent form
                           // must echo it and POST /oauth2/consent verifies it
@@ -847,7 +820,7 @@ void AuthorizationEndpointController::authorize(
                                 )
                               );
                               location +=
-                                "&consent_csrf=" + ::drogon::utils::urlEncode(consentCsrf);
+                                "&consent_csrf=" + ::drogon::utils::urlEncodeComponent(consentCsrf);
                           }
                           // v1.4.0 M1 (design §2.1 item 4): the org binding
                           // selected for THIS request crosses the portal
@@ -946,9 +919,11 @@ void AuthorizationEndpointController::authorize(
                             // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode the
                             // code and state so special chars survive the query.
                             std::string location =
-                              redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                              redirectUri +
+                              ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+                              "code=" + ::drogon::utils::urlEncodeComponent(code);
                             if (!state.empty())
-                                location += "&state=" + ::drogon::utils::urlEncode(state);
+                                location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
                             auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                             if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                                 m->incrementCounter(

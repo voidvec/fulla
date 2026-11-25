@@ -19,6 +19,7 @@
 #include <fulla/drogon/services/EmailVerificationService.h>
 #include <drogon/drogon.h>
 #include <drogon/HttpClient.h>
+#include <drogon/HttpViewData.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 #include <fulla/oauth2/access/ScopeDecisionEngine.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
@@ -97,11 +98,13 @@ void sendOAuthErrorRedirect(
   bool jsonMode = false
 )
 {
-    std::string location = redirectUri + "?error=" + error;
+    std::string location =
+      redirectUri + ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+      "error=" + ::drogon::utils::urlEncodeComponent(error);
     if (!description.empty())
-        location += "&error_description=" + ::drogon::utils::urlEncode(description);
+        location += "&error_description=" + ::drogon::utils::urlEncodeComponent(description);
     if (!state.empty())
-        location += "&state=" + ::drogon::utils::urlEncode(state);
+        location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
     if (jsonMode)
     {
         Json::Value ret;
@@ -250,7 +253,7 @@ struct OAuth2ControllerDocs
 
             ::fulla::drogon::observability::openapi::ParameterInfo stateParam;
             stateParam.name = "state";
-            stateParam.description = "Opaque value to maintain state (recommended)";
+            stateParam.description = "Opaque value preserved after one standard callback query decode, including delimiters (recommended)";
             stateParam.type = ::fulla::drogon::observability::openapi::ParameterType::STRING;
             stateParam.location =
               ::fulla::drogon::observability::openapi::ParameterLocation::QUERY;
@@ -388,7 +391,7 @@ struct OAuth2ControllerDocs
 
             ::fulla::drogon::observability::openapi::ParameterInfo stateParam;
             stateParam.name = "state";
-            stateParam.description = "Opaque value to maintain state";
+            stateParam.description = "Opaque state, query-component encoded and preserved after one standard callback query decode.";
             stateParam.type = ::fulla::drogon::observability::openapi::ParameterType::STRING;
             stateParam.location =
               ::fulla::drogon::observability::openapi::ParameterLocation::QUERY;
@@ -507,7 +510,7 @@ struct OAuth2ControllerDocs
                 "RP self-identification when id_token_hint is absent (RP-Initiated Logout 1.0 §2.1); the post_logout_redirect_uri must be registered for this client (#88-3)."
               ),
               endSessionParam("post_logout_redirect_uri", "URI to redirect to after logout; must be registered for the id_token_hint (or client_id) client."),
-              endSessionParam("state", "Opaque value echoed back to the post_logout_redirect_uri."),
+              endSessionParam("state", "Opaque value echoed without change after one standard post-logout callback query decode; encode the input as one query component."),
             };
             endSessionGet.responses = {
               {200, "Logged out (no post_logout_redirect_uri supplied)"},
@@ -601,15 +604,15 @@ void SessionController::showLoginPage(
 
     // Create template data
     ::drogon::DrTemplateData data;
-    data["client_id"] = clientId;
-    data["redirect_uri"] = redirectUri;
-    data["scope"] = scope;
-    data["state"] = state;
-    data["response_type"] = responseType;
-    data["code_challenge"] = codeChallenge;
-    data["code_challenge_method"] = codeChallengeMethod.empty() ? "plain" : codeChallengeMethod;
-    data["nonce"] = nonce;
-    data["frontend_register_url"] = frontendRegisterUrl;
+    data["client_id"] = ::drogon::HttpViewData::htmlTranslate(clientId);
+    data["redirect_uri"] = ::drogon::HttpViewData::htmlTranslate(redirectUri);
+    data["scope"] = ::drogon::HttpViewData::htmlTranslate(scope);
+    data["state"] = ::drogon::HttpViewData::htmlTranslate(state);
+    data["response_type"] = ::drogon::HttpViewData::htmlTranslate(responseType);
+    data["code_challenge"] = ::drogon::HttpViewData::htmlTranslate(codeChallenge);
+    data["code_challenge_method"] = ::drogon::HttpViewData::htmlTranslate(codeChallengeMethod.empty() ? "plain" : codeChallengeMethod);
+    data["nonce"] = ::drogon::HttpViewData::htmlTranslate(nonce);
+    data["frontend_register_url"] = ::drogon::HttpViewData::htmlTranslate(frontendRegisterUrl);
 
     // Render login.csp template
     try
@@ -1048,9 +1051,11 @@ void SessionController::login(
                                     return;
                                 }
                                 std::string location =
-                                  redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                                  redirectUri +
+                                  ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+                                  "code=" + ::drogon::utils::urlEncodeComponent(code);
                                 if (!state.empty())
-                                    location += "&state=" + ::drogon::utils::urlEncode(state);
+                                    location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
                                 if (req->getParameter("json") == "true")
                                 {
                                     Json::Value ret;
@@ -1145,9 +1150,11 @@ void SessionController::login(
                                   // F-020 (RFC 6749 §4.1.2/§4.1.3):
                                   // urlEncode code and state.
                                   std::string location =
-                                    redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                                    redirectUri +
+                                    ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+                                    "code=" + ::drogon::utils::urlEncodeComponent(code);
                                   if (!state.empty())
-                                      location += "&state=" + ::drogon::utils::urlEncode(state);
+                                      location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
                                   if (req->getParameter("json") == "true")
                                   {
                                       Json::Value ret;
@@ -1472,9 +1479,10 @@ void SessionController::consent(
               }
               std::string location =
                 redirectUri +
-                "?error=access_denied&error_description=User+denied+consent";
+                ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+                "error=access_denied&error_description=User+denied+consent";
               if (!state.empty())
-                  location += "&state=" + ::drogon::utils::urlEncode(state);
+                  location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
               if (jsonMode)
               {
                   Json::Value ret;
@@ -1644,9 +1652,11 @@ void SessionController::consent(
 
                     // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode code + state.
                     std::string location =
-                      redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
+                      redirectUri +
+                      ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
+                      "code=" + ::drogon::utils::urlEncodeComponent(code);
                     if (!state.empty())
-                        location += "&state=" + ::drogon::utils::urlEncode(state);
+                        location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
                     if (jsonMode)
                     {
                         // Same envelope as the /oauth2/login json=true path;
@@ -2613,7 +2623,7 @@ void SessionController::endSession(
                         if (!state.empty())
                             location += (location.find('?') == std::string::npos ? "?" : "&") +
                                         std::string("state=") +
-                                        ::drogon::utils::urlEncode(state);
+                                        ::drogon::utils::urlEncodeComponent(state);
                         auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                         resp->setStatusCode(::drogon::k302Found);
                         finish(subject, resp);

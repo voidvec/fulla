@@ -5,7 +5,7 @@
 // 279 LOC, 47% covered). The happy path (logged-in user -> code -> redirect)
 // is covered by the existing tests/integration/auth/AuthorizePkcePassthrough
 // test; this file targets the early-rejection branches that gcov shows as
-// uncovered: missing/invalid/length/character checks on the `state` CSRF
+// uncovered: missing/invalid/length checks on the `state` CSRF
 // parameter, invalid client_id, and invalid redirect_uri.
 //
 // Route: GET /oauth2/authorize (no user auth at this stage -- it is the
@@ -70,16 +70,9 @@ DROGON_TEST(Integration_P1_Authorize_StateTooShort_Returns400)
 }
 
 // ---------------------------------------------------------------------------
-// invalid-characters state: the authorize endpoint rejects a `state`
-// containing URL delimiters (?, #, &) as "potentially malicious" with 400
-// (AuthorizationEndpointController.cc:181-186). A literal `?` in the query
-// string cannot be embedded via the standard `?key=val&...` form (it would
-// start the query string itself), and URL-encoded forms (%26, %3F) get
-// decoded by Drogon BEFORE the delimiter check sees them -- so this specific
-// branch is not reliably reachable through HttpClient's query parsing. It is
-// intentionally NOT tested here; the missing-state, too-short-state, and
-// unknown-client branches above cover the other validation paths. (See the
-// plan doc's "hard surface" note: some validation branches are HTTP-inert.)
+// Opaque delimiter-state round trips are exercised with component-encoded
+// real HTTP requests in OpaqueOAuthStateHttpTest.cc. Delimiters are values,
+// not a separate validation failure; missing/length/client checks stay here.
 
 // ---------------------------------------------------------------------------
 // invalid client_id: a request with a valid state but an unknown client_id

@@ -540,7 +540,7 @@ export type LoginRequest = {
      */
     scope?: string;
     /**
-     * Opaque value maintained between request and callback (recommended).
+     * Opaque value preserved after one standard callback query decode, including delimiters and literal percent sequences (recommended).
      */
     state?: string;
     /**
@@ -4893,7 +4893,7 @@ export type GetOauth2AuthorizeData = {
          */
         scope?: string;
         /**
-         * Opaque value to maintain state between request and callback (recommended)
+         * Opaque state (authorize requires 8-512 bytes). Query-component encoded on redirects and preserved after one standard query decode, including delimiters.
          */
         state?: string;
         /**
@@ -4952,7 +4952,7 @@ export type PostOauth2ConsentData = {
          */
         redirect_uri: string;
         /**
-         * Opaque value to maintain state
+         * Opaque state, query-component encoded and preserved after one standard callback query decode.
          */
         state?: string;
         /**
@@ -5216,7 +5216,7 @@ export type GetOauth2EndSessionData = {
          */
         client_id?: string;
         /**
-         * Opaque value echoed back to the post_logout_redirect_uri.
+         * Opaque value echoed without change after one standard post-logout callback query decode; encode the input as one query component.
          */
         state?: string;
     };
@@ -5258,7 +5258,7 @@ export type PostOauth2EndSessionData = {
          */
         post_logout_redirect_uri?: string;
         /**
-         * Opaque state value.
+         * Opaque state echoed without change after one standard callback query decode.
          */
         state?: string;
     };

@@ -661,7 +661,7 @@ type LoginRequest struct {
 	// Scope Space-separated (optional).
 	Scope *string `json:"scope,omitempty"`
 
-	// State Opaque value maintained between request and callback (recommended).
+	// State Opaque value preserved after one standard callback query decode, including delimiters and literal percent sequences (recommended).
 	State *string `json:"state,omitempty"`
 
 	// Username Account username or email.
@@ -1445,7 +1445,7 @@ type GetOauth2AuthorizeParams struct {
 	// Scope Requested scope (optional)
 	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
 
-	// State Opaque value to maintain state between request and callback (recommended)
+	// State Opaque state (authorize requires 8-512 bytes). Query-component encoded on redirects and preserved after one standard query decode, including delimiters.
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 
 	// CodeChallenge PKCE code challenge (RFC 7636). Required for all clients when auth.require_pkce is enabled (default true).
@@ -1486,7 +1486,7 @@ type PostOauth2ConsentParams struct {
 	// RedirectUri Redirect URI (required)
 	RedirectUri string `form:"redirect_uri" json:"redirect_uri"`
 
-	// State Opaque value to maintain state
+	// State Opaque state, query-component encoded and preserved after one standard callback query decode.
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 
 	// Action Action to perform: 'approve' or 'deny' (required)
@@ -1554,7 +1554,7 @@ type GetOauth2EndSessionParams struct {
 	// ClientId RP self-identification when id_token_hint is absent (RP-Initiated Logout 1.0 §2.1). The post_logout_redirect_uri must be registered for this client (#88-3).
 	ClientId *string `form:"client_id,omitempty" json:"client_id,omitempty"`
 
-	// State Opaque value echoed back to the post_logout_redirect_uri.
+	// State Opaque value echoed without change after one standard post-logout callback query decode; encode the input as one query component.
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 }
 
@@ -1569,7 +1569,7 @@ type PostOauth2EndSessionParams struct {
 	// PostLogoutRedirectUri Registered post-logout redirect URI.
 	PostLogoutRedirectUri *string `form:"post_logout_redirect_uri,omitempty" json:"post_logout_redirect_uri,omitempty"`
 
-	// State Opaque state value.
+	// State Opaque state echoed without change after one standard callback query decode.
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 }
 
