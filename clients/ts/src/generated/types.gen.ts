@@ -1023,6 +1023,10 @@ export type PutApiAdminClientsClientIdData = {
          * P1-1 (#279): client brand image (https-only, loopback exempt). An empty string clears it.
          */
         logo_uri?: string;
+        /**
+         * Per-client token-endpoint auth method (RFC 7591 §2). Combination rule: PUBLIC clients accept only "none"; CONFIDENTIAL clients accept client_secret_basic/client_secret_post. Changing this takes effect at the token/introspect/revoke endpoints immediately (F-017 enforcement reads the client row).
+         */
+        token_endpoint_auth_method?: 'none' | 'client_secret_basic' | 'client_secret_post';
     };
     path: {
         /**
@@ -1036,7 +1040,7 @@ export type PutApiAdminClientsClientIdData = {
 
 export type PutApiAdminClientsClientIdErrors = {
     /**
-     * Invalid request body
+     * Invalid request body, or a token_endpoint_auth_method that contradicts the client's type
      */
     400: unknown;
     /**
@@ -4965,7 +4969,7 @@ export type PostOauth2ConsentData = {
 
 export type PostOauth2ConsentErrors = {
     /**
-     * Missing/expired/mismatched consent_csrf nonce, or (deny) redirect_uri not registered for the client (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)
+     * Missing/expired/mismatched consent_csrf nonce, or (deny) redirect_uri not registered for the client (VALIDATION_INVALID_INPUT / VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
      */
     400: unknown;
     /**
@@ -5056,7 +5060,7 @@ export type GetOauth2ConsentContextData = {
 
 export type GetOauth2ConsentContextErrors = {
     /**
-     * Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)
+     * Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
      */
     400: unknown;
     /**
@@ -5338,7 +5342,7 @@ export type PostOauth2LoginData = {
 
 export type PostOauth2LoginErrors = {
     /**
-     * Missing username/password (VALIDATION_INVALID_INPUT)
+     * Missing username/password (VALIDATION_INVALID_INPUT), or redirect_uri not registered for the client (VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
      */
     400: ErrorEnvelope;
     /**

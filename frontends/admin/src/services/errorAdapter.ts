@@ -29,8 +29,12 @@
  *      string `code` → take `error.code` and `error.request_id`.
  *   2. RFC 6749 — top-level `error` is a string → take the top-level `error`.
  *   3. Has a body but matches neither → generic unknown code.
- *   4. No HTTP response (network failure / timeout) → network fallback code,
- *      `httpStatus = 0`.
+ *   4. No HTTP response → `httpStatus = 0`. An axios error (request was
+ *      dispatched; network failure / timeout) maps to the network fallback
+ *      code; anything else is a frontend-side exception thrown before any
+ *      request was sent and maps to the client fallback `__client__`
+ *      (never tell the user to "check the network" for a
+ *      client bug).
  *
  * The resolved code is mapped to a localized, user-readable message via the
  * Error_Message_Catalog_FE (`getErrorMessage`). When no explicit locale is
@@ -39,6 +43,7 @@
  */
 import {
   getErrorMessage,
+  CLIENT_CODE,
   NETWORK_CODE,
   UNKNOWN_CODE,
 } from './messages'
@@ -68,6 +73,14 @@ export interface NormalizedError {
   request_id: string
   /** HTTP status code, or 0 when there is no HTTP response. */
   httpStatus: number
+  /**
+   * Validation `details` line from the Error Envelope (`error.details`):
+   * backend-assembled field-level failure reasons. Present
+   * only when the server sent it — Production_Mode deployments omit the key
+   * entirely, so it is optional and views must treat it as a hint, never a
+   * guarantee.
+   */
+  details?: string
 }
 
 /** Type guard: a non-null plain object (records, arrays excluded conceptually). */
@@ -119,9 +132,26 @@ export function normalizeError(err: unknown, locale?: string): NormalizedError {
   const response = errObj?.['response']
   const responseObj = isObject(response) ? response : undefined
 
-  // Case 4: no HTTP response at all (network failure / timeout). axios leaves
-  // `error.response` undefined in this case. (Requirement 8.5)
+  // Case 4: no HTTP response at all. This
+  // branch used to blanket-map EVERY response-less error onto the network
+  // fallback — including plain exceptions the frontend threw BEFORE any
+  // request was sent (e.g. PKCE setup failing in a non-secure context),
+  // which sent integrators chasing backend/network ghosts. Only genuine
+  // axios errors (request dispatched, no response: network failure /
+  // timeout) keep the network code; anything else is a frontend exception →
+  // CLIENT_CODE. (Requirement 8.5, split.)
   if (responseObj === undefined) {
+    if (errObj?.['isAxiosError'] !== true) {
+      // Frontend-side exception: keep the diagnostic channel informative
+      // (console) but the user-visible message generic — no internals leak.
+      console.error('[normalizeError] frontend-side exception:', err)
+      return {
+        code: CLIENT_CODE,
+        message: getErrorMessage(CLIENT_CODE, loc),
+        request_id: '',
+        httpStatus: 0,
+      }
+    }
     return {
       code: NETWORK_CODE,
       message: getErrorMessage(NETWORK_CODE, loc),
@@ -164,11 +194,18 @@ export function normalizeError(err: unknown, locale?: string): NormalizedError {
         : isNonEmptyString(data['request_id'])
           ? data['request_id']
           : ''
+      // Pass the validation details through (when the
+      // server emitted them) so views can show WHICH field failed instead of
+      // only the generic catalog message.
+      const details = isNonEmptyString(envelopeError['details'])
+        ? envelopeError['details']
+        : undefined
       return {
         code,
         message: getErrorMessage(code, loc),
         request_id: requestId,
         httpStatus,
+        details,
       }
     }
 

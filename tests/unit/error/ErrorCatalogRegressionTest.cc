@@ -72,8 +72,12 @@ DROGON_TEST(Unit_P0_ErrorCatalog_Regression_ExistingNumericCodesUnchanged)
     // 403 / QUOTA_EXCEEDED 429). P1-6 (#283) adds the two audit-export
     // guard codes (3021-3022, both 400). P1-3 (#280) adds the four
     // claims-mapping/custom-attributes codes (3023-3026, all 400).
+    // The WeKnora integration report adds
+    // VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED (3027, an unregistered
+    // redirect_uri on the code-issuance paths, 400) -- 3013 stays
+    // end_session-only.
     CHECK(
-      ErrorCatalog::allEntries().size() == kExpected.size() + 2 + 9 + 1 + 1 + 2 + 1 + 2 + 2 + 4 + 2 + 4);
+      ErrorCatalog::allEntries().size() == kExpected.size() + 2 + 9 + 1 + 1 + 2 + 1 + 2 + 2 + 4 + 2 + 4 + 1);
     // #144: AUTHENTICATION segment, next free numeric 4008, default 401.
     const CatalogEntry *mfaGateEntry = ErrorCatalog::find("AUTH_MFA_REQUIRED");
     REQUIRE(mfaGateEntry != nullptr);
@@ -99,6 +103,14 @@ DROGON_TEST(Unit_P0_ErrorCatalog_Regression_ExistingNumericCodesUnchanged)
     CHECK(redirectEntry->numericCode == 3013);
     CHECK(redirectEntry->category == ErrorCategory::VALIDATION);
     CHECK(redirectEntry->httpStatus == 400);
+    // WeKnora integration report: the code-issuance redirect_uri rejection
+    // gets its own VALIDATION entry (3013's message is end_session-specific).
+    const CatalogEntry *clientRedirectEntry =
+      ErrorCatalog::find("VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED");
+    REQUIRE(clientRedirectEntry != nullptr);
+    CHECK(clientRedirectEntry->numericCode == 3027);
+    CHECK(clientRedirectEntry->category == ErrorCategory::VALIDATION);
+    CHECK(clientRedirectEntry->httpStatus == 400);
 }
 
 // --- Requirement 3.6: every Application numeric code falls inside its segment.

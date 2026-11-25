@@ -42,7 +42,16 @@ class OAuth2CleanupService : public std::enable_shared_from_this<OAuth2CleanupSe
     /// #83: run SELECT ensure_audit_partitions() (idempotent; creates missing
     /// monthly partitions and evacuates the DEFAULT partition). Fire-and-
     /// forget with logging; failures never block the cleanup cycle. Public as
-    /// the integration-test seam. `completion` (optional) always fires.
+    /// the integration-test seam. `completion` (optional) fires when set.
+    ///
+    /// The implementation never dereferences an EMPTY
+    /// std::function. The production cleanup cycle (doPurge) calls this
+    /// without a completion, and the old unconditional `(*sharedCompletion)()`
+    /// threw std::bad_function_call once per hour (observed in a deployment's
+    /// log); on the postgres path the throw happens inside the execSqlAsync
+    /// callback, outside the cleanup cycle's error handling. The
+    /// default-argument form is kept (signature stability, api-diff); the
+    /// guard lives in the implementation.
     void maintainAuditPartitions(std::function<void()> &&completion = nullptr);
 
     /// P1-6 (#283): audit retention. Drops audit_logs monthly partitions whose

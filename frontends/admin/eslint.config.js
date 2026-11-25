@@ -18,9 +18,10 @@ export default tseslint.config(
     },
   },
   // App sources run in the browser: DOM globals (ESLint's no-undef does not
-  // read tsconfig lib.dom).
+  // read tsconfig lib.dom). public/*.js counts too: boot.js is the pre-paint
+  // script served as-is (no bundler), but it still runs in the page.
   {
-    files: ['src/**/*.ts', 'src/**/*.vue'],
+    files: ['src/**/*.ts', 'src/**/*.vue', 'public/**/*.js'],
     languageOptions: { globals: globals.browser },
   },
   // Node-context files (vite/playwright configs, e2e specs running under

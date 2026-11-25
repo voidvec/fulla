@@ -65,9 +65,9 @@ struct RawEntry
 
 // Verbatim copy of oauth2::error::ErrorCatalog's table (numeric codes/messages
 // preserved unchanged); grows as new codes are ratified.
-const std::array<RawEntry, 44> &rawEntries()
+const std::array<RawEntry, 45> &rawEntries()
 {
-    static const std::array<RawEntry, 44> kEntries = {{
+    static const std::array<RawEntry, 45> kEntries = {{
       // NETWORK (1000-1099)
       {"NET_CONNECTION_FAILED",
        1001,
@@ -248,6 +248,17 @@ const std::array<RawEntry, 44> &rawEntries()
        ErrorCategory::VALIDATION,
        "登出重定向地址未注册",
        "end_session 的 post_logout_redirect_uri 未注册（VALIDATION 类，HTTP 400）",
+       400},
+      // An unregistered redirect_uri on the
+      // code-issuance paths (login, consent approve/deny, consent context)
+      // used to answer with 3013, whose message is end_session-specific (it
+      // talks about the logout redirect) and misled login integrators. This
+      // code is theirs; 3013 is end_session-only again.
+      {"VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED",
+       3027,
+       ErrorCategory::VALIDATION,
+       "回调地址未注册，请检查客户端 redirect_uri 配置",
+       "授权码签发（login/consent）时 redirect_uri 未注册到该 client（VALIDATION 类，HTTP 400）",
        400},
 
       // AUTHENTICATION (4000-4099) —— MFA 补充缺口。

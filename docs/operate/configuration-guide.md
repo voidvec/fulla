@@ -150,6 +150,24 @@ Seed clients declare it explicitly: `fulla-portal` and `fulla-admin-console` →
 `backend-svc` → `client_secret_basic`. Existing clients with NULL values keep their
 pre-upgrade behavior; the upgrade does not break existing deployments.
 
+Config seeding and the admin API honor the key:
+
+- **Config seeding honors the key.** The bootstrap seeder now reads
+  `token_endpoint_auth_method` from each `plugins.OAuth2Plugin.config.clients`
+  entry (previously it ignored the key entirely and always wrote
+  `client_secret_basic` for CONFIDENTIAL clients, so an RP that authenticates
+  with a body secret could not be seeded from config). Combination rule:
+  `PUBLIC` accepts only `none`; `CONFIDENTIAL` accepts only
+  `client_secret_basic`/`client_secret_post` — an illegal explicit combination
+  fails that client's seed with a startup ERROR (the client is NOT seeded).
+  The in-memory repository applies the same rule.
+- **The admin API can change it.** `PUT /api/admin/clients/{clientId}` accepts
+  `token_endpoint_auth_method` (same value domain + combination rule, checked
+  against the row's `client_type`), and the admin console's application detail
+  page exposes it as a dropdown. Changes take effect immediately at the
+  token/introspect/revoke endpoints (F-017 reads the client row; the client
+  cache is invalidated on write).
+
 ## 6. OIDC prompt / max_age / auth_time (F-022)
 
 The authorization endpoint supports the `prompt` and `max_age` parameters from OIDC Core

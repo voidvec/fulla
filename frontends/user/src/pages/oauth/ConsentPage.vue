@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
+import { normalizeError } from '../../services/errorAdapter'
 import DData from '../../components/ui/DData.vue'
 
 const { t, locale } = useI18n()
@@ -150,21 +151,24 @@ function describeScope(s: string): string {
 }
 
 /**
- * Submit consent via a native form POST (not XHR).
+ * Submit consent via XHR and navigate the top-level window ourselves.
  *
- * The backend returns a real HTTP 302 redirect to the client's redirect_uri
- * with ?code=... (F-020). An XHR/fetch would auto-follow this redirect and
- * land on an opaque cross-origin response, preventing the browser from
- * navigating. A native form POST lets the browser handle the 302 directly,
- * correctly redirecting the top-level window to the client application.
- * This is the standard browser pattern for OAuth2 consent submission.
+ * The previous implementation used a dynamically built native form POST so
+ * the browser would follow the backend's 302 to the RP directly (F-020).
+ * That breaks under `form-action 'self'`: Chrome — contrary to the CSP spec
+ * (w3c/webappsec-csp#8) — also applies form-action to the redirect that
+ * FOLLOWS a form submission, so even a same-origin POST whose 302 lands on a
+ * cross-origin RP callback is killed; only `form-action *` made the flow
+ * work (observed in the WeKnora integration, 2026-11). With json=true the
+ * endpoint returns {"code"|"error", "location"} (the same contract as
+ * /oauth2/login) and this JS-initiated navigation — not a form submission,
+ * exempt from form-action — carries the code/state to the RP.
  */
-function handleConsent(action: 'approve' | 'deny') {
+const consentError = ref('')
+
+async function handleConsent(action: 'approve' | 'deny') {
   loading.value = true
-  const form = document.createElement('form')
-  form.method = 'POST'
-  form.action = '/oauth2/consent'
-  form.enctype = 'application/x-www-form-urlencoded'
+  consentError.value = ''
 
   const fields: Record<string, string> = {
     client_id: clientId,
@@ -173,6 +177,7 @@ function handleConsent(action: 'approve' | 'deny') {
     redirect_uri: redirectUri,
     state,
     action,
+    json: 'true',
   }
   if (consentCsrf) {
     fields.consent_csrf = consentCsrf
@@ -183,15 +188,24 @@ function handleConsent(action: 'approve' | 'deny') {
   }
   if (nonce) fields.nonce = nonce
 
-  for (const [key, value] of Object.entries(fields)) {
-    const input = document.createElement('input')
-    input.type = 'hidden'
-    input.name = key
-    input.value = value
-    form.appendChild(input)
+  try {
+    const resp = await axios.post('/oauth2/consent', new URLSearchParams(fields))
+    const target = resp.data?.location
+    // Defense in depth: the target is built server-side from the client's
+    // registered redirect_uri, but a navigation API will happily execute a
+    // `javascript:` URL — refuse anything that is not an absolute http(s)
+    // location before leaving the SPA.
+    if (typeof target !== 'string' || !/^https?:\/\//i.test(target)) {
+      throw new Error('invalid consent redirect target')
+    }
+    window.location.assign(target)
+    // Navigation in flight: keep the buttons disabled until the page unloads.
+  } catch (e) {
+    loading.value = false
+    // Envelope errors (expired consent_csrf, session loss, PKCE guards...)
+    // surface through the standard Frontend_Error_Module mapping.
+    consentError.value = normalizeError(e).message
   }
-  document.body.appendChild(form)
-  form.submit()
 }
 </script>
 
@@ -318,6 +332,16 @@ function handleConsent(action: 'approve' | 'deny') {
       data-testid="consent-missing-user"
     >
       {{ $t('oauth.consent.missingUser') }}
+    </p>
+
+    <!-- Submission failure: the XHR submit keeps the user on the page (the
+         old native form POST navigated to a raw error page instead). -->
+    <p
+      v-if="consentError"
+      class="mt-4 text-center text-sm text-error-600"
+      data-testid="consent-submit-error"
+    >
+      {{ consentError }}
     </p>
 
     <!-- Actions: Deny (quiet) / Authorize (primary stamp) -->

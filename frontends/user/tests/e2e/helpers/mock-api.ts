@@ -211,8 +211,12 @@ export async function setupMocks(page: Page) {
     }
   })
 
+  // The SPA submits consent via XHR with json=true and
+  // navigates itself from the returned {"code"|"error", "location"} envelope
+  // (same contract as /oauth2/login). The mock's location stays on the
+  // Playwright origin so the self-navigation never leaves the test context.
   await page.route('**/oauth2/consent', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ redirect_uri: 'http://localhost:5173/callback?code=consent-code&state=test' }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'consent-code', location: 'http://localhost:5173/callback?code=consent-code&state=test' }) })
   })
 
   // v1.4.0 M1b: consent-screen context (owner attribution + org banner) is

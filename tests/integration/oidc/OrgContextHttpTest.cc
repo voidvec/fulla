@@ -1560,9 +1560,10 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentContext_ServerDerived)
         REQUIRE(parseJsonBody(resp, err));
         CHECK(err["error"].get("code", "").asString() == "AUTHZ_ACCESS_DENIED");
     }
-    // Unregistered redirect_uri -> 400 VALIDATION_REDIRECT_URI_NOT_REGISTERED
-    // (the anti-enumeration binding: no owner data without knowing a
-    // registered redirect_uri).
+    // Unregistered redirect_uri -> 400 VALIDATION_CLIENT_REDIRECT_URI_NOT_
+    // REGISTERED (code-issuance paths no longer reuse the
+    // end_session-specific 3013; the anti-enumeration binding is unchanged:
+    // no owner data without knowing a registered redirect_uri).
     {
         auto resp = getContext(
           csrf2, orgClientId, "http://127.0.0.1:9999/evil", "orgctxctx2", userIdParam, cookie
@@ -1572,7 +1573,7 @@ DROGON_TEST(Integration_P1_OrgContext_ConsentContext_ServerDerived)
         Json::Value err;
         REQUIRE(parseJsonBody(resp, err));
         CHECK(err["error"].get("code", "").asString() ==
-              "VALIDATION_REDIRECT_URI_NOT_REGISTERED");
+              "VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED");
     }
 
     // Personal-app flow (no org hint): org is null and the attribution is

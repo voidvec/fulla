@@ -520,10 +520,37 @@ void ClientManagementService::updateClient(
     bool hasGrantTypes = jsonBody->isMember("allowed_grant_types");
     bool hasBackchannelUri = jsonBody->isMember("backchannel_logout_uri");
     bool hasLogoUri = jsonBody->isMember("logo_uri");
-    if (!hasName && !hasRedirectUris && !hasGrantTypes && !hasBackchannelUri && !hasLogoUri)
+    // token_endpoint_auth_method used to be create-only -- an
+    // existing client seeded as client_secret_basic could never be switched to
+    // client_secret_post through any API surface, forcing DB surgery. Same
+    // value domain as DCR (ClientRegistrationService); the per-type combination
+    // check runs once the row (client_type) is loaded below.
+    bool hasAuthMethod = jsonBody->isMember("token_endpoint_auth_method");
+    if (
+      !hasName && !hasRedirectUris && !hasGrantTypes && !hasBackchannelUri &&
+      !hasLogoUri && !hasAuthMethod
+    )
     {
         respondError(req, cb, "VALIDATION_INVALID_INPUT", "No fields to update");
         return;
+    }
+
+    if (hasAuthMethod)
+    {
+        const std::string authMethod =
+          (*jsonBody)["token_endpoint_auth_method"].asString();
+        if (
+          authMethod != "none" && authMethod != "client_secret_basic" &&
+          authMethod != "client_secret_post"
+        )
+        {
+            respondError(
+              req, cb, "VALIDATION_INVALID_INPUT",
+              "updateClient: token_endpoint_auth_method must be one of "
+              "none, client_secret_basic, client_secret_post"
+            );
+            return;
+        }
     }
 
     // F-014: reject non-compliant redirect URIs at update time.
@@ -569,9 +596,34 @@ void ClientManagementService::updateClient(
     Mapper<Oauth2Clients> mapper(db);
     mapper.findOne(
       Criteria(Oauth2Clients::Cols::_client_id, CompareOperator::EQ, clientId),
-      [cb, req, clientId, jsonBody, hasName, hasRedirectUris, hasGrantTypes, hasBackchannelUri, hasLogoUri, db](
+      [cb, req, clientId, jsonBody, hasName, hasRedirectUris, hasGrantTypes,
+       hasBackchannelUri, hasLogoUri, hasAuthMethod, db](
         Oauth2Clients row
       ) {
+          // Combination guard (same rule as the seeder/DCR): PUBLIC ->
+          // "none" only; CONFIDENTIAL -> client_secret_basic/post. Checked
+          // here because it needs the row's client_type.
+          if (hasAuthMethod)
+          {
+              const std::string authMethod =
+                (*jsonBody)["token_endpoint_auth_method"].asString();
+              const bool isPublic =
+                row.getValueOfClientType() == "PUBLIC";
+              const bool legal =
+                isPublic ? authMethod == "none"
+                         : (authMethod == "client_secret_basic" ||
+                            authMethod == "client_secret_post");
+              if (!legal)
+              {
+                  respondError(
+                    req, cb, "VALIDATION_INVALID_INPUT",
+                    "updateClient: token_endpoint_auth_method '" + authMethod +
+                      "' is not allowed for a " +
+                      (isPublic ? "PUBLIC" : "CONFIDENTIAL") + " client"
+                  );
+                  return;
+              }
+          }
           if (hasName)
           {
               row.setName((*jsonBody)["name"].asString());
@@ -599,6 +651,12 @@ void ClientManagementService::updateClient(
                   row.setLogoUriToNull();
               else
                   row.setLogoUri(logoUri);
+          }
+          if (hasAuthMethod)
+          {
+              row.setTokenEndpointAuthMethod(
+                (*jsonBody)["token_endpoint_auth_method"].asString()
+              );
           }
           Mapper<Oauth2Clients> updateMapper(db);
           updateMapper.update(

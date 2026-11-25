@@ -84,12 +84,17 @@ void respondError(
 // F-007 (RFC 6749 §4.1.2.1): errors raised while processing an
 // authorization request are delivered as a 302 back to the client's
 // (verified) redirect_uri with error/error_description/state in the query.
+// jsonMode mirrors the login/consent json=true contract: same target in a
+// {"error", "error_description"?, "location"} envelope so the SPA (XHR
+// submit) can navigate itself instead of the XHR opaquely following the
+// cross-origin 302.
 void sendOAuthErrorRedirect(
   const std::function<void(const ::drogon::HttpResponsePtr &)> &cb,
   const std::string &redirectUri,
   const std::string &error,
   const std::string &description,
-  const std::string &state
+  const std::string &state,
+  bool jsonMode = false
 )
 {
     std::string location = redirectUri + "?error=" + error;
@@ -97,6 +102,16 @@ void sendOAuthErrorRedirect(
         location += "&error_description=" + ::drogon::utils::urlEncode(description);
     if (!state.empty())
         location += "&state=" + ::drogon::utils::urlEncode(state);
+    if (jsonMode)
+    {
+        Json::Value ret;
+        ret["error"] = error;
+        if (!description.empty())
+            ret["error_description"] = description;
+        ret["location"] = location;
+        cb(::drogon::HttpResponse::newHttpJsonResponse(ret));
+        return;
+    }
     cb(::drogon::HttpResponse::newRedirectionResponse(location));
 }
 }  // namespace
@@ -946,7 +961,8 @@ void SessionController::login(
                         redirectUri,
                         "invalid_request",
                         "PKCE (code_challenge) is required",
-                        state
+                        state,
+                        req->getParameter("json") == "true"
                       );
                       return;
                   }
@@ -962,7 +978,8 @@ void SessionController::login(
                         redirectUri,
                         "invalid_request",
                         "code_challenge must be 43-128 characters of [A-Za-z0-9-._~]",
-                        state
+                        state,
+                        req->getParameter("json") == "true"
                       );
                       return;
                   }
@@ -1307,6 +1324,16 @@ void SessionController::consent(
     std::string codeChallengeMethod = params["code_challenge_method"];
     std::string nonce = params["nonce"];
     std::string consentCsrf = params["consent_csrf"];
+    // The SPA consent page submits via XHR with
+    // json=true (see ConsentPage.vue). A native form POST + 302 to the RP is
+    // blocked by Chrome's form-action enforcement, which -- contrary to the
+    // CSP spec (w3c/webappsec-csp#8) -- also checks redirects that follow a
+    // form submission, so even a same-origin POST whose 302 lands on a
+    // cross-origin RP callback is killed under `form-action 'self'`. json=true
+    // returns the redirect target in a {"code"|"error", "location"} envelope
+    // (same contract as /oauth2/login) and the SPA navigates itself; a JS
+    // navigation is not a form submission and is exempt from form-action.
+    const bool jsonMode = req->getParameter("json") == "true";
 
     // F1 (consent auth gates, fail-closed before ANY plugin call):
     // Gate 1 — the request must belong to an authenticated session. A
@@ -1434,11 +1461,11 @@ void SessionController::consent(
         plugin->validateRedirectUri(
           clientId,
           redirectUri,
-          [req, clientId, redirectUri, state, sharedCb](bool validUri) mutable {
+          [req, clientId, redirectUri, state, sharedCb, jsonMode](bool validUri) mutable {
               if (!validUri)
               {
                   respondError(
-                    req, *sharedCb, "VALIDATION_REDIRECT_URI_NOT_REGISTERED",
+                    req, *sharedCb, "VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED",
                     "consent: deny redirect_uri is not registered for the client"
                   );
                   return;
@@ -1448,6 +1475,14 @@ void SessionController::consent(
                 "?error=access_denied&error_description=User+denied+consent";
               if (!state.empty())
                   location += "&state=" + ::drogon::utils::urlEncode(state);
+              if (jsonMode)
+              {
+                  Json::Value ret;
+                  ret["error"] = "access_denied";
+                  ret["location"] = location;
+                  (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(ret));
+                  return;
+              }
               (*sharedCb)(::drogon::HttpResponse::newRedirectionResponse(location));
           }
         );
@@ -1507,6 +1542,7 @@ void SessionController::consent(
        nonce,
        sessAuthTime,
        sessAmr,
+       jsonMode,
        cb](
         ::OAuth2Plugin::CodeIssuanceGuardResult guard) mutable {
           if (!guard.ok)
@@ -1543,6 +1579,7 @@ void SessionController::consent(
              req,
              sessAuthTime,
              sessAmr,
+             jsonMode,
              cb](std::optional<int32_t> internalUserId) mutable {
           if (!internalUserId)
           {
@@ -1574,7 +1611,8 @@ void SessionController::consent(
           // correct form).
           auto mintCode =
             [plugin, clientId, userId, scope, redirectUri, state, codeChallenge,
-             codeChallengeMethod, nonce, req, sharedCb, sessAuthTime, sessAmr](
+             codeChallengeMethod, nonce, req, sharedCb, sessAuthTime, sessAmr,
+             jsonMode](
               std::optional<int32_t> orgId) {
               plugin->generateAuthorizationCode(
                 clientId,
@@ -1584,7 +1622,7 @@ void SessionController::consent(
                 codeChallenge,
                 codeChallengeMethod,
                 nonce,
-                [clientId, redirectUri, state, req, sharedCb](
+                [clientId, redirectUri, state, req, sharedCb, jsonMode](
                   bool success, std::string code, std::string error
                 ) mutable {
                     if (!success)
@@ -1598,7 +1636,8 @@ void SessionController::consent(
                           redirectUri,
                           "server_error",
                           "Failed to generate authorization code",
-                          state
+                          state,
+                          jsonMode
                         );
                         return;
                     }
@@ -1608,6 +1647,25 @@ void SessionController::consent(
                       redirectUri + "?code=" + ::drogon::utils::urlEncode(code);
                     if (!state.empty())
                         location += "&state=" + ::drogon::utils::urlEncode(state);
+                    if (jsonMode)
+                    {
+                        // Same envelope as the /oauth2/login json=true path;
+                        // the SPA performs the top-level navigation itself.
+                        Json::Value ret;
+                        ret["code"] = code;
+                        ret["location"] = location;
+                        auto jsonResp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
+                        if (auto m =
+                              ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
+                            m->incrementCounter(
+                              "oauth2_requests_total",
+                              fulla::common::ports::MetricLabels{
+                                {"endpoint", "authorize"}},
+                              static_cast<double>(200)
+                            );
+                        (*sharedCb)(jsonResp);
+                        return;
+                    }
                     auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
                     if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                         m->incrementCounter(

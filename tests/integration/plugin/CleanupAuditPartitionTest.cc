@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <future>
+#include <thread>
 
 using fulla::drogon::OAuth2CleanupService;
 using fulla::test::http::postgresAvailable;
@@ -77,6 +78,38 @@ DROGON_TEST(Integration_P2_Cleanup_AuditPartitions_DisabledPaths_CompleteWithout
     {
         // Memory mode: the nullptr-client branch above already covered the
         // short-circuit; nothing more to assert here.
+        CHECK(true);
+    }
+}
+
+// The production cleanup cycle (doPurge) calls
+// maintainAuditPartitions() with NO completion. The default argument is an
+// empty std::function, and the implementation used to invoke it
+// unconditionally, which threw std::bad_function_call once per hour (on the
+// postgres path inside the execSqlAsync callback, outside the cleanup cycle's
+// try/catch). Every invocation is guarded now; this case pins the exact
+// production call shape -- no argument, both the disabled and (when
+// available) the postgres path, no throw, and no completion to wait for.
+DROGON_TEST(Integration_P2_Cleanup_AuditPartitions_DefaultCompletion_DoesNotThrow)
+{
+    {
+        // Disabled path: returns synchronously; must not throw.
+        OAuth2CleanupService service(nullptr, nullptr, nullptr, false);
+        CHECK_NOTHROW(service.maintainAuditPartitions());
+    }
+    if (postgresAvailable())
+    {
+        // Postgres path: the async DDL runs with the no-op default completion.
+        // Fire and give the loop a beat; a bad_function_call here would have
+        // aborted the process before this CHECK even ran (that is the point).
+        auto db = drogon::app().getDbClient();
+        REQUIRE(db != nullptr);
+        OAuth2CleanupService service(nullptr, nullptr, db, true);
+        CHECK_NOTHROW(service.maintainAuditPartitions());
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    else
+    {
         CHECK(true);
     }
 }

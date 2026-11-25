@@ -78,6 +78,12 @@ export default {
       passwordPlaceholder: 'Enter your password',
       forgotPassword: 'Forgot password?',
       submit: 'Sign In',
+      // Label for the concrete redirect_uri shown under the
+      // VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED error banner.
+      redirectUriHint: 'Redirect URI used by this app',
+      // Second WeKnora report: shown when /login is reached with an authorize
+      // request while the portal still holds a refresh token.
+      reauthNotice: 'Your sign-in session has ended, or the application asks you to sign in again. Sign in to continue.',
       orContinueWith: 'or continue with',
       signInWithGitHub: 'Sign in with GitHub',
       signInWithGoogle: 'Sign in with Google',
@@ -115,7 +121,10 @@ export default {
       success: 'Account created successfully!',
       verifyEmailNotice:
         'A verification email has been sent to {email}. Please verify your address before signing in.',
-      usernameHint: 'Optional — generated for you when left blank',
+      // State the backend charset rule up front (the server
+      // rejects Chinese, '-', '.', '@' etc. with a bare 400 otherwise).
+      usernameHint: 'Optional — generated for you when left blank. 1–100 characters: letters, digits, underscore',
+      usernamePatternError: 'Username may only contain letters, digits, and underscore (1–100 characters)',
       passwordHint:
         'Minimum 8 characters. A longer passphrase of 3–4 random words works well.',
       submit: 'Create Account',

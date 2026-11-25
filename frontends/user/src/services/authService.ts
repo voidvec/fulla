@@ -1,9 +1,18 @@
 import http, { setTokens, clearTokens, getAccessToken } from './http'
-import { generatePkcePair } from '../utils/pkce'
+import { generatePkcePair, randomId } from '../utils/pkce'
 import type { ExternalProviderInfo, LoginResult, TokenResponse } from '../types'
 
 const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'fulla-portal'
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin + '/callback'
+
+/**
+ * The redirect_uri this SPA presents on its own login flow — exported so the
+ * login view can show the concrete value when the server rejects it as
+ * unregistered (VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED):
+ * "回调地址未注册" plus the actual URI is actionable; the bare code is
+ * not.
+ */
+export const PORTAL_REDIRECT_URI = REDIRECT_URI
 
 /**
  * Session-storage key for the PKCE code_verifier of the SPA's own login
@@ -72,7 +81,9 @@ export const authService = {
     // return JSON (not a browser redirect), so the page does not reload and
     // the closure survives to the token-exchange step below.
     const pkce = await generatePkcePair()
-    const state = crypto.randomUUID()
+    // randomId() (not crypto.randomUUID): non-secure contexts (plain-HTTP
+    // LAN deployments) leave randomUUID undefined.
+    const state = randomId()
 
     const resp = await http.post('/oauth2/login', new URLSearchParams({
       username, password,

@@ -11,6 +11,7 @@
 #include <fulla/identity/TotpUtils.h>
 #include <fulla/drogon/utils/CryptoUtils.h>
 #include <fulla/drogon/utils/PasswordHasher.h>
+#include <fulla/drogon/utils/PortalUrl.h>
 #include <json/json.h>
 
 #include <future>
@@ -557,4 +558,162 @@ DROGON_TEST(Integration_P0_MfaWrongCodeThenRelogin_IdTokenAmrStaysPwd)
     }
     CHECK(amrJoined.find("mfa") == std::string::npos);
     CHECK(amrJoined.find("pwd") != std::string::npos);
+}
+
+// POST /oauth2/consent with json=true returns
+// the redirect target in a {"code", "location"} envelope instead of a 302, so
+// the SPA consent page can navigate the top-level window itself (a native
+// form POST + 302 is killed by Chrome's form-action enforcement, which also
+// checks the redirect following a form submission -- w3c/webappsec-csp#8).
+// Same contract shape as the /oauth2/login json=true path.
+DROGON_TEST(Integration_P0_ConsentJsonMode_ApproveReturnsLocationEnvelope)
+{
+    if (!fulla::test::http::postgresAvailable())
+    {
+        CHECK(true);
+        return;
+    }
+    auto cookie = loginCookie("admin", "admin");
+    REQUIRE(!cookie.empty());
+
+    std::string csrf, userId, cookieFlow;
+    REQUIRE(authorizeMintNonce(cookie, "jsonstate01", csrf, userId, cookieFlow));
+
+    auto approve = post(
+      "/oauth2/consent",
+      "client_id=fulla-portal&user_id=" + userId +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=jsonstate01&code_challenge=9rpn4FzeG43ckXZ0V3Ap7ZaXjc224Js4NfXsy4KJwRA&code_challenge_method=S256&consent_csrf=" +
+        csrf + "&action=approve&json=true",
+      cookieFlow
+    );
+    REQUIRE(approve != nullptr);
+    CHECK(approve->getStatusCode() == k200OK);
+    CHECK(approve->getContentType() == ::drogon::CT_APPLICATION_JSON);
+    Json::Value body;
+    REQUIRE(fulla::test::http::parseJsonBody(approve, body));
+    CHECK(body.get("code", "").asString().size() > 0);
+    const std::string location = body.get("location", "").asString();
+    CHECK(location.find("http://127.0.0.1:5173/callback?code=") == 0);
+    CHECK(location.find("state=jsonstate01") != std::string::npos);
+}
+
+// Deny branch of the same json contract: {"error": "access_denied",
+// "location": ...} -- the SPA still self-navigates so the RP receives the
+// error redirect exactly as the 302 flow would have delivered it.
+DROGON_TEST(Integration_P0_ConsentJsonMode_DenyReturnsLocationEnvelope)
+{
+    if (!fulla::test::http::postgresAvailable())
+    {
+        CHECK(true);
+        return;
+    }
+    auto cookie = loginCookie("admin", "admin");
+    REQUIRE(!cookie.empty());
+
+    std::string csrf, userId, cookieFlow;
+    REQUIRE(authorizeMintNonce(cookie, "jsonstate02", csrf, userId, cookieFlow));
+
+    auto deny = post(
+      "/oauth2/consent",
+      "client_id=fulla-portal&user_id=" + userId +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=jsonstate02&consent_csrf=" +
+        csrf + "&action=deny&json=true",
+      cookieFlow
+    );
+    REQUIRE(deny != nullptr);
+    CHECK(deny->getStatusCode() == k200OK);
+    Json::Value body;
+    REQUIRE(fulla::test::http::parseJsonBody(deny, body));
+    CHECK(body.get("error", "").asString() == "access_denied");
+    const std::string location = body.get("location", "").asString();
+    CHECK(location.find("http://127.0.0.1:5173/callback?error=access_denied") == 0);
+    CHECK(location.find("state=jsonstate02") != std::string::npos);
+}
+
+// The pre-existing error contract is untouched in json mode: an expired /
+// mismatched consent_csrf still yields the standard 400 Error Envelope (the
+// SPA surfaces it inline instead of navigating anywhere). The user_id must be
+// the REAL session subject -- Gate 2 (user_id vs session) runs BEFORE the CSRF
+// gate, and a forged user_id would answer 403 AUTHZ_ACCESS_DENIED instead of
+// exercising the CSRF branch this case targets.
+DROGON_TEST(Integration_P0_ConsentJsonMode_ExpiredCsrfStill400Envelope)
+{
+    if (!fulla::test::http::postgresAvailable())
+    {
+        CHECK(true);
+        return;
+    }
+    auto cookie = loginCookie("admin", "admin");
+    REQUIRE(!cookie.empty());
+
+    const std::string userId = adminPublicSub();
+    REQUIRE(!userId.empty());
+
+    auto reject = post(
+      "/oauth2/consent",
+      "client_id=fulla-portal&user_id=" + userId +
+        "&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback&state=jsonstate03&consent_csrf=not-a-real-nonce&action=approve&json=true",
+      cookie
+    );
+    REQUIRE(reject != nullptr);
+    CHECK(reject->getStatusCode() == k400BadRequest);
+    Json::Value errBody;
+    REQUIRE(fulla::test::http::parseJsonBody(reject, errBody));
+    CHECK(errBody["error"]["code"].asString() == "VALIDATION_INVALID_INPUT");
+}
+
+// A consent-requiring authorize goes to the configured
+// consent target (custom_config.oauth2.consent_url), which by default is the
+// backend-relative "/consent" -- unchanged, because the capacity harness
+// checks this redirect against the configured consent_url. The backend
+// itself serves no GET /consent: a stack without a same-origin SPA (the
+// development compose files) points consent_url at the SPA.
+DROGON_TEST(Integration_P1_Authorize_ConsentRedirectGoesToConfiguredTarget)
+{
+    if (!fulla::test::http::postgresAvailable())
+    {
+        CHECK(true);
+        return;
+    }
+    auto cookie = loginCookie("admin", "admin");
+    REQUIRE(!cookie.empty());
+
+    // prompt=consent forces the consent branch even with recorded consent.
+    auto resp = authorize(cookie, "consent");
+    REQUIRE(resp != nullptr);
+    CHECK(resp->getStatusCode() == k302Found);
+    const std::string location = resp->getHeader("Location");
+    // The expected target is spelled out: the unchanged default.
+    CHECK(location.find("/consent?client_id=") == 0);
+    CHECK(location.find("consent_csrf=") != std::string::npos);
+}
+
+// The login endpoint's F-007 error redirects (PKCE guards) honor json=true
+// as well: the SPA's XHR login must receive the {"error", "location"}
+// envelope rather than opaquely following a 302 to the client callback.
+DROGON_TEST(Integration_P0_LoginJsonMode_PkceMissingReturnsErrorEnvelope)
+{
+    if (!fulla::test::http::postgresAvailable())
+    {
+        CHECK(true);
+        return;
+    }
+    // Valid credentials + registered redirect_uri, but NO code_challenge:
+    // CHECK 4 (require_pkce defaults to true) fires the F-007
+    // redirect -- in json mode as an envelope.
+    auto resp = fulla::test::http::sendPostForm(
+      "/oauth2/login?json=true",
+      "username=admin&password=admin"
+      "&client_id=fulla-portal&redirect_uri=http%3A%2F%2F127.0.0.1%3A5173%2Fcallback"
+      "&scope=openid&state=loginjson01"
+    );
+    REQUIRE(resp != nullptr);
+    CHECK(resp->getStatusCode() == k200OK);
+    Json::Value body;
+    REQUIRE(fulla::test::http::parseJsonBody(resp, body));
+    CHECK(body.get("error", "").asString() == "invalid_request");
+    CHECK(body.get("error_description", "").asString().find("PKCE") != std::string::npos);
+    const std::string location = body.get("location", "").asString();
+    CHECK(location.find("http://127.0.0.1:5173/callback?error=invalid_request") == 0);
+    CHECK(location.find("state=loginjson01") != std::string::npos);
 }

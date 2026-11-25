@@ -111,6 +111,43 @@ void MemoryClientRepository::initFromConfig(const Json::Value &clientsConfig)
             }
         }
 
+        // Honor token_endpoint_auth_method with
+        // the same combination rule as bootstrap::ClientSeeder -- PUBLIC ->
+        // "none" only, CONFIDENTIAL -> client_secret_basic/client_secret_post.
+        // The seeder previously ignored the key entirely, so memory mode and
+        // postgres mode seeded DIFFERENT auth methods from the same config; an
+        // explicit illegal combination skips the client (fail-closed, like the
+        // seeder's per-client rejection).
+        {
+            const bool isPublic =
+              client.clientType == ::fulla::oauth2::model::ClientType::PUBLIC;
+            if (clientData.isMember("token_endpoint_auth_method") &&
+                clientData["token_endpoint_auth_method"].isString())
+            {
+                const std::string declared =
+                  clientData["token_endpoint_auth_method"].asString();
+                const bool legal =
+                  isPublic ? declared == "none"
+                           : (declared == "client_secret_basic" ||
+                              declared == "client_secret_post");
+                if (!legal)
+                {
+                    LOG_ERROR << "MemoryClientRepository: invalid "
+                                 "token_endpoint_auth_method '"
+                              << declared << "' for "
+                              << (isPublic ? "PUBLIC" : "CONFIDENTIAL")
+                              << " client '" << clientId << "' -- client NOT loaded";
+                    continue;
+                }
+                client.tokenEndpointAuthMethod = declared;
+            }
+            else
+            {
+                client.tokenEndpointAuthMethod =
+                  isPublic ? "none" : "client_secret_basic";
+            }
+        }
+
         LOG_DEBUG << "MemoryClientRepository: Loaded client " << clientId << " with "
                   << client.allowedScopes.size() << " allowed scopes";
 

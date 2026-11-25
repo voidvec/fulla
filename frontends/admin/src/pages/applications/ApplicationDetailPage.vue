@@ -52,6 +52,26 @@ const editGrantTypes = ref<string[]>([])
 const editBackchannelLogoutUri = ref('')
 // P1-1 (#279): client brand image (https-only at the server).
 const editLogoUri = ref('')
+// token_endpoint_auth_method is editable via PUT
+// (was read-only display; an RP seeded as client_secret_basic could never
+// switch to client_secret_post without DB surgery).
+const editAuthMethod = ref('')
+
+// Options follow the per-type rule the backend enforces: PUBLIC -> none;
+// CONFIDENTIAL -> client_secret_basic/client_secret_post. Unknown type shows
+// all three.
+const AUTH_METHOD_OPTIONS = computed(() => {
+  const isPublic = client.value.client_type === 'PUBLIC'
+  const isConfidential = client.value.client_type === 'CONFIDENTIAL'
+  const options = [
+    { value: 'none', label: 'none (public, no secret)' },
+    { value: 'client_secret_basic', label: 'client_secret_basic (HTTP Basic)' },
+    { value: 'client_secret_post', label: 'client_secret_post (body)' },
+  ]
+  if (isPublic) return options.filter((o) => o.value === 'none')
+  if (isConfidential) return options.filter((o) => o.value !== 'none')
+  return options
+})
 
 // Scopes data
 const allScopes = ref<any[]>([])
@@ -101,6 +121,7 @@ async function fetchClient() {
       : []
     editBackchannelLogoutUri.value = resp.data.backchannel_logout_uri || ''
     editLogoUri.value = resp.data.logo_uri || ''
+    editAuthMethod.value = resp.data.token_endpoint_auth_method || ''
     clientScopes.value = resp.data.scopes || []
   } catch (e: unknown) {
     showError(normalizeError(e))
@@ -145,6 +166,9 @@ async function saveChanges() {
     }
     if (editLogoUri.value !== (client.value.logo_uri || '')) {
       body.logo_uri = editLogoUri.value
+    }
+    if (editAuthMethod.value !== (client.value.token_endpoint_auth_method || '')) {
+      body.token_endpoint_auth_method = editAuthMethod.value
     }
 
     if (Object.keys(body).length === 0) {
@@ -323,9 +347,21 @@ onMounted(() => {
       >
         <div>
           <label class="block text-sm font-medium text-neutral-700 mb-1">{{ $t('admin.applications.authMethodLabel') }}</label>
-          <div>
-            <DData :value="client.token_endpoint_auth_method || $t('admin.applications.notSet')" />
-          </div>
+          <select
+            v-model="editAuthMethod"
+            class="block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:ring-brand-500 focus:border-brand-500"
+          >
+            <option value="">
+              {{ $t('admin.applications.notSet') }}
+            </option>
+            <option
+              v-for="opt in AUTH_METHOD_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </option>
+          </select>
           <p class="text-xs text-neutral-500 mt-1">
             {{
               $t('admin.applications.authMethodHint', {

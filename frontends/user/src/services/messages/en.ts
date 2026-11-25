@@ -15,6 +15,7 @@ export const en: Record<string, string> = {
   // --- Reserved fallback keys (required by errorAdapter) ---
   __unknown__: 'An unexpected error occurred. Please try again later.',
   __network__: 'Network connection failed. Please check your network and try again.',
+  __client__: 'The request could not be sent due to a client-side error. Check the browser console for details.',
 
   // --- Backend Error_Code catalog ---
   NET_CONNECTION_FAILED: 'Upstream connection failed',
@@ -46,6 +47,7 @@ export const en: Record<string, string> = {
   VALIDATION_DEVICE_CODE_INVALID: 'The device code is invalid, expired, or already used',
   VALIDATION_RATE_LIMITED: 'Too many requests. Please try again later',
   VALIDATION_REDIRECT_URI_NOT_REGISTERED: 'The logout redirect URI is not registered',
+  VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED: 'The redirect URI is not registered for this client. Check the client\'s redirect_uri configuration',
   AUTH_MFA_CODE_INVALID: 'Incorrect verification code',
   AUTH_MFA_NOT_CONFIGURED: 'Two-factor authentication is not configured yet. Set it up first',
 

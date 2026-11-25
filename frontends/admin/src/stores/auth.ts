@@ -4,7 +4,7 @@ import axios from 'axios'
 import { normalizeError, sessionExpiredError } from '../services/errorAdapter'
 import type { NormalizedError } from '../services/errorAdapter'
 import { getErrorMessage } from '../services/messages'
-import { generatePkcePair } from '../utils/pkce'
+import { generatePkcePair, randomId } from '../utils/pkce'
 
 // Refresh token is persisted in sessionStorage so a page refresh can restore the
 // session without re-prompting credentials. The access token stays in memory only
@@ -132,7 +132,9 @@ export const useAuthStore = defineStore('auth', () => {
         client_id: 'fulla-admin-console',
         redirect_uri: REDIRECT_URI,
         scope: 'openid profile admin',
-        state: crypto.randomUUID(),
+        // randomId() (not crypto.randomUUID): non-secure contexts (plain-
+        // HTTP LAN deployments) leave randomUUID undefined.
+        state: randomId(),
         code_challenge: pkce.challenge,
         code_challenge_method: pkce.method,
         json: 'true',

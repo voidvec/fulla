@@ -978,8 +978,11 @@ void OAuth2Plugin::checkCodeIssuanceGuards(
           fulla::oauth2::model::Client aggregate(std::move(*clientOpt));
           if (!aggregate.isRegisteredRedirectUri(redirectUri))
           {
+              // Code-issuance paths have their own code --
+              // 3013's message is end_session-specific (it talks about the
+              // logout redirect) and misled login integrators.
               callback({false,
-                        "VALIDATION_REDIRECT_URI_NOT_REGISTERED",
+                        "VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED",
                         "redirect_uri is not registered for client '" + clientId + "'"});
               return;
           }

@@ -540,19 +540,16 @@ void AuthorizationEndpointController::authorize(
                     }
                     // Not logged in (or MFA-pending -> re-authenticate to
                     // complete the second factor) -> redirect to the login
-                    // screen (unchanged behavior; the engine's scope/consent
-                    // tiers only apply to a fully authenticated subject).
-                    auto customConfig = ::drogon::app().getCustomConfig();
-                    std::string loginUrl = "/login";
-                    if (
-                      customConfig.isMember("oauth2") &&
-                      customConfig["oauth2"].isMember("login_url")
-                    )
-                    {
-                        loginUrl = customConfig["oauth2"]["login_url"].asString();
-                    }
+                    // screen. The target is configurable
+                    // (oauth2.login_url, default the backend's own /login)
+                    // and may already carry a query string -- see
+                    // authorizeLoginUrl() / authorizeUrlQuerySeparator().
+                    std::string loginUrl =
+                      ::fulla::drogon::utils::authorizeLoginUrl();
                     std::string location =
-                      loginUrl + "?client_id=" + ::drogon::utils::urlEncode(clientId) +
+                      loginUrl +
+                      ::fulla::drogon::utils::authorizeUrlQuerySeparator(loginUrl) +
+                      "client_id=" + ::drogon::utils::urlEncode(clientId) +
                       "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
                       "&scope=" + ::drogon::utils::urlEncode(scope) +
                       "&state=" + ::drogon::utils::urlEncode(state) +
@@ -619,19 +616,15 @@ void AuthorizationEndpointController::authorize(
                 {
                     // Force re-authentication: redirect to the login screen,
                     // preserving the authorize context the same way the
-                    // no-session branch does. prompt=none + login is already
+                    // no-session branch does (same target from
+                    // authorizeLoginUrl()). prompt=none + login is already
                     // rejected above, so promptNone is false here.
-                    auto customConfig = ::drogon::app().getCustomConfig();
-                    std::string loginUrl = "/login";
-                    if (
-                      customConfig.isMember("oauth2") &&
-                      customConfig["oauth2"].isMember("login_url")
-                    )
-                    {
-                        loginUrl = customConfig["oauth2"]["login_url"].asString();
-                    }
+                    std::string loginUrl =
+                      ::fulla::drogon::utils::authorizeLoginUrl();
                     std::string location =
-                      loginUrl + "?client_id=" + ::drogon::utils::urlEncode(clientId) +
+                      loginUrl +
+                      ::fulla::drogon::utils::authorizeUrlQuerySeparator(loginUrl) +
+                      "client_id=" + ::drogon::utils::urlEncode(clientId) +
                       "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +
                       "&scope=" + ::drogon::utils::urlEncode(scope) +
                       "&state=" + ::drogon::utils::urlEncode(state) +
@@ -801,19 +794,18 @@ void AuthorizationEndpointController::authorize(
                               return;
                           }
                           // At least one requested scope lacks recorded consent
-                          // (or prompt=consent forced it) -> route to the consent
-                          // screen (unchanged redirect shape).
-                          auto customConfig = ::drogon::app().getCustomConfig();
-                          std::string consentUrl = "/consent";
-                          if (
-                            customConfig.isMember("oauth2") &&
-                            customConfig["oauth2"].isMember("consent_url")
-                          )
-                          {
-                              consentUrl = customConfig["oauth2"]["consent_url"].asString();
-                          }
+                          // (or prompt=consent forced it) -> route to the
+                          // consent screen. The target is
+                          // configurable (oauth2.consent_url, default the
+                          // relative /consent) and may already carry a query
+                          // string -- the backend itself serves no GET
+                          // /consent.
+                          std::string consentUrl =
+                            ::fulla::drogon::utils::authorizeConsentUrl();
                           std::string location =
-                            consentUrl + "?client_id=" + ::drogon::utils::urlEncode(clientId) +
+                            consentUrl +
+                            ::fulla::drogon::utils::authorizeUrlQuerySeparator(consentUrl) +
+                            "client_id=" + ::drogon::utils::urlEncode(clientId) +
                             "&user_id=" + ::drogon::utils::urlEncode(publicSub) +
                             "&scope=" + ::drogon::utils::urlEncode(scope) +
                             "&redirect_uri=" + ::drogon::utils::urlEncode(redirectUri) +

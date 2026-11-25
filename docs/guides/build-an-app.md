@@ -117,3 +117,12 @@ client_credentials.
 - Deleting an application revokes its consents and stops token issuance.
 - Administrators can suspend abusive applications; suspended clients fail
   client validation immediately.
+
+## 6. Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Token exchange answers `401 invalid_client` although the credentials are correct | The client's declared `token_endpoint_auth_method` does not match how you send the secret (F-017 enforces the declaration strictly): declared `client_secret_basic` but the secret is in the form body (the default for CONFIDENTIAL registrations — WeKnora hit exactly this) | Send the secret the way the client declares, or switch the declaration: `PUT /api/admin/clients/{id}` with `token_endpoint_auth_method: "client_secret_post"` (admin console → application → Auth tab has the same dropdown). `none`/`client_secret_basic`/`client_secret_post` are the only valid values; PUBLIC clients accept only `none` |
+| Login fails with 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` ("回调地址未注册") | The `redirect_uri` your request carries is not registered for the client — exact string match (scheme, host, port, path). With the first-party SPA this usually means `VITE_REDIRECT_URI` (baked at build time) does not match the client's registered URI | Add/align the URI: admin console → application → redirect URIs. The SPA login banner shows the concrete URI it sent. Note `localhost` and `127.0.0.1` are different hosts — register the exact variant |
+| Config-file client edits have no effect | `config.json` clients are seed-only (`ON CONFLICT DO NOTHING`); the database is authoritative at runtime | Edit via the admin API / admin console, or delete the row and restart to re-seed (see deployment.md, "Client lifecycle") |
+| Consent form POST blocked by `form-action` CSP in Chrome | Chrome enforces `form-action` on the redirect that follows a form submission (contrary to the CSP spec), so a consent POST whose 302 lands on a cross-origin RP callback is killed under `form-action 'self'` | The SPA consent page already avoids this by submitting with `json=true` and navigating itself. Custom consent frontends should do the same (POST `json=true`, then `location.assign(response.location)`) — do not loosen the CSP |

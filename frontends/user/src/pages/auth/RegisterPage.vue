@@ -31,6 +31,12 @@ const success = ref(false)
 // tested; the scale reaches 4 so every segment can light).
 const strength = computed(() => passwordStrength(password.value))
 
+// Mirror of the backend USERNAME_PATTERN
+// (libs/drogon/include/fulla/drogon/validation/Rule.h) — validate locally so
+// the user learns about an illegal character BEFORE the 400 round trip, which
+// (in Production_Mode) answers with only the generic "Invalid input".
+const USERNAME_PATTERN = /^[a-zA-Z0-9_]{1,100}$/
+
 async function handleRegister() {
   error.value = null
   if (password.value !== confirmPassword.value) {
@@ -39,6 +45,12 @@ async function handleRegister() {
   }
   if (password.value.length < 8) {
     error.value = t('common.passwordMinLength')
+    return
+  }
+  // Optional field: empty means "generate for me" server-side; a non-empty
+  // value must match the backend charset rule.
+  if (username.value && !USERNAME_PATTERN.test(username.value)) {
+    error.value = t('auth.register.usernamePatternError')
     return
   }
   loading.value = true
@@ -109,6 +121,16 @@ async function handleRegister() {
       class="mb-4"
     >
       {{ errorText }}
+      <!-- When the server emitted validation details (which
+           field failed), show them under the generic catalog message. The
+           key is absent in Production_Mode deployments — optional field. -->
+      <p
+        v-if="error && typeof error === 'object' && error.details"
+        class="mt-1.5 text-xs opacity-80 break-words"
+        data-testid="register-error-details"
+      >
+        {{ error.details }}
+      </p>
     </AppAlert>
 
     <form

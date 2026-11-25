@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
+  CLIENT_CODE,
   DEFAULT_LOCALE,
   getErrorMessage,
   messages,
@@ -68,8 +69,8 @@ const FULLA_PROTOCOL_CODES = [
 const REQUIRED_CODES = [...BACKEND_ERROR_CODES, ...FULLA_PROTOCOL_CODES] as const
 
 // 保留回退键：其值同样需为非空且清洁（占位符/Internal_Detail 检查），但它们作为
-// KEY 命名（__unknown__/__network__）本身不算占位符标记。
-const RESERVED_CODES = [UNKNOWN_CODE, NETWORK_CODE] as const
+// KEY 命名（__unknown__/__network__/__client__）本身不算占位符标记。
+const RESERVED_CODES = [UNKNOWN_CODE, NETWORK_CODE, CLIENT_CODE] as const
 
 // --- 占位符标记（未替换的模板片段视为目录缺陷） ---
 const PLACEHOLDER_PATTERNS: readonly RegExp[] = [

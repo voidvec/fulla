@@ -9,22 +9,27 @@
 //   - `message` 为非空字符串
 //   - `request_id` 为字符串（无该值时为空字符串）
 //   - `httpStatus` 为数字
-// 当输入无 HTTP 响应时 `code` 为网络类回退码且 `httpStatus` 为 0；
+// 当输入为无 HTTP 响应的 axios 错误（网络/超时）时 `code` 为网络类回退码且
+// `httpStatus` 为 0；当输入为无响应的非 axios 值（前端自身抛出的异常）
+// 时 `code` 为客户端回退码 `__client__`；
 // 当响应体含 Request_ID 时规范化结构的 `request_id` 等于该取值。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fc from 'fast-check'
 import { normalizeError } from './errorAdapter'
-import { getErrorMessage, NETWORK_CODE, UNKNOWN_CODE } from './messages'
+import { getErrorMessage, CLIENT_CODE, NETWORK_CODE, UNKNOWN_CODE } from './messages'
 import { zhCN } from './messages/zh-CN'
 import { en } from './messages/en'
 
 const RUNS = { numRuns: 100 } as const
 
 describe('Property 11: 前端规范化全域性与字段不变量', () => {
-  // The catalog logs `console.warn` for unmapped codes (expected for random
-  // inputs). Silence it so the property runs stay quiet and deterministic.
+  // The catalog logs `console.warn` for unmapped codes and normalizeError
+  // logs `console.error` for frontend-side exceptions (both expected for
+  // random inputs). Silence them so the property runs stay quiet and
+  // deterministic.
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -51,35 +56,72 @@ describe('Property 11: 前端规范化全域性与字段不变量', () => {
   })
 
   // 8.5 — no HTTP response (network failure / timeout): axios leaves
-  // `error.response` absent or undefined. code === NETWORK_CODE, httpStatus 0.
-  it('maps responseless (network/timeout) errors to the network fallback with httpStatus 0', () => {
-    // axios-like network errors: object with NO `response` property, or with
-    // `response` explicitly undefined / non-object.
+  // `error.response` absent or undefined AND marks the error with
+  // `isAxiosError: true`. code === NETWORK_CODE, httpStatus 0.
+  // (A response-less NON-axios value is a frontend
+  // exception → CLIENT_CODE, see the next case.)
+  it('maps responseless axios (network/timeout) errors to the network fallback with httpStatus 0', () => {
+    // axios network errors: `isAxiosError: true` with NO `response`
+    // property, or with `response` explicitly undefined / non-object.
     const networkErrorArb = fc.oneof(
       // typical axios network error shape (no `response` key at all)
       fc.record(
         {
+          isAxiosError: fc.constant(true),
           message: fc.string(),
           code: fc.constantFrom('ECONNABORTED', 'ERR_NETWORK', 'ETIMEDOUT'),
           name: fc.constant('AxiosError'),
         },
-        { requiredKeys: [] },
+        { requiredKeys: ['isAxiosError'] },
       ),
       // explicit `response: undefined`
-      fc.record({ message: fc.string(), response: fc.constant(undefined) }),
+      fc.record({
+        isAxiosError: fc.constant(true),
+        response: fc.constant(undefined),
+      }),
       // `response` present but not an object (treated as no response)
-      fc.record({ response: fc.oneof(fc.constant(null), fc.string(), fc.integer()) }),
-      // arbitrary object that never carries a `response` key
-      fc.dictionary(
-        fc.string().filter((k) => k !== 'response'),
-        fc.anything(),
-      ),
+      fc.record({
+        isAxiosError: fc.constant(true),
+        response: fc.oneof(fc.constant(null), fc.string(), fc.integer()),
+      })
     )
 
     fc.assert(
       fc.property(networkErrorArb, (err) => {
         const r = normalizeError(err)
         expect(r.code).toBe(NETWORK_CODE)
+        expect(r.httpStatus).toBe(0)
+        expect(r.request_id).toBe('')
+        expect(r.message.length).toBeGreaterThan(0)
+      }),
+      RUNS,
+    )
+  })
+
+  // 8.5 — a response-less value that is NOT an axios error
+  // (a plain Error / arbitrary object thrown by frontend code BEFORE any
+  // request was sent) must NOT be reported as a network failure; it maps to
+  // CLIENT_CODE with httpStatus 0 and a non-empty message.
+  it('maps responseless non-axios values (frontend exceptions) to the client fallback', () => {
+    const frontendErrorArb = fc.oneof(
+      fc.constant(new Error('PKCE setup failed')),
+      fc.string(),
+      fc.record({
+        message: fc.string(),
+        response: fc.constant(undefined),
+        isAxiosError: fc.constant(false),
+      }),
+      // arbitrary object without isAxiosError
+      fc.dictionary(
+        fc.string().filter((k) => k !== 'response' && k !== 'isAxiosError'),
+        fc.anything(),
+      ),
+    )
+
+    fc.assert(
+      fc.property(frontendErrorArb, (err) => {
+        const r = normalizeError(err)
+        expect(r.code).toBe(CLIENT_CODE)
         expect(r.httpStatus).toBe(0)
         expect(r.request_id).toBe('')
         expect(r.message.length).toBeGreaterThan(0)

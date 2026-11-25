@@ -238,7 +238,7 @@ void ConsentContextController::context(
           if (!validUri)
           {
               respondError(
-                req, *sharedCb, "VALIDATION_REDIRECT_URI_NOT_REGISTERED",
+                req, *sharedCb, "VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED",
                 "consent context: redirect_uri is not registered for the client"
               );
               return;

@@ -216,11 +216,21 @@ void OAuth2CleanupService::maintainAuditPartitions(std::function<void()> &&compl
 {
     auto sharedCompletion =
       std::make_shared<std::function<void()>>(std::move(completion));
+    // The default completion is nullptr -- an EMPTY
+    // std::function. The production cleanup cycle (doPurge) calls this with
+    // no completion, and the unconditional (*sharedCompletion)() below used
+    // to throw std::bad_function_call once per hour (on postgres deployments
+    // inside the execSqlAsync callback, i.e. outside the cleanup cycle's
+    // try/catch). Guard every invocation.
+    auto fireCompletion = [sharedCompletion]() {
+        if (*sharedCompletion)
+            (*sharedCompletion)();
+    };
     // Memory/no-DB deployments have no audit partitioning to maintain, and
     // resolving a DbClient here would be a process-terminating assert.
     if (!postgresStorage_ || !auditDbClient_)
     {
-        (*sharedCompletion)();
+        fireCompletion();
         return;
     }
     // Raw-SQL exemption ① (db-operations.md): DDL-by-proxy -- the function
@@ -229,19 +239,19 @@ void OAuth2CleanupService::maintainAuditPartitions(std::function<void()> &&compl
     // blocks the cleanup cycle.
     auditDbClient_->execSqlAsync(
       "SELECT ensure_audit_partitions() AS created",
-      [sharedCompletion](const ::drogon::orm::Result &result) {
+      [fireCompletion](const ::drogon::orm::Result &result) {
           const long created =
             (result.empty() ? 0 : result[0]["created"].as<long>());
           if (created > 0)
               LOG_INFO << "audit_logs partition maintenance created " << created
                        << " new monthly partition(s)";
-          (*sharedCompletion)();
+          fireCompletion();
       },
-      [sharedCompletion](const ::drogon::orm::DrogonDbException &e) {
+      [fireCompletion](const ::drogon::orm::DrogonDbException &e) {
           LOG_ERROR << "audit_logs partition maintenance failed (next cleanup "
                        "cycle retries): "
                     << e.base().what();
-          (*sharedCompletion)();
+          fireCompletion();
       }
     );
 }
