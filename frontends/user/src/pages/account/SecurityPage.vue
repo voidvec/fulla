@@ -253,6 +253,26 @@ async function fetchWebauthnCredentials() {
   } catch {}
 }
 
+// UF-03: per-credential delete. The backend allows deleting the LAST passkey
+// (WebAuthn and TOTP are parallel second factors) and answers a foreign or
+// unknown id with the same generic 404 (anti-enumeration) — the catalog's
+// not-found copy covers it as-is.
+function deletePasskey(cred: { credential_id: string; name?: string }) {
+  const label = cred.name || t('account.security.passkeys.fallbackName')
+  askConfirm(
+    t('account.security.passkeys.deleteConfirm', { name: label }),
+    async () => {
+      try {
+        await http.delete(`/api/me/webauthn/credentials/${encodeURIComponent(cred.credential_id)}`)
+        showSuccess(t('account.security.passkeys.deleted', { name: label }))
+        await fetchWebauthnCredentials()
+      } catch (e: unknown) {
+        error.value = normalizeError(e)
+      }
+    },
+  )
+}
+
 async function registerPasskey() {
   registeringPasskey.value = true
   try {
@@ -608,10 +628,23 @@ onMounted(() => {
                 {{ $t('account.security.passkeys.signCounter', { count: cred.sign_count ?? 0 }) }}
               </p>
             </div>
-            <AppBadge
-              variant="success"
-              size="sm"
-            >{{ $t('account.security.passkeys.active') }}</AppBadge>
+            <div class="flex items-center gap-2">
+              <AppBadge
+                variant="success"
+                size="sm"
+              >{{ $t('account.security.passkeys.active') }}</AppBadge>
+              <!-- UF-03: remove a lost/retired passkey (P0-7; the last one
+                   may be deleted too — WebAuthn and TOTP run in parallel). -->
+              <button
+                type="button"
+                data-testid="passkey-delete-button"
+                class="px-2 py-1 text-xs text-error-600 border border-error-200 rounded-ctl hover:bg-error-50 transition-colors
+                       focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                @click="deletePasskey(cred)"
+              >
+                {{ $t('account.security.passkeys.delete') }}
+              </button>
+            </div>
           </div>
         </div>
         <div

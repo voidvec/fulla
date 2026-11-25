@@ -87,6 +87,15 @@ export default {
       orContinueWith: 'or continue with',
       signInWithGitHub: 'Sign in with GitHub',
       signInWithGoogle: 'Sign in with Google',
+      // UF-01: passkey login entry. Every server-side failure is the generic
+      // AUTH_INVALID_CREDENTIALS (anti-enumeration); the two local copies
+      // cover the browser-side DOMExceptions that carry no axios response.
+      passkey: {
+        button: 'Sign in with a passkey',
+        busy: 'Waiting for your authenticator…',
+        timedOut: 'Passkey request timed out or was cancelled.',
+        failed: 'Passkey sign-in failed. Please try again or use your password.',
+      },
       wechatNote:
         'WeChat sign-in uses the mobile app scan flow — scan the QR code shown by your provider on a WeChat-enabled device.',
       mfa: {
@@ -287,6 +296,11 @@ export default {
         alreadyRegistered: 'This browser already has a passkey registered for your account.',
         registrationFailed: 'Passkey registration failed. Please try again.',
         success: 'Passkey registered successfully!',
+        // UF-03: per-credential delete (P0-7 — deleting the last passkey is
+        // allowed; WebAuthn and TOTP are parallel second factors).
+        delete: 'Delete',
+        deleteConfirm: 'Delete the passkey "{name}"? Devices using it will no longer be able to sign in with it.',
+        deleted: 'Passkey "{name}" deleted.',
       },
       social: {
         title: 'Connected Accounts',

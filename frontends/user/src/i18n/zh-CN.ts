@@ -85,6 +85,14 @@ export default {
       orContinueWith: '或使用以下方式继续',
       signInWithGitHub: '使用 GitHub 登录',
       signInWithGoogle: '使用 Google 登录',
+      // UF-01：通行密钥登录入口。服务端失败统一为 AUTH_INVALID_CREDENTIALS
+      // （防枚举）；两条本地文案覆盖不带 axios 响应的浏览器端 DOMException。
+      passkey: {
+        button: '使用通行密钥登录',
+        busy: '正在等待认证器…',
+        timedOut: '通行密钥请求超时或已取消。',
+        failed: '通行密钥登录失败，请重试或改用密码登录。',
+      },
       wechatNote:
         '微信登录使用移动端扫码流程 —— 请在支持微信的设备上扫描提供方展示的二维码。',
       mfa: {
@@ -277,6 +285,10 @@ export default {
         alreadyRegistered: '此浏览器已为该账户注册过安全密钥。',
         registrationFailed: '安全密钥注册失败，请重试。',
         success: '安全密钥注册成功',
+        // UF-03：按凭据删除（P0-7 —— 允许删除最后一枚；WebAuthn 与 TOTP 是并行的第二因素）。
+        delete: '删除',
+        deleteConfirm: '确定删除安全密钥“{name}”吗？使用它的设备将无法再用其登录。',
+        deleted: '安全密钥“{name}”已删除。',
       },
       social: {
         title: '已连接的账户',
