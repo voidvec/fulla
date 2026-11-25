@@ -498,6 +498,14 @@ add_test(NAME OpaqueState_LoginHtml
 set_tests_properties(OpaqueState_LoginHtml PROPERTIES
     LABELS "Endpoint" RUN_SERIAL TRUE TIMEOUT 120)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME ForcedPasswordChangeSessionState_OutOfProcess
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/scripts/backend/test-forced-password-change-session-state.py"
+            --server-exe "$<TARGET_FILE:fulla-server>"
+            --config "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config.json"
+            --resources-dir "${CMAKE_SOURCE_DIR}/apps/server")
+    set_tests_properties(ForcedPasswordChangeSessionState_OutOfProcess PROPERTIES
+        LABELS "Endpoint" RUN_SERIAL TRUE SKIP_RETURN_CODE 77 TIMEOUT 300)
     add_test(NAME FeatureSurface_OutOfProcess
         COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tools/feature-matrix/check_runtime.py"
