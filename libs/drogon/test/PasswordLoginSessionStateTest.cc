@@ -1,9 +1,11 @@
 #include "../src/controllers/PasswordLoginSessionState.h"
+#include "../src/controllers/ForcedPasswordChangeSessionState.h"
 
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -254,6 +256,114 @@ TEST(PasswordLoginSessionState, ClaimsKeepSubjectsAndFullSignedTimeRange)
         EXPECT_FALSE(session.find("mfa_pending"));
         EXPECT_FALSE(session.find("must_change_password"));
         EXPECT_NE(fixture.cookie(), cookie);
+    }
+}
+constexpr std::array<const char *, 8> kForcedChangeKeys{{
+  "must_change_password", "userId", "sub", "auth_time", "amr", "mfa_pending",
+  "mfa_code_challenge", "mfa_code_challenge_method"
+}};
+
+TEST(ForcedPasswordChangeSessionState, ClearsAllAuthenticationKeysAndRotates)
+{
+    SessionFixture fixture;
+    const auto cookie = fixture.cookie();
+    const auto observed = fixture.observe([](::drogon::Session &session) {
+        session.insert("must_change_password", true);
+        session.insert("userId", std::string("41"));
+        session.insert("sub", std::string("public-user"));
+        session.insert("auth_time", int64_t{2147483799});
+        session.insert("amr", std::string("pwd mfa"));
+        session.insert("mfa_pending", true);
+        session.insert("mfa_code_challenge", std::string("old-challenge"));
+        session.insert("mfa_code_challenge_method", std::string("S256"));
+        state::clearForcedPasswordChangeSessionAndRotate(session);
+    });
+    EXPECT_EQ(observed, fixture.session);
+    for (const auto *key : kForcedChangeKeys)
+        EXPECT_FALSE(observed->find(key)) << key;
+    EXPECT_NE(fixture.cookie(), cookie);
+}
+
+TEST(ForcedPasswordChangeSessionState, PreservesUnownedValuesAndTypes)
+{
+    SessionFixture fixture;
+    const auto observed = fixture.observe([](::drogon::Session &session) {
+        for (const auto *key : kForcedChangeKeys)
+            session.insert(key, std::string("old-authentication"));
+        session.insert("code_challenge", std::string("oauth-pkce"));
+        session.insert("code_challenge_method", std::string("S256"));
+        session.insert("pending_consent_csrf_slots", std::string("consent-state"));
+        session.insert("pending_org_context_slots", std::string("org-state"));
+        session.insert("webauthn_auth_challenge", std::string("webauthn-state"));
+        session.insert("unknown-number", int64_t{2147483799});
+        session.insert("unknown-flag", false);
+        state::clearForcedPasswordChangeSessionAndRotate(session);
+    });
+    EXPECT_EQ(observed, fixture.session);
+    for (const auto *key : kForcedChangeKeys)
+        EXPECT_FALSE(observed->find(key)) << key;
+    EXPECT_EQ(observed->getOptional<std::string>("code_challenge"), "oauth-pkce");
+    EXPECT_EQ(observed->getOptional<std::string>("code_challenge_method"), "S256");
+    EXPECT_EQ(observed->getOptional<std::string>("pending_consent_csrf_slots"), "consent-state");
+    EXPECT_EQ(observed->getOptional<std::string>("pending_org_context_slots"), "org-state");
+    EXPECT_EQ(observed->getOptional<std::string>("webauthn_auth_challenge"), "webauthn-state");
+    EXPECT_EQ(observed->getOptional<int64_t>("unknown-number"), int64_t{2147483799});
+    EXPECT_EQ(observed->getOptional<bool>("unknown-flag"), false);
+    size_t count = 0;
+    observed->modify([&count](const ::drogon::Session::SessionMap &values) {
+        count = values.size();
+    });
+    EXPECT_EQ(count, size_t{7});
+}
+
+TEST(ForcedPasswordChangeSessionState, HandlesEmptyPartialAndDifferentlyTypedKeys)
+{
+    for (int scenario = 0; scenario < 3; ++scenario)
+    {
+        SessionFixture fixture;
+        const auto cookie = fixture.cookie();
+        const auto observed = fixture.observe([scenario](::drogon::Session &session) {
+            if (scenario == 1)
+            {
+                session.insert("userId", false);
+                session.insert("must_change_password", int64_t{3});
+                session.insert("mfa_code_challenge_method", std::string("partial"));
+            }
+            else if (scenario == 2)
+            {
+                for (const auto *key : kForcedChangeKeys)
+                    session.insert(key, int64_t{9});
+            }
+            state::clearForcedPasswordChangeSessionAndRotate(session);
+        });
+        EXPECT_EQ(observed, fixture.session);
+        for (const auto *key : kForcedChangeKeys)
+            EXPECT_FALSE(observed->find(key)) << key;
+        size_t count = 0;
+        observed->modify([&count](const ::drogon::Session::SessionMap &values) {
+            count = values.size();
+        });
+        EXPECT_EQ(count, size_t{0});
+        EXPECT_NE(fixture.cookie(), cookie);
+    }
+}
+
+TEST(ForcedPasswordChangeSessionState, RepeatedRequestsRemainAnonymousAndRotateEachTime)
+{
+    SessionFixture fixture;
+    auto cookie = fixture.cookie();
+    for (int request = 0; request < 2; ++request)
+    {
+        const auto observed = fixture.observe([](::drogon::Session &session) {
+            session.insert("unknown-number", int64_t{73});
+            state::clearForcedPasswordChangeSessionAndRotate(session);
+        });
+        EXPECT_EQ(observed, fixture.session);
+        for (const auto *key : kForcedChangeKeys)
+            EXPECT_FALSE(observed->find(key)) << key;
+        EXPECT_EQ(observed->getOptional<int64_t>("unknown-number"), int64_t{73});
+        EXPECT_NE(fixture.cookie(), cookie);
+        cookie = fixture.cookie();
     }
 }
 }  // namespace
