@@ -76,7 +76,8 @@ DROGON_TEST(Integration_P1_Concurrency_1_5_JwkManager_InitVsSign_DataRace_Repro)
             for (int index = 0; index < readers; ++index)
             {
                 threads.emplace_back([published, results, release, claims, expectedKid,
-                                      expectedJwks, expectedJwt, index]() {
+                                      expectedJwks, expectedJwt, index,
+                                      readsPerThread = kReadsPerThread]() {
                     auto &result = (*results)[static_cast<size_t>(index)];
                     try
                     {
@@ -85,7 +86,7 @@ DROGON_TEST(Integration_P1_Concurrency_1_5_JwkManager_InitVsSign_DataRace_Repro)
                             result.ok = false;
                             return;
                         }
-                        for (int read = 0; read < kReadsPerThread; ++read)
+                        for (int read = 0; read < readsPerThread; ++read)
                         {
                             const auto jwt = published->signJwt(claims);
                             const auto jwks = published->getJwks();
