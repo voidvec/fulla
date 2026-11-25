@@ -302,6 +302,7 @@ jobs:
             build/${{ env.PRESET }}/libs/drogon/test/CMakeFiles/fulla-password-login-session-test.dir/link.txt
             build/${{ env.PRESET }}/tests/CMakeFiles/fulla-tests.dir/link.txt
             build/${{ env.PRESET }}/apps/server/CMakeFiles/fulla-server.dir/link.txt
+            build/${{ env.PRESET }}/apps/server/CMakeFiles/fulla-server.dir/flags.make
             build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/flags.make
             build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/link.txt
             build/${{ env.PRESET }}/examples/full-stack-host/fulla-sdk-dependencies-*.txt
