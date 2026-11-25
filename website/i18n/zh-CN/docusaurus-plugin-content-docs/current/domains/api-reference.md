@@ -33,7 +33,7 @@
 | `client_id` | 是 | 客户端 ID | `fulla-portal` |
 | `redirect_uri` | 是 | 回调地址 (需完全匹配) | `http://localhost:5173/callback` |
 | `scope` | 否 | 申请的权限范围 | `openid profile` |
-| `state` | 建议 | 防止 CSRF 的随机串 | `xyz123` |
+| `state` | 是（authorize） | 8–512 字节的不透明 CSRF 值 | `xyz12345` |
 | `code_challenge` | 否 | PKCE code challenge（默认对所有客户端强制，`auth.require_pkce`） | `dBjftJeZ4CVK...` |
 | `code_challenge_method` | 否 | 必须为 `S256`（`plain` 被拒绝；提供 challenge 时必填） | `S256` |
 | `nonce` | 否 | OIDC nonce（防重放），openid scope 时回显到 id_token | `n-0S6_WzA2Mj` |
@@ -45,9 +45,13 @@
 **成功响应**：
 重定向至 `redirect_uri`，并附带 `code` 和 `state`。
 
+`state` 是不透明值，发送时应作为单个 query/form 组件编码。登录、authorize、consent、错误和注销重定向在标准 query 解析一次后保留原值，包括 `&`、`=`、`+`、空格、`%`、`?` 和 `#`。不要再次解码：字面 `%26` 与 `&` 保持不同；回调原有 query 参数也会保留。authorize 保留既有的非空、8–512 字节限制；其他端点维持各自既有的可选 state 行为。
+
+例如 `state=opaque+state%2B%26%3Dvalue%2526%3F%23` 表示 `opaque state+&=value%26?#`。默认 HTML 登录表单通过 HTML 属性转义和标准表单提交保留同一字段原值。
+
 ```http
 HTTP/1.1 302 Found
-Location: http://localhost:5173/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz123
+Location: http://localhost:5173/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz12345
 ```
 
 **错误响应**：

@@ -1634,7 +1634,7 @@ Used to request user authorization and obtain an authorization code.
 | `client_id` | Yes | Client ID | `fulla-portal` |
 | `redirect_uri` | Yes | Callback URL (must match exactly) | `http://localhost:5173/callback` |
 | `scope` | No | Requested scope | `openid profile` |
-| `state` | Recommended | Random string for CSRF protection | `xyz123` |
+| `state` | Yes (authorize) | Opaque CSRF value, 8–512 bytes | `xyz12345` |
 | `code_challenge` | No | PKCE code challenge (mandatory by default for all clients, `auth.require_pkce`) | `dBjftJeZ4CVK...` |
 | `code_challenge_method` | No | Must be `S256` (`plain` is rejected; required whenever a challenge is provided) | `S256` |
 | `nonce` | No | OIDC nonce (replay protection); echoed into the id_token when the openid scope is requested | `n-0S6_WzA2Mj` |
@@ -1647,9 +1647,13 @@ Used to request user authorization and obtain an authorization code.
 **Success**:
 Redirects to `redirect_uri` with `code` and `state` attached.
 
+`state` is opaque: supply it as one query/form component. Login, authorize, consent and error/logout redirects preserve its original value after one standard query decode, including `&`, `=`, `+`, spaces, `%`, `?` and `#`. Do not decode it again: literal `%26` remains different from `&`. Existing callback query parameters are retained. The authorize endpoint retains its existing nonempty, 8–512-byte state requirement; other endpoints keep their existing optional-state behavior.
+
+For example, `state=opaque+state%2B%26%3Dvalue%2526%3F%23` represents `opaque state+&=value%26?#`. The default HTML login form preserves the same field value through HTML attribute escaping and normal form submission.
+
 ```http
 HTTP/1.1 302 Found
-Location: http://localhost:5173/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz123
+Location: http://localhost:5173/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz12345
 ```
 
 **Error**:

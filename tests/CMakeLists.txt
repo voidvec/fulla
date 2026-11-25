@@ -466,7 +466,14 @@ endif()
 
 # Real executable protocol checks use a separate cookie jar per browser and
 # never contact an external provider. Match the endpoint suite's prerequisites.
-find_package(Python3 COMPONENTS Interpreter QUIET)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME OpaqueState_LoginHtml
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/scripts/backend/test-opaque-state-login-html.py"
+        --test-exe "$<TARGET_FILE:${PROJECT_NAME}>"
+        --config "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config.json")
+set_tests_properties(OpaqueState_LoginHtml PROPERTIES
+    LABELS "Endpoint" RUN_SERIAL TRUE TIMEOUT 120)
 if(Python3_Interpreter_FOUND)
     add_test(NAME FeatureSurface_OutOfProcess
         COMMAND "${Python3_EXECUTABLE}"

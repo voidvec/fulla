@@ -21,7 +21,8 @@ class LoginRequest:
         client_id (str | Unset): Matches the requesting app (required for code issuance).
         redirect_uri (str | Unset): Must match the registered client.
         scope (str | Unset): Space-separated (optional).
-        state (str | Unset): Opaque value maintained between request and callback (recommended).
+        state (str | Unset): Opaque value preserved after one standard callback query decode, including delimiters and
+            literal percent sequences (recommended).
         code_challenge (str | Unset): PKCE code challenge (RFC 7636). REQUIRED for all authorization_code clients when
             auth.require_pkce is enabled (default true, F-011 / RFC 9700 §2.1.1). The matching code_verifier must be sent on
             the /oauth2/token exchange.
