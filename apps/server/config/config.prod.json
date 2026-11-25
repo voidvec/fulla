@@ -302,6 +302,15 @@
             "url": "https://app.example.com",
             "register_path": "/register"
         },
+        // Authorize-endpoint redirect targets. Empty = the backend-relative
+        // /login and /consent, which reach the SPA behind the stack's
+        // gateway. Set FULLA_OAUTH2_LOGIN_URL + FULLA_OAUTH2_CONSENT_URL (or
+        // edit here) when the two pages live on another origin. The block
+        // must be present: env overrides only land on paths that exist.
+        "oauth2": {
+            "login_url": "",
+            "consent_url": ""
+        },
         // #142 WebAuthn: env overrides only land on config paths that exist,
         // so the block must be present. rp_origins stays empty = fail-closed;
         // set FULLA_WEBAUTHN_RP_ID + FULLA_WEBAUTHN_RP_ORIGINS to enable.

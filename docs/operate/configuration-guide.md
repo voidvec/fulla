@@ -128,6 +128,51 @@ requires `old_password`, enforces `auth.min_password_length`, revokes all
 tokens, clears the flag). `PUT /api/me/password` also clears the flag. An
 admin-set flag on an existing account takes effect at that user's next login.
 
+## 4c. Authorize Login/Consent Redirect Targets
+
+When `/oauth2/authorize` must involve the user (not logged in, re-auth forced,
+or consent required), it redirects to the login/consent screen. The target is
+resolved like this:
+
+1. `config.oauth2.login_url` / `config.oauth2.consent_url` — a non-empty value
+   wins. Both can be set from the environment with `FULLA_OAUTH2_LOGIN_URL`
+   and `FULLA_OAUTH2_CONSENT_URL`.
+2. Otherwise the backend-relative `/login` | `/consent` — the unchanged
+   default. The backend serves `/login` itself; it serves no `GET /consent`
+   (that page is a SPA route).
+
+The defaults only reach the SPA where a gateway fronts both on one origin.
+Behind the production stack's nginx or a Helm ingress, `/login` and
+`/consent` are routed to the frontend, so nothing needs to be configured
+there. A stack without a shared gateway — `deploy/docker/docker-compose.yml`
+(the backend on 5555, the SPA on 8080) — has to tell the backend where the
+two pages are, which is why that file sets both variables to the SPA's
+address. Do the same for any deployment where the SPA is on another origin
+than the one `/oauth2/authorize` is reached on:
+
+```bash
+FULLA_OAUTH2_LOGIN_URL=https://portal.example.com/login
+FULLA_OAUTH2_CONSENT_URL=https://portal.example.com/consent
+```
+
+Left at the defaults in such a deployment, the authorize endpoint sends the
+browser to the backend's own login page (unstyled: its inline styles are
+blocked by the backend CSP) and, when consent is required, to a 404.
+
+A configured URL may already carry a query string; the authorize parameters
+are then appended with `&` instead of `?`. Non-string and empty values count
+as "not set" rather than being thrown from `asString()`. An override never
+creates a key, which is why every shipped config carries both keys as empty
+strings. A variable whose key the loaded config file lacks is reported at
+startup instead of being silently ignored (see deployment.md, "Backend
+configuration").
+
+Related: the SPA consent page submits `POST /oauth2/consent` with `json=true`
+and navigates the browser itself from the JSON `location` field — a native
+form POST + 302 is killed by Chrome's `form-action` enforcement (which also
+checks the redirect following a form submission). The 302 contract remains the
+default for non-JSON callers.
+
 ## 5. Client Token-Endpoint Authentication Methods (F-017)
 
 Each client declares, via the `oauth2_clients.token_endpoint_auth_method` column, how it

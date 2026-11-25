@@ -188,6 +188,10 @@
             "url": "http://localhost:5173",
             "register_path": "/register"
         },
+        "oauth2": {
+            "login_url": "",
+            "consent_url": ""
+        },
         "webauthn": {
         "rp_id": "localhost",
         "rp_name": "OAuth2 Server",

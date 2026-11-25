@@ -28,6 +28,12 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
    {"redis_clients.0.passwd", "FULLA_REDIS_PASSWORD", false},
    {"custom_config.metadata.issuer", "FULLA_ISSUER", false},
    {"custom_config.frontend.url", "FULLA_FRONTEND_URL", false},
+   // Authorize-endpoint redirect targets. Both keys are anchored in every
+   // shipped config as empty strings (an override only lands on a key the
+   // config already carries); empty means "not set" and the backend-relative
+   // defaults apply (fulla/drogon/utils/PortalUrl.h).
+   {"custom_config.oauth2.login_url", "FULLA_OAUTH2_LOGIN_URL", false},
+   {"custom_config.oauth2.consent_url", "FULLA_OAUTH2_CONSENT_URL", false},
    {"custom_config.external_auth.github.client_id", "FULLA_GITHUB_CLIENT_ID", false},
    {"custom_config.external_auth.github.client_secret", "FULLA_GITHUB_CLIENT_SECRET", false},
    {"custom_config.external_auth.google.client_id", "FULLA_GOOGLE_CLIENT_ID", false},

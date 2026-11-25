@@ -363,6 +363,11 @@ FULLA_REDIS_PASSWORD=<与 REDIS_PASSWORD 相同>
 
 # CORS / OAuth 回调（HTTPS 域名必填，否则浏览器请求被拦截）
 FULLA_FRONTEND_URL=https://your-domain.com
+# 可选：/oauth2/authorize 把需要登录或授权确认的用户送到哪里。
+# 留空 = API 自身源上的 /login 与 /consent，本栈的网关会把它们路由到 SPA；
+# 仅当 SPA 部署在另一个源上时才需要同时设置这两个变量。
+# FULLA_OAUTH2_LOGIN_URL=https://your-domain.com/login
+# FULLA_OAUTH2_CONSENT_URL=https://your-domain.com/consent
 FULLA_CORS_ALLOW_ORIGINS=https://your-domain.com
 # ⚠ FULLA_VUE_REDIRECT_URI 与 VITE_REDIRECT_URI 必须保持一致
 FULLA_VUE_REDIRECT_URI=https://your-domain.com/callback
@@ -566,6 +571,7 @@ curl -k https://localhost/admin/
 | `FULLA_REDIS_PASSWORD` | Redis 密码 | (必须设置) |
 | `FULLA_LISTEN_PORT` | 后端监听端口 | 5555 |
 | `FULLA_FRONTEND_URL` | 前端 URL（用于重定向等） | http://localhost:5173 |
+| `FULLA_OAUTH2_LOGIN_URL` / `FULLA_OAUTH2_CONSENT_URL` | 授权端点重定向到的登录页 / 授权确认页的绝对 URL（可选） | （空 = 后端相对路径 `/login` 与 `/consent`） |
 | `FULLA_CORS_ALLOW_ORIGINS` | CORS 允许的源（逗号分隔，覆盖 JSON 数组） | config 中的 localhost 列表 |
 | `FULLA_PORTAL_REDIRECT_URI` | fulla-portal OAuth 回调 URI（旧名别名：`FULLA_VUE_REDIRECT_URI`） | config 中的 localhost 值 |
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth 回调 URI | config 中的 localhost 值 |
@@ -590,6 +596,8 @@ curl -k https://localhost/admin/
 > **邮件模式说明**：仅当 `FULLA_SMTP_HOST` + `FULLA_SMTP_USER` + `FULLA_SMTP_PASSWORD` 三项均非空时启用真实 SMTP 发送；否则邮件只输出到后端日志。详见上文"邮件服务（SMTP）配置说明"。
 >
 > **CORS 数组覆盖**：`FULLA_CORS_ALLOW_ORIGINS` 是逗号分隔的字符串（如 `https://a.com,https://b.com`），后端启动时自动分割成 JSON 数组覆盖 `config.prod.json` 的 `custom_config.cors.allow_origins`。CORS 校验代码要求该字段是数组，因此**必须**用逗号分隔形式，不要写成 JSON 数组字面量。
+
+> **覆盖只作用于配置文件里已有的键**：环境变量替换的是已有键的值，不会创建新键。变量已设置、但所加载的配置文件里没有对应键时，启动会报告（`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`）——此前这是静默无效的。`FULLA_ISSUER` 是最常见的例子：`config.prod.json` 有 `custom_config.metadata.issuer`，而开发用的 `config.json` 没有，因此该变量只在带这个键的配置下生效。
 
 ### Nginx 配置
 

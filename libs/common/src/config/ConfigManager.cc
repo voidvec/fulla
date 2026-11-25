@@ -188,6 +188,19 @@ void ConfigManager::applyEnvOverrides(Json::Value &config, const std::vector<Env
                     *ptr = envValue;
                 }
             }
+            else
+            {
+                // getJsonPointer never creates the path, so a rule whose key
+                // this config file does not carry is a no-op. It used to be
+                // a SILENT one: the operator had set the variable for a
+                // reason and nothing said that it had not landed. Report it
+                // (the name and path only, never the value).
+                std::cerr << "[ConfigManager] WARNING: " << rule.envVar
+                          << " is set but the config has no '"
+                          << rule.configPath
+                          << "' key; the override was not applied"
+                          << std::endl;
+            }
         }
     }
 }

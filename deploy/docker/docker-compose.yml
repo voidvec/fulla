@@ -60,6 +60,13 @@ services:
       - FULLA_VUE_CLIENT_SECRET=123456
       - FULLA_AUTO_MIGRATE=true
       - FULLA_FRONTEND_URL=http://localhost:8080
+      # This stack has no shared gateway: the backend (5555) and the SPA
+      # (8080) are different origins, so the backend-relative /login and
+      # /consent would not reach the SPA. Point the authorize endpoint at it;
+      # keep the port in step with FULLA_FRONTEND_URL and the fulla-frontend
+      # port mapping.
+      - FULLA_OAUTH2_LOGIN_URL=${FULLA_OAUTH2_LOGIN_URL:-http://localhost:8080/login}
+      - FULLA_OAUTH2_CONSENT_URL=${FULLA_OAUTH2_CONSENT_URL:-http://localhost:8080/consent}
       # Email / SMTP (omit via empty .env.docker values to stay in Console mode)
       - FULLA_SMTP_HOST=${FULLA_SMTP_HOST:-}
       - FULLA_SMTP_PORT=${FULLA_SMTP_PORT:-465}
