@@ -6,7 +6,8 @@ import { useAuthStore } from '../../stores/auth'
 import { beginSocialLogin, SocialFlowError } from '../../services/socialLogin'
 import type { SocialProvider } from '../../services/socialFlowContext'
 import { normalizeError } from '../../services/errorAdapter'
-import { authService } from '../../services/authService'
+import { authService, PORTAL_REDIRECT_URI } from '../../services/authService'
+import { buildAuthorizeResumeUrl, isAuthorizeResumeRequest } from '../../services/authorizeResume'
 import type { ExternalProviderInfo } from '../../types'
 import AppInput from '../../components/ui/AppInput.vue'
 import AppButton from '../../components/ui/AppButton.vue'
@@ -16,6 +17,17 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+
+// When login fails because the portal's redirect_uri is
+// not registered for the client, show the concrete value we sent — the bare
+// catalog message tells the integrator WHAT failed, this tells them WHAT to
+// whitelist.
+const redirectUriHint = computed(() => {
+  const e = auth.error
+  return e && typeof e === 'object' && e.code === 'VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED'
+    ? PORTAL_REDIRECT_URI
+    : ''
+})
 
 // P0-6 (#260): the application this login is being performed for (the
 // authorize flow flattens client_id onto the query when it redirects here).
@@ -93,37 +105,37 @@ if (route.query.must_change_password === '1') {
 // login is required).
 const passwordChangedNotice = route.query.pw_changed === '1'
 
+// Second WeKnora report: reaching /login with an authorize request while the
+// portal still holds a refresh token means the IdP's SSO session has ended
+// (or the relying party asked for a fresh authentication: prompt=login, a
+// short max_age). The two are separate lifetimes (session-management.md §1),
+// so the user signs in once more; say why, instead of showing a silent login
+// form to someone who is, by the portal's own state, already signed in.
+const showReauthNotice = computed(
+  () => auth.isAuthenticated && isAuthorizeResumeRequest(route.query),
+)
+
 // U-3 (browser-e2e 2026-09-08): /oauth2/authorize redirects anonymous users
 // to /login with the OAuth parameters FLATTENED onto the query (client_id,
 // redirect_uri, state, ... — there is no `redirect` param). After a successful
 // login the authorization flow must RESUME: rebuild the authorize URL from
-// those parameters (whitelisted keys only, values passed through verbatim —
-// the server re-validates redirect_uri against the client registration) and
-// navigate with a full page load. Before this, such users landed on the
-// dashboard and the relying party never received its authorization code.
-// v1.4.0 M1b: 'org_id' joins the whitelist — the backend already flattens
-// the org context hint onto the /login URL (both authorize login-redirect
-// branches), but dropping it here rebuilt the authorize request without the
-// org context, silently degrading the browser chain to a no-org issuance
-// while every CI-covered (API-driven) flow stayed green. The login submit
-// is an XHR (no form POST navigation), so the whitelist IS the forwarding
-// mechanism — the query survives on the page until the resume rebuild.
-const AUTHORIZE_CARRY_KEYS = [
-  'client_id', 'redirect_uri', 'scope', 'state', 'response_type',
-  'code_challenge', 'code_challenge_method', 'nonce', 'org_id',
-] as const
-
+// those parameters and navigate with a full page load. Before this, such
+// users landed on the dashboard and the relying party never received its
+// authorization code.
+// v1.4.0 M1b: 'org_id' is carried too — the backend already flattens the org
+// context hint onto the /login URL (both authorize login-redirect branches),
+// but dropping it here rebuilt the authorize request without the org context,
+// silently degrading the browser chain to a no-org issuance while every
+// CI-covered (API-driven) flow stayed green. The login submit is an XHR (no
+// form POST navigation), so the whitelist IS the forwarding mechanism — the
+// query survives on the page until the resume rebuild.
+// The whitelist and the "is this an authorize request" decision live in
+// services/authorizeResume: the router's guest guard relies on the same
+// decision to let this page render.
 function resumeAuthorizeFlow(): boolean {
-  const q = route.query
-  const clientId = typeof q.client_id === 'string' ? q.client_id : ''
-  const responseType = typeof q.response_type === 'string' ? q.response_type : ''
-  if (!clientId || !responseType) return false
-  const params = new URLSearchParams()
-  for (const key of AUTHORIZE_CARRY_KEYS) {
-    const v = q[key]
-    if (typeof v === 'string' && v !== '') params.set(key, v)
-  }
-  window.location.href = `/oauth2/authorize?${params.toString()}`
+  const url = buildAuthorizeResumeUrl(route.query)
+  if (!url) return false
+  window.location.href = url
   return true
 }
 
@@ -216,6 +228,18 @@ async function handlePasswordChange() {
       {{ $t('auth.login.passwordChangedNotice') }}
     </AppAlert>
 
+    <!-- Second WeKnora report: the portal session is alive but the IdP's SSO
+         session is not (or the RP asked for a fresh authentication) — explain
+         why a signed-in user is asked to sign in again. -->
+    <AppAlert
+      v-if="showReauthNotice"
+      type="info"
+      class="mb-6"
+      data-testid="login-reauth-notice"
+    >
+      {{ $t('auth.login.reauthNotice') }}
+    </AppAlert>
+
     <AppAlert
       v-if="auth.errorText"
       type="error"
@@ -223,6 +247,15 @@ async function handlePasswordChange() {
       dismissible
     >
       {{ auth.errorText }}
+      <!-- The concrete redirect_uri this SPA sent — show it
+           under the catalog message so the operator can whitelist exactly it. -->
+      <p
+        v-if="redirectUriHint"
+        class="mt-1.5 font-mono text-[11.5px] opacity-80 break-all"
+        data-testid="login-redirect-uri-hint"
+      >
+        {{ $t('auth.login.redirectUriHint') }}: {{ redirectUriHint }}
+      </p>
     </AppAlert>
 
     <!-- #145: Forced Password Change -->

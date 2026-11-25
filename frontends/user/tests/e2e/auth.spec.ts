@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { setupMocks, MOCK_TOKEN_PAIR } from './helpers/mock-api'
+import { setupMocks, loginUser, MOCK_TOKEN_PAIR } from './helpers/mock-api'
 
 test.describe('Login', () => {
   test.beforeEach(async ({ page }) => {
@@ -154,6 +154,34 @@ test.describe('Authorize flow resume (U-3)', () => {
     expect(url.searchParams.get('client_id')).toBe('rp-app')
     expect(url.searchParams.get('state')).toBe('st4te123')
     expect(url.searchParams.get('code_challenge')).toBe('ch4ll8910')
+  })
+
+  // Second WeKnora report: the IdP's SSO session is a separate lifetime from
+  // the portal's tokens (session-management.md §1). When it has ended — or
+  // the relying party asked for a fresh authentication — /oauth2/authorize
+  // sends the user to /login with the flattened authorize request while the
+  // portal still holds a valid refresh token. The guest guard used to treat
+  // that as "already signed in" and bounce to the dashboard, dropping the
+  // authorize parameters: the relying party never got its response.
+  test('a signed-in portal user is kept on /login when the URL carries an authorize request', async ({ page }) => {
+    await loginUser(page)
+    await page.goto(authorizeQuery)
+    await expect(page).toHaveURL(/\/login\?client_id=rp-app/)
+    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
+    await expect(page.getByTestId('login-reauth-notice')).toBeVisible()
+  })
+
+  test('a signed-in portal user signs in again and the authorize request resumes', async ({ page }) => {
+    await loginUser(page)
+    await page.goto(authorizeQuery)
+    await page.locator('input[autocomplete="username"]').fill('testuser')
+    await page.locator('input[autocomplete="current-password"]').fill('password123')
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL(/\/oauth2\/authorize\?/, { timeout: 10000 })
+    const url = new URL(page.url())
+    expect(url.searchParams.get('client_id')).toBe('rp-app')
+    expect(url.searchParams.get('redirect_uri')).toBe('https://rp.example.com/cb')
+    expect(url.searchParams.get('state')).toBe('st4te123')
   })
 
   test('plain login (no OAuth query) still lands on the dashboard', async ({ page }) => {

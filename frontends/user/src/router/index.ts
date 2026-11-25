@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { captureSocialCallback } from '../services/socialFlowContext'
+import { isAuthorizeResumeRequest } from '../services/authorizeResume'
 
 // createWebHistory snapshots the current URL during router construction.
 captureSocialCallback()
@@ -120,6 +121,21 @@ router.beforeEach(async (to, _from, next) => {
     // flag used to bounce the user off /login into a zombie dashboard of
     // 401s. Await the restore — it clears the flag when the refresh token
     // is dead — then decide on the live value.
+    //
+    // Second WeKnora report: /login is also where /oauth2/authorize sends a
+    // user who has to authenticate, with the authorize request flattened onto
+    // the query. The IdP's SSO session is a separate lifetime from the
+    // portal's tokens (session-management.md §1): once it has ended — or the
+    // relying party asked for a fresh authentication (prompt=login, a short
+    // max_age) — the user lands here while the portal still holds a valid
+    // refresh token. Treating that as "already signed in" bounced the user to
+    // the dashboard and dropped the authorize parameters, so the relying
+    // party never got its response. Render the page instead: it explains why
+    // and resumes the authorize request after the sign-in.
+    if (isAuthorizeResumeRequest(to.query)) {
+      next()
+      return
+    }
     await auth.restoreSession()
     if (auth.isAuthenticated) {
       next({ name: 'dashboard' })
