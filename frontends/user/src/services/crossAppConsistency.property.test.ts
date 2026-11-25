@@ -38,6 +38,7 @@ const BACKEND_ERROR_CODES = [
   'VALIDATION_RESOURCE_NOT_FOUND',
   'VALIDATION_RESOURCE_CONFLICT',
   'VALIDATION_REDIRECT_URI_NOT_REGISTERED',
+  'VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED',
   'AUTH_INVALID_CREDENTIALS',
   'AUTH_TOKEN_EXPIRED',
   'AUTH_TOKEN_INVALID',
@@ -72,7 +73,7 @@ const FULLA_PROTOCOL_CODES = [
 ] as const
 
 // 保留回退键，亦应在两应用间一致映射。
-const RESERVED_CODES = ['__unknown__', '__network__'] as const
+const RESERVED_CODES = ['__unknown__', '__network__', '__client__'] as const
 
 const ALL_CODES = [
   ...BACKEND_ERROR_CODES,

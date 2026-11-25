@@ -77,6 +77,11 @@ export default {
       passwordPlaceholder: '请输入密码',
       forgotPassword: '忘记密码？',
       submit: '登录',
+      // VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED 错误
+      // 横幅下方展示的具体 redirect_uri 的标签。
+      redirectUriHint: '本应用使用的回调地址',
+      // 第二次 WeKnora 反馈：门户仍有 refresh token、却带着授权请求到达 /login 时展示。
+      reauthNotice: '您的登录会话已结束，或应用要求重新验证身份。请登录后继续。',
       orContinueWith: '或使用以下方式继续',
       signInWithGitHub: '使用 GitHub 登录',
       signInWithGoogle: '使用 Google 登录',
@@ -112,7 +117,10 @@ export default {
       subtitle: '立即加入',
       success: '账户创建成功',
       verifyEmailNotice: '验证邮件已发送至 {email}，请先完成邮箱验证再登录',
-      usernameHint: '可选 —— 留空时将为您自动生成',
+      // 前置展示后端字符集规则（中文、'-'、'.'、'@' 等会被
+      // 后端以 400 拒绝）。
+      usernameHint: '可选 —— 留空时将为您自动生成。1–100 个字符：字母、数字、下划线',
+      usernamePatternError: '用户名只能包含字母、数字和下划线（1–100 个字符）',
       passwordHint: '至少 8 个字符。使用 3–4 个随机单词组成的长密码短语效果更佳。',
       submit: '创建账户',
       creating: '创建中…',

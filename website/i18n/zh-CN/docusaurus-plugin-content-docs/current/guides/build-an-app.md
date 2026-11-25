@@ -107,3 +107,12 @@ GET /oauth2/authorize?
 - 轮换密钥（门户 → 我的应用 → *轮换密钥*）会使旧密钥立即失效。
 - 删除应用会吊销其用户授权并停止令牌签发。
 - 管理员可停用滥用应用；停用后的客户端校验立即失败。
+
+## 6. 故障排查
+
+| 现象 | 可能原因 | 处理 |
+|---|---|---|
+| 令牌交换返回 `401 invalid_client`，但凭据是对的 | 客户端声明的 `token_endpoint_auth_method` 与你发送密钥的方式不一致（F-017 严格按声明强制）：声明的是 `client_secret_basic`，密钥却放在表单 body 里（`client_secret_basic` 是 CONFIDENTIAL 注册的默认值——WeKnora 撞上的正是这种情况） | 按客户端声明的方式发送密钥，或者改声明：`PUT /api/admin/clients/{id}`，带上 `token_endpoint_auth_method: "client_secret_post"`（管理控制台 → 应用详情 → 认证配置页签有同样的下拉框）。`none` / `client_secret_basic` / `client_secret_post` 是仅有的合法取值；PUBLIC 客户端只接受 `none` |
+| 登录失败，返回 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED`（"回调地址未注册"） | 请求携带的 `redirect_uri` 没有为该客户端注册——精确字符串匹配（协议、主机、端口、路径）。对第一方 SPA 而言，这通常意味着 `VITE_REDIRECT_URI`（构建时写入）与客户端注册的 URI 不一致 | 添加 / 对齐该 URI：管理控制台 → 应用 → 重定向 URI。SPA 登录横幅会显示它实际发送的 URI。注意 `localhost` 与 `127.0.0.1` 是不同的主机——请注册确切的那种写法 |
+| 修改配置文件里的客户端不生效 | `config.json` 的客户端仅用于播种（`ON CONFLICT DO NOTHING`）；运行时以数据库为准 | 通过管理 API / 管理控制台修改，或者删除该行后重启以重新播种（见 deployment.md 的"客户端生命周期"） |
+| Chrome 下授权确认表单 POST 被 `form-action` CSP 拦截 | Chrome 把 `form-action` 应用到表单提交之后的重定向上（与 CSP 规范相悖），因此 302 落到跨源 RP 回调地址的授权确认 POST 会被 `form-action 'self'` 拦掉 | SPA 的授权确认页已通过带 `json=true` 提交并自行导航规避了这个问题。自建的授权确认前端也应照此处理（POST 时带 `json=true`，然后 `location.assign(response.location)`）——不要放宽 CSP |

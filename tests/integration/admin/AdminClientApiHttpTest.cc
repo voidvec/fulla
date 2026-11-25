@@ -240,6 +240,64 @@ DROGON_TEST(Integration_P1_AdminClient_Update_AndEmptyBody_Returns200Then400)
 }
 
 // ---------------------------------------------------------------------------
+// token_endpoint_auth_method is an updatable field.
+//   * CONFIDENTIAL client -> client_secret_post: 200, and a follow-up GET
+//     shows the new value (the seeded default was client_secret_basic, which
+//     is exactly why the WeKnora token exchange 401'd and had no API surface
+//     to fix).
+//   * Unknown value -> 400 VALIDATION_INVALID_INPUT.
+//   * Illegal combination (CONFIDENTIAL row cannot become "none") -> 400.
+// ---------------------------------------------------------------------------
+DROGON_TEST(Integration_P1_AdminClient_Update_AuthMethod_EnforcedCombinations)
+{
+    ADMIN_CLIENT_SKIP_GUARD;
+
+    auto token = loginAsAdmin();
+    REQUIRE(token.has_value());
+
+    // CONFIDENTIAL throwaway client.
+    Json::Value createBody;
+    createBody["name"] = "auth-method-target";
+    createBody["redirect_uris"] = "http://localhost:9996/callback";
+    createBody["client_type"] = "CONFIDENTIAL";
+    auto createResp = sendPostJson("/api/admin/clients", createBody, *token);
+    REQUIRE(createResp != nullptr);
+    Json::Value created;
+    REQUIRE(parseJsonBody(createResp, created));
+    const std::string clientId = created["client_id"].asString();
+    REQUIRE(!clientId.empty());
+
+    // Switch the RP to client_secret_post -> 200, persisted.
+    Json::Value postBody;
+    postBody["token_endpoint_auth_method"] = "client_secret_post";
+    auto postResp = sendPutJson("/api/admin/clients/" + clientId, postBody, *token);
+    REQUIRE(postResp != nullptr);
+    CHECK(statusIs(postResp, drogon::k200OK));
+    auto getResp = sendGet("/api/admin/clients/" + clientId, *token);
+    REQUIRE(getResp != nullptr);
+    Json::Value fetched;
+    REQUIRE(parseJsonBody(getResp, fetched));
+    CHECK(fetched.get("token_endpoint_auth_method", "").asString() == "client_secret_post");
+
+    // Unknown value -> 400.
+    Json::Value bogusBody;
+    bogusBody["token_endpoint_auth_method"] = "client_secret_header";
+    auto bogusResp = sendPutJson("/api/admin/clients/" + clientId, bogusBody, *token);
+    REQUIRE(bogusResp != nullptr);
+    CHECK(statusIs(bogusResp, drogon::k400BadRequest));
+
+    // Combination violation: a CONFIDENTIAL row cannot declare "none".
+    Json::Value noneBody;
+    noneBody["token_endpoint_auth_method"] = "none";
+    auto noneResp = sendPutJson("/api/admin/clients/" + clientId, noneBody, *token);
+    REQUIRE(noneResp != nullptr);
+    CHECK(statusIs(noneResp, drogon::k400BadRequest));
+
+    // Cleanup.
+    sendDelete("/api/admin/clients/" + clientId, *token);
+}
+
+// ---------------------------------------------------------------------------
 // resetClientSecret happy path: creates a client, resets its secret, asserts
 // a new secret is returned. Covers the findOne -> update secret -> success
 // branch and the not-found branch (delegated to the Get_UnknownId case above

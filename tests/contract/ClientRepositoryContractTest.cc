@@ -407,3 +407,84 @@ DROGON_TEST(Integration_P0_Contract_Functional_ClientRepository_Memory_InitFromC
     });
     CHECK(!client.has_value());
 }
+
+// The in-memory repository applies the same
+// token_endpoint_auth_method rule as the startup seeder, so memory storage
+// and postgres storage load the same auth methods from the same config. It
+// is also the only backend where this parsing is observable without a
+// database. The token endpoint enforces the loaded value (F-017); an empty
+// value would silently switch the enforcement off in memory mode.
+DROGON_TEST(
+  Integration_P1_Contract_Functional_ClientRepository_Memory_InitFromConfig_AuthMethod_DefaultsFollowClientType
+)
+{
+    auto repo = std::make_shared<fulla::storage::memory::MemoryClientRepository>();
+    Json::Value cfg;
+    cfg["public-client"]["client_type"] = "PUBLIC";
+    cfg["public-client"]["redirect_uri"] = "http://localhost/cb";
+    cfg["confidential-client"]["client_type"] = "CONFIDENTIAL";
+    cfg["confidential-client"]["secret"] = "s";
+    cfg["confidential-client"]["redirect_uri"] = "http://localhost/cb";
+    repo->initFromConfig(cfg);
+
+    auto publicClient = waitForValue<std::optional<OAuth2Client>>([&](auto cb) {
+        repo->getClient("public-client", std::move(cb));
+    });
+    REQUIRE(publicClient.has_value());
+    CHECK(publicClient->tokenEndpointAuthMethod == "none");
+
+    auto confidentialClient = waitForValue<std::optional<OAuth2Client>>([&](auto cb) {
+        repo->getClient("confidential-client", std::move(cb));
+    });
+    REQUIRE(confidentialClient.has_value());
+    CHECK(confidentialClient->tokenEndpointAuthMethod == "client_secret_basic");
+}
+
+DROGON_TEST(
+  Integration_P1_Contract_Functional_ClientRepository_Memory_InitFromConfig_AuthMethod_ExplicitValueKept
+)
+{
+    auto repo = std::make_shared<fulla::storage::memory::MemoryClientRepository>();
+    Json::Value cfg;
+    cfg["post-client"]["client_type"] = "CONFIDENTIAL";
+    cfg["post-client"]["secret"] = "s";
+    cfg["post-client"]["token_endpoint_auth_method"] = "client_secret_post";
+    repo->initFromConfig(cfg);
+
+    auto client = waitForValue<std::optional<OAuth2Client>>([&](auto cb) {
+        repo->getClient("post-client", std::move(cb));
+    });
+    REQUIRE(client.has_value());
+    CHECK(client->tokenEndpointAuthMethod == "client_secret_post");
+}
+
+// An explicit method that contradicts the client type, or an unknown one,
+// must not load the client: the alternative is a client row whose declared
+// method the token endpoint would then reject every request for.
+DROGON_TEST(
+  Integration_P1_Contract_Functional_ClientRepository_Memory_InitFromConfig_AuthMethod_IllegalValueSkipsClient
+)
+{
+    auto repo = std::make_shared<fulla::storage::memory::MemoryClientRepository>();
+    Json::Value cfg;
+    // PUBLIC only allows "none".
+    cfg["public-with-secret"]["client_type"] = "PUBLIC";
+    cfg["public-with-secret"]["token_endpoint_auth_method"] = "client_secret_post";
+    // CONFIDENTIAL only allows the two client_secret_* methods.
+    cfg["confidential-none"]["client_type"] = "CONFIDENTIAL";
+    cfg["confidential-none"]["secret"] = "s";
+    cfg["confidential-none"]["token_endpoint_auth_method"] = "none";
+    // Not a method this server knows.
+    cfg["unknown-method"]["client_type"] = "CONFIDENTIAL";
+    cfg["unknown-method"]["secret"] = "s";
+    cfg["unknown-method"]["token_endpoint_auth_method"] = "client_secret_header";
+    repo->initFromConfig(cfg);
+
+    for (const char *clientId : {"public-with-secret", "confidential-none", "unknown-method"})
+    {
+        auto client = waitForValue<std::optional<OAuth2Client>>([&](auto cb) {
+            repo->getClient(clientId, std::move(cb));
+        });
+        CHECK(!client.has_value());
+    }
+}

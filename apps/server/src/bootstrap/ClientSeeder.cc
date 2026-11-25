@@ -70,6 +70,41 @@ std::string redirectUrisCsv(const Json::Value &c)
     return {};
 }
 
+// Honor an explicit token_endpoint_auth_method in the
+// config client block -- the seeder previously ignored the key entirely, so a
+// client_secret_post RP (WeKnora) could not be seeded from config at all.
+// Combination rule: PUBLIC -> "none" only; CONFIDENTIAL ->
+// client_secret_basic/client_secret_post. An illegal explicit combination
+// fails that client's seed loudly instead of silently shipping a method the
+// token endpoint would then reject. Returns false on invalid configuration.
+bool resolveAuthMethod(
+  const Json::Value &c,
+  bool publicClient,
+  std::string &authMethod
+)
+{
+    if (
+      c.isMember("token_endpoint_auth_method") &&
+      c["token_endpoint_auth_method"].isString()
+    )
+    {
+        authMethod = c["token_endpoint_auth_method"].asString();
+    }
+    else
+    {
+        authMethod = publicClient ? "none" : "client_secret_basic";
+        return true;
+    }
+    if (publicClient && authMethod != "none")
+        return false;
+    if (
+      !publicClient && authMethod != "client_secret_basic" &&
+      authMethod != "client_secret_post"
+    )
+        return false;
+    return true;
+}
+
 }  // namespace
 
 void ClientSeeder::run(const Json::Value &clientsConfig, DoneCallback &&done)
@@ -96,6 +131,24 @@ void ClientSeeder::run(const Json::Value &clientsConfig, DoneCallback &&done)
     {
         const Json::Value &c = clientsConfig[clientId];
         const bool publicClient = isPublicClient(c);
+
+        // Combination guard: an explicit auth method that contradicts the
+        // client type must fail the seed of THIS client loudly.
+        std::string authMethod;
+        if (!resolveAuthMethod(c, publicClient, authMethod))
+        {
+            LOG_ERROR << "ClientSeeder: invalid token_endpoint_auth_method '"
+                      << c["token_endpoint_auth_method"].asString() << "' for "
+                      << (publicClient ? "PUBLIC" : "CONFIDENTIAL")
+                      << " client '" << clientId
+                      << "' (PUBLIC allows 'none'; CONFIDENTIAL allows "
+                         "'client_secret_basic'/'client_secret_post') -- client NOT seeded";
+            if (!run->failed.exchange(true))
+                run->firstError =
+                  "invalid token_endpoint_auth_method for client '" + clientId + "'";
+            run->finishOne();
+            continue;
+        }
 
         std::string secret;
         std::string salt;
@@ -210,7 +263,7 @@ void ClientSeeder::run(const Json::Value &clientsConfig, DoneCallback &&done)
               c.get("name", clientId).asString(),
               redirectUrisCsv(c),
               std::string("authorization_code,refresh_token"),
-              publicClient ? std::string("none") : std::string("client_secret_basic"));
+              authMethod);
         }
         catch (...)
         {

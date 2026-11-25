@@ -706,6 +706,17 @@ ClientSeeder: config clients seeded/verified
 > UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
 > ```
 
+### 客户端生命周期：config.json 只负责播种，数据库才是权威
+
+一个常见的接入误区：在 `config.json` 里改了客户端，却发现毫无变化。规则如下：
+
+- **运行时 `oauth2_clients` 表是唯一的事实来源。** 每一次 redirect_uri / 认证方式 / scope 校验读取的都是数据库（可能经过 Redis 客户端缓存，该缓存在管理 API 写入时失效）。
+- **`config.json` 的 `clients` 条目只用于播种，且仅在记录不存在时插入**（`ON CONFLICT DO NOTHING`）。记录已存在时，播种器不会碰它——重启永远不会回退通过管理 API 做的修改，但也永远不会把 config 的修改*应用*到已有记录上。
+- 结论：要修改第一方客户端，请通过**管理 API**（`PUT /api/admin/clients/{id}`——名称、redirect_uris、授权类型、`token_endpoint_auth_method`、logo、backchannel URI）或管理控制台的应用页面修改。编辑 `config.json` 只影响尚不存在的客户端（或已被清空的表）。删除数据库记录后重启，会按 config 重新播种。
+- 播种器会读取 config 条目中的 `token_endpoint_auth_method`（遵循 PUBLIC→`none` / CONFIDENTIAL→basic|post 的组合规则；非法组合会使该客户端播种失败并输出一条启动 ERROR），因此用 body 密钥认证的 RP 也能通过 config 正确播种。已有记录仍然要通过管理 API（或 SQL）修改——播种从不更新。
+
+**第一方前端的构建参数。** `VITE_CLIENT_ID` / `VITE_REDIRECT_URI` / `VITE_API_BASE_URL` 是 Vite 构建期变量，会被内联进 SPA 包——它们在镜像构建时写入，运行时**不**读取（没有运行时配置注入）。修改它们必须重新构建前端镜像。保持 `VITE_REDIRECT_URI` 与客户端已注册的重定向 URI（`FULLA_PORTAL_REDIRECT_URI`）一致；不一致时，登录会报 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED`（"回调地址未注册"），SPA 会在错误横幅下方显示它实际发送的 URI。另请注意：在非 localhost 主机上通过明文 HTTP 访问 SPA 属于非安全浏览器上下文——登录可用（SPA 对 PKCE 回退到纯 JS 的 SHA-256），但生产部署应当使用 HTTPS（否则会话 cookie 在线路上可见）。
+
 ---
 
 ## 性能调优（推荐配置）

@@ -230,6 +230,27 @@ func (e PostApiAdminClientsJSONBodyClientType) Valid() bool {
 	}
 }
 
+// Defines values for PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod.
+const (
+	ClientSecretBasic PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod = "client_secret_basic"
+	ClientSecretPost  PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod = "client_secret_post"
+	None              PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod = "none"
+)
+
+// Valid indicates whether the value is a known member of the PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod enum.
+func (e PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod) Valid() bool {
+	switch e {
+	case ClientSecretBasic:
+		return true
+	case ClientSecretPost:
+		return true
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetApiAdminLogsExportParamsAll.
 const (
 	GetApiAdminLogsExportParamsAllN1   GetApiAdminLogsExportParamsAll = "1"
@@ -1031,7 +1052,13 @@ type PutApiAdminClientsClientIdJSONBody struct {
 	LogoUri      *string `json:"logo_uri,omitempty"`
 	Name         *string `json:"name,omitempty"`
 	RedirectUris *string `json:"redirect_uris,omitempty"`
+
+	// TokenEndpointAuthMethod Per-client token-endpoint auth method (RFC 7591 §2). Combination rule: PUBLIC clients accept only "none"; CONFIDENTIAL clients accept client_secret_basic/client_secret_post. Changing this takes effect at the token/introspect/revoke endpoints immediately (F-017 enforcement reads the client row).
+	TokenEndpointAuthMethod *PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod `json:"token_endpoint_auth_method,omitempty"`
 }
+
+// PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod defines parameters for PutApiAdminClientsClientId.
+type PutApiAdminClientsClientIdJSONBodyTokenEndpointAuthMethod string
 
 // PostApiAdminClientsClientIdResetSecretJSONBody defines parameters for PostApiAdminClientsClientIdResetSecret.
 type PostApiAdminClientsClientIdResetSecretJSONBody = map[string]interface{}

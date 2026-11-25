@@ -6,6 +6,9 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.put_api_admin_clients_client_id_body_token_endpoint_auth_method import (
+    PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod,
+)
 from ..types import UNSET, Unset
 
 T = TypeVar("T", bound="PutApiAdminClientsClientIdBody")
@@ -22,6 +25,10 @@ class PutApiAdminClientsClientIdBody:
             this RP; an empty string clears it.
         logo_uri (str | Unset): P1-1 (#279): client brand image (https-only, loopback exempt). An empty string clears
             it.
+        token_endpoint_auth_method (PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod | Unset): Per-client token-
+            endpoint auth method (RFC 7591 §2). Combination rule: PUBLIC clients accept only "none"; CONFIDENTIAL clients
+            accept client_secret_basic/client_secret_post. Changing this takes effect at the token/introspect/revoke
+            endpoints immediately (F-017 enforcement reads the client row).
     """
 
     name: str | Unset = UNSET
@@ -29,6 +36,7 @@ class PutApiAdminClientsClientIdBody:
     allowed_grant_types: str | Unset = UNSET
     backchannel_logout_uri: str | Unset = UNSET
     logo_uri: str | Unset = UNSET
+    token_endpoint_auth_method: PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -41,6 +49,10 @@ class PutApiAdminClientsClientIdBody:
         backchannel_logout_uri = self.backchannel_logout_uri
 
         logo_uri = self.logo_uri
+
+        token_endpoint_auth_method: str | Unset = UNSET
+        if not isinstance(self.token_endpoint_auth_method, Unset):
+            token_endpoint_auth_method = self.token_endpoint_auth_method.value
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -55,6 +67,8 @@ class PutApiAdminClientsClientIdBody:
             field_dict["backchannel_logout_uri"] = backchannel_logout_uri
         if logo_uri is not UNSET:
             field_dict["logo_uri"] = logo_uri
+        if token_endpoint_auth_method is not UNSET:
+            field_dict["token_endpoint_auth_method"] = token_endpoint_auth_method
 
         return field_dict
 
@@ -71,12 +85,22 @@ class PutApiAdminClientsClientIdBody:
 
         logo_uri = d.pop("logo_uri", UNSET)
 
+        _token_endpoint_auth_method = d.pop("token_endpoint_auth_method", UNSET)
+        token_endpoint_auth_method: PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod | Unset
+        if isinstance(_token_endpoint_auth_method, Unset):
+            token_endpoint_auth_method = UNSET
+        else:
+            token_endpoint_auth_method = PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod(
+                _token_endpoint_auth_method
+            )
+
         put_api_admin_clients_client_id_body = cls(
             name=name,
             redirect_uris=redirect_uris,
             allowed_grant_types=allowed_grant_types,
             backchannel_logout_uri=backchannel_logout_uri,
             logo_uri=logo_uri,
+            token_endpoint_auth_method=token_endpoint_auth_method,
         )
 
         put_api_admin_clients_client_id_body.additional_properties = d

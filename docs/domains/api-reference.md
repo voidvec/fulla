@@ -395,6 +395,7 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `CLAIM_MAPPING_INVALID_SOURCE` | 3024 | VALIDATION | 400 | 映射源路径不在白名单 |
 | `CLAIM_MAPPING_FORBIDDEN_SCOPE` | 3025 | VALIDATION | 400 | 触发 scope 不允许 |
 | `CUSTOM_ATTRIBUTES_INVALID` | 3026 | VALIDATION | 400 | 自定义属性不合法 |
+| `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` | 3027 | VALIDATION | 400 | 回调地址未注册，请检查客户端 redirect_uri 配置 |
 | `AUTH_INVALID_CREDENTIALS` | 4001 | AUTHENTICATION | 401 | 用户名或密码错误 |
 | `AUTH_TOKEN_EXPIRED` | 4002 | AUTHENTICATION | 401 | 登录已过期 |
 | `AUTH_TOKEN_INVALID` | 4003 | AUTHENTICATION | 401 | 登录凭证无效 |

@@ -16,6 +16,7 @@ export const zhCN: Record<string, string> = {
   // --- Reserved fallback keys (required by errorAdapter) ---
   __unknown__: '发生未知错误，请稍后重试',
   __network__: '网络连接失败，请检查网络后重试',
+  __client__: '请求未能发出（客户端错误），详情请查看浏览器控制台',
 
   // --- Backend Error_Code catalog (design.md initial entries) ---
   NET_CONNECTION_FAILED: '上游连接失败',
@@ -50,6 +51,7 @@ export const zhCN: Record<string, string> = {
   VALIDATION_DEVICE_CODE_INVALID: '设备码无效、已过期或已被处理',
   VALIDATION_RATE_LIMITED: '请求过于频繁，请稍后重试',
   VALIDATION_REDIRECT_URI_NOT_REGISTERED: '登出重定向地址未注册',
+  VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED: '回调地址未注册，请检查客户端 redirect_uri 配置',
   AUTH_MFA_CODE_INVALID: '验证码不正确',
   AUTH_MFA_NOT_CONFIGURED: '尚未设置双重验证，请先完成设置',
 

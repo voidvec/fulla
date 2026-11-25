@@ -144,6 +144,20 @@ OAuth2 插件的 `config.storage_type` 决定持久化后端：
 `backend-svc` → `client_secret_basic`。已有 NULL 值的客户端保持升级前的
 行为，升级不破坏存量部署。
 
+配置播种与管理 API 同样遵循该键：
+
+- **配置播种会读取该键。** 启动播种器现在会从每个
+  `plugins.OAuth2Plugin.config.clients` 条目读取 `token_endpoint_auth_method`
+  （此前它完全忽略该键，对 CONFIDENTIAL 客户端总是写入 `client_secret_basic`，
+  以致用 body 密钥认证的 RP 无法通过配置播种）。组合规则：`PUBLIC` 只接受
+  `none`；`CONFIDENTIAL` 只接受 `client_secret_basic` / `client_secret_post`
+  ——显式写出的非法组合会让该客户端播种失败，并输出一条启动 ERROR（该客户端
+  **不会**被播种）。内存仓库适用同样的规则。
+- **管理 API 可以修改它。** `PUT /api/admin/clients/{clientId}` 接受
+  `token_endpoint_auth_method`（取值域与组合规则相同，按该行的 `client_type`
+  校验），管理控制台的应用详情页以下拉框的形式提供该字段。修改在令牌 / 内省 /
+  撤销端点立即生效（F-017 读取客户端行；写入时会使客户端缓存失效）。
+
 ## 6. OIDC prompt / max_age / auth_time（F-022）
 
 授权端点支持 OIDC Core §3.1.2.1 的 `prompt` 与 `max_age` 参数：

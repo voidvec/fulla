@@ -30,6 +30,13 @@ import { FALLBACK_LOCALE, getCurrentLocale } from '../locale'
 export const UNKNOWN_CODE = '__unknown__'
 /** Reserved key for the network/timeout fallback. */
 export const NETWORK_CODE = '__network__'
+/**
+ * Reserved key for a frontend-side exception thrown BEFORE any request was
+ * sent (not an axios error — e.g. PKCE setup failing in a non-secure
+ * context). Distinct from `__network__` so users and integrators are not
+ * told to "check the network" for a client bug.
+ */
+export const CLIENT_CODE = '__client__'
 /** Fallback-table locale — NOT the active-locale default (see above). */
 export const DEFAULT_LOCALE = FALLBACK_LOCALE
 

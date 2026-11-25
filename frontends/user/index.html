@@ -5,30 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fulla</title>
-    <script>
-      // Anti-FOUC: resolve the theme BEFORE first paint (mirrors
-      // stores/theme.ts read logic). Without this, dark users see a light
-      // flash while the JS bundle downloads.
-      try {
-        var t = localStorage.getItem('fulla-theme')
-        var dark = t === 'dark' || ((!t || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
-      } catch (e) { /* keep default presentation */ }
-      // Sync <html lang> from the resolved UI locale before paint — mirrors
-      // i18n/index.ts detection (stored value wins; otherwise any zh browser
-      // language resolves zh-CN) so screen readers never see 'en' first.
-      try {
-        var storedLocale = localStorage.getItem('fulla-locale')
-        var zh
-        if (storedLocale === 'zh-CN') {
-          zh = true
-        } else if (storedLocale !== 'en') {
-          var langs = navigator.languages || [navigator.language]
-          zh = langs.some(function (l) { return /^zh/i.test(l || '') })
-        }
-        if (zh) document.documentElement.lang = 'zh-CN'
-      } catch (e) { /* keep default 'en' */ }
-    </script>
+    <!-- External file instead of an inline script — the
+         CSP (`script-src 'self'`) blocked the inline version, silently
+         disabling the anti-FOUC theme resolution and the <html lang> sync.
+         Synchronous on purpose: must run before first paint. -->
+    <script src="/boot.js"></script>
   </head>
   <body>
     <div id="app"></div>

@@ -715,6 +715,17 @@ ClientSeeder: config clients seeded/verified
 > UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
 > ```
 
+### Client lifecycle: config.json seeds, the database is authoritative
+
+A common integration pitfall: editing a client in `config.json` and wondering why nothing changes. The rules:
+
+- **At runtime the `oauth2_clients` table is the single source of truth.** Every redirect_uri / auth-method / scope check reads the database (optionally through the Redis client cache, invalidated on admin-API writes).
+- **`config.json` `clients` entries are seed-only and insert-if-missing** (`ON CONFLICT DO NOTHING`). When the row already exists, the seeder leaves it untouched — a restart never reverts admin-API edits, but it also never *applies* config edits to an existing row.
+- Consequence: to change a first-party client, edit through the **admin API** (`PUT /api/admin/clients/{id}` — name, redirect_uris, grant types, `token_endpoint_auth_method`, logo, backchannel URI) or the admin console's application pages. Editing `config.json` only affects clients that do not exist yet (or a wiped table). Deleting the DB row and restarting re-seeds it from config.
+- The seeder honors `token_endpoint_auth_method` in config entries (with the PUBLIC→`none` / CONFIDENTIAL→basic|post combination rule; an illegal combination fails that client's seed with a startup ERROR), so an RP authenticating with a body secret can be seeded correctly from config. Existing rows still need the admin API (or SQL) — seeding never updates.
+
+**SPA build args (first-party frontends).** `VITE_CLIENT_ID` / `VITE_REDIRECT_URI` / `VITE_API_BASE_URL` are Vite build-time variables inlined into the SPA bundle — they are baked at image build time, NOT read at runtime (there is no runtime config injection). Changing them requires rebuilding the frontend image. Keep `VITE_REDIRECT_URI` equal to the client's registered redirect URI (`FULLA_PORTAL_REDIRECT_URI`); a mismatch surfaces at login as 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` ("回调地址未注册") with the SPA showing the concrete URI it sent under the error banner. Also note: accessing the SPA over plain HTTP on a non-localhost host is a non-secure browser context — login works (the SPA falls back to a pure-JS SHA-256 for PKCE), but production deployments should serve HTTPS (session cookies are visible on the wire otherwise).
+
 ---
 
 ## Performance tuning (recommended configuration)

@@ -225,6 +225,9 @@ from .post_oauth_2_register_body_client_type import PostOauth2RegisterBodyClient
 from .post_oauth_2_revoke_body import PostOauth2RevokeBody
 from .put_api_admin_claim_mappings_mapping_id_body import PutApiAdminClaimMappingsMappingIdBody
 from .put_api_admin_clients_client_id_body import PutApiAdminClientsClientIdBody
+from .put_api_admin_clients_client_id_body_token_endpoint_auth_method import (
+    PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod,
+)
 from .put_api_admin_clients_client_id_scopes_body import PutApiAdminClientsClientIdScopesBody
 from .put_api_admin_email_templates_key_locale_body import PutApiAdminEmailTemplatesKeyLocaleBody
 from .put_api_admin_roles_role_id_body import PutApiAdminRolesRoleIdBody
@@ -418,6 +421,7 @@ __all__ = (
     "PostOauth2RevokeBody",
     "PutApiAdminClaimMappingsMappingIdBody",
     "PutApiAdminClientsClientIdBody",
+    "PutApiAdminClientsClientIdBodyTokenEndpointAuthMethod",
     "PutApiAdminClientsClientIdScopesBody",
     "PutApiAdminEmailTemplatesKeyLocaleBody",
     "PutApiAdminRolesRoleIdBody",

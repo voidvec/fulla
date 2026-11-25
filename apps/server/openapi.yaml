@@ -1382,11 +1382,24 @@ paths:
                   maxLength: 512
                   description: 'P1-1 (#279): client brand image (https-only,
                     loopback exempt). An empty string clears it.'
+                token_endpoint_auth_method:
+                  type: string
+                  enum:
+                  - none
+                  - client_secret_basic
+                  - client_secret_post
+                  description: 'Per-client token-endpoint
+                    auth method (RFC 7591 §2). Combination rule: PUBLIC
+                    clients accept only "none"; CONFIDENTIAL clients accept
+                    client_secret_basic/client_secret_post. Changing this
+                    takes effect at the token/introspect/revoke endpoints
+                    immediately (F-017 enforcement reads the client row).'
       responses:
         '200':
           description: Client updated successfully
         '400':
-          description: Invalid request body
+          description: Invalid request body, or a token_endpoint_auth_method
+            that contradicts the client's type
         '401':
           description: Unauthorized
         '404':
@@ -5978,7 +5991,7 @@ paths:
         '302':
           description: Redirect to client with authorization code or error
         '400':
-          description: Missing/expired/mismatched consent_csrf nonce, or (deny) redirect_uri not registered for the client (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)
+          description: Missing/expired/mismatched consent_csrf nonce, or (deny) redirect_uri not registered for the client (VALIDATION_INVALID_INPUT / VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
         '401':
           description: 'No authenticated session (AUTH_SESSION_REQUIRED), or the
             session is paused at the MFA challenge (AUTH_MFA_REQUIRED, #144:
@@ -6150,7 +6163,7 @@ paths:
                       unset).
           description: Consent context (owner_name empty for admin-seeded clients; org null for flows without an org binding)
         '400':
-          description: Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_REDIRECT_URI_NOT_REGISTERED)
+          description: Missing/unknown/expired consent_csrf, missing client_id/redirect_uri, or redirect_uri not registered for client_id (VALIDATION_INVALID_INPUT / VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
         '401':
           description: No authenticated session (AUTH_SESSION_REQUIRED)
         '403':
@@ -6533,7 +6546,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-          description: Missing username/password (VALIDATION_INVALID_INPUT)
+          description: Missing username/password (VALIDATION_INVALID_INPUT), or redirect_uri not registered for the client (VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED)
         '401':
           content:
             application/json:
