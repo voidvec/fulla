@@ -34,6 +34,7 @@ async function setupOpenPlatformMocks(page: any) {
         status: 'active',
         redirect_uris: body?.redirect_uris || [],
         scopes: body?.scopes || [],
+        allowed_grant_types: body?.allowed_grant_types || ['authorization_code'],
       }
       MOCK_APPS.push(created)
       await route.fulfill({
@@ -45,6 +46,40 @@ async function setupOpenPlatformMocks(page: any) {
             created.client_type === 'CONFIDENTIAL' ? 'once-shown-secret' : undefined,
           message: 'created',
         }),
+      })
+      return
+    }
+    // T1.3 (UF-04a): PATCH {id} — partial update semantics (absent keys
+    // unchanged). The mock mutates the stored row so the follow-up GET
+    // re-renders the edited values, mirroring the real controller.
+    const patchMatch = path.match(/^\/api\/me\/applications\/([^/]+)$/)
+    if (route.request().method() === 'PATCH' && patchMatch) {
+      const app = MOCK_APPS.find((a) => a.client_id === decodeURIComponent(patchMatch[1]))
+      if (!app) {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'VALIDATION_RESOURCE_NOT_FOUND', category: 'VALIDATION', message: 'Application not found', numeric_code: 1004, request_id: 'req-e2e-patch-404' } }),
+        })
+        return
+      }
+      if (app.status === 'suspended') {
+        await route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'AUTHZ_ACCESS_DENIED', category: 'AUTHORIZATION', message: 'application is suspended; contact the administrator', numeric_code: 5001, request_id: 'req-e2e-patch-403' } }),
+        })
+        return
+      }
+      const body = route.request().postDataJSON()
+      if (body?.name !== undefined) app.name = body.name
+      if (body?.redirect_uris !== undefined) app.redirect_uris = body.redirect_uris
+      if (body?.allowed_grant_types !== undefined) app.allowed_grant_types = body.allowed_grant_types
+      if (body?.scopes !== undefined) app.scopes = body.scopes
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'updated' }),
       })
       return
     }
@@ -113,6 +148,91 @@ test.describe('My Applications', () => {
 
   test('nav shows organizations entry', async ({ page }) => {
     await expect(page.locator('nav a:has-text("My Organizations")')).toBeVisible()
+  })
+
+  // T1.3 (UF-04a) — edit modal (PATCH, partial semantics). Each test resets
+  // the module-level store first: MOCK_APPS persists across tests in this
+  // file, and the edit tests need a deterministic single-card list.
+  test('editing only the name sends a name-only PATCH (partial semantics)', async ({ page }) => {
+    MOCK_APPS.splice(0)
+    MOCK_APPS.push({
+      client_id: 'app_edit1',
+      name: 'Editable App',
+      client_type: 'PUBLIC',
+      status: 'active',
+      redirect_uris: ['https://edit.example/callback'],
+      allowed_grant_types: ['authorization_code'],
+    })
+    const patchRequest = page.waitForRequest(
+      (r) => r.url().endsWith('/api/me/applications/app_edit1') && r.method() === 'PATCH',
+    )
+    await page.reload()
+    await page.getByTestId('app-edit-button').click()
+    await page.getByTestId('app-edit-name').fill('Renamed App')
+    await page.getByTestId('app-edit-submit').click()
+    const request = await patchRequest
+    expect((request.headers()['content-type'] || '').toLowerCase()).toContain('application/json')
+    const body = JSON.parse(request.postData() || '{}')
+    // R5: absent keys stay unchanged — the body must carry ONLY the dirty field.
+    expect(body).toEqual({ name: 'Renamed App' })
+    await expect(page.getByText('Application "Renamed App" updated')).toBeVisible()
+    await expect(page.getByText('Renamed App').first()).toBeVisible()
+  })
+
+  test('editing redirect URIs refreshes the list with the new value', async ({ page }) => {
+    MOCK_APPS.splice(0)
+    MOCK_APPS.push({
+      client_id: 'app_edit2',
+      name: 'Uri App',
+      client_type: 'PUBLIC',
+      status: 'active',
+      redirect_uris: ['https://old.example/callback'],
+      allowed_grant_types: ['authorization_code'],
+    })
+    await page.reload()
+    await page.getByTestId('app-edit-button').click()
+    await page.getByTestId('app-edit-redirect-uris').fill('https://new.example/callback')
+    await page.getByTestId('app-edit-submit').click()
+    await expect(page.getByText('https://new.example/callback').first()).toBeVisible()
+  })
+
+  test('rejects a non-https redirect URI client-side without sending PATCH', async ({ page }) => {
+    MOCK_APPS.splice(0)
+    MOCK_APPS.push({
+      client_id: 'app_edit3',
+      name: 'Bad Uri App',
+      client_type: 'PUBLIC',
+      status: 'active',
+      redirect_uris: ['https://ok.example/callback'],
+      allowed_grant_types: ['authorization_code'],
+    })
+    let patchSeen = false
+    page.on('request', (r) => {
+      if (r.method() === 'PATCH') patchSeen = true
+    })
+    await page.reload()
+    await page.getByTestId('app-edit-button').click()
+    await page.getByTestId('app-edit-redirect-uris').fill('http://plain.example/callback')
+    await page.getByTestId('app-edit-submit').click()
+    await expect(page.getByText('Invalid redirect URI "http://plain.example/callback"')).toBeVisible()
+    expect(patchSeen).toBe(false)
+  })
+
+  test('suspended application freezes its edit entry', async ({ page }) => {
+    MOCK_APPS.splice(0)
+    MOCK_APPS.push({
+      client_id: 'app_susp',
+      name: 'Suspended App',
+      client_type: 'PUBLIC',
+      status: 'suspended',
+      redirect_uris: [],
+      allowed_grant_types: ['authorization_code'],
+    })
+    await page.reload()
+    const button = page.getByTestId('app-edit-button')
+    await expect(button).toBeDisabled()
+    // Even a forced PATCH answers 403 frozen (mock mirrors the backend).
+    await expect(page.getByText('Suspended App').first()).toBeVisible()
   })
 })
 
