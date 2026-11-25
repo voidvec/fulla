@@ -8,6 +8,7 @@ Essential docs:
 Guides docs:
 - [Automating with Fulla (no human in the loop)](https://fulla.dev/docs/guides/automation): Fulla speaks standard OAuth 2.0, so scripts, CLIs and service-to-service
 - [Build an app on Fulla (OIDC sign-in)](https://fulla.dev/docs/guides/build-an-app): Let your web/mobile/CLI application use Fulla as its identity provider:
+- [Integrating Fulla as an OIDC Provider (RP guide)](https://fulla.dev/docs/guides/rp-integration): Audience: teams wiring an external relying party (RP) — WeKnora, Nextcloud,
 
 Evaluate docs:
 - [Architecture Overview](https://fulla.dev/docs/architecture/architecture-overview): This page summarizes the overall architecture of fulla from four perspectives: technology stack, module layout, request flow, and deployment topology.

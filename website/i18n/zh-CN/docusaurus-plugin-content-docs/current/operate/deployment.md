@@ -634,6 +634,8 @@ curl -k https://localhost/admin/
 > **管理后台（OAuth2Admin）无需配置**：源码不读取任何 `import.meta.env`，所有 API 调用走相对路径 `/api/admin/*`，由 nginx 反代到后端。改域名时只需保证 nginx `/admin/` 路由正确，无需重建 admin 镜像。
 >
 > **改域名需重建前端镜像**：由于 VITE 变量在构建期固化，更换域名后必须 `docker compose ... up -d --build fulla-frontend`（管理后台不受影响）。
+>
+> **SPA 镜像的后端地址（运行时变量）**：`fulla-frontend` 与 `fulla-admin` 镜像把 `/api`、`/oauth2`、`/.well-known` 和 `/health` 反代到后端。它们的 nginx 站点配置是模板（`frontends/user/nginx.conf.template`、`frontends/admin/nginx.conf.template`），由 nginx 镜像的入口脚本在容器启动时渲染，因此这个地址与上面的 VITE 变量不同，是在**运行时**读取的：`FULLA_BACKEND_UPSTREAM`，默认 `http://fulla-backend:5555`（compose 服务名）。仅当后端不在 compose 栈内时，才在 `.env.docker` 中设置它；两份 compose 文件都会把它传给这两个服务。模板中只替换 `FULLA_*` 变量；使用默认值时，渲染出的配置与此前完全一致。栈自带的网关（`deploy/nginx/nginx.conf`）是挂载进去的，并不打包在镜像里：要改它的上游地址，直接改这个文件。
 
 ---
 

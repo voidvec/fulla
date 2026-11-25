@@ -18,6 +18,10 @@ static T get(const Json::Value &config, const std::string &path, const T &defaul
 static bool validate(const Json::Value &config, std::string &errorMessage);
 static void applyEnvOverrides(Json::Value &config, const std::vector<EnvOverride> &rules);
 static const char *getEnv(const char *name);
+static const char *getProcessEnv(const char *name);
+static void setDotEnvForTesting(
+const std::vector<std::pair<std::string, std::string>> &entries
+);
 private:
 static Json::Value *getJsonPointer(Json::Value &root, const std::string &path);
 static int parseInt(const std::string &str);
@@ -51,6 +55,8 @@ inline const std::vector<EnvOverride> FULLA_ENV_OVERRIDES =
 {"redis_clients.0.passwd", "FULLA_REDIS_PASSWORD", false},
 {"custom_config.metadata.issuer", "FULLA_ISSUER", false},
 {"custom_config.frontend.url", "FULLA_FRONTEND_URL", false},
+{"custom_config.oauth2.login_url", "FULLA_OAUTH2_LOGIN_URL", false},
+{"custom_config.oauth2.consent_url", "FULLA_OAUTH2_CONSENT_URL", false},
 {"custom_config.external_auth.github.client_id", "FULLA_GITHUB_CLIENT_ID", false},
 {"custom_config.external_auth.github.client_secret", "FULLA_GITHUB_CLIENT_SECRET", false},
 {"custom_config.external_auth.google.client_id", "FULLA_GOOGLE_CLIENT_ID", false},
@@ -4782,6 +4788,12 @@ static bool needsRehash(const std::string &storedHash);
 namespace fulla::drogon::utils
 {
 inline std::string mustChangePasswordRedirectUrl(const std::string &clientId)
+;
+inline std::string authorizeLoginUrl()
+;
+inline std::string authorizeConsentUrl()
+;
+inline char authorizeUrlQuerySeparator(const std::string &target)
 ;
 }
 === libs/drogon/include/fulla/drogon/utils/ScopeChecker.h

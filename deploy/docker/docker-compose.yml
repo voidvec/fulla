@@ -13,6 +13,9 @@ services:
     restart: always
     ports:
       - "8081:80"
+    environment:
+      # Where the SPA proxies /api, /oauth2, /.well-known and /health.
+      FULLA_BACKEND_UPSTREAM: ${FULLA_BACKEND_UPSTREAM:-http://fulla-backend:5555}
     depends_on:
       - fulla-backend
     networks:
@@ -27,6 +30,8 @@ services:
     restart: always
     ports:
       - "8080:80"
+    environment:
+      FULLA_BACKEND_UPSTREAM: ${FULLA_BACKEND_UPSTREAM:-http://fulla-backend:5555}
     depends_on:
       - fulla-backend
     networks:

@@ -34,6 +34,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 - Custom C++ `ITokenRepository` implementations must implement the new `inspectRefreshToken`, `rotateRefreshToken` and `revokeTokenFamilyChecked` ports before upgrading refresh consumers. Old implementations remain source-compatible but refresh fails closed with `server_error`; the old optional CAS result is not a reliable storage-error/replay discriminator. See [Refresh Tokens and Revocation Boundaries](docs/domains/token-refresh-and-revocation.md). Publish this migration notice with the next MINOR security-hardening release.
 
+- Code-issuance redirect-URI rejections have their own error code. `POST /oauth2/login`, `POST /oauth2/consent` (approve and deny) and `GET /oauth2/consent/context` now answer an unregistered `redirect_uri` with `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` (numeric code 3027, HTTP 400) instead of `VALIDATION_REDIRECT_URI_NOT_REGISTERED` (3013). 3013 is again end-session-only: its client-safe message ("logout redirect URI is not registered") misled integrators who saw it on a failed login (found in the WeKnora RP integration). Callers that match 3013 on the code-issuance paths must switch to the new code; `end_session` behavior is unchanged. The SDK clients, the error-code catalog tables, both frontend message mirrors and the OpenAPI descriptions are updated.
+
 ### Security
 
 - Sanitize bundled Nginx callback access/error logs and prevent caching/referrer
@@ -65,6 +67,20 @@ Changelog entries are written in English (see CONTRIBUTING).
   sync — versioning-and-release.md §11.0 EN + zh, release-engineering checklist,
   PR template section), so the v1.5.0-style silent skip cannot recur.
 
+- **`json=true` on `POST /oauth2/consent`** (the opt-in `/oauth2/login` already had): the endpoint returns the redirect target in a `{"code", "location"}` (approval) or `{"error", "location"}` (denial) JSON body with HTTP 200 instead of a 302, and the PKCE guard rejections of both endpoints return `{"error", "error_description", "location"}` the same way. The bundled consent page uses it to navigate the top-level window itself; `form-action` restricts form submissions, not a script-initiated navigation. The default 302 contract is unchanged for other callers.
+
+- `PUT /api/admin/clients/{clientId}` accepts `token_endpoint_auth_method` (`none`, `client_secret_basic`, `client_secret_post`), and the admin console's application detail page exposes it as a select. The value must agree with the client type (PUBLIC: `none`; CONFIDENTIAL: basic or post) and takes effect at the token, introspect and revoke endpoints immediately. The field was create-only before, so a CONFIDENTIAL client stored as `client_secret_basic` could not be switched to `client_secret_post` without a direct database edit.
+
+- The startup client seeder and the in-memory client repository honor `token_endpoint_auth_method` in `plugins[name=OAuth2Plugin].config.clients` entries, with the same value domain and type rule. An explicit combination that contradicts the client type fails that client's seed with an ERROR log line instead of silently writing `client_secret_basic`. Existing rows are still never overwritten by the seeder.
+
+- `FULLA_OAUTH2_LOGIN_URL` and `FULLA_OAUTH2_CONSENT_URL` override `custom_config.oauth2.login_url` / `consent_url`, the authorize endpoint's login and consent redirect targets. Every shipped config now carries both keys as empty strings so that the overrides land (an override never creates a key); empty means "not set", in which case the unchanged backend-relative defaults (`/login`, `/consent`) apply.
+
+- `FULLA_BACKEND_UPSTREAM` sets the backend address that the frontend and admin console images proxy `/api`, `/oauth2`, `/.well-known` and `/health` to (default `http://fulla-backend:5555`, the compose service name). Their nginx server blocks are now templates (`frontends/user/nginx.conf.template`, `frontends/admin/nginx.conf.template`) rendered by the nginx image entrypoint at container start, so a deployment can relocate the backend without rebuilding the images; only `FULLA_*` variables are substituted. With the default the rendered configuration is identical to the previous one. The compose gateway's `deploy/nginx/nginx.conf` is unchanged — it is bind-mounted, so its upstreams are edited in that file.
+
+- New relying-party guide, [docs/guides/rp-integration.md](docs/guides/rp-integration.md): deployment prerequisites, client registration, the `json=true` consent contract, the legacy direct-`/oauth2/login` semantics (a code is minted without a consent check) and a troubleshooting table.
+
+- The frontends' `normalizeError` passes the Error Envelope's `error.details` through as an optional `details` field, and distinguishes a frontend-side exception thrown before any request was sent (reserved code `__client__`) from a real network failure (`__network__`).
+
 
 ### Changed
 
@@ -80,7 +96,29 @@ Changelog entries are written in English (see CONTRIBUTING).
   grants, preserving scope presence, refresh-token fields and signed 64-bit
   lifetimes. Device signing, persistence and HTTP/metrics handling remain in place.
 
+- The development compose file (`deploy/docker/docker-compose.yml`) points the backend's authorize login and consent redirect targets at the SPA. That stack has no shared gateway — the backend on 5555 and the SPA on 8080 are different origins — so the backend-relative defaults could not reach the SPA's `/login` and `/consent`; a first-time authorization ended on the backend's own login page and then on a 404. The defaults themselves are unchanged: behind the production stack's gateway or a Helm ingress they already reach the SPA. See [Configuration Guide §4c](docs/operate/configuration-guide.md).
+
+- `FULLA_ENV` is read through one accessor everywhere (`.env` file first, then the process environment). `JwkManager` and `OAuth2Plugin` used to read it raw from the process environment while `ConfigManager` and the server assembly already honored `.env`. A deployment that set `FULLA_ENV=production` only in `.env` now gets the strict behavior it asked for — the ephemeral signing key is refused and the client registry is scanned — where two of the four readers used to treat it as non-production. Conversely, a `.env` that says `development` while the process environment says `production` now relaxes those two checks, to match the other two readers. Any disagreement between the two sources is reported at startup; keep `FULLA_ENV` in one place.
+
 ### Fixed
+
+- Keys that are read from the process environment only (`FULLA_SIGNING_KEY`, `FULLA_JWT_KEY_PATH`, `FULLA_AUTO_MIGRATE`, `FULLA_BOOTSTRAP_ADMIN_PASSWORD`, `FULLA_BOOTSTRAP_ADMIN_EMAIL`, the `FULLA_SMTP_*` family, `DETAILED_VALIDATION_ERRORS`) are reported at startup when they are set in a `.env` file. The file is parsed into memory and never exported, so such a value was ignored without a trace — `FULLA_AUTO_MIGRATE` in `.env`, for example, left migrations disabled with no indication why. The reads are unchanged and still ignore `.env`; the production signing-key error now says that those two variables must be real environment variables. Every production read goes through `ConfigManager::getProcessEnv()` / `getEnv()`, and the architecture guard rejects a direct `getenv()` call (rule R5).
+
+- An environment override whose key the loaded config file does not carry is reported at startup (`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`). It was a silent no-op before. `FULLA_ISSUER` is the common case: `config.prod.json` carries `custom_config.metadata.issuer` and the development `config.json` does not, so the variable only takes effect with a config that has the key. No override behavior changed; only the report is new.
+
+- **A later login from a relying party landed on the portal's home page instead of calling the RP back** (second WeKnora report). Once the IdP's SSO session had ended, or when the RP sent `prompt=login` or a short `max_age`, `/oauth2/authorize` sent the user to `/login` with the authorize request on the query. The portal's guest guard, seeing a still-valid refresh token, treated that user as signed in, bounced them to the dashboard and dropped the authorize parameters. The guard now renders the login page whenever the URL carries an authorize request; the page says why a signed-in user is asked to sign in again and resumes the authorize request after the sign-in. The guard and the login page share one module for the "is this an authorize request" decision. The backend is unchanged: the SSO session and the API tokens stay separate lifetimes, and a token refresh still does not extend the SSO session ([Session Management](docs/domains/session-management.md)).
+
+- **The consent page stayed on "Authorizing…" on a relying party's first authorization** (WeKnora integration): the page submitted the decision with a native form POST and let the browser follow the backend's 302 to the RP callback. Chromium enforces CSP `form-action` on the redirect that follows a form submission (contrary to the CSP spec, w3c/webappsec-csp#8), so a same-origin POST under `form-action 'self'` was blocked as soon as the 302 left the origin. The page now submits with `json=true` and navigates itself from the returned `location`, refusing any non-http(s) target. No CSP directive was relaxed.
+
+- **Login failed with "Network connection failed" on plain-HTTP LAN deployments** (non-secure browser contexts): `crypto.subtle` and `crypto.randomUUID` are undefined there, so PKCE setup threw before the login request was even sent, and the error adapter reported every response-less error as a network failure. The user portal and the admin console fall back to a pure-JS SHA-256 for the S256 challenge (the method is never downgraded to `plain`) and build the `state` UUID from `crypto.getRandomValues`.
+
+- The hourly cleanup cycle threw `std::bad_function_call`: it called `maintainAuditPartitions()` without a completion callback, and the implementation invoked the empty `std::function` unconditionally (observed once per hour in the WeKnora deployment logs).
+
+- The pre-paint theme and `<html lang>` script of both frontends (an inline `<script>` in `index.html`) was blocked by the nginx CSP `script-src 'self'` and never ran. It moved to an external `/boot.js`.
+
+- The registration page states the username rule (1–100 characters: letters, digits, underscore) and validates it before submitting; in production mode the server answers a violation only with the generic 3001 message.
+
+- The user portal's login banner shows the concrete `redirect_uri` the SPA sent when the server rejects it as unregistered.
 
 - Roll back a scope replacement on caught preparation or submission failures so a failed request cannot commit its preceding DELETE. Scope-order regressions now require successful fixture setup and valid readback.
 

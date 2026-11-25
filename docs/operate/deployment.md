@@ -637,6 +637,8 @@ The frontend (the user-facing OAuth2Frontend) is configured through Vite environ
 > **The admin console (OAuth2Admin) needs no configuration**: its source code reads no `import.meta.env` at all; every API call uses the relative path `/api/admin/*`, which nginx reverse-proxies to the backend. When changing domains you only need to keep the nginx `/admin/` route correct — no admin image rebuild required.
 >
 > **Changing the domain requires rebuilding the frontend image**: because VITE variables are baked in at build time, after switching domains you must run `docker compose ... up -d --build fulla-frontend` (the admin console is unaffected).
+>
+> **Backend address of the SPA images (a runtime variable)**: the `fulla-frontend` and `fulla-admin` images proxy `/api`, `/oauth2`, `/.well-known` and `/health` to the backend. Their nginx server blocks are templates (`frontends/user/nginx.conf.template`, `frontends/admin/nginx.conf.template`) that the nginx image entrypoint renders at container start, so this address — unlike the Vite variables above — is read at runtime: `FULLA_BACKEND_UPSTREAM`, default `http://fulla-backend:5555` (the compose service name). Set it in `.env.docker` only when the backend lives outside the compose stack; both compose files pass it to the two services. Only `FULLA_*` variables are substituted in the templates, and with the default the rendered configuration is identical to the previous one. The stack's own gateway (`deploy/nginx/nginx.conf`) is bind-mounted rather than baked into an image: change its upstreams in that file.
 
 ---
 
