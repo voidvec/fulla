@@ -8,6 +8,12 @@ import type { SocialProvider } from '../../services/socialFlowContext'
 import { normalizeError } from '../../services/errorAdapter'
 import { authService, PORTAL_REDIRECT_URI } from '../../services/authService'
 import { buildAuthorizeResumeUrl, isAuthorizeResumeRequest } from '../../services/authorizeResume'
+import {
+  beginPasskeyAuthentication,
+  finishPasskeyAuthentication,
+  toPublicKeyRequestOptions,
+  assertionToFinishPayload,
+} from '../../services/webauthnService'
 import type { ExternalProviderInfo } from '../../types'
 import AppInput from '../../components/ui/AppInput.vue'
 import AppButton from '../../components/ui/AppButton.vue'
@@ -160,6 +166,44 @@ async function handleLogin() {
     showPasswordChange.value = true
   } else if (result.success) {
     navigateAfterLogin()
+  }
+}
+
+// UF-01: passkey login entry. The finish endpoint establishes the browser
+// session (cookie) but no tokens, so a plain portal login completes through
+// the SPA's own authorize round-trip; an in-flight authorize request resumes
+// through the same rebuild as the password path. Every server failure is the
+// generic 401 AUTH_INVALID_CREDENTIALS (anti-enumeration — the catalog copy
+// covers it); DOMExceptions carry no axios response and get local copy
+// (SecurityPage M-3 pattern).
+const webauthnSupported = typeof window !== 'undefined' && !!window.PublicKeyCredential
+const passkeyBusy = ref(false)
+const passkeyError = ref('')
+
+async function handlePasskeyLogin() {
+  if (passkeyBusy.value) return
+  passkeyBusy.value = true
+  passkeyError.value = ''
+  try {
+    const options = toPublicKeyRequestOptions(await beginPasskeyAuthentication())
+    const credential = await navigator.credentials.get({ publicKey: options }) as PublicKeyCredential | null
+    if (!credential) throw new DOMException('The operation was aborted', 'NotAllowedError')
+    await finishPasskeyAuthentication(assertionToFinishPayload(credential))
+    if (resumeAuthorizeFlow()) return
+    window.location.href = await authService.buildOwnAuthorizeUrl()
+  } catch (e: unknown) {
+    const name = (e as { name?: string })?.name
+    if (name === 'NotAllowedError') {
+      passkeyError.value = t('auth.login.passkey.timedOut')
+    } else if (!name || !(e as { response?: unknown }).response) {
+      // WebAuthn DOMExceptions and local throws carry no axios response;
+      // normalizeError would misreport them as network failures.
+      passkeyError.value = t('auth.login.passkey.failed')
+    } else {
+      passkeyError.value = normalizeError(e).message
+    }
+  } finally {
+    passkeyBusy.value = false
   }
 }
 
@@ -426,6 +470,43 @@ async function handlePasswordChange() {
       >
         {{ $t('auth.login.submit') }}
       </AppButton>
+
+      <!-- UF-01: passkey login entry — offered only when the browser
+           supports WebAuthn; a degraded password-only login beats a button
+           that cannot complete (same rule as the social section). -->
+      <button
+        v-if="webauthnSupported"
+        type="button"
+        :disabled="passkeyBusy"
+        data-testid="login-passkey-button"
+        class="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-neutral-300
+               rounded-lg text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors
+               disabled:opacity-50"
+        @click="handlePasskeyLogin"
+      >
+        <svg
+          class="w-4 h-4"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M10 1a4.5 4.5 0 00-4.5 4.5V8H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 7V5.5a3 3 0 10-6 0V8h6zm-3 4a1 1 0 100-2 1 1 0 000 2z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        {{ passkeyBusy ? $t('auth.login.passkey.busy') : $t('auth.login.passkey.button') }}
+      </button>
+
+      <AppAlert
+        v-if="passkeyError"
+        type="error"
+        class="mt-4"
+        data-testid="login-passkey-error"
+      >
+        {{ passkeyError }}
+      </AppAlert>
 
       <AppAlert
         v-if="socialError"

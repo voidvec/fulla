@@ -179,18 +179,51 @@ export async function setupMocks(page: Page) {
   })
 
   // WebAuthn registration — real begin shape nests creation options under
-  // `options` (WebAuthnController); finish validates the backend's contract
-  // fields, not the browser attestation envelope (gap-fix E1/E8).
+  // `options` (WebAuthnController); finish validates the backend's ACTUAL
+  // #142 contract {id, rawId, response:{attestationObject, clientDataJSON},
+  // name} (gap-fix E1/E8; the pre-gap mock still demanded the retired
+  // credential_id/public_key fields and answered every real-shaped POST
+  // with 400 — mock drift, plan risk R3).
   await page.route('**/api/me/webauthn/register/begin', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ options: { challenge: MOCK_WEBAUTHN_CHALLENGE, rp: { name: 'Fulla', id: 'localhost' }, user: { id: 'dXNlci0x', name: 'testuser', displayName: 'testuser' }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], timeout: 60000, authenticatorSelection: { userVerification: 'preferred' } } }) })
   })
 
   await page.route('**/api/me/webauthn/register/finish', async (route) => {
     const body = JSON.parse(route.request().postData() || '{}')
-    if (!body.credential_id || !body.public_key || !body.name) {
-      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_MISSING_REQUIRED_FIELD', category: 'VALIDATION', message: 'credential_id and public_key are required', numeric_code: 1001, request_id: 'req-e2e-webauthn' } }) })
+    const response = body.response || {}
+    if (!body.id || !body.rawId || !response.attestationObject || !response.clientDataJSON) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_MISSING_REQUIRED_FIELD', category: 'VALIDATION', message: 'id, rawId and response.{attestationObject, clientDataJSON} are required', numeric_code: 1001, request_id: 'req-e2e-webauthn' } }) })
     } else {
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ message: 'Passkey registered successfully', credential_id: body.credential_id }) })
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ message: 'Passkey registered successfully', credential_id: body.id }) })
+    }
+  })
+
+  // UF-01: passkey authentication (anonymous, session-carried). Real begin
+  // shape (WebAuthnController::authenticateBegin): FLAT options with rpId —
+  // not the creation-options nesting. Finish verifies the assertion-contract
+  // fields; all verification failures answer the generic 401
+  // AUTH_INVALID_CREDENTIALS (anti-enumeration).
+  await page.route('**/oauth2/webauthn/authenticate/begin', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ options: { challenge: MOCK_WEBAUTHN_CHALLENGE, rpId: 'localhost', timeout: 60000, userVerification: 'required', allowCredentials: [] } }) })
+  })
+
+  await page.route('**/oauth2/webauthn/authenticate/finish', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}')
+    const response = body.response || {}
+    if (!body.id || !body.rawId || !response.authenticatorData || !response.clientDataJSON || !response.signature) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_INVALID_INPUT', category: 'VALIDATION', message: 'body must be {id, rawId, response:{authenticatorData, clientDataJSON, signature}, userHandle?}', numeric_code: 1001, request_id: 'req-e2e-webauthn-auth' } }) })
+    } else {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'WebAuthn authentication successful' }) })
+    }
+  })
+
+  // UF-03: passkey delete (P0-7). Ownership-scoped; a foreign/unknown id
+  // answers the same generic 404 — specs override this route for that branch.
+  await page.route('**/api/me/webauthn/credentials/*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Passkey deleted' }) })
+    } else {
+      await route.continue()
     }
   })
 

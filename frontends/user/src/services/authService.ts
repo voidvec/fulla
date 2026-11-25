@@ -198,6 +198,31 @@ export const authService = {
     setTokens(resp.data.access_token, resp.data.refresh_token)
   },
 
+  /**
+   * UF-01 (passkey login): after the WebAuthn finish established the browser
+   * session WITHOUT issuing a code, the SPA still needs tokens for the
+   * Bearer-protected /api/me surface. Mint this SPA's own authorize URL and
+   * stash the matching PKCE verifier; a full-page navigation lets the
+   * authorization endpoint see the session cookie and redirect back to
+   * /callback, where exchangeCode() redeems the code (prior consent →
+   * straight to tokens; first login stops at the consent screen once).
+   */
+  async buildOwnAuthorizeUrl(scope = 'openid profile email'): Promise<string> {
+    const pkce = await generatePkcePair()
+    const state = randomId()
+    writePkceStash({ state, verifier: pkce.verifier })
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      scope,
+      state,
+      code_challenge: pkce.challenge,
+      code_challenge_method: pkce.method,
+    })
+    return `/oauth2/authorize?${params.toString()}`
+  },
+
   async register(username: string, password: string, email: string): Promise<void> {
     await http.post('/api/register', new URLSearchParams({ username, password, email }))
   },
