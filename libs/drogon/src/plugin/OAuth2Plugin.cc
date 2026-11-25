@@ -1,5 +1,6 @@
 #include <atomic>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
+#include <fulla/common/config/ConfigManager.h>
 #include <fulla/drogon/filters/OAuth2AuthFilter.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
 #include <fulla/drogon/adapters/DrogonLogger.h>
@@ -477,7 +478,9 @@ void OAuth2Plugin::initAndStart(const Json::Value &config)
     // three failure paths are fail-closed: production must not boot past an
     // unauditable client registry.
     {
-        const char *fullaEnv = std::getenv("FULLA_ENV");
+        // Read through ConfigManager so .env and the process environment are
+        // decided the same way here as in JwkManager and the server assembly.
+        const char *fullaEnv = fulla::common::config::ConfigManager::getEnv("FULLA_ENV");
         const bool isProduction = fullaEnv && std::string(fullaEnv) == "production";
         if (isProduction && storageType_ == "postgres")
         {

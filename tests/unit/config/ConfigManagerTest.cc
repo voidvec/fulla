@@ -1,6 +1,8 @@
 #include <drogon/drogon_test.h>
 #include <drogon/drogon.h>
 #include <filesystem>
+#include <cstdlib>
+#include <string>
 #include <fulla/common/config/ConfigManager.h>
 #include <fulla/drogon/plugin/OAuth2Plugin.h>
 
@@ -402,4 +404,95 @@ DROGON_TEST(Unit_P0_ConfigManager_SocialCallbackCollisionFailsBeforeStartup)
     CHECK(fulla::common::config::ConfigManager::validate(config, error) == false);
     custom["external_auth"]["tiers"]["international"] = false;
     CHECK(fulla::common::config::ConfigManager::validate(config, error) == true);
+}
+
+namespace
+{
+// Saves one process-environment variable and restores it on destruction
+// (including "it was not set"): a case that overwrites a key the CI
+// environment itself provides (FULLA_ENV, FULLA_SIGNING_KEY) must not break
+// the cases that follow.
+class ScopedEnvVar
+{
+  public:
+    ScopedEnvVar(const char *name, const std::string &value) : name_(name)
+    {
+        const char *previous = std::getenv(name);
+        hadValue_ = previous != nullptr;
+        if (hadValue_)
+            previousValue_ = previous;
+        setenv(name, value.c_str(), 1);
+    }
+    ~ScopedEnvVar()
+    {
+        if (hadValue_)
+            setenv(name_.c_str(), previousValue_.c_str(), 1);
+        else
+            unsetenv(name_.c_str());
+    }
+    ScopedEnvVar(const ScopedEnvVar &) = delete;
+    ScopedEnvVar &operator=(const ScopedEnvVar &) = delete;
+
+  private:
+    std::string name_;
+    bool hadValue_ = false;
+    std::string previousValue_;
+};
+
+// Restores the "no .env" table on every exit path (a REQUIRE failure returns
+// early), so values injected by one case never leak into the next.
+struct DotEnvTableRestore
+{
+    ~DotEnvTableRestore()
+    {
+        fulla::common::config::ConfigManager::setDotEnvForTesting({});
+    }
+};
+}  // namespace
+
+// A key that is read from the process environment only must not see a value
+// that merely sits in the .env file, while the .env-aware accessor does.
+// Such keys used to be read with a raw getenv(), so the .env value was
+// ignored without a trace (getProcessEnv reports it now).
+DROGON_TEST(Unit_P1_ConfigManager_GetProcessEnv_IgnoresDotEnvValue)
+{
+    DotEnvTableRestore restore;
+    ScopedEnvVar noProcessKey("FULLA_SIGNING_KEY", "");
+    fulla::common::config::ConfigManager::setDotEnvForTesting(
+      {{"FULLA_SIGNING_KEY", "only-in-dot-env"}});
+
+    const char *viaProcessOnly =
+      fulla::common::config::ConfigManager::getProcessEnv("FULLA_SIGNING_KEY");
+    CHECK((viaProcessOnly == nullptr || std::string(viaProcessOnly).empty()));
+
+    const char *viaDotEnv =
+      fulla::common::config::ConfigManager::getEnv("FULLA_SIGNING_KEY");
+    REQUIRE(viaDotEnv != nullptr);
+    CHECK(std::string(viaDotEnv) == "only-in-dot-env");
+}
+
+DROGON_TEST(Unit_P1_ConfigManager_GetProcessEnv_ReadsProcessEnvironment)
+{
+    DotEnvTableRestore restore;
+    ScopedEnvVar autoMigrate("FULLA_AUTO_MIGRATE", "true");
+
+    const char *value =
+      fulla::common::config::ConfigManager::getProcessEnv("FULLA_AUTO_MIGRATE");
+    REQUIRE(value != nullptr);
+    CHECK(std::string(value) == "true");
+}
+
+// FULLA_ENV is the security switch: every reader settles on ONE value, the
+// .env value when both sources are set (ConfigManager's documented
+// precedence). The readers used to disagree -- two honored .env and two read
+// the raw process environment.
+DROGON_TEST(Unit_P1_ConfigManager_GetEnv_FullaEnv_DotEnvWinsOverProcess)
+{
+    DotEnvTableRestore restore;
+    ScopedEnvVar processEnv("FULLA_ENV", "development");
+    fulla::common::config::ConfigManager::setDotEnvForTesting({{"FULLA_ENV", "production"}});
+
+    const char *value = fulla::common::config::ConfigManager::getEnv("FULLA_ENV");
+    REQUIRE(value != nullptr);
+    CHECK(std::string(value) == "production");
 }

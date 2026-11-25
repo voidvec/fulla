@@ -1,5 +1,6 @@
 #include "AdminBootstrapper.h"
 
+#include <fulla/common/config/ConfigManager.h>
 #include <fulla/storage/postgres/models/Oauth2SubjectMappings.h>
 #include <fulla/storage/postgres/models/Roles.h>
 #include <fulla/storage/postgres/models/UserRoles.h>
@@ -226,10 +227,15 @@ void ensureAdminUser(const RunPtr &run)
                       // SMTP), the row ships verified=true instead: nothing could
                       // ever deliver a verification email, so the gate would
                       // deadlock the administrator (prod rollout 2026-09-14).
-                      const char *envEmail = std::getenv("FULLA_BOOTSTRAP_ADMIN_EMAIL");
-                      const char *smtpHost = std::getenv("FULLA_SMTP_HOST");
-                      const char *smtpUser = std::getenv("FULLA_SMTP_USER");
-                      const char *smtpPass = std::getenv("FULLA_SMTP_PASSWORD");
+                      const char *envEmail =
+                        fulla::common::config::ConfigManager::getProcessEnv(
+                          "FULLA_BOOTSTRAP_ADMIN_EMAIL");
+                      const char *smtpHost =
+                        fulla::common::config::ConfigManager::getProcessEnv("FULLA_SMTP_HOST");
+                      const char *smtpUser =
+                        fulla::common::config::ConfigManager::getProcessEnv("FULLA_SMTP_USER");
+                      const char *smtpPass =
+                        fulla::common::config::ConfigManager::getProcessEnv("FULLA_SMTP_PASSWORD");
                       const bool realMailbox =
                         envEmail && envEmail[0] != 0 && smtpHost && smtpHost[0] != 0 &&
                         smtpUser && smtpUser[0] != 0 && smtpPass && smtpPass[0] != 0;

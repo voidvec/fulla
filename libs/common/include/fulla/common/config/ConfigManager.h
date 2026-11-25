@@ -31,6 +31,31 @@ class ConfigManager
      */
     static const char *getEnv(const char *name);
 
+    /**
+     * @brief Get an environment variable from the PROCESS environment only.
+     *
+     * The .env file is NOT consulted. Use this for the few keys that must be
+     * real environment variables (signing keys, bootstrap credentials, ...):
+     * loadDotEnv() only parses the file into memory and never exports it, so
+     * such a key used to be invisible to a raw getenv() -- with nothing
+     * saying so. Every process-environment read in production code goes
+     * through this accessor (arch-guard rule R5), which reports a key that
+     * was put into .env anyway (the report names the key, never the value).
+     * @return value string or nullptr if not set in the process environment
+     */
+    static const char *getProcessEnv(const char *name);
+
+    /**
+     * @brief Test seam: replace the in-memory .env table.
+     *
+     * Production code never calls this. Tests use it to put values into the
+     * table without touching the working directory, and pass an empty list
+     * to restore the "no .env" state.
+     */
+    static void setDotEnvForTesting(
+      const std::vector<std::pair<std::string, std::string>> &entries
+    );
+
   private:
     // Parse JSON path and return pointer to node
     static Json::Value *getJsonPointer(Json::Value &root, const std::string &path);

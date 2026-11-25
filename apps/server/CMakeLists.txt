@@ -63,12 +63,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/openplatform
 )
 
-# Silence MSVC C4996 for std::getenv (bootstrap/MigrationRunner). PRIVATE:
-# the server executable exports no interface, same pattern as tests/.
-if(MSVC)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-
 # Compiler compatibility (shared module)
 oauth2_apply_compat(${PROJECT_NAME})
 

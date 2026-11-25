@@ -371,7 +371,9 @@ int main(int argc, char *argv[])
                         std::this_thread::sleep_for(
                           std::chrono::seconds(2 * attempt)
                         );
-                        const char *envPwd = std::getenv("FULLA_BOOTSTRAP_ADMIN_PASSWORD");
+                        const char *envPwd =
+                          fulla::common::config::ConfigManager::getProcessEnv(
+                            "FULLA_BOOTSTRAP_ADMIN_PASSWORD");
                         auto result = std::make_shared<std::promise<bool>>();
                         bootstrap::AdminBootstrapper::run(
                           envPwd ? std::string(envPwd) : std::string(),

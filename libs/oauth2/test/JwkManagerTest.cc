@@ -11,6 +11,7 @@
 // signing_key_path), the kid override, the logger forwarding path, and
 // the JWKS use/e fields.
 
+#include <fulla/common/config/ConfigManager.h>
 #include <fulla/common/testing/FakeLogger.h>
 #include <fulla/oauth2/jwk/JwkManager.h>
 
@@ -74,6 +75,17 @@ class EnvVarGuard
     std::string name_;
     bool hadValue_;
     std::string oldValue_;
+};
+
+// Restores the "no .env" table on every exit path (an ASSERT failure returns
+// early), so the .env values a test injected never leak into the next one.
+class DotEnvTableRestore
+{
+  public:
+    ~DotEnvTableRestore()
+    {
+        fulla::common::config::ConfigManager::setDotEnvForTesting({});
+    }
 };
 
 // Generate a fresh RSA private key (PEM) for this test run. Used to feed
@@ -786,6 +798,38 @@ TEST(JwkManagerTest, Init_ProductionEnv_NoKeySource_RefusesEphemeral)
 TEST(JwkManagerTest, Init_DevelopmentEnv_NoKeySource_EphemeralOk)
 {
     EnvVarGuard envGuard("FULLA_ENV", "development");
+    EnvVarGuard keyGuard("FULLA_SIGNING_KEY", "");
+    EnvVarGuard keyPathGuard("FULLA_JWT_KEY_PATH", "");
+    JwkManager jwk;
+    EXPECT_TRUE(jwk.init(Json::Value(Json::objectValue)));
+    EXPECT_TRUE(jwk.isInitialized());
+}
+
+// Config/env consolidation: FULLA_ENV used to be read from the raw process
+// environment here while the server assembly already honored the .env file,
+// so a deployment that set FULLA_ENV=production only in .env skipped this
+// very check. Every reader must decide both sources the same way; .env wins
+// (ConfigManager's documented precedence).
+TEST(JwkManagerTest, Init_ProductionEnv_OnlyInDotEnv_RefusesEphemeral)
+{
+    DotEnvTableRestore dotEnvRestore;
+    fulla::common::config::ConfigManager::setDotEnvForTesting({{"FULLA_ENV", "production"}});
+    EnvVarGuard envGuard("FULLA_ENV", "development");
+    EnvVarGuard keyGuard("FULLA_SIGNING_KEY", "");
+    EnvVarGuard keyPathGuard("FULLA_JWT_KEY_PATH", "");
+    JwkManager jwk;
+    EXPECT_FALSE(jwk.init(Json::Value(Json::objectValue)));
+    EXPECT_FALSE(jwk.isInitialized());
+}
+
+// The mirror image: .env says development while the process environment says
+// production. The .env value wins here too, exactly as it already did for
+// the server assembly; ConfigManager reports the disagreement at startup.
+TEST(JwkManagerTest, Init_DevelopmentEnv_OnlyInDotEnv_EphemeralOk)
+{
+    DotEnvTableRestore dotEnvRestore;
+    fulla::common::config::ConfigManager::setDotEnvForTesting({{"FULLA_ENV", "development"}});
+    EnvVarGuard envGuard("FULLA_ENV", "production");
     EnvVarGuard keyGuard("FULLA_SIGNING_KEY", "");
     EnvVarGuard keyPathGuard("FULLA_JWT_KEY_PATH", "");
     JwkManager jwk;

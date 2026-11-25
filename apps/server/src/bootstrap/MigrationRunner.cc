@@ -1,5 +1,6 @@
 #include "MigrationRunner.h"
 #include <drogon/drogon.h>
+#include <fulla/common/config/ConfigManager.h>
 #include "../SchemaManager.h"
 #include <chrono>
 #include <cstdlib>
@@ -66,7 +67,8 @@ void setupMigrations()
     // deployments (Helm) keep it false and run migrations via the
     // pre-install/pre-upgrade hook Job (`fulla-server --migrate-only`);
     // the app then only self-checks that the schema is current.
-    const char *autoMigrate = std::getenv("FULLA_AUTO_MIGRATE");
+    const char *autoMigrate =
+      fulla::common::config::ConfigManager::getProcessEnv("FULLA_AUTO_MIGRATE");
     if (!autoMigrate || std::string(autoMigrate) != "true")
     {
         LOG_INFO << "Auto-migration disabled. Set FULLA_AUTO_MIGRATE=true to enable.";

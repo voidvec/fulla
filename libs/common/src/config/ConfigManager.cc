@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <filesystem>
+#include <mutex>
 
 namespace fulla::common::config
 {
@@ -21,19 +22,18 @@ static std::unordered_map<std::string, std::string> &getDotEnvVars()
     return instance;
 }
 
-static bool dotEnvLoaded_ = false;
+// Loaded exactly once. Request threads reach loadDotEnv() as well (the error
+// handler reads its switch through this module), so the one-time load is
+// guarded instead of relying on an unsynchronized flag.
+static std::once_flag dotEnvLoadOnce_;
 
 /**
  * @brief Load .env file into memory
  * Searches for .env in current directory and parent directories.
  * Format: KEY=VALUE (one per line, # comments, empty lines ignored)
  */
-static void loadDotEnv()
+static void loadDotEnvOnce()
 {
-    if (dotEnvLoaded_)
-        return;
-    dotEnvLoaded_ = true;
-
     // Search paths for .env file
     std::vector<std::string> searchPaths = {
       ".env",
@@ -124,6 +124,36 @@ static const char *getEnvValue(const char *name)
 
     // Priority 2: system environment variable
     return std::getenv(name);
+}
+
+static void loadDotEnv()
+{
+    std::call_once(dotEnvLoadOnce_, loadDotEnvOnce);
+}
+
+// Warnings already emitted for .env keys (one report per key). Request
+// threads can reach the accessors below concurrently (ErrorContext reads its
+// switch through getProcessEnv), hence the mutex.
+static std::mutex &dotEnvReportMutex()
+{
+    static std::mutex instance;
+    return instance;
+}
+
+static std::set<std::string> &dotEnvWarningsEmitted()
+{
+    static std::set<std::string> instance;
+    return instance;
+}
+
+// Emit `what` for `key` at most once per process.
+static void warnDotEnvOnce(const std::string &key, const std::string &what)
+{
+    std::lock_guard<std::mutex> lock(dotEnvReportMutex());
+    if (dotEnvWarningsEmitted().insert(key).second)
+    {
+        std::cerr << "[ConfigManager] WARNING: " << what << std::endl;
+    }
 }
 
 bool ConfigManager::load(const std::string &configPath, Json::Value &config)
@@ -444,13 +474,13 @@ bool ConfigManager::validate(const Json::Value &config, std::string &errorMessag
         // #102: a real signing-key source MUST exist in production. Without
         // one, JwkManager falls back to a per-boot ephemeral key: every
         // restart invalidates all tokens and the JWKS kid resolves to nothing,
-        // with no operator-visible failure. NOTE: these two env reads are
-        // deliberately raw std::getenv (NOT the .env-aware getEnvValue) to
-        // match exactly what JwkManager::init() sees -- a key supplied only
-        // via .env must not pass here and fail (or silently degrade) later.
+        // with no operator-visible failure. NOTE: these two env reads go
+        // through getProcessEnv() (NOT the .env-aware getEnv) to match
+        // exactly what JwkManager::init() sees -- a key supplied only via
+        // .env must not pass here and fail (or silently degrade) later.
         {
-            const char *keyEnv = std::getenv("FULLA_SIGNING_KEY");
-            const char *keyPathEnv = std::getenv("FULLA_JWT_KEY_PATH");
+            const char *keyEnv = getProcessEnv("FULLA_SIGNING_KEY");
+            const char *keyPathEnv = getProcessEnv("FULLA_JWT_KEY_PATH");
             std::string configKeyPath;
             std::string configKeystoreDir;
             if (config.isMember("plugins") && config["plugins"].isArray())
@@ -508,7 +538,9 @@ bool ConfigManager::validate(const Json::Value &config, std::string &errorMessag
                   "Production requires a real signing key: set FULLA_SIGNING_KEY, "
                   "FULLA_JWT_KEY_PATH, plugins.OAuth2Plugin.config.oidc."
                   "signing_key_path, or plugins.OAuth2Plugin.config.oidc."
-                  "signing_keystore_dir (the ephemeral dev key is rejected in production)";
+                  "signing_keystore_dir (the ephemeral dev key is rejected in production; "
+                  "FULLA_SIGNING_KEY and FULLA_JWT_KEY_PATH must be real environment "
+                  "variables, a .env file is not read for them)";
                 return false;
             }
         }
@@ -520,7 +552,58 @@ bool ConfigManager::validate(const Json::Value &config, std::string &errorMessag
 const char *ConfigManager::getEnv(const char *name)
 {
     loadDotEnv();
-    return getEnvValue(name);
+    const char *value = getEnvValue(name);
+
+    // FULLA_ENV is the security switch (production turns the strict
+    // validations on). .env wins over the process environment, and every
+    // reader settles on the same value now -- so a disagreement between the
+    // two is worth a report: the winning value must not come as a surprise.
+    if (std::strcmp(name, "FULLA_ENV") == 0)
+    {
+        const char *fromProcess = std::getenv(name);
+        if (value && fromProcess && std::strcmp(value, fromProcess) != 0)
+        {
+            std::string message = name;
+            message += " differs between .env ('";
+            message += value;
+            message += "') and the process environment ('";
+            message += fromProcess;
+            message += "'); the .env value applies to every reader";
+            warnDotEnvOnce(std::string("mismatch:") + name, message);
+        }
+    }
+    return value;
+}
+
+const char *ConfigManager::getProcessEnv(const char *name)
+{
+    loadDotEnv();
+    // A value that only sits in .env is invisible to the getenv() below. It
+    // used to be ignored without a trace; say so, once per key.
+    const auto &dotEnvVars = getDotEnvVars();
+    auto it = dotEnvVars.find(name);
+    if (it != dotEnvVars.end() && !it->second.empty())
+    {
+        warnDotEnvOnce(
+          std::string("ignored:") + name,
+          std::string(name) +
+            " is set in .env but is read from the process environment only; "
+            "export it as a real environment variable (the .env value is "
+            "ignored)");
+    }
+    return std::getenv(name);
+}
+
+void ConfigManager::setDotEnvForTesting(
+  const std::vector<std::pair<std::string, std::string>> &entries)
+{
+    loadDotEnv();
+    auto &dotEnvVars = getDotEnvVars();
+    dotEnvVars.clear();
+    for (const auto &entry : entries)
+    {
+        dotEnvVars[entry.first] = entry.second;
+    }
 }
 
 }  // namespace fulla::common::config

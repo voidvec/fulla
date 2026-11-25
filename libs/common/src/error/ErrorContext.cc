@@ -1,5 +1,5 @@
 #include <fulla/common/error/ErrorContext.h>
-#include <cstdlib>
+#include <fulla/common/config/ConfigManager.h>
 #include <optional>
 #include <string>
 
@@ -26,8 +26,10 @@ bool ErrorContext::defaultDetailedErrorsAllowed()
     return true;
 #else
     // Production builds: only enable detailed errors when the operator opts in
-    // via the DETAILED_VALIDATION_ERRORS switch.
-    const char *env = std::getenv("DETAILED_VALIDATION_ERRORS");
+    // via the DETAILED_VALIDATION_ERRORS switch. Like the other process-only
+    // switches it is not read from a .env file.
+    const char *env =
+      fulla::common::config::ConfigManager::getProcessEnv("DETAILED_VALIDATION_ERRORS");
     return env && (std::string(env) == "1" || std::string(env) == "true");
 #endif
 }

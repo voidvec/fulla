@@ -32,6 +32,39 @@ especially in Docker/Kubernetes environments — sensitive values should not be 
 
 A dedicated test, `EnvInjectionVerify` (`EnvConfigTest.cc`), guarantees this logic is correct.
 
+### `.env` file vs. process environment
+
+`loadDotEnv()` parses a `.env` file (searched as `.env`, `../.env`, `../../.env`
+relative to the working directory) **into memory**; it never exports the values
+into the process environment. Two accessors read the result, and every read in
+production code goes through one of them (arch-guard rule R5):
+
+- **`.env`-aware** (`ConfigManager::getEnv`): `.env` wins over the process
+  environment. The config overrides above and `FULLA_ENV` use it.
+- **Process environment only** (`ConfigManager::getProcessEnv`): the `.env`
+  file is not consulted. This is deliberate for the keys that carry
+  credentials or decide startup behavior and must be real environment
+  variables (container / orchestrator injection): `FULLA_SIGNING_KEY`,
+  `FULLA_JWT_KEY_PATH`, `FULLA_AUTO_MIGRATE`, `FULLA_BOOTSTRAP_ADMIN_PASSWORD`,
+  `FULLA_BOOTSTRAP_ADMIN_EMAIL`, the `FULLA_SMTP_*` family and
+  `DETAILED_VALIDATION_ERRORS`.
+
+A key of the second group that is set in `.env` is **ignored**, and startup
+reports it:
+
+```
+[ConfigManager] WARNING: FULLA_AUTO_MIGRATE is set in .env but is read from the process environment only; export it as a real environment variable (the .env value is ignored)
+```
+
+It used to be ignored silently. The production signing-key error says the
+same for `FULLA_SIGNING_KEY` / `FULLA_JWT_KEY_PATH`.
+
+`FULLA_ENV` is read the same way everywhere. It used to honor `.env` in two
+places and ignore it in two others, so a `.env`-only `production` skipped the
+signing-key and client-registry checks. When `.env` and the process
+environment disagree on it, the `.env` value applies to every reader and
+startup reports the disagreement — keep `FULLA_ENV` in one place.
+
 ## 2. Docker Deployment
 
 The repository ships a `docker-compose.yml` that orchestrates the full stack (see [Docker Deployment](docker-deployment.md) for details).
