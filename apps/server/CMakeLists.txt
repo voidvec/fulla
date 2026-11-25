@@ -68,6 +68,7 @@ oauth2_apply_compat(${PROJECT_NAME})
 
 # First-party warning level (shared module, included from the repo root)
 oauth2_apply_warnings(${PROJECT_NAME})
+oauth2_apply_sanitizer(${PROJECT_NAME})
 
 # Copy Swagger UI to build directory (server-owned static assets, shipped
 # with the server rather than living in the user-facing docs/ tree)

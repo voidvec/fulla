@@ -21,7 +21,6 @@ DROGON_TEST(Integration_P0_UserSystem_General_Works)
         return;
     }
 
-    trantor::Logger::setLogLevel(trantor::Logger::kTrace);
     auto db = app().getDbClient();
     if (!db)
     {
