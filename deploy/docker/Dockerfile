@@ -132,6 +132,12 @@ RUN npm run build
 # --- Stage 6: Frontend Runtime (Target: frontend-runtime) ---
 FROM nginx:stable-alpine AS frontend-runtime
 COPY --from=frontend-builder /app/frontends/user/dist /usr/share/nginx/html
-COPY frontends/user/nginx.conf /etc/nginx/conf.d/default.conf
+# The server block is a template: the image entrypoint renders it at
+# container start, so a deployment can point the SPA at another backend with
+# FULLA_BACKEND_UPSTREAM instead of rebuilding the image. Only FULLA_*
+# variables are substituted; the nginx variables in the file stay as they are.
+COPY frontends/user/nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV FULLA_BACKEND_UPSTREAM=http://fulla-backend:5555 \
+    NGINX_ENVSUBST_FILTER=^FULLA_
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

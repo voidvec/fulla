@@ -1,3 +1,9 @@
+# Template for the admin console image. The nginx image entrypoint renders it
+# at container start (20-envsubst-on-templates.sh -> /etc/nginx/conf.d/default.conf)
+# and substitutes FULLA_* variables only, so the nginx variables below
+# ($uri, $host, ...) are left alone. FULLA_BACKEND_UPSTREAM defaults to
+# http://fulla-backend:5555, the compose service name: set it to point this
+# image at a backend somewhere else without rebuilding the image.
 server {
     listen 80;
     server_name _;
@@ -34,7 +40,7 @@ server {
 
     # API proxy to backend
     location /api/ {
-        proxy_pass http://fulla-backend:5555;
+        proxy_pass ${FULLA_BACKEND_UPSTREAM};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -42,7 +48,7 @@ server {
     }
 
     location /oauth2/ {
-        proxy_pass http://fulla-backend:5555;
+        proxy_pass ${FULLA_BACKEND_UPSTREAM};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -50,11 +56,11 @@ server {
     }
 
     location /health {
-        proxy_pass http://fulla-backend:5555;
+        proxy_pass ${FULLA_BACKEND_UPSTREAM};
     }
 
     location /.well-known/ {
-        proxy_pass http://fulla-backend:5555;
+        proxy_pass ${FULLA_BACKEND_UPSTREAM};
         proxy_set_header Host $host;
     }
 }

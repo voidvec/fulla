@@ -50,6 +50,9 @@ services:
         VITE_REDIRECT_URI: ${VITE_REDIRECT_URI:-}
     container_name: fulla-frontend
     restart: always
+    environment:
+      # Where the SPA proxies /api, /oauth2, /.well-known and /health.
+      FULLA_BACKEND_UPSTREAM: ${FULLA_BACKEND_UPSTREAM:-http://fulla-backend:5555}
     expose:
       - "80"
     deploy:
@@ -67,6 +70,8 @@ services:
       dockerfile: Dockerfile
     container_name: fulla-admin
     restart: always
+    environment:
+      FULLA_BACKEND_UPSTREAM: ${FULLA_BACKEND_UPSTREAM:-http://fulla-backend:5555}
     expose:
       - "80"
     deploy:

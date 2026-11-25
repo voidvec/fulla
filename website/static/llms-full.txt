@@ -232,6 +232,153 @@ client_credentials.
 - Administrators can suspend abusive applications; suspended clients fail
   client validation immediately.
 
+## 6. Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Token exchange answers `401 invalid_client` although the credentials are correct | The client's declared `token_endpoint_auth_method` does not match how you send the secret (F-017 enforces the declaration strictly): declared `client_secret_basic` but the secret is in the form body (the default for CONFIDENTIAL registrations — WeKnora hit exactly this) | Send the secret the way the client declares, or switch the declaration: `PUT /api/admin/clients/{id}` with `token_endpoint_auth_method: "client_secret_post"` (admin console → application → Auth tab has the same dropdown). `none`/`client_secret_basic`/`client_secret_post` are the only valid values; PUBLIC clients accept only `none` |
+| Login fails with 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` ("回调地址未注册") | The `redirect_uri` your request carries is not registered for the client — exact string match (scheme, host, port, path). With the first-party SPA this usually means `VITE_REDIRECT_URI` (baked at build time) does not match the client's registered URI | Add/align the URI: admin console → application → redirect URIs. The SPA login banner shows the concrete URI it sent. Note `localhost` and `127.0.0.1` are different hosts — register the exact variant |
+| Config-file client edits have no effect | `config.json` clients are seed-only (`ON CONFLICT DO NOTHING`); the database is authoritative at runtime | Edit via the admin API / admin console, or delete the row and restart to re-seed (see deployment.md, "Client lifecycle") |
+| Consent form POST blocked by `form-action` CSP in Chrome | Chrome enforces `form-action` on the redirect that follows a form submission (contrary to the CSP spec), so a consent POST whose 302 lands on a cross-origin RP callback is killed under `form-action 'self'` | The SPA consent page already avoids this by submitting with `json=true` and navigating itself. Custom consent frontends should do the same (POST `json=true`, then `location.assign(response.location)`) — do not loosen the CSP |
+
+
+---
+
+# Integrating Fulla as an OIDC Provider (RP guide)
+
+Source: https://fulla.dev/docs/guides/rp-integration
+
+# Integrating Fulla as an OIDC Provider (RP guide)
+
+Audience: teams wiring an external relying party (RP) — WeKnora, Nextcloud,
+an internal SSO app — to Fulla as the identity provider. This guide collects
+the integration-critical facts that are otherwise spread across
+[build-an-app.md](build-an-app.md), the [configuration guide](../operate/configuration-guide.md),
+and [deployment.md](../operate/deployment.md). It was written after the
+WeKnora v0.9.0 integration (2026-11), and every gotcha in it is a defect that
+actually bit an integrator.
+
+## 0. Deployment prerequisites (read first)
+
+- **Tell the backend where the login and consent pages are when the SPA is
+  on another origin.** `/oauth2/authorize` sends an unauthenticated user to
+  the login page and a first-time authorization to the consent page. By
+  default both targets are backend-relative (`/login`, `/consent`), which
+  reaches the SPA only where a gateway fronts backend and SPA on one origin
+  (the production stack, Helm). Without such a gateway — the development
+  compose files, or any deployment where the SPA has its own host or port —
+  set `FULLA_OAUTH2_LOGIN_URL` and `FULLA_OAUTH2_CONSENT_URL` to the SPA's
+  pages; `deploy/docker/docker-compose.yml` already does. Left unset there,
+  the user lands on the backend's own login page and, when consent is
+  required, on a 404 (configuration-guide §4c).
+- **Serve HTTPS in production.** Plain HTTP on a non-localhost host is a
+  non-secure browser context: `crypto.subtle`/`crypto.randomUUID` are
+  unavailable there. The bundled SPAs degrade gracefully (pure-JS SHA-256 for
+  PKCE, `getRandomValues`-based UUIDs) so login still works on LAN-IP HTTP
+  deployments, but session cookies cross the wire in cleartext — treat HTTP
+  as a LAN-only convenience, never a production posture.
+- **Same-origin reverse proxying**: the SPAs call the backend through
+  relative paths (`/oauth2/…`, `/api/…`, `/.well-known/…`) proxied by nginx.
+  Keep `VITE_API_BASE_URL` empty; setting it breaks routing
+  (deployment.md, "Frontend configuration").
+
+## 1. Register your RP client
+
+Use the admin console (Applications) or `POST /oauth2/register` /
+`POST /api/admin/clients` — see [build-an-app.md §1](build-an-app.md).
+Integration-critical fields:
+
+| Field | Watch out for |
+|---|---|
+| `redirect_uris` | Exact string match at authorize time — scheme, host, port, path must all match. `localhost` and `127.0.0.1` are different hosts. Mismatch ⇒ 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED`. |
+| `client_type` | `PUBLIC` (SPA / mobile, no secret) or `CONFIDENTIAL` (server-side). |
+| `token_endpoint_auth_method` | `CONFIDENTIAL` defaults to `client_secret_basic`. If your OIDC library sends the secret in the form body (common: WeKnora, many PHP/Java libs), declare `client_secret_post` at registration — or change it later via `PUT /api/admin/clients/{id}`. F-017 enforces the declared method strictly at token/introspect/revoke; a mismatch answers `401 invalid_client` even with correct credentials. |
+
+**Client lifecycle**: the database is authoritative at runtime;
+`config.json` `clients` entries are seed-only (`ON CONFLICT DO NOTHING` —
+edits there never reach an existing row, and restarts never revert admin-API
+edits). See deployment.md, "Client lifecycle".
+
+## 2. Wire the flow
+
+Point your OIDC library at discovery:
+
+```
+{issuer}/.well-known/openid-configuration
+```
+
+Authorization code + PKCE is the supported sign-in flow. PKCE is mandatory
+for every authorization-code client by default (`auth.require_pkce`). The
+key was renamed from `require_pkce_for_public` and the old name is no longer
+read: a deployment that disabled PKCE for a legacy RP under the old key must
+rename it, otherwise PKCE is enforced again. `state` is **required**, 8–512
+characters, no URL delimiters — the server 400s otherwise before any session
+check.
+
+- Not signed in ⇒ 302 to the SPA login, your authorize context carried in
+  the query; after login the SPA resumes `/oauth2/authorize`, and first-time
+  access stops at the SPA consent screen.
+- **The IdP session is a separate lifetime from your users' tokens.** Fulla's
+  single sign-on session lives for `session_timeout` / `session_max_age`
+  (one hour by default) and is not extended when tokens are refreshed. Once
+  it has ended — or when your request carries `prompt=login` or a short
+  `max_age` — the user signs in once more and the authorize request resumes
+  by itself, so a returning user sees the IdP login page instead of a silent
+  redirect back to your callback. Raise both settings if that is too frequent
+  for your deployment ([Session Management](../domains/session-management.md)).
+- The consent page submits `POST /oauth2/consent` **with `json=true`** and
+  navigates itself from the JSON `location` field. This is deliberate: a
+  native form POST whose 302 lands on a cross-origin RP callback is killed
+  by Chrome's `form-action` enforcement (Chrome applies `form-action` to the
+  redirect following a form submission, contrary to the CSP spec —
+  w3c/webappsec-csp#8). If you build a custom consent frontend, do the same;
+  do not loosen the CSP.
+
+## 3. Legacy semantics: direct `/oauth2/login` mints codes without consent
+
+`POST /oauth2/login` is the SPA's two-step login endpoint. On success it
+**issues an authorization code directly** — it never evaluates whether
+consent is required. This is intentional legacy 2-step semantics (the
+portal's consent state resolves downstream; ADR-0014 / the handler comment
+document the tiering contract). The SPA's own browser flow never bypasses
+consent: it posts to `/oauth2/login` only for the session leg, then resumes
+`/oauth2/authorize`, which performs the consent evaluation.
+
+If you drive `/oauth2/login` directly (curl scripts, legacy RPs), you are
+using this legacy contract: first-time access will NOT stop at a consent
+screen. Do not point an interactive RP at `/oauth2/login`; use
+`/oauth2/authorize`.
+
+## 4. Troubleshooting quick table
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `401 invalid_client` at token exchange with correct credentials | Declared `token_endpoint_auth_method` ≠ how you send the secret | Align method ↔ transport (§1 table) |
+| Login fails 3027 "回调地址未注册" | `redirect_uri` not exactly registered | Register the exact URI (§1); the SPA banner shows the URI it sent |
+| Browser console: consent POST blocked by CSP `form-action` | Chrome form-action-on-redirect behavior (§2) | Use the bundled SPA consent page (json=true) — do not loosen CSP |
+| SPA login says "client-side error" / PKCE fails on LAN HTTP | Non-secure context (§0) | Works via fallback; serve HTTPS for production |
+| Stuck at `authorizing…`, no navigation | Old SPA bundle (pre-2026-11) doing a native form POST + 302 | Rebuild/deploy the current SPA image |
+| A later login from the RP lands on the IdP home page instead of calling back the RP | The IdP session has ended, and an old SPA bundle bounced the still-signed-in portal user off `/login` to the dashboard, dropping the authorize parameters | Rebuild/deploy the current SPA image; the user then signs in once and the authorization resumes (§2) |
+| Consent POST answers 400 `VALIDATION_INVALID_INPUT` "consent_csrf" | The one-shot CSRF nonce expired (TTL ~10 min) or was already consumed (double submit / reload) | Restart the authorize flow |
+| Code issued but token exchange rejects `invalid_grant` | PKCE verifier mismatch, or the code was consumed/expired | Send the verifier paired with the flow's `code_challenge` (RFC 7636 §4.6) |
+
+## 5. Checklists
+
+**Before go-live**
+
+- [ ] Backend and SPA share one origin behind a gateway, or `FULLA_OAUTH2_LOGIN_URL` / `FULLA_OAUTH2_CONSENT_URL` point at the SPA's pages
+- [ ] Issuer is `https://` (configuration-guide §4)
+- [ ] RP client registered with exact redirect URIs and the right auth method
+- [ ] Secrets stored in a secret manager (client_secret shown exactly once)
+- [ ] HTTPS end to end; HSTS at the proxy
+
+**When the RP cannot sign in**
+
+1. Check the exact error code in the response envelope (3027 vs `invalid_client` vs `invalid_grant`).
+2. Compare the failing `redirect_uri` byte-for-byte against the client row (`GET /api/admin/clients/{id}`).
+3. Confirm the transport of the client secret matches the declared method.
+4. grep the server log for the request_id returned in the envelope.
+
 
 ---
 
@@ -1849,6 +1996,7 @@ Business endpoints (Application_Endpoint) return a uniform error envelope whose 
 | `CLAIM_MAPPING_INVALID_SOURCE` | 3024 | VALIDATION | 400 | 映射源路径不在白名单 |
 | `CLAIM_MAPPING_FORBIDDEN_SCOPE` | 3025 | VALIDATION | 400 | 触发 scope 不允许 |
 | `CUSTOM_ATTRIBUTES_INVALID` | 3026 | VALIDATION | 400 | 自定义属性不合法 |
+| `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` | 3027 | VALIDATION | 400 | 回调地址未注册，请检查客户端 redirect_uri 配置 |
 | `AUTH_INVALID_CREDENTIALS` | 4001 | AUTHENTICATION | 401 | 用户名或密码错误 |
 | `AUTH_TOKEN_EXPIRED` | 4002 | AUTHENTICATION | 401 | 登录已过期 |
 | `AUTH_TOKEN_INVALID` | 4003 | AUTHENTICATION | 401 | 登录凭证无效 |
@@ -2959,6 +3107,19 @@ re-auth when the session's `auth_time` is older. `auth_time`, `amr`, and
 stamped into the id_token — see
 [Configuration Guide §6](../operate/configuration-guide.md).
 
+### What a relying-party login does once the SSO session has ended
+
+Token refreshes do not extend the SSO session. An access/refresh token pair
+stays valid for its own lifetime, but once the SSO session has ended (idle
+expiry or `session_max_age`), `/oauth2/authorize` treats the user as signed
+out again and sends them to the login page with the authorize request
+preserved on the URL — the same thing happens on `prompt=login` or when
+`max_age` is exceeded. The user signs in once more (a fresh SSO session with
+a fresh `auth_time` and `amr`) and the authorization resumes, so the relying
+party still receives its response. This is why a user who remains signed in
+to the portal is asked to sign in again when an application they come back to
+the next day starts a login.
+
 ## 4. What sessions are NOT
 
 - Token revocation surfaces (revoke by token / client / user) act on
@@ -3991,6 +4152,39 @@ especially in Docker/Kubernetes environments — sensitive values should not be 
 
 A dedicated test, `EnvInjectionVerify` (`EnvConfigTest.cc`), guarantees this logic is correct.
 
+### `.env` file vs. process environment
+
+`loadDotEnv()` parses a `.env` file (searched as `.env`, `../.env`, `../../.env`
+relative to the working directory) **into memory**; it never exports the values
+into the process environment. Two accessors read the result, and every read in
+production code goes through one of them (arch-guard rule R5):
+
+- **`.env`-aware** (`ConfigManager::getEnv`): `.env` wins over the process
+  environment. The config overrides above and `FULLA_ENV` use it.
+- **Process environment only** (`ConfigManager::getProcessEnv`): the `.env`
+  file is not consulted. This is deliberate for the keys that carry
+  credentials or decide startup behavior and must be real environment
+  variables (container / orchestrator injection): `FULLA_SIGNING_KEY`,
+  `FULLA_JWT_KEY_PATH`, `FULLA_AUTO_MIGRATE`, `FULLA_BOOTSTRAP_ADMIN_PASSWORD`,
+  `FULLA_BOOTSTRAP_ADMIN_EMAIL`, the `FULLA_SMTP_*` family and
+  `DETAILED_VALIDATION_ERRORS`.
+
+A key of the second group that is set in `.env` is **ignored**, and startup
+reports it:
+
+```
+[ConfigManager] WARNING: FULLA_AUTO_MIGRATE is set in .env but is read from the process environment only; export it as a real environment variable (the .env value is ignored)
+```
+
+It used to be ignored silently. The production signing-key error says the
+same for `FULLA_SIGNING_KEY` / `FULLA_JWT_KEY_PATH`.
+
+`FULLA_ENV` is read the same way everywhere. It used to honor `.env` in two
+places and ignore it in two others, so a `.env`-only `production` skipped the
+signing-key and client-registry checks. When `.env` and the process
+environment disagree on it, the `.env` value applies to every reader and
+startup reports the disagreement — keep `FULLA_ENV` in one place.
+
 ## 2. Docker Deployment
 
 The repository ships a `docker-compose.yml` that orchestrates the full stack (see [Docker Deployment](docker-deployment.md) for details).
@@ -4087,6 +4281,51 @@ requires `old_password`, enforces `auth.min_password_length`, revokes all
 tokens, clears the flag). `PUT /api/me/password` also clears the flag. An
 admin-set flag on an existing account takes effect at that user's next login.
 
+## 4c. Authorize Login/Consent Redirect Targets
+
+When `/oauth2/authorize` must involve the user (not logged in, re-auth forced,
+or consent required), it redirects to the login/consent screen. The target is
+resolved like this:
+
+1. `config.oauth2.login_url` / `config.oauth2.consent_url` — a non-empty value
+   wins. Both can be set from the environment with `FULLA_OAUTH2_LOGIN_URL`
+   and `FULLA_OAUTH2_CONSENT_URL`.
+2. Otherwise the backend-relative `/login` | `/consent` — the unchanged
+   default. The backend serves `/login` itself; it serves no `GET /consent`
+   (that page is a SPA route).
+
+The defaults only reach the SPA where a gateway fronts both on one origin.
+Behind the production stack's nginx or a Helm ingress, `/login` and
+`/consent` are routed to the frontend, so nothing needs to be configured
+there. A stack without a shared gateway — `deploy/docker/docker-compose.yml`
+(the backend on 5555, the SPA on 8080) — has to tell the backend where the
+two pages are, which is why that file sets both variables to the SPA's
+address. Do the same for any deployment where the SPA is on another origin
+than the one `/oauth2/authorize` is reached on:
+
+```bash
+FULLA_OAUTH2_LOGIN_URL=https://portal.example.com/login
+FULLA_OAUTH2_CONSENT_URL=https://portal.example.com/consent
+```
+
+Left at the defaults in such a deployment, the authorize endpoint sends the
+browser to the backend's own login page (unstyled: its inline styles are
+blocked by the backend CSP) and, when consent is required, to a 404.
+
+A configured URL may already carry a query string; the authorize parameters
+are then appended with `&` instead of `?`. Non-string and empty values count
+as "not set" rather than being thrown from `asString()`. An override never
+creates a key, which is why every shipped config carries both keys as empty
+strings. A variable whose key the loaded config file lacks is reported at
+startup instead of being silently ignored (see deployment.md, "Backend
+configuration").
+
+Related: the SPA consent page submits `POST /oauth2/consent` with `json=true`
+and navigates the browser itself from the JSON `location` field — a native
+form POST + 302 is killed by Chrome's `form-action` enforcement (which also
+checks the redirect following a form submission). The 302 contract remains the
+default for non-JSON callers.
+
 ## 5. Client Token-Endpoint Authentication Methods (F-017)
 
 Each client declares, via the `oauth2_clients.token_endpoint_auth_method` column, how it
@@ -4108,6 +4347,24 @@ defaults are stored:
 Seed clients declare it explicitly: `fulla-portal` and `fulla-admin-console` → `none`;
 `backend-svc` → `client_secret_basic`. Existing clients with NULL values keep their
 pre-upgrade behavior; the upgrade does not break existing deployments.
+
+Config seeding and the admin API honor the key:
+
+- **Config seeding honors the key.** The bootstrap seeder now reads
+  `token_endpoint_auth_method` from each `plugins.OAuth2Plugin.config.clients`
+  entry (previously it ignored the key entirely and always wrote
+  `client_secret_basic` for CONFIDENTIAL clients, so an RP that authenticates
+  with a body secret could not be seeded from config). Combination rule:
+  `PUBLIC` accepts only `none`; `CONFIDENTIAL` accepts only
+  `client_secret_basic`/`client_secret_post` — an illegal explicit combination
+  fails that client's seed with a startup ERROR (the client is NOT seeded).
+  The in-memory repository applies the same rule.
+- **The admin API can change it.** `PUT /api/admin/clients/{clientId}` accepts
+  `token_endpoint_auth_method` (same value domain + combination rule, checked
+  against the row's `client_type`), and the admin console's application detail
+  page exposes it as a dropdown. Changes take effect immediately at the
+  token/introspect/revoke endpoints (F-017 reads the client row; the client
+  cache is invalidated on write).
 
 ## 6. OIDC prompt / max_age / auth_time (F-022)
 
@@ -5684,6 +5941,11 @@ FULLA_REDIS_PASSWORD=<same as REDIS_PASSWORD>
 
 # CORS / OAuth callbacks (HTTPS domain required, otherwise browser requests are blocked)
 FULLA_FRONTEND_URL=https://your-domain.com
+# Optional: where /oauth2/authorize sends a user who has to sign in or approve a client.
+# Empty = /login and /consent on the API's own origin, which the gateway routes to the SPA;
+# set both only when the SPA is served from another origin.
+# FULLA_OAUTH2_LOGIN_URL=https://your-domain.com/login
+# FULLA_OAUTH2_CONSENT_URL=https://your-domain.com/consent
 FULLA_CORS_ALLOW_ORIGINS=https://your-domain.com
 # ⚠ FULLA_VUE_REDIRECT_URI and VITE_REDIRECT_URI must be identical
 FULLA_VUE_REDIRECT_URI=https://your-domain.com/callback
@@ -5887,6 +6149,7 @@ The backend overrides configuration-file values with environment variables (prec
 | `FULLA_REDIS_PASSWORD` | Redis password | (must be set) |
 | `FULLA_LISTEN_PORT` | Backend listen port | 5555 |
 | `FULLA_FRONTEND_URL` | Frontend URL (used for redirects etc.) | http://localhost:5173 |
+| `FULLA_OAUTH2_LOGIN_URL` / `FULLA_OAUTH2_CONSENT_URL` | Absolute URLs of the login / consent pages the authorize endpoint redirects to (optional) | (empty = the backend-relative `/login` and `/consent`) |
 | `FULLA_CORS_ALLOW_ORIGINS` | CORS allowed origins (comma-separated; overrides the JSON array) | localhost list from config |
 | `FULLA_PORTAL_REDIRECT_URI` | fulla-portal OAuth callback URI (legacy alias: `FULLA_VUE_REDIRECT_URI`) | localhost value from config |
 | `FULLA_GOOGLE_REDIRECT_URI` | Google OAuth callback URI | localhost value from config |
@@ -5911,6 +6174,10 @@ The backend overrides configuration-file values with environment variables (prec
 > **Email mode note**: real SMTP sending is enabled only when all three of `FULLA_SMTP_HOST` + `FULLA_SMTP_USER` + `FULLA_SMTP_PASSWORD` are non-empty; otherwise email is only written to the backend log. See "Email service (SMTP) configuration notes" above.
 >
 > **CORS array override**: `FULLA_CORS_ALLOW_ORIGINS` is a comma-separated string (e.g. `https://a.com,https://b.com`) that the backend splits into a JSON array at startup to override `custom_config.cors.allow_origins` from `config.prod.json`. The CORS validation code requires this field to be an array, so you **must** use the comma-separated form — never write it as a JSON array literal.
+
+> **Overrides only land on keys the config file carries**: an environment variable replaces the value of an existing key; it never creates one. A variable that is set but has no matching key in the loaded config file is reported at startup (`[ConfigManager] WARNING: <VAR> is set but the config has no '<path>' key; the override was not applied`) — it used to be a silent no-op. `FULLA_ISSUER` is the common case: `config.prod.json` carries `custom_config.metadata.issuer` and the development `config.json` does not, so the variable only takes effect with a config that has the key.
+>
+> **Read from the process environment only**: `FULLA_SIGNING_KEY`, `FULLA_JWT_KEY_PATH`, `FULLA_AUTO_MIGRATE`, `FULLA_BOOTSTRAP_ADMIN_PASSWORD`, `FULLA_BOOTSTRAP_ADMIN_EMAIL`, the `FULLA_SMTP_*` variables and `DETAILED_VALIDATION_ERRORS` are not read from a `.env` file. Pass them through the container / orchestrator environment (`env_file:` / `environment:`). A value that only sits in a mounted `.env` file is reported at startup and ignored — it used to be ignored silently. See the configuration guide, "`.env` file vs. process environment".
 
 ### Nginx configuration
 
@@ -5947,6 +6214,8 @@ The frontend (the user-facing OAuth2Frontend) is configured through Vite environ
 > **The admin console (OAuth2Admin) needs no configuration**: its source code reads no `import.meta.env` at all; every API call uses the relative path `/api/admin/*`, which nginx reverse-proxies to the backend. When changing domains you only need to keep the nginx `/admin/` route correct — no admin image rebuild required.
 >
 > **Changing the domain requires rebuilding the frontend image**: because VITE variables are baked in at build time, after switching domains you must run `docker compose ... up -d --build fulla-frontend` (the admin console is unaffected).
+>
+> **Backend address of the SPA images (a runtime variable)**: the `fulla-frontend` and `fulla-admin` images proxy `/api`, `/oauth2`, `/.well-known` and `/health` to the backend. Their nginx server blocks are templates (`frontends/user/nginx.conf.template`, `frontends/admin/nginx.conf.template`) that the nginx image entrypoint renders at container start, so this address — unlike the Vite variables above — is read at runtime: `FULLA_BACKEND_UPSTREAM`, default `http://fulla-backend:5555` (the compose service name). Set it in `.env.docker` only when the backend lives outside the compose stack; both compose files pass it to the two services. Only `FULLA_*` variables are substituted in the templates, and with the default the rendered configuration is identical to the previous one. The stack's own gateway (`deploy/nginx/nginx.conf`) is bind-mounted rather than baked into an image: change its upstreams in that file.
 
 ---
 
@@ -6034,6 +6303,17 @@ ClientSeeder: config clients seeded/verified
 > UPDATE oauth2_clients SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
 > UPDATE oauth2_client_scopes SET client_id = 'fulla-admin-console' WHERE client_id = 'admin-console';
 > ```
+
+### Client lifecycle: config.json seeds, the database is authoritative
+
+A common integration pitfall: editing a client in `config.json` and wondering why nothing changes. The rules:
+
+- **At runtime the `oauth2_clients` table is the single source of truth.** Every redirect_uri / auth-method / scope check reads the database (optionally through the Redis client cache, invalidated on admin-API writes).
+- **`config.json` `clients` entries are seed-only and insert-if-missing** (`ON CONFLICT DO NOTHING`). When the row already exists, the seeder leaves it untouched — a restart never reverts admin-API edits, but it also never *applies* config edits to an existing row.
+- Consequence: to change a first-party client, edit through the **admin API** (`PUT /api/admin/clients/{id}` — name, redirect_uris, grant types, `token_endpoint_auth_method`, logo, backchannel URI) or the admin console's application pages. Editing `config.json` only affects clients that do not exist yet (or a wiped table). Deleting the DB row and restarting re-seeds it from config.
+- The seeder honors `token_endpoint_auth_method` in config entries (with the PUBLIC→`none` / CONFIDENTIAL→basic|post combination rule; an illegal combination fails that client's seed with a startup ERROR), so an RP authenticating with a body secret can be seeded correctly from config. Existing rows still need the admin API (or SQL) — seeding never updates.
+
+**SPA build args (first-party frontends).** `VITE_CLIENT_ID` / `VITE_REDIRECT_URI` / `VITE_API_BASE_URL` are Vite build-time variables inlined into the SPA bundle — they are baked at image build time, NOT read at runtime (there is no runtime config injection). Changing them requires rebuilding the frontend image. Keep `VITE_REDIRECT_URI` equal to the client's registered redirect URI (`FULLA_PORTAL_REDIRECT_URI`); a mismatch surfaces at login as 3027 `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` ("回调地址未注册") with the SPA showing the concrete URI it sent under the error banner. Also note: accessing the SPA over plain HTTP on a non-localhost host is a non-secure browser context — login works (the SPA falls back to a pure-JS SHA-256 for PKCE), but production deployments should serve HTTPS (session cookies are visible on the wire otherwise).
 
 ---
 
