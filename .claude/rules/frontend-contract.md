@@ -56,7 +56,9 @@ globs:
   SUPPORTED_LOCALES 拒绝回退 navigator）。
 - **测试文件永远不要跨 app import**（user 的镜像上下文只有 `frontends/user/`——跨 app 静态/
   动态 import 会让 docker 用户镜像 TS2307 不可构建）。
-- 组件双副本由 `scripts/check-ui-sync.mjs` 守护字节一致；体积门 `scripts/check-frontend-size.mjs`
+- 组件双副本由 `scripts/check-ui-sync.mjs` 守护字节一致；**错误码目录镜像（user → admin，逐条
+  文案一致）由同一个脚本守护**——前端测试不能跨 app import，测不了这件事，改了
+  `services/messages/*` 任一侧都要跑它。体积门 `scripts/check-frontend-size.mjs`
   必须从 repo 根跑。
 - vite dev 默认绑 `[::1]`，harness 用 127.0.0.1——本地起 dev server 必须
   `npm run dev -- --host 127.0.0.1`。

@@ -75,7 +75,7 @@ Selection logic: the error catalog (`services/messages/`) is *already* a per-loc
 ### 2.3 Cross-app invariants that constrain the work
 
 - `components/ui/*.vue` are **byte-identical across apps**, enforced by `scripts/check-ui-sync.mjs` in CI — shared components (`LocaleSwitcher.vue` included) are edited in both copies. Templates use `$t()` only (no script imports), which keeps sync trivial.
-- `services/errorAdapter.ts` + `services/messages/` are mirrored files (canonical: user app); `crossAppConsistency.property.test.ts` asserts both apps produce identical messages per `(code, locale)`. The mirrored files stay **dependency-free** (no vue-i18n, no DOM): the active locale travels through `services/locale.ts`, a plain module the i18n bootstrap pushes into.
+- `services/errorAdapter.ts` + `services/messages/` are mirrored files (canonical: user app). The mirror is enforced by the **error catalog section of `scripts/check-ui-sync.mjs`**: every entry of the user catalog must be in the admin catalog with the identical literal, in each locale (admin may carry additional admin-only codes). No frontend test can check this, because test files never import across apps — `crossAppConsistency.property.test.ts` only establishes that the shared source is deterministic. The mirrored files stay **dependency-free** (no vue-i18n, no DOM): the active locale travels through `services/locale.ts`, a plain module the i18n bootstrap pushes into.
 - Property 13 (`messageCatalog.property.test.ts`) requires **every backend Error_Code and protocol code** to have a clean, non-empty entry — in **every registered locale**.
 - E2E suites run pinned to `en-US` (`playwright.config.ts` `use.locale`); Chinese paths are covered by a dedicated `i18n.spec.ts` per app.
 
