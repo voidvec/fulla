@@ -422,6 +422,9 @@ export default {
       exportLabel: '导出 CSV',
       exportFromLabel: '从：',
       exportToLabel: '至：',
+      // AF-05：显式的全量导出（all=true）。
+      exportAllLabel: '全部日志',
+      exportAllHint: '不限时间范围；行数上限仍然生效。',
     },
     claimMappings: {
       title: 'Claim 映射',

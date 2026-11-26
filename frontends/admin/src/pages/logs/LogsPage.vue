@@ -32,6 +32,10 @@ const actorIdFilter = ref('')
 const exportFrom = ref('')
 const exportTo = ref('')
 const exporting = ref(false)
+// AF-05: all=true waives the window requirement for a full export. The other
+// filters still apply, and so does the server's row cap: a full export over
+// it is refused with AUDIT_EXPORT_TOO_LARGE, shown from the catalog.
+const exportAll = ref(false)
 
 function exportWindowSeconds(): { from: number; to: number } {
   const now = Math.floor(Date.now() / 1000)
@@ -66,8 +70,9 @@ async function exportCsv() {
   exporting.value = true
   errorMessage.value = null
   const { from, to } = exportWindowSeconds()
+  const params: Record<string, string | number> = exportAll.value ? { all: 'true' } : { from, to }
+  const stamp = exportAll.value ? 'all' : `${from}-${to}`
   try {
-    const params: Record<string, string | number> = { from, to }
     if (actionFilter.value) params.action = actionFilter.value
     if (outcomeFilter.value) params.outcome = outcomeFilter.value
     if (actorIdFilter.value) params.actor_id = actorIdFilter.value
@@ -75,7 +80,7 @@ async function exportCsv() {
     const url = URL.createObjectURL(resp.data as Blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `audit-export-${from}-${to}.csv`
+    link.download = `audit-export-${stamp}.csv`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -185,18 +190,36 @@ onMounted(fetchLogs)
       </button>
       <!-- CSV export (P1-6): window defaults to the last 24h when empty -->
       <div class="flex items-center gap-2 ml-auto">
-        <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportFromLabel') }}</label>
-        <input
-          v-model="exportFrom"
-          type="datetime-local"
-          class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
-        >
-        <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportToLabel') }}</label>
-        <input
-          v-model="exportTo"
-          type="datetime-local"
-          class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
-        >
+        <!-- AF-05: a full export opts in explicitly (all=true); the window
+             inputs step aside while it is chosen. -->
+        <label class="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
+          <input
+            v-model="exportAll"
+            type="checkbox"
+            data-testid="logs-export-all"
+            class="rounded border-neutral-300 text-brand-600"
+          >
+          {{ $t('admin.logs.exportAllLabel') }}
+        </label>
+        <template v-if="!exportAll">
+          <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportFromLabel') }}</label>
+          <input
+            v-model="exportFrom"
+            type="datetime-local"
+            class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
+          >
+          <label class="text-sm font-medium text-neutral-700">{{ $t('admin.logs.exportToLabel') }}</label>
+          <input
+            v-model="exportTo"
+            type="datetime-local"
+            class="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-brand-500 focus:border-brand-500"
+          >
+        </template>
+        <span
+          v-else
+          class="text-xs text-neutral-500"
+          data-testid="logs-export-all-hint"
+        >{{ $t('admin.logs.exportAllHint') }}</span>
         <button
           :disabled="exporting"
           class="px-4 py-1.5 border border-brand-600 text-brand-600 text-sm font-medium rounded-md hover:bg-brand-50 disabled:opacity-50"

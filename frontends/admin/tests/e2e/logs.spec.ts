@@ -144,4 +144,64 @@ test.describe('Audit Logs', () => {
       'Audit export requires a time window',
     )
   })
+
+  // AF-05: a full export opts in with all=true. The server waives the window
+  // requirement for it but keeps the row cap.
+  test('a full export sends all=true and no time window', async ({ page }) => {
+    await expect(page.locator('input[type="datetime-local"]')).toHaveCount(2)
+    await page.getByTestId('logs-export-all').check()
+
+    // The window inputs step aside, and the cap is stated.
+    await expect(page.locator('input[type="datetime-local"]')).toHaveCount(0)
+    await expect(page.getByTestId('logs-export-all-hint')).toContainText('row cap')
+
+    const exportRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/admin/logs/export'),
+    )
+    await page.click('button:has-text("Export CSV")')
+    const url = new URL((await exportRequest).url())
+    expect(url.searchParams.get('all')).toBe('true')
+    expect(url.searchParams.has('from')).toBe(false)
+    expect(url.searchParams.has('to')).toBe(false)
+  })
+
+  test('a full export with no filter typed sends all=true alone', async ({ page }) => {
+    await page.getByTestId('logs-export-all').check()
+    const exportRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/admin/logs/export'),
+    )
+    await page.click('button:has-text("Export CSV")')
+    const url = new URL((await exportRequest).url())
+    // Nothing else rides along unasked.
+    expect([...url.searchParams.keys()]).toEqual(['all'])
+  })
+
+  test('unchecking the full export brings the window back', async ({ page }) => {
+    await page.getByTestId('logs-export-all').check()
+    await page.getByTestId('logs-export-all').uncheck()
+
+    await expect(page.locator('input[type="datetime-local"]')).toHaveCount(2)
+    const exportRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/admin/logs/export'),
+    )
+    await page.click('button:has-text("Export CSV")')
+    const url = new URL((await exportRequest).url())
+    expect(url.searchParams.has('all')).toBe(false)
+    expect(url.searchParams.has('from')).toBe(true)
+    expect(url.searchParams.has('to')).toBe(true)
+  })
+
+  test('a full export over the row cap is refused with the catalog message', async ({ page }) => {
+    await page.route('**/api/admin/logs/export**', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'AUDIT_EXPORT_TOO_LARGE', message: 'over cap' } }),
+      })
+    })
+    await page.getByTestId('logs-export-all').check()
+    await page.click('button:has-text("Export CSV")')
+
+    await expect(page.locator('p.text-error-700')).toContainText('Export exceeds the row cap')
+  })
 })
