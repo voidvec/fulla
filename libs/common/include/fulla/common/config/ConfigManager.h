@@ -49,12 +49,15 @@ class ConfigManager
      * @brief Test seam: replace the in-memory .env table.
      *
      * Production code never calls this. Tests use it to put values into the
-     * table without touching the working directory, and pass an empty list
-     * to restore the "no .env" state.
+     * table without touching the working directory. These seams, like the
+     * underlying table, require serial test execution with no in-flight requests;
+     * returned strings are value copies, not stable c_str() pointers.
      */
     static void setDotEnvForTesting(
       const std::vector<std::pair<std::string, std::string>> &entries
     );
+
+    static std::vector<std::pair<std::string, std::string>> getDotEnvForTesting();
 
   private:
     // Parse JSON path and return pointer to node

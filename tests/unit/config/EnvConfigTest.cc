@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <json/json.h>
+#include <fulla/common/config/ConfigManager.h>
 #include <cstdlib>
 #include <sstream>
 
@@ -43,7 +44,7 @@ DROGON_TEST(Unit_P1_Config_EnvInjection_Works)
     }
 
     // Check DB Name Override
-    const char *expectedDbName = std::getenv("FULLA_DB_NAME");
+    const char *expectedDbName = fulla::common::config::ConfigManager::getEnv("FULLA_DB_NAME");
     if (expectedDbName)
     {
         if (config.isMember("db_clients") && config["db_clients"].size() > 0)
@@ -57,11 +58,52 @@ DROGON_TEST(Unit_P1_Config_EnvInjection_Works)
         }
     }
 
+    const char *expectedRedisPortValue =
+      fulla::common::config::ConfigManager::getEnv("FULLA_REDIS_PORT");
+    int expectedRedisPort = 0;
+    if (expectedRedisPortValue)
+    {
+        try
+        {
+            expectedRedisPort = std::stoi(expectedRedisPortValue);
+        }
+        catch (...)
+        {
+            expectedRedisPort = 0;
+        }
+    }
+    if (expectedRedisPortValue)
+    {
+        REQUIRE(config["redis_clients"].isArray());
+        if (config["redis_clients"].empty())
+        {
+            bool memoryStorage = false;
+            if (config["plugins"].isArray())
+            {
+                for (const auto &plugin : config["plugins"])
+                {
+                    if (plugin.get("name", "").asString() == "OAuth2Plugin" &&
+                        plugin["config"].get("storage_type", "").asString() == "memory")
+                    {
+                        memoryStorage = true;
+                        break;
+                    }
+                }
+            }
+            CHECK(memoryStorage);
+        }
+        else
+        {
+            CHECK(config["redis_clients"][0]["port"].asInt() == expectedRedisPort);
+        }
+    }
+
     // Check Portal Client Secret Override (new primary name, legacy alias)
-    const char *expectedSecret = std::getenv("FULLA_PORTAL_CLIENT_SECRET");
+    const char *expectedSecret =
+      fulla::common::config::ConfigManager::getEnv("FULLA_PORTAL_CLIENT_SECRET");
     if (!expectedSecret || expectedSecret[0] == 0)
-        expectedSecret = std::getenv("FULLA_VUE_CLIENT_SECRET");
-    if (expectedSecret)
+        expectedSecret = fulla::common::config::ConfigManager::getEnv("FULLA_VUE_CLIENT_SECRET");
+    if (expectedSecret && expectedSecret[0] != 0)
     {
         bool found = false;
         if (config.isMember("plugins"))
@@ -73,7 +115,6 @@ DROGON_TEST(Unit_P1_Config_EnvInjection_Works)
                     std::string actual =
                       plugin["config"]["clients"]["fulla-portal"]["secret"].asString();
                     CHECK(actual == expectedSecret);
-                    LOG_INFO << "Verified Client Secret: " << actual;
                     found = true;
                     break;
                 }

@@ -20,6 +20,7 @@ set_target_properties(fulla-common-testing-test PROPERTIES
 
 oauth2_apply_compat(fulla-common-testing-test)
 oauth2_apply_gcov(fulla-common-testing-test)
+oauth2_apply_sanitizer(fulla-common-testing-test)
 
 include(GoogleTest)
 gtest_discover_tests(fulla-common-testing-test)

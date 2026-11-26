@@ -184,11 +184,28 @@ bool ConfigManager::load(const std::string &configPath, Json::Value &config)
 
 void ConfigManager::applyEnvOverrides(Json::Value &config, const std::vector<EnvOverride> &rules)
 {
+    std::unordered_map<std::string, size_t> ruleCounts;
+    for (const auto &rule : rules)
+    {
+        ++ruleCounts[rule.configPath];
+    }
+    std::unordered_map<std::string, bool> appliedAlias;
+
     for (const auto &rule : rules)
     {
         const char *envValue = getEnvValue(rule.envVar);
         if (envValue)
         {
+            // Duplicate paths are canonical-name/deprecated-alias pairs. The
+            // first non-empty value wins; an empty alias must not erase either
+            // the canonical value or the configured baseline.
+            if (ruleCounts[rule.configPath] > 1)
+            {
+                if (envValue[0] == '\0' || appliedAlias[rule.configPath])
+                    continue;
+                appliedAlias[rule.configPath] = true;
+            }
+
             Json::Value *ptr = getJsonPointer(config, rule.configPath);
             if (ptr)
             {
@@ -592,6 +609,13 @@ const char *ConfigManager::getProcessEnv(const char *name)
             "ignored)");
     }
     return std::getenv(name);
+}
+
+std::vector<std::pair<std::string, std::string>> ConfigManager::getDotEnvForTesting()
+{
+    loadDotEnv();
+    const auto &dotEnvVars = getDotEnvVars();
+    return {dotEnvVars.begin(), dotEnvVars.end()};
 }
 
 void ConfigManager::setDotEnvForTesting(

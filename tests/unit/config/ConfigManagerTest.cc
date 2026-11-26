@@ -439,13 +439,16 @@ class ScopedEnvVar
     std::string previousValue_;
 };
 
-// Restores the "no .env" table on every exit path (a REQUIRE failure returns
+// Restores the loaded .env table on every exit path (a REQUIRE failure returns
 // early), so values injected by one case never leak into the next.
 struct DotEnvTableRestore
 {
+    std::vector<std::pair<std::string, std::string>> entries =
+      fulla::common::config::ConfigManager::getDotEnvForTesting();
+
     ~DotEnvTableRestore()
     {
-        fulla::common::config::ConfigManager::setDotEnvForTesting({});
+        fulla::common::config::ConfigManager::setDotEnvForTesting(entries);
     }
 };
 }  // namespace
@@ -495,4 +498,84 @@ DROGON_TEST(Unit_P1_ConfigManager_GetEnv_FullaEnv_DotEnvWinsOverProcess)
     const char *value = fulla::common::config::ConfigManager::getEnv("FULLA_ENV");
     REQUIRE(value != nullptr);
     CHECK(std::string(value) == "production");
+}
+
+DROGON_TEST(Unit_P1_ConfigManager_DotEnvTableRestore_PreservesLoadedValues)
+{
+    DotEnvTableRestore restore;
+    ScopedEnvVar processProbe("FULLA_DOTENV_RESTORE_PROBE", "");
+    fulla::common::config::ConfigManager::setDotEnvForTesting(
+      {{"FULLA_DOTENV_RESTORE_PROBE", "before"}});
+    {
+        DotEnvTableRestore innerRestore;
+        fulla::common::config::ConfigManager::setDotEnvForTesting(
+          {{"FULLA_DOTENV_RESTORE_PROBE", "during"}});
+        const char *during =
+          fulla::common::config::ConfigManager::getEnv("FULLA_DOTENV_RESTORE_PROBE");
+        REQUIRE(during != nullptr);
+        CHECK(std::string(during) == "during");
+    }
+    const char *after =
+      fulla::common::config::ConfigManager::getEnv("FULLA_DOTENV_RESTORE_PROBE");
+    REQUIRE(after != nullptr);
+    CHECK(std::string(after) == "before");
+}
+
+DROGON_TEST(Unit_P0_ConfigManager_EnvOverride_PortalAliasesPreferCanonicalName)
+{
+    DotEnvTableRestore restore;
+    fulla::common::config::ConfigManager::setDotEnvForTesting({});
+    ScopedEnvVar canonicalSecret("FULLA_PORTAL_CLIENT_SECRET", "canonical-test-secret");
+    ScopedEnvVar legacySecret("FULLA_VUE_CLIENT_SECRET", "legacy-test-secret");
+    ScopedEnvVar canonicalRedirect("FULLA_PORTAL_REDIRECT_URI", "https://canonical.test/callback");
+    ScopedEnvVar legacyRedirect("FULLA_VUE_REDIRECT_URI", "https://legacy.test/callback");
+
+    std::vector<fulla::common::config::EnvOverride> rules;
+    for (const auto &rule : fulla::common::config::FULLA_ENV_OVERRIDES)
+    {
+        const std::string name = rule.envVar;
+        if (name == "FULLA_PORTAL_CLIENT_SECRET" || name == "FULLA_VUE_CLIENT_SECRET" ||
+            name == "FULLA_PORTAL_REDIRECT_URI" || name == "FULLA_VUE_REDIRECT_URI")
+        {
+            rules.push_back(rule);
+        }
+    }
+
+    const auto makeConfig = [] {
+        Json::Value config;
+        Json::Value plugin;
+        plugin["name"] = "OAuth2Plugin";
+        plugin["config"]["clients"]["fulla-portal"]["secret"] = "configured-secret";
+        plugin["config"]["clients"]["fulla-portal"]["redirect_uri"] =
+          "https://configured.test/callback";
+        config["plugins"].append(plugin);
+        return config;
+    };
+    const auto portalSecret = [](const Json::Value &config) {
+        return fulla::common::config::ConfigManager::get<std::string>(
+          config, "plugins[name=OAuth2Plugin].config.clients.fulla-portal.secret");
+    };
+    const auto portalRedirect = [](const Json::Value &config) {
+        return fulla::common::config::ConfigManager::get<std::string>(
+          config, "plugins[name=OAuth2Plugin].config.clients.fulla-portal.redirect_uri");
+    };
+
+    auto config = makeConfig();
+    fulla::common::config::ConfigManager::applyEnvOverrides(config, rules);
+    CHECK(portalSecret(config) == "canonical-test-secret");
+    CHECK(portalRedirect(config) == "https://canonical.test/callback");
+
+    setenv("FULLA_PORTAL_CLIENT_SECRET", "", 1);
+    setenv("FULLA_PORTAL_REDIRECT_URI", "", 1);
+    config = makeConfig();
+    fulla::common::config::ConfigManager::applyEnvOverrides(config, rules);
+    CHECK(portalSecret(config) == "legacy-test-secret");
+    CHECK(portalRedirect(config) == "https://legacy.test/callback");
+
+    setenv("FULLA_VUE_CLIENT_SECRET", "", 1);
+    setenv("FULLA_VUE_REDIRECT_URI", "", 1);
+    config = makeConfig();
+    fulla::common::config::ConfigManager::applyEnvOverrides(config, rules);
+    CHECK(portalSecret(config) == "configured-secret");
+    CHECK(portalRedirect(config) == "https://configured.test/callback");
 }
