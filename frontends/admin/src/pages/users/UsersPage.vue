@@ -19,7 +19,8 @@ const loading = ref(true)
 const showRoleModal = ref(false)
 const showCreateModal = ref(false)
 const selectedUser = ref<any>(null)
-const roleInput = ref('')
+// Role names checked in the assignment dialog.
+const assignedRoles = ref<string[]>([])
 const saving = ref(false)
 // #158: catalog-backed errors are stored as NormalizedError and resolved at
 // render time (errorText) so switching locale re-translates text on screen;
@@ -41,8 +42,58 @@ const searchQuery = ref('')
 const roleFilter = ref('')
 const lockedFilter = ref('')
 
+// AF-02: the role catalog drives the filter, the create form and the
+// assignment dialog, so a custom role can be picked as soon as it exists
+// instead of waiting for this page to be edited. Only the admin role may
+// read it (the shipped rbac rules keep /api/admin/roles behind the admin
+// catch-all), so for a delegated account it stays empty: the filter falls
+// back to the two built-in role names, and the dialogs say the list is
+// unavailable rather than offering role names typed from memory.
+const roleCatalog = ref<string[]>([])
+const filterRoleNames = computed(() =>
+  roleCatalog.value.length > 0 ? roleCatalog.value : ['admin', 'user'])
+
+async function fetchRoleCatalog() {
+  try {
+    const resp = await axios.get('/api/admin/roles')
+    roleCatalog.value = (resp.data.roles || [])
+      .map((r: any) => String(r?.name || ''))
+      .filter((name: string) => name.length > 0)
+  } catch {
+    // Not an error to surface: the page works with the fallback above.
+  }
+}
+
+function toggled(list: string[], name: string): string[] {
+  return list.includes(name) ? list.filter((r) => r !== name) : [...list, name]
+}
+
+// The assignment dialog's checkboxes: the catalog, plus any role the user
+// already holds that the catalog does not list (it can be stale, or
+// unreadable for a delegated account). Those are kept and sent back
+// unchanged — silently dropping them would take roles away — so they are
+// shown, checked and locked, rather than hidden.
+const assignableRoles = computed(() => {
+  const names = [...roleCatalog.value]
+  for (const name of assignedRoles.value) {
+    if (!names.includes(name)) names.push(name)
+  }
+  return names
+})
+
 // Create-user form state
-const createForm = ref({ username: '', password: '', email: '', roles: '', email_verified: false, mfa_enabled: false })
+const createForm = ref({
+  username: '',
+  password: '',
+  email: '',
+  // Left empty = the server's default role.
+  roles: [] as string[],
+  email_verified: false,
+  mfa_enabled: false,
+  // #145: the account must replace its password at first sign-in (the
+  // server refuses to issue tokens until it does).
+  must_change_password: false,
+})
 
 const hasPrev = computed(() => currentPage.value > 1)
 const hasNext = computed(() => currentPage.value < totalPages.value)
@@ -107,16 +158,18 @@ function goToPage(page: number) {
 
 function openRoleModal(user: any) {
   selectedUser.value = user
-  roleInput.value = (user.roles || []).join(', ')
+  // The list rows carry the user's role names; check exactly those.
+  assignedRoles.value = Array.isArray(user.roles)
+    ? user.roles.filter((r: unknown) => typeof r === 'string')
+    : []
   showRoleModal.value = true
 }
 
 async function assignRoles() {
-  if (!selectedUser.value || !roleInput.value.trim()) return
+  if (!selectedUser.value || assignedRoles.value.length === 0) return
   saving.value = true
   try {
-    const roles = roleInput.value.split(',').map((r: string) => r.trim()).filter(Boolean)
-    await axios.put(`/api/admin/users/${selectedUser.value.id}/roles`, { roles }, {
+    await axios.put(`/api/admin/users/${selectedUser.value.id}/roles`, { roles: [...assignedRoles.value] }, {
       headers: { 'Content-Type': 'application/json' },
     })
     showRoleModal.value = false
@@ -147,12 +200,20 @@ async function createUser() {
       mfa_enabled: createForm.value.mfa_enabled,
     }
     if (createForm.value.email) body.email = createForm.value.email
-    if (createForm.value.roles) {
-      body.roles = createForm.value.roles.split(',').map((r: string) => r.trim()).filter(Boolean)
-    }
+    if (createForm.value.roles.length > 0) body.roles = [...createForm.value.roles]
+    // Sent only when asked for; left out, the flag keeps its default.
+    if (createForm.value.must_change_password) body.must_change_password = true
     const resp = await axios.post('/api/admin/users', body, { headers: { 'Content-Type': 'application/json' } })
     showCreateModal.value = false
-    createForm.value = { username: '', password: '', email: '', roles: '', email_verified: false, mfa_enabled: false }
+    createForm.value = {
+      username: '',
+      password: '',
+      email: '',
+      roles: [],
+      email_verified: false,
+      mfa_enabled: false,
+      must_change_password: false,
+    }
     // Gap-fix: surface partial failures instead of always reporting success —
     // the create response carries roles_failed/warning when role assignment
     // failed for some entries (UserAdminService).
@@ -194,7 +255,10 @@ function deleteUser(user: any) {
   })
 }
 
-onMounted(fetchUsers)
+onMounted(() => {
+  fetchUsers()
+  fetchRoleCatalog()
+})
 </script>
 
 <template>
@@ -238,18 +302,18 @@ onMounted(fetchUsers)
       >
       <select
         v-model="roleFilter"
+        data-testid="users-role-filter"
         class="px-3 py-2 border border-neutral-300 rounded-md text-sm"
         @change="applySearch"
       >
         <option value="">
           {{ $t('admin.users.allRoles') }}
         </option>
-        <option value="admin">
-          admin
-        </option>
-        <option value="user">
-          user
-        </option>
+        <option
+          v-for="name in filterRoleNames"
+          :key="name"
+          :value="name"
+        >{{ name }}</option>
       </select>
       <select
         v-model="lockedFilter"
@@ -435,17 +499,37 @@ onMounted(fetchUsers)
             >
           </div>
           <div>
-            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.users.rolesCommaSeparated') }}</label>
-            <input
-              v-model="createForm.roles"
-              class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
-              placeholder="user"
+            <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.users.rolesLabel') }}</label>
+            <div
+              class="mt-2 flex flex-wrap gap-x-6 gap-y-2"
+              data-testid="create-user-roles"
             >
+              <label
+                v-for="name in roleCatalog"
+                :key="name"
+                class="flex items-center gap-2 text-sm text-neutral-700"
+              >
+                <input
+                  type="checkbox"
+                  :checked="createForm.roles.includes(name)"
+                  :data-testid="`create-user-role-${name}`"
+                  class="rounded border-neutral-300 text-brand-600"
+                  @change="createForm.roles = toggled(createForm.roles, name)"
+                >
+                {{ name }}
+              </label>
+            </div>
+            <p
+              v-if="roleCatalog.length === 0"
+              class="mt-1 text-xs text-neutral-500"
+            >
+              {{ $t('admin.users.rolesUnavailable') }}
+            </p>
             <p class="mt-1 text-xs text-neutral-500">
               {{ $t('admin.users.defaultRolesHint') }}
             </p>
           </div>
-          <div class="flex gap-6">
+          <div class="flex flex-wrap gap-6">
             <label class="flex items-center gap-2 text-sm text-neutral-700">
               <input
                 v-model="createForm.email_verified"
@@ -461,6 +545,17 @@ onMounted(fetchUsers)
                 class="rounded border-neutral-300 text-brand-600"
               >
               {{ $t('admin.users.mfaEnabled') }}
+            </label>
+            <!-- AF-03 (#145): the account replaces its password at first
+                 sign-in — for accounts created on someone's behalf. -->
+            <label class="flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                v-model="createForm.must_change_password"
+                type="checkbox"
+                data-testid="create-user-must-change-password"
+                class="rounded border-neutral-300 text-brand-600"
+              >
+              {{ $t('admin.users.firstSignInChange') }}
             </label>
           </div>
         </div>
@@ -495,14 +590,40 @@ onMounted(fetchUsers)
           {{ $t('admin.users.userPrefix') }} <strong>{{ selectedUser?.username }}</strong>
         </p>
         <div>
-          <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.users.rolesCommaSeparated') }}</label>
-          <input
-            v-model="roleInput"
-            class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md text-sm"
-            placeholder="admin, user"
+          <label class="block text-sm font-medium text-neutral-700">{{ $t('admin.users.rolesLabel') }}</label>
+          <div
+            class="mt-2 flex flex-col gap-2"
+            data-testid="assign-user-roles"
           >
-          <p class="mt-1 text-xs text-neutral-500">
-            {{ $t('admin.users.availableRolesHint') }}
+            <label
+              v-for="name in assignableRoles"
+              :key="name"
+              class="flex items-center gap-2 text-sm text-neutral-700"
+            >
+              <input
+                type="checkbox"
+                :checked="assignedRoles.includes(name)"
+                :disabled="!roleCatalog.includes(name)"
+                :title="roleCatalog.includes(name) ? undefined : $t('admin.users.roleKept')"
+                :data-testid="`assign-user-role-${name}`"
+                class="rounded border-neutral-300 text-brand-600 disabled:opacity-50"
+                @change="assignedRoles = toggled(assignedRoles, name)"
+              >
+              {{ name }}
+            </label>
+            <p
+              v-if="assignedRoles.some((name) => !roleCatalog.includes(name))"
+              class="mt-1 text-xs text-neutral-500"
+            >
+              {{ $t('admin.users.roleKept') }}
+            </p>
+          </div>
+          <p
+            v-if="roleCatalog.length === 0"
+            class="mt-1 text-xs text-neutral-500"
+            data-testid="assign-user-roles-unavailable"
+          >
+            {{ $t('admin.users.rolesUnavailable') }}
           </p>
         </div>
         <div class="flex justify-end space-x-3 mt-4">
@@ -513,7 +634,8 @@ onMounted(fetchUsers)
             {{ $t('common.cancel') }}
           </button>
           <button
-            :disabled="saving"
+            :disabled="saving || assignedRoles.length === 0"
+            data-testid="assign-user-roles-save"
             class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50"
             @click="assignRoles"
           >

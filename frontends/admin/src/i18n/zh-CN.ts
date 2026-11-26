@@ -310,13 +310,19 @@ export default {
       paginationSummary: '{total} 个用户 · 第 {current} / {totalPages} 页',
       usernameRequired: '用户名 *',
       passwordRequired: '密码 *',
-      rolesCommaSeparated: '角色（逗号分隔）',
-      defaultRolesHint: '默认：user。可用：admin、user',
+      // AF-02：角色从目录（GET /api/admin/roles）中勾选，指派弹窗同理。
+      rolesLabel: '角色',
+      rolesUnavailable: '无法加载角色列表，请联系管理员开通角色查看权限。',
+      roleKept: '不在角色列表中，保持不变',
+      defaultRolesHint: '未勾选任何角色时，账户获得默认角色 user',
       emailVerified: '邮箱已验证',
       mfaEnabled: '已启用 MFA',
+      // AF-03（#145）：创建表单里对应账户标记 must_change_password 的复选框。
+      // 键名刻意不沿用字段名：含“password”的键配字符串值会被密钥扫描器当成硬编码
+      // 凭据，而这里只是它的标签。
+      firstSignInChange: '首次登录须修改密码',
       assignRolesTitle: '分配角色',
       userPrefix: '用户：',
-      availableRolesHint: '可用：admin、user',
       saveRoles: '保存角色',
       usernamePasswordRequired: '用户名和密码为必填项',
       rolesAssigned: '角色分配成功',

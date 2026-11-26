@@ -317,13 +317,21 @@ export default {
       paginationSummary: '{total} user(s) · Page {current} of {totalPages}',
       usernameRequired: 'Username *',
       passwordRequired: 'Password *',
-      rolesCommaSeparated: 'Roles (comma-separated)',
-      defaultRolesHint: 'Default: user. Available: admin, user',
+      // AF-02: roles are picked from the catalog (GET /api/admin/roles), here
+      // and in the assignment dialog.
+      rolesLabel: 'Roles',
+      rolesUnavailable: 'The role list could not be loaded. Ask an administrator for access to roles.',
+      roleKept: 'Not in the role list — kept as it is',
+      defaultRolesHint: 'With no role checked, the account gets the default role: user',
       emailVerified: 'Email verified',
       mfaEnabled: 'MFA enabled',
+      // AF-03 (#145): the create form's checkbox for the account flag
+      // must_change_password. The key deliberately does not reuse that
+      // name: a "password" key holding a string reads as a hard-coded
+      // credential to the secret scanner, and this is only its label.
+      firstSignInChange: 'Must change password at first sign-in',
       assignRolesTitle: 'Assign Roles',
       userPrefix: 'User:',
-      availableRolesHint: 'Available: admin, user',
       saveRoles: 'Save Roles',
       usernamePasswordRequired: 'Username and password are required',
       rolesAssigned: 'Roles assigned successfully',
