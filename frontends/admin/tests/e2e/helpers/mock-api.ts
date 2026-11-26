@@ -431,8 +431,23 @@ export async function setupAuthenticatedMocks(page: Page) {
     else if (method === 'POST')
     {
       const body = JSON.parse(route.request().postData() || '{}')
+      // AF-01: mirror the real handler's validation-first order
+      // (UserAdminService::createUser) — a body without username/password is
+      // refused with 400 before anything is written. The console's write
+      // probe for a delegated account depends on exactly that: it POSTs an
+      // empty object and reads "reached validation" as "may write".
+      if (!body.username || !body.password)
+      {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: { code: 'VALIDATION_MISSING_REQUIRED_FIELD', message: 'username is required' },
+          }),
+        })
+      }
       // Duplicate username check.
-      if (MOCK_USERS.some((u) => u.username === body.username))
+      else if (MOCK_USERS.some((u) => u.username === body.username))
       {
         await route.fulfill({
           status: 400,

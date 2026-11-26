@@ -5,6 +5,7 @@ import { normalizeError, sessionExpiredError } from '../services/errorAdapter'
 import type { NormalizedError } from '../services/errorAdapter'
 import { getErrorMessage } from '../services/messages'
 import { generatePkcePair, randomId } from '../utils/pkce'
+import { usePermissionsStore } from './permissions'
 
 // Refresh token is persisted in sessionStorage so a page refresh can restore the
 // session without re-prompting credentials. The access token stays in memory only
@@ -59,6 +60,36 @@ async function redirectToLogin(): Promise<void> {
   }
 }
 
+/**
+ * Scopes the console asks for at login (AF-01).
+ *
+ * `admin` covers the admin role. The nine P1-8 resource scopes (the V045
+ * permission catalog) are requested alongside it so a DELEGATED account — a
+ * custom role holding e.g. only `users:read` — can be issued the subset it
+ * is entitled to: /oauth2/login evaluates every requested scope on its own
+ * and drops the ones the client allowlist or the user's permissions do not
+ * cover, instead of rejecting the request.
+ *
+ * The shipped `fulla-admin-console` client allows only openid/profile/admin,
+ * so today the resource scopes are dropped at the client-allowlist tier and
+ * the granted scope is exactly what it was before this change. A deployment
+ * that widens that client's allowlist gets delegated sign-in with no further
+ * frontend change; without it a delegated account signs in with no
+ * admin-class scope, every console probe answers 403 and the login is
+ * refused the same way it always was.
+ *
+ * Keep the names in step with the V045 seed: a resource scope missing here
+ * is never issued, so its console domain stays hidden for delegates.
+ */
+const CONSOLE_LOGIN_SCOPE = [
+  'openid', 'profile', 'admin',
+  'users:read', 'users:write',
+  'clients:read', 'clients:write',
+  'tokens:read', 'tokens:write',
+  'roles:read', 'roles:write',
+  'audit:read',
+].join(' ')
+
 // Result shape shared by login()/verifyMfa() — the LoginPage branches on it.
 // #158: `error` carries the NormalizedError (not the resolved string) so the
 // banner re-translates on locale switch; plain strings keep snapshot semantics.
@@ -92,8 +123,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Shared post-token-exchange path: store tokens, load the profile, and gate
-   * on the admin role. Used by both the direct login() and the MFA completion
-   * verifyMfa() so the two entry points cannot drift.
+   * on admin-surface access. Used by both the direct login() and the MFA
+   * completion verifyMfa() so the two entry points cannot drift.
+   *
+   * AF-01: the gate is no longer the literal 'admin' role. The admin role
+   * takes the fast path (unchanged behavior); a delegated account (P1-8
+   * object-level permissions, e.g. users:read) enters when the permissions
+   * store proves at least one readable console domain — the backend's 403s
+   * remain the real boundary. Without any admin-surface access the login is
+   * rejected exactly as before.
+   *
+   * "Delegated" here means: signed in with a token that carries resource
+   * scopes. That depends on CONSOLE_LOGIN_SCOPE above.
    */
   async function applySession(tokenResp: { data: { access_token: string; refresh_token?: string } }): Promise<AdminLoginResult> {
     accessToken.value = tokenResp.data.access_token
@@ -102,7 +143,15 @@ export const useAuthStore = defineStore('auth', () => {
 
     await fetchUserInfo()
 
-    if (!user.value?.roles?.includes('admin')) {
+    const permissions = usePermissionsStore()
+    permissions.reset()
+    const roles: string[] = user.value?.roles ?? []
+    if (roles.includes('admin')) {
+      permissions.adoptAdminRole()
+      return { success: true }
+    }
+    const delegated = await permissions.probeDomains()
+    if (!delegated) {
       logout()
       loginError.value = 'Admin role required to access this console'
       return { error: 'forbidden' }
@@ -131,7 +180,7 @@ export const useAuthStore = defineStore('auth', () => {
         password,
         client_id: 'fulla-admin-console',
         redirect_uri: REDIRECT_URI,
-        scope: 'openid profile admin',
+        scope: CONSOLE_LOGIN_SCOPE,
         // randomId() (not crypto.randomUUID): non-secure contexts (plain-
         // HTTP LAN deployments) leave randomUUID undefined.
         state: randomId(),
@@ -331,6 +380,9 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = null
     user.value = null
     persistRefreshToken(null)
+    // AF-01: a stale access map must never survive into the next login on
+    // this tab (delegate out, admin in).
+    usePermissionsStore().reset()
   }
 
   /**
@@ -347,8 +399,16 @@ export const useAuthStore = defineStore('auth', () => {
     const ok = await refreshAccessToken()
     if (!ok) return false
     await fetchUserInfo()
-    // Verify the restored session still has the admin role.
-    return !!user.value?.roles?.includes('admin')
+    // Verify the restored session still has admin-surface access (AF-01:
+    // admin role fast path, or a delegated account with a readable domain).
+    const permissions = usePermissionsStore()
+    permissions.reset()
+    const roles: string[] = user.value?.roles ?? []
+    if (roles.includes('admin')) {
+      permissions.adoptAdminRole()
+      return true
+    }
+    return await permissions.probeDomains()
   }
 
   // Deduplicate session restoration across concurrent callers (router guard +

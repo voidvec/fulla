@@ -3,12 +3,14 @@ import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
+import { usePermissionsStore, filterNavSections } from '../../stores/permissions'
 import { useThemeStore } from '../../stores/theme'
 import AppLogo from '../shared/AppLogo.vue'
 import LocaleSwitcher from '../ui/LocaleSwitcher.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const permissions = usePermissionsStore()
 const theme = useThemeStore()
 const router = useRouter()
 const route = useRoute()
@@ -23,37 +25,41 @@ watch(() => route.path, () => {
   mobileMenuOpen.value = false
 })
 
-// Navigation items with SVG icon components (computed so labels follow the locale)
-const navSections = computed(() => [
+// Navigation items with SVG icon components (computed so labels follow the locale).
+// AF-01: every item carries its console domain; the permissions store decides
+// visibility (admin role ⇒ everything, unchanged; a delegated account sees
+// only the domains its probes proved readable — a section whose items all
+// vanish disappears entirely).
+const navSections = computed(() => filterNavSections([
   {
     label: t('nav.overview'),
     items: [
-      { name: t('nav.dashboard'), path: '/', icon: 'dashboard' },
+      { name: t('nav.dashboard'), path: '/', icon: 'dashboard', domain: 'dashboard' },
     ],
   },
   {
     label: t('nav.management'),
     items: [
-      { name: t('nav.applications'), path: '/applications', icon: 'apps' },
-      { name: t('nav.organizations'), path: '/organizations', icon: 'roles' },
-      { name: t('nav.users'), path: '/users', icon: 'users' },
-      { name: t('nav.roles'), path: '/roles', icon: 'roles' },
-      { name: t('nav.scopes'), path: '/scopes', icon: 'scopes' },
-      { name: t('nav.claimMappings'), path: '/claim-mappings', icon: 'scopes' },
-      { name: t('nav.upstreamProviders'), path: '/upstream-providers', icon: 'apps' },
-      { name: t('nav.tokens'), path: '/tokens', icon: 'tokens' },
-      { name: t('nav.devices'), path: '/devices', icon: 'devices' },
+      { name: t('nav.applications'), path: '/applications', icon: 'apps', domain: 'applications' },
+      { name: t('nav.organizations'), path: '/organizations', icon: 'roles', domain: 'organizations' },
+      { name: t('nav.users'), path: '/users', icon: 'users', domain: 'users' },
+      { name: t('nav.roles'), path: '/roles', icon: 'roles', domain: 'roles' },
+      { name: t('nav.scopes'), path: '/scopes', icon: 'scopes', domain: 'scopes' },
+      { name: t('nav.claimMappings'), path: '/claim-mappings', icon: 'scopes', domain: 'claim-mappings' },
+      { name: t('nav.upstreamProviders'), path: '/upstream-providers', icon: 'apps', domain: 'upstream-providers' },
+      { name: t('nav.tokens'), path: '/tokens', icon: 'tokens', domain: 'tokens' },
+      { name: t('nav.devices'), path: '/devices', icon: 'devices', domain: 'devices' },
     ],
   },
   {
     label: t('nav.monitoring'),
     items: [
-      { name: t('nav.auditLogs'), path: '/logs', icon: 'logs' },
-      { name: t('nav.emailTemplates'), path: '/email-templates', icon: 'settings' },
-      { name: t('nav.settings'), path: '/settings', icon: 'settings' },
+      { name: t('nav.auditLogs'), path: '/logs', icon: 'logs', domain: 'logs' },
+      { name: t('nav.emailTemplates'), path: '/email-templates', icon: 'settings', domain: 'email-templates' },
+      { name: t('nav.settings'), path: '/settings', icon: 'settings', domain: 'settings' },
     ],
   },
-])
+], (domain) => permissions.canRead(domain)))
 
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
@@ -80,9 +86,18 @@ const CRUMB_KEYS: Record<string, string> = {
 
 const breadcrumbs = computed(() => {
   const parts = route.path.split('/').filter(Boolean)
-  if (parts.length === 0) return [{ name: t('nav.dashboard'), path: '/' }]
+  // AF-01: the dashboard is the root crumb only for an account that may read
+  // it — a delegated account must not be offered a link into a 403.
+  const dashboardRoot = permissions.canRead('dashboard')
+    ? [{ name: t('nav.dashboard'), path: '/' }]
+    : []
+  if (parts.length === 0) {
+    // On the dashboard route itself the crumb is the current page, so it
+    // renders as text rather than a link whatever the account may read.
+    return [{ name: t('nav.dashboard'), path: '/' }]
+  }
 
-  const crumbs = [{ name: t('nav.dashboard'), path: '/' }]
+  const crumbs = [...dashboardRoot]
   let current = ''
   for (const part of parts) {
     current += '/' + part
@@ -132,8 +147,10 @@ const displayName = computed(() => auth.user?.name || t('adminLayout.defaultUser
           sidebarCollapsed ? 'justify-center px-2' : 'px-5',
         ]"
       >
+        <!-- AF-01: the logo leads to the dashboard for admins and to the
+             first readable domain for a delegated account. -->
         <router-link
-          to="/"
+          :to="permissions.landingPath"
           class="flex items-center"
           @click="mobileMenuOpen = false"
         >
@@ -429,11 +446,14 @@ const displayName = computed(() => auth.user?.name || t('adminLayout.defaultUser
                     {{ displayName }}
                   </p>
                   <p class="text-xs text-neutral-500 mt-0.5">
-                    {{ $t('adminLayout.administrator') }}
+                    <!-- AF-01: a delegated account is not an administrator;
+                         show its roles instead of the admin label. -->
+                    {{ permissions.isAdminRole ? $t('adminLayout.administrator') : (auth.user?.roles || []).join(', ') }}
                   </p>
                 </div>
 
                 <router-link
+                  v-if="permissions.canRead('settings')"
                   to="/settings"
                   class="flex items-center gap-3 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
                   @click="userMenuOpen = false"

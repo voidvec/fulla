@@ -7,8 +7,10 @@ import AppAlert from '../components/ui/AppAlert.vue'
 import AppLogo from '../components/shared/AppLogo.vue'
 import LocaleSwitcher from '../components/ui/LocaleSwitcher.vue'
 import { useAuthStore } from '../stores/auth'
+import { usePermissionsStore } from '../stores/permissions'
 
 const auth = useAuthStore()
+const permissions = usePermissionsStore()
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -58,7 +60,9 @@ async function handleLogin() {
       password.value = ''
       showPasswordChange.value = true
     } else if (!result?.error) {
-      router.push('/')
+      // AF-01: a delegated account (e.g. users-only) lands on its first
+      // readable domain instead of the admin-role dashboard.
+      router.push(permissions.landingPath)
     }
   } finally {
     loading.value = false
@@ -70,7 +74,7 @@ async function handleMfa() {
   try {
     const result = await auth.verifyMfa(mfaToken.value, mfaCode.value)
     if (!result?.error) {
-      router.push('/')
+      router.push(permissions.landingPath)
     }
   } finally {
     mfaLoading.value = false
