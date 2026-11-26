@@ -18,33 +18,61 @@
 //     则动态导入该 shim 并断言其导出与共享来源指向同一实现；否则回退为对共享
 //     来源的第二次独立求值（确定性），并据“Admin 导入同一模块”这一不变量
 //     得出两应用一致的结论。
+//
+// 现状说明（2026-11 复核 UF-08 时做了变异验证）：adminPath 的候选路径在 vitest 下
+// 都加载不到——测试文件不得跨 app import（.claude/rules/frontend-contract.md），
+// user 的模块上下文只有 frontends/user/。把 admin 目录里的文案改坏，本文件照样全绿。
+// 所以本文件实际验证的只是共享来源自身的确定性；两应用目录逐字一致由
+// scripts/check-ui-sync.mjs 的“错误目录镜像”一节守护，那一步同样的变异会失败。
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import fc from 'fast-check'
-import { getErrorMessage } from './messages'
+import { DEFAULT_LOCALE, UNKNOWN_CODE, getErrorMessage, messages } from './messages'
 
 const RUNS = { numRuns: 100 } as const
 
-// 完整的后端 Error_Code 目录（初始 14 条 + 方案 A 新增的
-// VALIDATION_RESOURCE_NOT_FOUND/CONFLICT 共 16 条）。
+// 门户用户可能收到的全部后端应用码——libs/common/src/error/ErrorCatalog.cc 里的
+// 条目，去掉下面这些（新增后端码时这里要跟着加；前端测试读不到 C++ 目录）：
+//   - 仅管理端会返回：AUDIT_EXPORT_TOO_LARGE / AUDIT_EXPORT_WINDOW_REQUIRED、
+//     CLAIM_MAPPING_{RESERVED_CLAIM,INVALID_SOURCE,FORBIDDEN_SCOPE}、
+//     EMAIL_{TEMPLATE_NOT_FOUND,TEMPLATE_CONTENT_REJECTED,TEST_RECIPIENT_DENIED,
+//     TEST_QUOTA_EXCEEDED}
+//   - 以 200 分支结构化处理、不需要文案：AUTH_MFA_REQUIRED、
+//     AUTH_PASSWORD_CHANGE_REQUIRED
+//   - 面向发起登出的第三方 RP：AUTH_INVALID_ID_TOKEN_HINT
+//   - 门户尚无对应界面（UF-06）：CUSTOM_ATTRIBUTES_INVALID
 const BACKEND_ERROR_CODES = [
   'NET_CONNECTION_FAILED',
   'NET_TIMEOUT',
   'DB_CONNECTION_ERROR',
   'DB_QUERY_ERROR',
   'DB_CONSTRAINT_VIOLATION',
-  'VALIDATION_INVALID_INPUT',
-  'VALIDATION_MISSING_REQUIRED_FIELD',
-  'VALIDATION_FORMAT_ERROR',
-  'VALIDATION_RESOURCE_NOT_FOUND',
-  'VALIDATION_RESOURCE_CONFLICT',
-  'VALIDATION_REDIRECT_URI_NOT_REGISTERED',
-  'VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED',
+  'INTERNAL_ERROR',
   'AUTH_INVALID_CREDENTIALS',
   'AUTH_TOKEN_EXPIRED',
   'AUTH_TOKEN_INVALID',
+  'AUTH_SESSION_REQUIRED',
+  'AUTH_MFA_CODE_INVALID',
+  'AUTH_MFA_NOT_CONFIGURED',
+  'AUTH_SOCIAL_ACCOUNT_NOT_LINKED',
   'AUTHZ_ACCESS_DENIED',
   'AUTHZ_INSUFFICIENT_PERMISSIONS',
-  'INTERNAL_ERROR',
+  'VALIDATION_INVALID_INPUT',
+  'VALIDATION_MISSING_REQUIRED_FIELD',
+  'VALIDATION_FORMAT_ERROR',
+  'VALIDATION_PASSWORD_TOO_SHORT',
+  'VALIDATION_RESOURCE_NOT_FOUND',
+  'VALIDATION_RESOURCE_CONFLICT',
+  'VALIDATION_USERNAME_TAKEN',
+  'VALIDATION_EMAIL_TAKEN',
+  'VALIDATION_CREDENTIAL_ALREADY_REGISTERED',
+  'VALIDATION_RESET_TOKEN_INVALID',
+  'VALIDATION_VERIFICATION_TOKEN_INVALID',
+  'VALIDATION_DEVICE_CODE_INVALID',
+  'VALIDATION_RATE_LIMITED',
+  'VALIDATION_REDIRECT_URI_NOT_REGISTERED',
+  'VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED',
+  'WEBAUTHN_INVALID_ATTESTATION',
+  'WEBAUTHN_CHALLENGE_MISMATCH',
 ] as const
 
 // 完整的 OAuth2 / RFC 6749 协议错误码（design.md「OAuth2 协议错误码目录」）。
@@ -75,11 +103,19 @@ const FULLA_PROTOCOL_CODES = [
 // 保留回退键，亦应在两应用间一致映射。
 const RESERVED_CODES = ['__unknown__', '__network__', '__client__'] as const
 
-const ALL_CODES = [
+// 上面两份清单记的是后端已知会返回的码。域的另一半是目录本身：这样确定性属性覆盖
+// user 目录实际有的每一个键，而不是一份会随新增码过期的手写清单。
+const CATALOG_CODES = Object.keys(messages[DEFAULT_LOCALE])
+
+const ALL_CODES = Array.from(new Set<string>([
   ...BACKEND_ERROR_CODES,
   ...FULLA_PROTOCOL_CODES,
   ...RESERVED_CODES,
-] as const
+  ...CATALOG_CODES,
+]))
+
+// Locales both catalogs register.
+const REGISTERED_LOCALES = ['en', 'zh-CN'] as const
 
 // 语言域：已登记的 en 与 zh-CN，加上未登记语言（应回退到 en 备选表）。
 const LOCALES = ['en', 'zh-CN', 'en-US', 'fr', '__unknown_locale__'] as const
@@ -142,6 +178,20 @@ describe('Property 14: 跨应用映射确定性一致', () => {
       ),
       RUNS,
     )
+  })
+
+  // 不许静默兜底：上面的相等性断言分不出“有文案”和“缺码”——缺码时 getErrorMessage
+  // 回落到 __unknown__，两次调用照样相等。后端会返回的每个码都必须在 user 目录里有
+  // 真实文案（UF-08：三个用户可达的码曾以这种方式漏掉）。admin 侧的镜像不在这里
+  // 断言：测试文件不得跨 app import（.claude/rules/frontend-contract.md），那道门由
+  // scripts/check-ui-sync.mjs 守。
+  it('每个后端码与协议码在 user 目录中都有真实文案，而不是回落到兜底', () => {
+    for (const locale of REGISTERED_LOCALES) {
+      const fallback = getErrorMessage(UNKNOWN_CODE, locale)
+      for (const code of [...BACKEND_ERROR_CODES, ...FULLA_PROTOCOL_CODES]) {
+        expect(getErrorMessage(code, locale), `frontends/user ${code} (${locale})`).not.toBe(fallback)
+      }
+    }
   })
 })
 

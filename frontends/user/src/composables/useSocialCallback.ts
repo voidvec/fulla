@@ -18,6 +18,13 @@ export function useSocialCallback(provider: SocialProvider) {
     const value = error.value
     return !value ? '' : typeof value === 'string' ? value : getErrorMessage(value.code)
   })
+  // AUTH_SOCIAL_ACCOUNT_NOT_LINKED is the one social-login failure the user
+  // can fix alone: the provider identity has no local account and automatic
+  // account creation is off, so the way forward is the link flow on the
+  // security page. The callback pages turn this into a link instead of a
+  // dead end.
+  const needsLinking = computed(() =>
+    typeof error.value === 'object' && error.value?.code === 'AUTH_SOCIAL_ACCOUNT_NOT_LINKED')
   onMounted(async () => {
     try {
       const callback = takeSocialCallback()
@@ -52,5 +59,5 @@ export function useSocialCallback(provider: SocialProvider) {
         : normalizeError(failure)
     }
   })
-  return { errorText }
+  return { errorText, needsLinking }
 }

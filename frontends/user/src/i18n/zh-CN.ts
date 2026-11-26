@@ -208,6 +208,8 @@ export default {
     },
     social: {
       completing: '正在完成 {provider} 登录…',
+      // UF-08：回调页遇到 AUTH_SOCIAL_ACCOUNT_NOT_LINKED。
+      linkGuide: '打开安全设置绑定该账号',
     },
     noCodeFromProvider: '未收到来自 {provider} 的授权码',
     linkMissingState: '缺少关联状态，请从安全设置页面重新发起关联流程。',
