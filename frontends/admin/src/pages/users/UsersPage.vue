@@ -4,9 +4,15 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
+import { usePermissionsStore } from '../../stores/permissions'
 import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 
 const { t } = useI18n()
+// AF-01: read-only delegates (users:read without users:write) see the list
+// but not the write surface — the write probe decided at login.
+const permissions = usePermissionsStore()
+const canWriteUsers = computed(() => permissions.canWrite('users'))
+const readOnlyTitle = computed(() => (canWriteUsers.value ? undefined : t('admin.users.readOnlyHint')))
 
 const users = ref<any[]>([])
 const loading = ref(true)
@@ -198,7 +204,11 @@ onMounted(fetchUsers)
         {{ $t('admin.users.title') }}
       </h2>
       <button
-        class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700"
+        class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700
+               disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="users-create-button"
+        :disabled="!canWriteUsers"
+        :title="readOnlyTitle"
         @click="showCreateModal = true"
       >
         {{ $t('admin.users.create') }}
@@ -330,8 +340,13 @@ onMounted(fetchUsers)
               </span>
             </td>
             <td class="px-6 py-3 text-sm">
+              <!-- AF-01: write actions are disabled (not hidden) for a
+                   read-only delegate, with the reason in the tooltip. -->
               <button
-                class="text-brand-600 hover:text-brand-900 mr-3"
+                class="text-brand-600 hover:text-brand-900 mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="users-assign-roles-button"
+                :disabled="!canWriteUsers"
+                :title="readOnlyTitle"
                 @click="openRoleModal(user)"
               >
                 {{ $t('admin.users.assignRoles') }}
@@ -343,7 +358,10 @@ onMounted(fetchUsers)
                 {{ $t('admin.users.details') }}
               </router-link>
               <button
-                class="text-error-600 hover:text-error-700"
+                class="text-error-600 hover:text-error-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="users-delete-button"
+                :disabled="!canWriteUsers"
+                :title="readOnlyTitle"
                 @click="deleteUser(user)"
               >
                 {{ $t('common.delete') }}

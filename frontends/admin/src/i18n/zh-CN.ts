@@ -327,6 +327,8 @@ export default {
       someTokensNotRevoked: '部分令牌无法吊销',
       deleteConfirm: '确定删除用户“{name}”？此操作无法撤销。',
       backToList: '← 返回用户列表',
+      // AF-01：只读委托账号写操作按钮置灰时的提示。
+      readOnlyHint: '只读权限：您的角色可以查看用户，但无法修改',
       enableAccount: '启用账户',
       disableAccount: '停用账户',
       emailVerifiedBadge: '邮箱已验证',

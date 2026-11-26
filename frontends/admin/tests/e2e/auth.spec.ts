@@ -47,6 +47,18 @@ test.describe('Authentication', () => {
   })
 
   test('denies access for non-admin users', async ({ page }) => {
+    // A plain user account holds no admin-class scope, so the backend's scope
+    // gate refuses every admin endpoint to its token. The console admits an
+    // account by what it can actually read (AF-01), so that refusal has to
+    // be modelled here and not only the role list. Registered after the
+    // beforeEach defaults, so it overrides them (LIFO).
+    await page.route('**/api/admin/**', async (route) => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'AUTHZ_INSUFFICIENT_PERMISSIONS', category: 'AUTHORIZATION', message: 'Insufficient permissions' } }),
+      })
+    })
     // Override userinfo to return non-admin user
     await page.route('**/oauth2/userinfo', async (route) => {
       await route.fulfill({

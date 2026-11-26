@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
 import { getErrorMessage } from '../../services/messages'
+import { usePermissionsStore } from '../../stores/permissions'
 import AppAlert from '../../components/ui/AppAlert.vue'
 import AppBadge from '../../components/ui/AppBadge.vue'
 import DData from '../../components/ui/DData.vue'
@@ -13,6 +14,12 @@ import AppConfirmDialog from '../../components/ui/AppConfirmDialog.vue'
 const { t } = useI18n()
 const route = useRoute()
 const userId = computed(() => route.params.id as string)
+
+// AF-01: a read-only delegate (users:read without users:write) can open the
+// detail page but every write action on it stays disabled.
+const permissions = usePermissionsStore()
+const canWriteUsers = computed(() => permissions.canWrite('users'))
+const readOnlyTitle = computed(() => (canWriteUsers.value ? undefined : t('admin.users.readOnlyHint')))
 
 // Tab strip (labels follow the active locale).
 const TABS = computed(() => [
@@ -215,7 +222,11 @@ onMounted(() => {
           <button
             v-if="isLocked"
             class="px-3 py-2 bg-success-600 text-white rounded-ctl text-sm hover:bg-success-700
-                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="user-enable-button"
+            :disabled="!canWriteUsers"
+            :title="readOnlyTitle"
             @click="enableUser"
           >
             {{ $t('admin.users.enableAccount') }}
@@ -223,7 +234,11 @@ onMounted(() => {
           <button
             v-else
             class="px-3 py-2 bg-error-600 text-white rounded-ctl text-sm hover:bg-error-700
-                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="user-disable-button"
+            :disabled="!canWriteUsers"
+            :title="readOnlyTitle"
             @click="disableUser"
           >
             {{ $t('admin.users.disableAccount') }}
@@ -325,8 +340,10 @@ onMounted(() => {
         </div>
         <div class="pt-4 border-t border-neutral-200">
           <button
-            :disabled="saving"
-            class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50"
+            :disabled="saving || !canWriteUsers"
+            :title="readOnlyTitle"
+            data-testid="user-save-info-button"
+            class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             @click="saveInfo"
           >
             {{ saving ? $t('common.saving') : $t('common.saveChanges') }}
@@ -371,7 +388,10 @@ onMounted(() => {
             {{ $t('admin.users.lockedUntil', { time: new Date((user.locked_until || 0) * 1000).toLocaleString() }) }}
           </p>
           <button
-            class="mt-2 px-3 py-1.5 bg-error-600 text-white rounded text-sm hover:bg-error-700"
+            class="mt-2 px-3 py-1.5 bg-error-600 text-white rounded text-sm hover:bg-error-700
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!canWriteUsers"
+            :title="readOnlyTitle"
             @click="enableUser"
           >
             {{ $t('admin.users.unlockAccount') }}
@@ -431,8 +451,10 @@ onMounted(() => {
         </div>
         <div class="mt-6 pt-4 border-t border-neutral-200">
           <button
-            :disabled="saving"
-            class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50"
+            :disabled="saving || !canWriteUsers"
+            :title="readOnlyTitle"
+            data-testid="user-save-roles-button"
+            class="px-4 py-2 bg-brand-600 text-white rounded-md text-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             @click="saveRoles"
           >
             {{ saving ? $t('common.saving') : $t('admin.users.saveRoles') }}

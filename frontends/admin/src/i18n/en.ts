@@ -337,6 +337,8 @@ export default {
       deleteConfirm:
         'Delete user "{name}"? This action cannot be undone.',
       backToList: '← Back to Users',
+      // AF-01: tooltip on the disabled write actions of a read-only delegate.
+      readOnlyHint: 'Read-only access: your role can view users but not change them',
       enableAccount: 'Enable Account',
       disableAccount: 'Disable Account',
       emailVerifiedBadge: 'Email Verified',
