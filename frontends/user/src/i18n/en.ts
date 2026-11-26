@@ -35,6 +35,7 @@ export default {
     loading: 'Loading...',
     dismiss: 'Dismiss',
     cancel: 'Cancel',
+    done: 'Done',
     save: 'Save',
     backToLogin: 'Back to Login',
     goToLogin: 'Go to Login',
@@ -368,6 +369,9 @@ export default {
       requestOrgAuthNoOrgs:
         'Join an organization before requesting organization authorization for this app.',
       requestOrgAuthSuccess: 'Request submitted — awaiting a manager decision',
+      // UF-07: same request dialog as on the applications page.
+      requestOrgAuthWithdraw: 'Withdraw request',
+      requestOrgAuthWithdrawn: 'Request withdrawn.',
     },
     applications: {
       title: 'My Applications',
@@ -401,6 +405,9 @@ export default {
       requestOrgAuthNoOrgs:
         'Join an organization before requesting organization authorization for this app.',
       requestOrgAuthSuccess: 'Request submitted — awaiting a manager decision',
+      // UF-07: take back a request just filed (the dialog's filed state).
+      requestOrgAuthWithdraw: 'Withdraw request',
+      requestOrgAuthWithdrawn: 'Request withdrawn.',
       // T1.3 (UF-04a): edit modal (PATCH with only the dirty fields).
       edit: 'Edit',
       editTitle: 'Edit "{app}"',
@@ -488,6 +495,10 @@ export default {
         'Approve "{requester}"\'s authorization request for "{client}"? The application will be granted the organization\'s consent.',
       pendingRejectConfirm:
         'Reject "{requester}"\'s authorization request for "{client}"? The requester will stay authorized to file a new one.',
+      // UF-07: the requester withdraws their own pending request.
+      withdraw: 'Withdraw',
+      pendingWithdrawConfirm: 'Withdraw your authorization request for "{client}"?',
+      requestWithdrawn: 'Authorization request withdrawn',
     },
   },
 }

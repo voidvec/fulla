@@ -424,6 +424,56 @@ test.describe('My Organizations — consent-request approvals (manager)', () => 
     // ...and the auto-resolved request vanished from the refetched queue.
     await expect(pending).toHaveCount(0)
   })
+
+  // UF-07: the requester withdraws their own pending request. A row is
+  // recognised as the user's by requester_username against the profile
+  // (mocked as 'testuser'); the default queue row belongs to 'member-lee'.
+  test("another member's request offers no withdrawal", async ({ page }) => {
+    // Wait for the profile round trip the recognition depends on, so the
+    // count below is not taken before the button could have appeared.
+    const profile = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/me')
+    await page.reload()
+    await profile
+    await page.click('button:has-text("Org authorizations")')
+
+    const pending = page.getByTestId('org-pending-requests')
+    await expect(pending.getByText('member-lee')).toBeVisible()
+    await expect(pending.getByTestId('withdraw-consent-request')).toHaveCount(0)
+    await expect(pending.getByTestId('approve-consent-request')).toBeVisible()
+  })
+
+  test('a manager withdraws their own request from the queue', async ({ page }) => {
+    STATE.requests.push({
+      id: 'cr_mine',
+      client_id: 'app_orgmock1',
+      requested_by: 7,
+      requester_username: 'testuser',
+      requested_at: '2026-09-26 11:00:00',
+      status: 'pending',
+    })
+    await page.reload()
+    await page.click('button:has-text("Org authorizations")')
+
+    const pending = page.getByTestId('org-pending-requests')
+    // Exactly one row carries a withdrawal: the user's own.
+    await expect(pending.getByTestId('withdraw-consent-request')).toHaveCount(1)
+    await expect(pending.getByTestId('approve-consent-request')).toHaveCount(2)
+
+    await pending.getByTestId('withdraw-consent-request').click()
+    await expect(page.getByTestId('confirm-dialog-confirm')).toBeVisible()
+    expect(STATE.calls.filter((c) => c.method === 'DELETE')).toEqual([])
+    await page.getByTestId('confirm-dialog-confirm').click()
+
+    await expect(page.getByText('Authorization request withdrawn')).toBeVisible()
+    expect(STATE.calls).toContainEqual({
+      method: 'DELETE',
+      path: '/api/me/organizations/qa-consent-org/consent-requests/cr_mine',
+      body: null,
+    })
+    // The user's row is gone from the refetched queue; the other stays.
+    await expect(pending.getByText('testuser')).toHaveCount(0)
+    await expect(pending.getByText('member-lee')).toBeVisible()
+  })
 })
 
 // v1.6: member-side filing — the applications list files a consent-request
@@ -460,15 +510,59 @@ test.describe('My Applications — request organization authorization (member)',
     await page.getByTestId('request-org-auth-submit').click()
 
     // The backend's message ("awaiting a manager decision") is surfaced
-    // verbatim in the success alert — also proving the POST round-tripped.
-    await expect(page.getByText('awaiting a manager decision')).toBeVisible()
+    // verbatim in the page's success alert — also proving the POST
+    // round-tripped — and again inside the dialog, which stays open.
+    await expect(page.locator('.bg-success-50').first()).toContainText('awaiting a manager decision')
+    await expect(page.getByTestId('request-org-auth-filed-message')).toHaveText('awaiting a manager decision')
     // The POST carried exactly {client_id}:
     expect(STATE.calls).toContainEqual({
       method: 'POST',
       path: '/api/me/organizations/qa-member-org/consent-requests',
       body: { client_id: 'app_member1' },
     })
-    await expect(dialog).toHaveCount(0)
+    // UF-07: the dialog stays on its filed state, so the request can still
+    // be taken back — a plain member is told the id only here.
+    await expect(page.getByTestId('request-org-auth-filed')).toBeVisible()
+    await expect(page.getByTestId('request-org-auth-withdraw')).toBeVisible()
+  })
+
+  test('a request just filed can be withdrawn on the spot', async ({ page }) => {
+    const STATE: OrgConsentRequestState = { requests: [], calls: [] }
+    await mockOrgConsentRequests(page, 'qa-member-org', STATE)
+
+    await page.getByTestId('request-org-auth').click()
+    await page.getByRole('dialog').locator('select').selectOption('qa-member-org')
+    await page.getByTestId('request-org-auth-submit').click()
+    await expect(page.getByTestId('request-org-auth-filed')).toBeVisible()
+
+    await page.getByTestId('request-org-auth-withdraw').click()
+    await expect(page.getByTestId('request-org-auth-withdrawn')).toHaveText('Request withdrawn.')
+    // The withdrawal names the id the filing answered with.
+    expect(STATE.calls).toContainEqual({
+      method: 'DELETE',
+      path: '/api/me/organizations/qa-member-org/consent-requests/cr_1',
+      body: null,
+    })
+    expect(STATE.requests).toHaveLength(0)
+    // Withdrawn: the button is gone, only finishing is left.
+    await expect(page.getByTestId('request-org-auth-withdraw')).toHaveCount(0)
+    await page.getByTestId('request-org-auth-done').click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  })
+
+  test('closing the filed dialog keeps the request', async ({ page }) => {
+    const STATE: OrgConsentRequestState = { requests: [], calls: [] }
+    await mockOrgConsentRequests(page, 'qa-member-org', STATE)
+
+    await page.getByTestId('request-org-auth').click()
+    await page.getByRole('dialog').locator('select').selectOption('qa-member-org')
+    await page.getByTestId('request-org-auth-submit').click()
+    await expect(page.getByTestId('request-org-auth-filed')).toBeVisible()
+    await page.getByTestId('request-org-auth-done').click()
+
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect(STATE.calls.filter((c) => c.method === 'DELETE')).toEqual([])
+    expect(STATE.requests).toHaveLength(1)
   })
 
   test('no organizations shows the join hint instead of an empty select', async ({ page }) => {
