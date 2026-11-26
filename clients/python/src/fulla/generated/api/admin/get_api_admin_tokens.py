@@ -5,14 +5,33 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
+    client_id: str | Unset = UNSET,
+    user_id: str | Unset = UNSET,
+) -> dict[str, Any]:
+
+    params: dict[str, Any] = {}
+
+    params["page"] = page
+
+    params["per_page"] = per_page
+
+    params["client_id"] = client_id
+
+    params["user_id"] = user_id
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/admin/tokens",
+        "params": params,
     }
 
     return _kwargs
@@ -43,10 +62,22 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
+    client_id: str | Unset = UNSET,
+    user_id: str | Unset = UNSET,
 ) -> Response[Any]:
     """List Tokens
 
-     Get a list of active OAuth2 tokens.
+     List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination
+    (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total
+    count.
+
+    Args:
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
+        client_id (str | Unset):
+        user_id (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -56,7 +87,12 @@ def sync_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        page=page,
+        per_page=per_page,
+        client_id=client_id,
+        user_id=user_id,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -68,10 +104,22 @@ def sync_detailed(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
+    client_id: str | Unset = UNSET,
+    user_id: str | Unset = UNSET,
 ) -> Response[Any]:
     """List Tokens
 
-     Get a list of active OAuth2 tokens.
+     List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination
+    (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total
+    count.
+
+    Args:
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
+        client_id (str | Unset):
+        user_id (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -81,7 +129,12 @@ async def asyncio_detailed(
         Response[Any]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        page=page,
+        per_page=per_page,
+        client_id=client_id,
+        user_id=user_id,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 

@@ -1175,6 +1175,21 @@ type PutApiAdminScopesScopeIdJSONBody struct {
 	RequiresAdminRole *bool   `json:"requires_admin_role,omitempty"`
 }
 
+// GetApiAdminTokensParams defines parameters for GetApiAdminTokens.
+type GetApiAdminTokensParams struct {
+	// Page Page number (1-based)
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Items per page (1-100)
+	PerPage *int `form:"per_page,omitempty" json:"per_page,omitempty"`
+
+	// ClientId Only tokens issued to this client_id
+	ClientId *string `form:"client_id,omitempty" json:"client_id,omitempty"`
+
+	// UserId Only tokens issued to this user_id
+	UserId *string `form:"user_id,omitempty" json:"user_id,omitempty"`
+}
+
 // PostApiAdminTokensRevokeByClientJSONBody defines parameters for PostApiAdminTokensRevokeByClient.
 type PostApiAdminTokensRevokeByClientJSONBody = map[string]interface{}
 
@@ -2541,10 +2556,10 @@ type ClientInterface interface {
 
 	// GetApiAdminTokens List Tokens
 	//
-	// Get a list of active OAuth2 tokens.
+	// List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total count.
 	//
 	// Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
-	GetApiAdminTokens(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetApiAdminTokens(ctx context.Context, params *GetApiAdminTokensParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostApiAdminTokensRevokeByClientWithBody Revoke Tokens By Client
 	//
@@ -4985,11 +5000,11 @@ func (c *Client) PutApiAdminScopesScopeId(ctx context.Context, scopeId int, body
 
 // GetApiAdminTokens List Tokens
 //
-// Get a list of active OAuth2 tokens.
+// List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total count.
 //
 // Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
-func (c *Client) GetApiAdminTokens(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetApiAdminTokensRequest(c.Server)
+func (c *Client) GetApiAdminTokens(ctx context.Context, params *GetApiAdminTokensParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiAdminTokensRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9575,7 +9590,7 @@ func NewPutApiAdminScopesScopeIdRequestWithBody(server string, scopeId int, cont
 }
 
 // NewGetApiAdminTokensRequest constructs an http.Request for the GetApiAdminTokens method
-func NewGetApiAdminTokensRequest(server string) (*http.Request, error) {
+func NewGetApiAdminTokensRequest(server string, params *GetApiAdminTokensParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9591,6 +9606,69 @@ func NewGetApiAdminTokensRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page", *params.Page, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ClientId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "client_id", *params.ClientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_id", *params.UserId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -14366,12 +14444,12 @@ type ClientWithResponsesInterface interface {
 
 	// GetApiAdminTokensWithResponse List Tokens
 	//
-	// Get a list of active OAuth2 tokens.
+	// List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total count.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
-	GetApiAdminTokensWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminTokensResponse, error)
+	GetApiAdminTokensWithResponse(ctx context.Context, params *GetApiAdminTokensParams, reqEditors ...RequestEditorFn) (*GetApiAdminTokensResponse, error)
 
 	// PostApiAdminTokensRevokeByClientWithBodyWithResponse Revoke Tokens By Client
 	//
@@ -23839,13 +23917,13 @@ func (c *ClientWithResponses) PutApiAdminScopesScopeIdWithResponse(ctx context.C
 
 // GetApiAdminTokensWithResponse List Tokens
 //
-// Get a list of active OAuth2 tokens.
+// List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total count.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/admin/tokens (the `GetApiAdminTokens` operationId).
-func (c *ClientWithResponses) GetApiAdminTokensWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetApiAdminTokensResponse, error) {
-	rsp, err := c.GetApiAdminTokens(ctx, reqEditors...)
+func (c *ClientWithResponses) GetApiAdminTokensWithResponse(ctx context.Context, params *GetApiAdminTokensParams, reqEditors ...RequestEditorFn) (*GetApiAdminTokensResponse, error) {
+	rsp, err := c.GetApiAdminTokens(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

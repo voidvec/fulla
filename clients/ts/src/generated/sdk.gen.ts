@@ -639,7 +639,7 @@ export const getApiAdminScopesResources = <ThrowOnError extends boolean = false>
 /**
  * List Tokens
  *
- * Get a list of active OAuth2 tokens.
+ * List active OAuth2 tokens (not expired and not revoked), newest first, with optional pagination (page, per_page) and filtering (client_id, user_id; exact match, combined with AND). Returns total count.
  */
 export const getApiAdminTokens = <ThrowOnError extends boolean = false>(options?: Options<GetApiAdminTokensData, ThrowOnError>): RequestResult<GetApiAdminTokensResponses, GetApiAdminTokensErrors, ThrowOnError> => (options?.client ?? client).get<GetApiAdminTokensResponses, GetApiAdminTokensErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
