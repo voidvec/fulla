@@ -414,6 +414,21 @@ export default {
       clearLogo: 'Remove the logo',
       suspendedFrozen: 'This application is suspended — configuration changes are frozen until an administrator resumes it',
       invalidRedirectUri: 'Invalid redirect URI "{uri}": must be a valid https URL (loopback hosts may use http)',
+      // T2.2 (UF-04b/c): the owner at create (personal, or an organization
+      // the caller manages) and transfer of the management anchor.
+      owner: 'Owner',
+      ownerPersonalOption: 'Personal (no organization)',
+      ownerHint: 'Only organizations you manage (as owner or admin) can own an application.',
+      managedBy: 'Managed by',
+      ownerPersonal: 'you (personal)',
+      ownerOrg: 'an organization',
+      transfer: 'Transfer',
+      transferring: 'Transferring…',
+      transferTitle: 'Transfer "{app}"',
+      transferBody: 'Move this application to a different owner. Its client ID, existing consents and issued tokens are kept.',
+      transferTarget: 'New owner',
+      transferNoTargets: 'You do not manage any organization, so this application can only stay under your personal ownership.',
+      transferred: 'Application "{app}" is now managed by {owner}',
     },
     organizations: {
       title: 'My Organizations',

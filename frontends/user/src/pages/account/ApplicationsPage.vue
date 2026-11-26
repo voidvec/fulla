@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import http from '../../services/http'
 import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
@@ -34,6 +34,71 @@ const newRedirectUris = ref('')
 const newScopes = ref('openid profile')
 // P1-1 (#279): optional brand image (https-only at the server).
 const newLogoUri = ref('')
+// T2.2 (UF-04c): the application's owner (personal, or an organization the
+// caller manages) and the grant types it may use. The form sends what it
+// shows: the server's default when allowed_grant_types is left out is
+// authorization_code alone, which is also the form's initial state.
+const newOrgSlug = ref('')
+const newGrants = ref<string[]>(['authorization_code'])
+
+// The only owners an application may be created under or transferred to:
+// the caller's own account, or an organization where they are owner/admin
+// (ApplicationService::isManagerRole; the server refuses any other slug the
+// same way it refuses an unknown one). Loaded once per page. The names are
+// decoration on the cards, so a failed load is quiet there and is reported
+// only by an action that needs the list.
+const manageableOrgs = ref<{ id: number; slug: string; name: string; role: string }[]>([])
+let orgsRequest: Promise<boolean> | null = null
+const orgsError = ref<NormalizedError | string | null>(null)
+
+function loadManageableOrgs(): Promise<boolean> {
+  if (!orgsRequest) {
+    orgsError.value = null
+    orgsRequest = http.get('/api/me/organizations')
+      .then((resp) => {
+        const all = resp.data?.organizations || []
+        manageableOrgs.value = all.filter((o: any) => o.role === 'owner' || o.role === 'admin')
+        return true
+      })
+      .catch((e: unknown) => {
+        orgsError.value = normalizeError(e)
+        // Not memoized: the next action that needs the list asks again.
+        orgsRequest = null
+        return false
+      })
+  }
+  return orgsRequest
+}
+
+function ownerSlugOf(app: any): string {
+  return manageableOrgs.value.find((o) => o.id === app.org_id)?.slug ?? ''
+}
+
+function ownerNameOf(app: any): string {
+  if (app.org_id == null) return t('account.applications.ownerPersonal')
+  return manageableOrgs.value.find((o) => o.id === app.org_id)?.name || t('account.applications.ownerOrg')
+}
+
+// At least one grant type has to stay selected (the server rejects an empty
+// list), so the last one checked cannot be cleared.
+function toggleNewGrant(gt: string) {
+  const selected = newGrants.value.includes(gt)
+  if (selected && newGrants.value.length === 1) return
+  newGrants.value = selected
+    ? newGrants.value.filter((g) => g !== gt)
+    : [...newGrants.value, gt]
+}
+
+// The create form opens: make sure the owner list is there.
+watch(showCreate, (open) => {
+  if (open) void loadManageableOrgs()
+})
+
+// client_credentials needs a client secret, which a PUBLIC client cannot
+// hold; drop it when the type rules it out.
+watch(newType, (type) => {
+  if (type === 'PUBLIC') newGrants.value = newGrants.value.filter((g) => g !== 'client_credentials')
+})
 
 // #181: destructive actions route through the shared confirm dialog instead
 // of native confirm() (which needed page.on('dialog') shims in the e2e suite).
@@ -77,6 +142,8 @@ async function createApp() {
     if (uris.length) body.redirect_uris = uris
     if (scopes.length) body.scopes = scopes
     if (newLogoUri.value.trim()) body.logo_uri = newLogoUri.value.trim()
+    body.allowed_grant_types = [...newGrants.value]
+    if (newOrgSlug.value) body.org_slug = newOrgSlug.value
     const resp = await http.post('/api/me/applications', JSON.stringify(body), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -84,6 +151,8 @@ async function createApp() {
     oneTimeSecretFor.value = resp.data?.client_id || ''
     showCreate.value = false
     newName.value = ''
+    newOrgSlug.value = ''
+    newGrants.value = ['authorization_code']
     success.value = t('account.applications.created')
     setTimeout(() => { success.value = '' }, 3000)
     await fetchApps()
@@ -121,6 +190,64 @@ function deleteApp(app: any) {
       error.value = normalizeError(e)
     }
   })
+}
+
+// T2.2 (UF-04b): move the management anchor — personal <-> an organization
+// the caller manages. The server keeps the client ID, existing consents and
+// issued tokens; only who may manage the application changes. Opening the
+// dialog and pressing its submit are the two deliberate steps.
+const transferOpen = ref(false)
+const transferring = ref(false)
+const transferringApp = ref<any>(null)
+// '' = personal ownership, otherwise an organization slug.
+const transferTarget = ref('')
+
+// Every owner the application is not already under.
+const transferTargets = computed(() =>
+  manageableOrgs.value.filter((o) => o.id !== transferringApp.value?.org_id))
+
+// True while the selection is the current owner: nothing to send.
+const transferUnchanged = computed(() => {
+  const app = transferringApp.value
+  return !app || transferTarget.value === ownerSlugOf(app)
+})
+
+async function openTransfer(app: any) {
+  error.value = null
+  transferringApp.value = app
+  transferTarget.value = ''
+  transferOpen.value = true
+  if (!await loadManageableOrgs()) {
+    transferOpen.value = false
+    error.value = orgsError.value ?? t('account.applications.loadFailed')
+  }
+  // Pre-select the current owner, so submitting without choosing another one
+  // does nothing rather than moving the application by accident.
+  transferTarget.value = ownerSlugOf(app)
+}
+
+async function confirmTransfer() {
+  const app = transferringApp.value
+  if (!app || transferring.value || transferUnchanged.value) return
+  transferring.value = true
+  error.value = null
+  try {
+    await http.post(`/api/me/applications/${app.client_id}/transfer`, JSON.stringify({
+      // The key is required; null means "back to personal".
+      org_slug: transferTarget.value || null,
+    }), { headers: { 'Content-Type': 'application/json' } })
+    const owner = transferTarget.value
+      ? (manageableOrgs.value.find((o) => o.slug === transferTarget.value)?.name || transferTarget.value)
+      : t('account.applications.ownerPersonal')
+    transferOpen.value = false
+    success.value = t('account.applications.transferred', { app: app.name || app.client_id, owner })
+    setTimeout(() => { success.value = '' }, 3000)
+    await fetchApps()
+  } catch (e: unknown) {
+    error.value = normalizeError(e)
+  } finally {
+    transferring.value = false
+  }
 }
 
 // T1.3 (UF-04a): edit modal — PATCH /api/me/applications/{clientId} with
@@ -256,7 +383,11 @@ function onRequestAuthError(e: unknown) {
   error.value = normalizeError(e)
 }
 
-onMounted(fetchApps)
+onMounted(() => {
+  void fetchApps()
+  // For the owner names on the cards; a failure stays quiet here.
+  void loadManageableOrgs()
+})
 </script>
 
 <template>
@@ -340,6 +471,27 @@ onMounted(fetchApps)
             <option value="CONFIDENTIAL">CONFIDENTIAL</option>
           </select>
         </div>
+        <!-- T2.2 (UF-04c): the owner. Personal by default; the organizations
+             listed are the ones the caller manages. -->
+        <div>
+          <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.owner') }}</label>
+          <select
+            v-model="newOrgSlug"
+            data-testid="app-create-owner"
+            class="mt-1 rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          >
+            <option value="">{{ $t('account.applications.ownerPersonalOption') }}</option>
+            <option
+              v-for="org in manageableOrgs"
+              :key="org.slug"
+              :value="org.slug"
+            >{{ org.name }}</option>
+          </select>
+          <p class="mt-1 text-xs text-neutral-400">
+            {{ $t('account.applications.ownerHint') }}
+          </p>
+        </div>
         <div>
           <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.redirectUris') }}</label>
           <input
@@ -356,6 +508,32 @@ onMounted(fetchApps)
             class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
+        </div>
+        <!-- T2.2 (UF-04c): grant types. client_credentials needs a secret a
+             PUBLIC client cannot hold, so it is not offered for that type. -->
+        <div>
+          <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.grants') }}</label>
+          <div class="mt-1 flex flex-wrap gap-3">
+            <label
+              v-for="gt in GRANT_TYPES"
+              :key="gt"
+              class="flex items-center gap-1.5 text-sm text-neutral-700"
+            >
+              <input
+                type="checkbox"
+                :checked="newGrants.includes(gt)"
+                :disabled="(gt === 'client_credentials' && newType === 'PUBLIC')
+                           || (newGrants.length === 1 && newGrants.includes(gt))"
+                :data-testid="`app-create-grant-${gt}`"
+                class="rounded border-neutral-300"
+                @change="toggleNewGrant(gt)"
+              >
+              {{ gt }}
+            </label>
+          </div>
+          <p class="mt-1 text-xs text-neutral-400">
+            {{ $t('account.applications.grantsHint') }}
+          </p>
         </div>
         <!-- P1-1 (#279): brand image for the login/consent screens. -->
         <div>
@@ -430,6 +608,15 @@ onMounted(fetchApps)
             >
               {{ app.redirect_uris.join(', ') }}
             </div>
+            <!-- T2.2 (UF-04b): who manages the application. The list carries
+                 only the organization id; its name comes from the caller's
+                 organizations. -->
+            <div
+              class="text-xs text-neutral-500 mt-1"
+              data-testid="app-owner"
+            >
+              {{ $t('account.applications.managedBy') }}: {{ ownerNameOf(app) }}
+            </div>
           </div>
           <div class="flex items-center gap-2">
             <!-- T1.3 (UF-04a): edit — disabled for suspended apps (management
@@ -443,6 +630,18 @@ onMounted(fetchApps)
               @click="openEdit(app)"
             >
               {{ $t('account.applications.edit') }}
+            </button>
+            <!-- T2.2 (UF-04b): transfer — frozen for suspended apps like
+                 every other management write. -->
+            <button
+              class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
+                     focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:opacity-50"
+              data-testid="app-transfer-button"
+              :disabled="app.status === 'suspended'"
+              :title="app.status === 'suspended' ? $t('account.applications.suspendedFrozen') : undefined"
+              @click="openTransfer(app)"
+            >
+              {{ $t('account.applications.transfer') }}
             </button>
             <button
               class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
@@ -488,6 +687,68 @@ onMounted(fetchApps)
       @confirm="runConfirm"
       @cancel="confirmOpen = false"
     />
+
+    <!-- T2.2 (UF-04b): transfer dialog. The submit stays disabled while the
+         selection is the current owner, so confirming without choosing
+         another owner cannot move anything. -->
+    <AppModal
+      :open="transferOpen"
+      :title="$t('account.applications.transferTitle', { app: transferringApp?.name || transferringApp?.client_id })"
+      size="sm"
+      @close="transferOpen = false"
+    >
+      <div
+        class="space-y-4"
+        data-testid="app-transfer-dialog"
+      >
+        <p class="text-sm text-neutral-600">
+          {{ $t('account.applications.transferBody') }}
+        </p>
+        <div>
+          <label class="block text-sm font-medium text-neutral-500">{{ $t('account.applications.transferTarget') }}</label>
+          <select
+            v-model="transferTarget"
+            data-testid="app-transfer-target"
+            class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          >
+            <option value="">{{ $t('account.applications.ownerPersonalOption') }}</option>
+            <option
+              v-for="org in transferTargets"
+              :key="org.slug"
+              :value="org.slug"
+            >{{ org.name }}</option>
+          </select>
+          <p
+            v-if="transferTargets.length === 0"
+            class="mt-1 text-xs text-neutral-500"
+            data-testid="app-transfer-no-targets"
+          >
+            {{ $t('account.applications.transferNoTargets') }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            class="px-4 py-2 text-sm text-neutral-600 border border-neutral-300 rounded-ctl hover:bg-neutral-50"
+            @click="transferOpen = false"
+          >
+            {{ $t('common.cancel') }}
+          </button>
+          <button
+            type="button"
+            :disabled="transferring || transferUnchanged"
+            data-testid="app-transfer-submit"
+            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700
+                   disabled:opacity-50 transition-colors
+                   focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            @click="confirmTransfer"
+          >
+            {{ transferring ? $t('account.applications.transferring') : $t('account.applications.transfer') }}
+          </button>
+        </div>
+      </div>
+    </AppModal>
 
     <!-- T1.3 (UF-04a): edit modal. Sends PATCH with only the dirty fields —
          absent keys stay unchanged on the server (partial semantics). -->
