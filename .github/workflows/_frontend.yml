@@ -26,10 +26,12 @@ jobs:
         with:
           node-version: "20"
 
-      # Dual-copy UI kit drift gate (P1 shared-UI strategy stage 1): the
-      # admin and user components/ui directories must stay byte-identical
-      # until the kit graduates to frontends/packages/ui.
-      - name: UI kit dual-copy sync gate
+      # Dual-copy sync gate: (1) the admin and user components/ui
+      # directories must stay byte-identical until the kit graduates to
+      # frontends/packages/ui; (2) the admin error catalogs must mirror
+      # every user catalog entry verbatim. It runs before npm ci on purpose:
+      # it reads the sources directly and needs no dependencies.
+      - name: Dual-copy sync gate (UI kit + error catalog)
         run: node scripts/check-ui-sync.mjs
 
       - name: Unit / property tests (user portal)
