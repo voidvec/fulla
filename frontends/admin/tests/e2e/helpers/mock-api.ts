@@ -50,6 +50,8 @@ export const MOCK_ORGS = [
   { id: 1, slug: 'acme', name: 'ACME Inc.', logo_uri: '', primary_color: '', issuer_override: '' },
 ]
 
+// Real list shape (UserAdminService::listUsers): each row carries its role
+// NAMES in `roles` — the role-assignment dialog pre-checks exactly those.
 export const MOCK_USERS = [
   {
     id: 1,
@@ -57,6 +59,7 @@ export const MOCK_USERS = [
     email: 'admin@example.com',
     email_verified: true,
     mfa_enabled: true,
+    roles: ['admin', 'user'],
   },
   {
     id: 2,
@@ -64,6 +67,7 @@ export const MOCK_USERS = [
     email: 'test@example.com',
     email_verified: false,
     mfa_enabled: false,
+    roles: ['user'],
   },
 ]
 
