@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
 import { beginSocialLogin, SocialFlowError } from '../../services/socialLogin'
 import type { SocialProvider } from '../../services/socialFlowContext'
-import { normalizeError } from '../../services/errorAdapter'
+import { normalizeError, type NormalizedError } from '../../services/errorAdapter'
+import { getErrorMessage } from '../../services/messages'
 import { authService, PORTAL_REDIRECT_URI } from '../../services/authService'
 import { buildAuthorizeResumeUrl, isAuthorizeResumeRequest } from '../../services/authorizeResume'
 import {
@@ -169,6 +170,50 @@ async function handleLogin() {
   }
 }
 
+// UF-05: the login was refused because the account's email address is not
+// verified (auth.require_email_verification). /oauth2/login answers exactly
+// that one case with 403 AUTHZ_ACCESS_DENIED, and the frontend only keeps the
+// code (not the server's message), so the code is the discriminator. The
+// catalog copy for it is a bare "Access denied"; this offers the way out —
+// a new verification link, requested without a session.
+const emailNotVerified = computed(
+  () => !!auth.error && typeof auth.error === 'object' && auth.error.code === 'AUTHZ_ACCESS_DENIED',
+)
+const verifyEmail = ref('')
+const resending = ref(false)
+const verificationSent = ref(false)
+// #158: a catalog-backed failure is kept as NormalizedError so the text
+// follows a locale switch.
+const resendError = ref<NormalizedError | string | null>(null)
+const resendErrorText = computed(() => {
+  const e = resendError.value
+  return !e ? '' : typeof e === 'string' ? e : getErrorMessage(e.code)
+})
+
+// The sign-in field takes a username as well, so carry the typed value over
+// only when it is an address; start the panel clean of any earlier outcome.
+watch(emailNotVerified, (denied) => {
+  if (!denied) return
+  verificationSent.value = false
+  resendError.value = null
+  if (username.value.includes('@')) verifyEmail.value = username.value
+})
+
+async function handleResendVerification() {
+  if (resending.value) return
+  resending.value = true
+  resendError.value = null
+  try {
+    await authService.resendVerificationByEmail(verifyEmail.value.trim())
+    verificationSent.value = true
+  } catch (e: unknown) {
+    verificationSent.value = false
+    resendError.value = normalizeError(e)
+  } finally {
+    resending.value = false
+  }
+}
+
 // UF-01: passkey login entry. The finish endpoint establishes the browser
 // session (cookie) but no tokens, so a plain portal login completes through
 // the SPA's own authorize round-trip; an in-flight authorize request resumes
@@ -301,6 +346,59 @@ async function handlePasswordChange() {
         {{ $t('auth.login.redirectUriHint') }}: {{ redirectUriHint }}
       </p>
     </AppAlert>
+
+    <!-- UF-05: sign-in refused because the email address is not verified —
+         request a new verification link (no session needed). The
+         confirmation is deliberately the same whatever address was entered:
+         the server does not reveal whether an account exists for it. -->
+    <div
+      v-if="emailNotVerified"
+      class="mb-6 rounded-lg border border-warning-200 bg-warning-50 p-4"
+      data-testid="verify-email-panel"
+    >
+      <p class="font-medium text-neutral-900">
+        {{ $t('auth.login.verifyEmail.title') }}
+      </p>
+      <p class="mt-1 text-sm text-neutral-600">
+        {{ $t('auth.login.verifyEmail.body') }}
+      </p>
+      <div
+        v-if="verificationSent"
+        class="mt-3 rounded-lg bg-success-50 border border-success-200 p-3 text-sm text-success-800"
+        data-testid="verify-email-sent"
+      >
+        {{ $t('auth.login.verifyEmail.sent') }}
+      </div>
+      <form
+        v-else
+        class="mt-3 space-y-3"
+        data-testid="verify-email-form"
+        @submit.prevent="handleResendVerification"
+      >
+        <AppInput
+          v-model="verifyEmail"
+          :label="$t('auth.login.verifyEmail.emailLabel')"
+          type="email"
+          autocomplete="email"
+          required
+        />
+        <AppAlert
+          v-if="resendErrorText"
+          type="error"
+          data-testid="verify-email-error"
+        >
+          {{ resendErrorText }}
+        </AppAlert>
+        <AppButton
+          type="submit"
+          :loading="resending"
+          :disabled="!verifyEmail.trim()"
+          block
+        >
+          {{ $t('auth.login.verifyEmail.submit') }}
+        </AppButton>
+      </form>
+    </div>
 
     <!-- #145: Forced Password Change -->
     <form
