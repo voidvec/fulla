@@ -27,9 +27,14 @@ on:
       - "libs/**"
       - "apps/server/**"
       - "tests/**"
+      - "examples/**"
       - "cmake/**"
       - "tools/sanitizers/tsan-dependencies.profile"
+      - "tools/sanitizers/tsan.supp"
       - "tools/sanitizers/verify_tsan_dependencies.py"
+      - "tools/sanitizers/check_ctest_junit.py"
+      - "CMakeLists.txt"
+      - ".gitattributes"
       - "CMakePresets.json"
       - ".github/workflows/sanitizer.yml"
   push:
@@ -38,9 +43,14 @@ on:
       - "libs/**"
       - "apps/server/**"
       - "tests/**"
+      - "examples/**"
       - "cmake/**"
       - "tools/sanitizers/tsan-dependencies.profile"
+      - "tools/sanitizers/tsan.supp"
       - "tools/sanitizers/verify_tsan_dependencies.py"
+      - "tools/sanitizers/check_ctest_junit.py"
+      - "CMakeLists.txt"
+      - ".gitattributes"
       - "CMakePresets.json"
   schedule:
     # tsan-nightly's documented cadence (see the job comment above). The
@@ -188,9 +198,14 @@ jobs:
     env:
       PRESET: linux-release-tsan
       TZ: UTC
+      FULLA_ENV_TEST_FLAG: "1"
+      FULLA_DB_PORT: "5432"
+      FULLA_REDIS_PORT: "6379"
       # suppressions: documented trantor-internal races (tools/sanitizers/
       # tsan.supp — created 2026-11-09 after tsan-nightly's first real run;
       # see the file for the per-race evidence and the triage policy).
+      # Uninstrumented third-party boundary: JsonCpp/OpenSSL/libpq/hiredis/libcurl.
+      # First-party and Drogon/Trantor must be instrumented; never mask first-party races.
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tools/sanitizers/tsan.supp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -238,11 +253,14 @@ jobs:
           ccache -M 2G
           ccache -z
           cmake --preset "$PRESET" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          python3 tools/sanitizers/verify_tsan_dependencies.py \
-            "build/$PRESET/conan-tsan-graph.json" --build-dir "build/$PRESET"
 
       - name: Build
         run: cmake --build --preset "$PRESET"
+
+      - name: Verify first-party TSan instrumentation
+        run: >-
+          python3 tools/sanitizers/verify_tsan_dependencies.py
+          "build/$PRESET/conan-tsan-graph.json" --build-dir "build/$PRESET"
 
       - name: ccache statistics
         run: ccache -s
@@ -290,7 +308,31 @@ jobs:
         # 900 like the coverage leg: the instrumented OAuth2Tests binary plus
         # a login-retry sequence can exceed the old 300s ceiling, and ctest
         # then reported the whole suite as (Timeout).
-        run: ctest -C Debug --output-on-failure --timeout 900
+        run: |
+          ctest -C Debug --no-tests=error --output-on-failure --timeout 900 \
+            --output-junit "$RUNNER_TEMP/ctest-tsan.xml"
+
+      - name: Verify SDK smoke TSan linkage
+        if: always()
+        working-directory: build/${{ env.PRESET }}
+        run: >-
+          python3 ../../tools/sanitizers/verify_tsan_dependencies.py
+          conan-tsan-graph.json --build-dir . --require-sdk-smoke
+
+      - name: Reject empty, skipped, or not-run CTest tests
+        if: always()
+        run: >-
+          python3 tools/sanitizers/check_ctest_junit.py
+          "$RUNNER_TEMP/ctest-tsan.xml"
+          "build/${{ env.PRESET }}/examples/full-stack-host/smoke-junit.xml"
+
+      - name: Upload TSan CTest JUnit
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tsan-ctest-junit
+          path: ${{ runner.temp }}/ctest-tsan.xml
+          if-no-files-found: ignore
 
       - name: Upload TSan dependency provenance
         if: always()
@@ -305,6 +347,7 @@ jobs:
             build/${{ env.PRESET }}/apps/server/CMakeFiles/fulla-server.dir/flags.make
             build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/flags.make
             build/${{ env.PRESET }}/examples/full-stack-host/CMakeFiles/fulla-full-stack-smoke.dir/link.txt
+            build/${{ env.PRESET }}/examples/full-stack-host/smoke-junit.xml
             build/${{ env.PRESET }}/examples/full-stack-host/fulla-sdk-dependencies-*.txt
           if-no-files-found: warn
 

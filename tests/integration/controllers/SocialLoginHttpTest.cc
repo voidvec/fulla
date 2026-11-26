@@ -53,14 +53,10 @@ using fulla::test::social::injectSocialLinkFake;
 // Server-reachability guard (these routes need no DB, but the in-process
 // server must be up). No postgresAvailable() guard: the mock-injected paths
 // run under memory mode too.
-#define SOCIAL_SKIP_GUARD                                    \
-    do                                                       \
-    {                                                        \
-        if (!serverReachable())                              \
-        {                                                    \
-            CHECK(true);                                     \
-            return;                                          \
-        }                                                    \
+#define SOCIAL_SERVER_GUARD                    \
+    do                                        \
+    {                                         \
+        REQUIRE(serverReachable());           \
     } while (0)
 
 // ===========================================================================
@@ -72,7 +68,7 @@ using fulla::test::social::injectSocialLinkFake;
 // same shape as GitHub's.
 DROGON_TEST(Integration_P0_GoogleLogin_FakeExchange_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGoogleFake();
     Json::Value tokenBody;
@@ -104,7 +100,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_FakeExchange_ReturnsTokens)
 // account was created (no side effects).
 DROGON_TEST(Integration_P0_GoogleLogin_AutoCreateDisabled_Returns403)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGoogleFake();
     h.service->setAutoCreate(false);
@@ -131,7 +127,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_AutoCreateDisabled_Returns403)
 // are accepted; the helper obtains the browser-bound state over HTTP.
 DROGON_TEST(Integration_P1_GoogleLogin_MissingCode_Returns400)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     injectGoogleFake();  // install fake (not actually hit on this path)
     auto resp = sendLoginForm("/api/google/login", "other=val");
@@ -146,7 +142,7 @@ DROGON_TEST(Integration_P1_GoogleLogin_MissingCode_Returns400)
 // Major).
 DROGON_TEST(Integration_P0_GoogleLogin_JsonCodeBody_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGoogleFake();
     Json::Value tokenBody;
@@ -177,7 +173,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_JsonCodeBody_ReturnsTokens)
 // LogicError from asString().
 DROGON_TEST(Integration_P1_GoogleLogin_NonStringCode_Returns400)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     injectGoogleFake();  // install fake (must not be hit on this path)
     Json::Value hostile;
@@ -192,7 +188,7 @@ DROGON_TEST(Integration_P1_GoogleLogin_NonStringCode_Returns400)
 // (HTTP 502, NETWORK-category default).
 DROGON_TEST(Integration_P1_GoogleLogin_TransportFailure_Returns502)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGoogleFake();
     h.http->postFormResponses.push_back(fulla::identity::testing::transportFailure());
@@ -210,7 +206,7 @@ DROGON_TEST(Integration_P1_GoogleLogin_TransportFailure_Returns502)
 // #70 happy path: fake exchange + userinfo + auto-create -> token pair.
 DROGON_TEST(Integration_P0_WeChatLogin_FakeExchange_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectWeChatFake();
     Json::Value tokenBody;
@@ -238,7 +234,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_FakeExchange_ReturnsTokens)
 // JSON-extraction fix so the same contract regression cannot resurface here.
 DROGON_TEST(Integration_P0_WeChatLogin_JsonCodeBody_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectWeChatFake();
     Json::Value tokenBody;
@@ -264,7 +260,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_JsonCodeBody_ReturnsTokens)
 // account creation (the linked map stays at the single pre-seeded entry).
 DROGON_TEST(Integration_P0_WeChatLogin_LinkedUser_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectWeChatFake();
     fulla::identity::SocialAccountLookup seeded;
@@ -295,7 +291,7 @@ DROGON_TEST(Integration_P0_WeChatLogin_LinkedUser_ReturnsTokens)
 // DB_QUERY_ERROR).
 DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGoogleFake();
     // "google_g_collide1" is derived from sub "g-collide1" (first 12 chars);
@@ -325,7 +321,7 @@ DROGON_TEST(Integration_P0_GoogleLogin_UsernameCollision_RetriesWithSuffix)
 
 DROGON_TEST(Integration_P1_WeChatLogin_MissingCode_Returns400)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     injectWeChatFake();
     auto resp = sendLoginForm("/api/wechat/login", "other=val");
@@ -351,7 +347,7 @@ DROGON_TEST(Integration_P1_WeChatLogin_MissingCode_Returns400)
 // expires_in}. Runs in memory mode (the GitHub blocker is resolved).
 DROGON_TEST(Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     // Token exchange response.
@@ -384,7 +380,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_FakeExchange_ReturnsTokens)
 // extraction and did not cover it (PR #225 review, Major).
 DROGON_TEST(Integration_P0_GitHubLogin_JsonCodeBody_ReturnsTokens)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     Json::Value tokenBody;
@@ -410,7 +406,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_JsonCodeBody_ReturnsTokens)
 // Missing code -> 400 (controller validation, service not called).
 DROGON_TEST(Integration_P1_GitHubLogin_MissingCode_Returns400)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     injectGitHubFake();
     auto resp = sendLoginForm("/api/github/login", "other=val");
@@ -423,7 +419,7 @@ DROGON_TEST(Integration_P1_GitHubLogin_MissingCode_Returns400)
 // service returns an error, never reaching issueTokensForUser.
 DROGON_TEST(Integration_P1_GitHubLogin_TransportFailure_Returns502)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     h.http->postFormResponses.push_back(fulla::identity::testing::transportFailure());
@@ -439,7 +435,7 @@ DROGON_TEST(Integration_P1_GitHubLogin_TransportFailure_Returns502)
 // path only, so it is safe under memory mode.
 DROGON_TEST(Integration_P0_GitHubLogin_DeletedLinkedUser_Rejected401)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     // Mark (github, "12345") as linked-but-unavailable (soft-deleted/locked).
@@ -469,7 +465,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_DeletedLinkedUser_Rejected401)
 // account-CREATION branch instead (PR-review finding 3).
 DROGON_TEST(Integration_P0_GitHubLogin_RepoError_Returns5xx_NoCreation)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     h.accountRepo->failFind = true;
@@ -500,7 +496,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_RepoError_Returns5xx_NoCreation)
 // succeeds on the fresh name.
 DROGON_TEST(Integration_P0_GitHubLogin_ConflictingUsername_RetriesWithoutAdoption)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     // No mapping for the subject, but "gh_gh-test-user" (the derived
@@ -580,7 +576,7 @@ std::optional<std::pair<std::string, std::string>> fakeGitHubLoginForTokens(
 // refresh grant accepts an empty secret for it.
 DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_RefreshGrantWorks)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
 
     auto h = injectGitHubFake();
     auto tokens = fakeGitHubLoginForTokens(h.http, 60690);
@@ -607,7 +603,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_RefreshGrantWorks)
 // fulla-admin-console cannot call it.
 DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_AuthenticatedEndpointsWork)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
     if (!postgresAvailable())
     {
         CHECK(true);
@@ -737,7 +733,7 @@ DROGON_TEST(Integration_P0_GitHubLogin_IssuedToken_AuthenticatedEndpointsWork)
 
 DROGON_TEST(Integration_P0_SocialLogin_StateGuardRejectsBeforeUpstream)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
     auto h = injectGitHubFake();
     fulla::test::social::LoginBrowser browser;
     REQUIRE(browser.begin("github"));
@@ -790,7 +786,7 @@ DROGON_TEST(Integration_P0_SocialLogin_StateGuardRejectsBeforeUpstream)
 
 DROGON_TEST(Integration_P0_SocialLogin_AuthorizeFailsClosed)
 {
-    SOCIAL_SKIP_GUARD;
+    SOCIAL_SERVER_GUARD;
     injectGoogleFake();
     fulla::test::social::LoginBrowser browser;
     auto response = browser.send("/api/auth/providers/google/authorize", "", "application/json", "");

@@ -44,15 +44,14 @@ set(SCHEMA_MGR_SRC "${FULLA_SERVER_SRC_DIR}/SchemaManager.cc")
 # defined in ControllerRegistration.cc alongside registerAllControllers()
 # (already called by test_main.cc directly, without going through this
 # glob, before this task). Task 24 slice 4 adds IdentityAssembly.cc
-# (test_main.cc also calls bootstrap::wireIdentityServices()). These two
-# bootstrap/ files are needed by the test target; the others
-# (CorsSetup/SecurityHeaders/etc) are apps/server-only concerns
-# test_main.cc does not use.
+# (test_main.cc also calls bootstrap::wireIdentityServices()). The test server
+# shares the production controller, identity, and security-header wiring.
 set(BOOTSTRAP_SRC
     "${FULLA_SERVER_SRC_DIR}/bootstrap/AdminBootstrapper.cc"
     "${FULLA_SERVER_SRC_DIR}/bootstrap/ClientSeeder.cc"
     "${FULLA_SERVER_SRC_DIR}/bootstrap/ControllerRegistration.cc"
     "${FULLA_SERVER_SRC_DIR}/bootstrap/IdentityAssembly.cc"
+    "${FULLA_SERVER_SRC_DIR}/bootstrap/SecurityHeaders.cc"
 )
 
 # M5 Task 30: the product-level OrganizationController (apps/server/src/
@@ -493,7 +492,7 @@ if(WITH_SOCIAL)
             COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_SOURCE_DIR}/scripts/backend/test-social-login-state.py"
                 --server-exe "${_SERVER_BIN}"
-                --config "${CMAKE_SOURCE_DIR}/apps/server/config/config.json")
+                --config "$<TARGET_FILE_DIR:fulla-server>/config.json")
         set_tests_properties(SocialLoginState_OutOfProcess PROPERTIES
             LABELS "Endpoint" RUN_SERIAL TRUE SKIP_RETURN_CODE 77 TIMEOUT 60)
     endif()

@@ -41,6 +41,7 @@ set_target_properties(fulla-identity-test PROPERTIES CXX_STANDARD 17 CXX_STANDAR
 
 oauth2_apply_compat(fulla-identity-test)
 oauth2_apply_gcov(fulla-identity-test)
+oauth2_apply_sanitizer(fulla-identity-test)
 
 include(GoogleTest)
 gtest_discover_tests(fulla-identity-test)
