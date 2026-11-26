@@ -217,7 +217,12 @@ async function saveEdit() {
       headers: { 'Content-Type': 'application/json' },
     })
     editOpen.value = false
-    success.value = t('account.applications.updated', { app: original.name || original.client_id })
+    // Confirm under the name the application has NOW — a rename should not
+    // be reported with the previous one.
+    const currentName = typeof body.name === 'string' && body.name
+      ? body.name
+      : (original.name || original.client_id)
+    success.value = t('account.applications.updated', { app: currentName })
     setTimeout(() => { success.value = '' }, 3000)
     await fetchApps()
   } catch (e: unknown) {

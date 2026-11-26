@@ -14,7 +14,10 @@ const MOCK_ORGS: any[] = []
 
 async function setupOpenPlatformMocks(page: any) {
   await setupMocks(page)
-  await page.route('**/api/me/applications*', async (route: any) => {
+  // Trailing `**` (not `*`): a single star does not cross '/', so it would
+  // only match the collection path and let the per-application requests
+  // (PATCH /{id} here) fall through to the network.
+  await page.route('**/api/me/applications**', async (route: any) => {
     const url = new URL(route.request().url())
     const path = url.pathname
     if (route.request().method() === 'GET' && path.endsWith('/api/me/applications')) {
