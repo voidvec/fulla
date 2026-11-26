@@ -67,8 +67,8 @@ test-results/
 # Runtime directories (created by Drogon at startup)
 **/logs/
 # Exception: admin console source directory named "logs" (page component)
-!OAuth2Admin/src/pages/logs/
-!OAuth2Admin/src/pages/logs/**
+!frontends/admin/src/pages/logs/
+!frontends/admin/src/pages/logs/**
 **/uploads/
 
 # Bug Fix Reports - local documentation only
