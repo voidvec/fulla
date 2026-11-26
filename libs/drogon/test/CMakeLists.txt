@@ -36,6 +36,7 @@ set_target_properties(fulla-drogon-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_
 
 oauth2_apply_compat(fulla-drogon-test)
 oauth2_apply_gcov(fulla-drogon-test)
+oauth2_apply_sanitizer(fulla-drogon-test)
 
 include(GoogleTest)
 gtest_discover_tests(fulla-drogon-test)

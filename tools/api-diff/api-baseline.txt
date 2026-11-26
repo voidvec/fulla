@@ -22,6 +22,7 @@ static const char *getProcessEnv(const char *name);
 static void setDotEnvForTesting(
 const std::vector<std::pair<std::string, std::string>> &entries
 );
+static std::vector<std::pair<std::string, std::string>> getDotEnvForTesting();
 private:
 static Json::Value *getJsonPointer(Json::Value &root, const std::string &path);
 static int parseInt(const std::string &str);
@@ -6480,9 +6481,10 @@ const std::function<bool(const std::string &)> &scopeRequiresAdmin
 #include <fulla/common/ports/ILogger.h>
 #include <string>
 #include <json/json.h>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
-#include <vector>
 namespace fulla::oauth2
 {
 class JwkManager
@@ -6490,6 +6492,10 @@ class JwkManager
 public:
 explicit JwkManager(fulla::common::ports::ILogger *logger = nullptr) : logger_(logger)
 ;
+JwkManager(const JwkManager &other);
+JwkManager &operator=(const JwkManager &other);
+JwkManager(JwkManager &&other);
+JwkManager &operator=(JwkManager &&other);
 ~JwkManager();
 bool init(const Json::Value &config);
 std::string signJwt(const Json::Value &payload) const;
@@ -6521,31 +6527,30 @@ const std::string &expectedAudience = {},
 JwtVerificationResult *rejectionReason = nullptr
 ) const;
 Json::Value getJwks() const;
-const std::string &getKeyId() const
-;
-bool isInitialized() const
-;
+const std::string &getKeyId() const;
+bool isInitialized() const;
 private:
 struct KeyEntry
 {
 std::string kid;
 void *pkey = nullptr;
 };
-std::vector<KeyEntry> keys_;
-std::string activeKid_;
-bool initialized_ = false;
-fulla::common::ports::ILogger *logger_ = nullptr;
-const KeyEntry *findEntry(const std::string &kid) const;
-const KeyEntry *activeEntry() const;
+struct KeySet;
+std::atomic<fulla::common::ports::ILogger *> logger_{nullptr};
+mutable std::mutex initMutex_;
+std::shared_ptr<const KeySet> keySet_;
+const KeyEntry *findEntry(const KeySet &keySet, const std::string &kid) const;
 bool generateEphemeralKey(KeyEntry &entry);
 bool loadPemInto(KeyEntry &entry, const std::string &pemData);
-bool loadKeystoreDir(const std::string &dir);
+bool loadKeystoreDir(KeySet &keySet, const std::string &dir);
 static std::string base64UrlEncode(const unsigned char *data, size_t len);
 static std::string base64UrlEncode(const std::string &data);
 static bool base64UrlDecode(const std::string &input, std::string &output);
 bool getPublicKeyComponents(const KeyEntry &entry, std::string &n, std::string &e) const;
 static bool verifyRs256Signature(
-const void *pkey, const std::string &signingInput, const std::string &signature
+const void *pkey,
+const std::string &signingInput,
+const std::string &signature
 );
 JwtVerificationResult verifyCore(
 const std::string &jwt,

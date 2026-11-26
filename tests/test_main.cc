@@ -44,8 +44,10 @@ static void flushGcovIfInstrumented()
 {
 }
 #endif
+#include <fulla/common/config/ConfigManager.h>
 #include "../src/bootstrap/ControllerRegistration.h"
 #include "../src/bootstrap/IdentityAssembly.h"
+#include "../src/bootstrap/SecurityHeaders.h"
 // #299: capture the effective db_clients[0] conninfo for DbDiagnostics.h's
 // out-of-pool snapshot client.
 #include "DbDiagnostics.h"
@@ -162,64 +164,13 @@ void createLogDirFromConfig(const std::string &configPath)
 std::string loadConfigWithEnv(const std::string &configPath)
 {
     Json::Value root;
-    std::ifstream configFile(configPath);
-    if (!configFile.is_open())
+    if (!fulla::common::config::ConfigManager::load(configPath, root))
     {
-        std::cerr << "Error: Config file not found: " << configPath << std::endl;
         return configPath;
     }
 
-    if (!parseJsonString(configFile, root))
+    if (root["db_clients"].isArray() && root["db_clients"].size() > 0)
     {
-        std::cerr << "Error: Failed to parse config file: " << configPath << std::endl;
-        return configPath;
-    }
-
-    // Check storage type to determine if database overrides should be applied
-    bool isMemoryStorage = false;
-    if (root.isMember("plugins") && root["plugins"].isArray())
-    {
-        for (const auto &plugin : root["plugins"])
-        {
-            if (
-              plugin.isMember("name") && plugin["name"].asString() == "OAuth2Plugin" &&
-              plugin.isMember("config") && plugin["config"].isMember("storage_type")
-            )
-            {
-                std::string storageType = plugin["config"]["storage_type"].asString();
-                if (storageType == "memory")
-                {
-                    isMemoryStorage = true;
-                    std::cout << "Memory storage detected: skipping database "
-                                 "environment variable overrides"
-                              << std::endl;
-                }
-                break;
-            }
-        }
-    }
-
-    // Override DB Settings (only if not memory storage and db_clients array is
-    // not empty)
-    if (!isMemoryStorage && root["db_clients"].isArray() && root["db_clients"].size() > 0)
-    {
-        if (const char *env = std::getenv("FULLA_DB_HOST"))
-        {
-            if (env[0] != '\0')
-                root["db_clients"][0]["host"] = env;
-        }
-        if (const char *env = std::getenv("FULLA_DB_NAME"))
-        {
-            if (env[0] != '\0')
-                root["db_clients"][0]["dbname"] = env;
-        }
-        if (const char *env = std::getenv("FULLA_DB_PASSWORD"))
-        {
-            // Always override password if env var is set, even if empty
-            // This allows CI to disable password authentication
-            root["db_clients"][0]["passwd"] = env;
-        }
-
         // #299 fail-fast: the TEST server's DB connections must never wait
         // forever. Production defaults are `lock_timeout=0` (infinite lock
         // queue) and drogon-side `timeout: -1` (an unbounded-TIME client-side
@@ -279,48 +230,6 @@ std::string loadConfigWithEnv(const std::string &configPath)
                      "idle_in_transaction_session_timeout=60s, drogon "
                      "sql-timeout=30s (test runtime config only)"
                   << std::endl;
-    }
-
-    // Override Redis Settings (only if not memory storage and redis_clients
-    // array is not empty)
-    if (!isMemoryStorage && root["redis_clients"].isArray() && root["redis_clients"].size() > 0)
-    {
-        if (const char *env = std::getenv("FULLA_REDIS_HOST"))
-        {
-            if (env[0] != '\0')
-                root["redis_clients"][0]["host"] = env;
-        }
-        if (const char *env = std::getenv("FULLA_REDIS_PASSWORD"))
-        {
-            // Always override password if env var is set, even if empty
-            // This allows CI to disable password authentication
-            root["redis_clients"][0]["passwd"] = env;
-        }
-    }
-
-    // Override Client Secret in OAuth2Plugin (new primary name, legacy alias)
-    const char *env = std::getenv("FULLA_PORTAL_CLIENT_SECRET");
-    if (!env || env[0] == 0)
-        env = std::getenv("FULLA_VUE_CLIENT_SECRET");
-    if (env != nullptr && env[0] != 0)
-    {
-        if (env[0] != '\0' && root["plugins"].isArray())
-        {
-            for (auto &plugin : root["plugins"])
-            {
-                if (plugin.get("name", "").asString() == "OAuth2Plugin")
-                {
-                    if (
-                      plugin.isMember("config") && plugin["config"].isMember("clients") &&
-                      plugin["config"]["clients"].isMember("fulla-portal")
-                    )
-                    {
-                        plugin["config"]["clients"]["fulla-portal"]["secret"] = env;
-                    }
-                    break;
-                }
-            }
-        }
     }
 
     // Widen the login failure rate-limit window for the TEST server. The
@@ -549,6 +458,7 @@ int main(int argc, char **argv)
                 // Task 24 slice 4: same wiring as OAuth2Server/main.cc --
                 // see bootstrap::wireIdentityServices()'s header comment.
                 bootstrap::wireIdentityServices(identityRuntimeConfig);
+                bootstrap::setupSecurityHeaders();
                 std::cout << "Drogon app ready, signaling tests to start..." << std::endl;
                 // Add a small delay on macOS to ensure EventLoop and ThreadPool
                 // are fully initialized before tests start hitting the server.

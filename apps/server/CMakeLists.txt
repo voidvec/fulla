@@ -78,5 +78,18 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     "$<TARGET_FILE_DIR:${PROJECT_NAME}>/docs/api/swagger-ui"
 )
 
+# Keep out-of-process CTest wrappers on the current config without requiring a relink.
+set(_server_config_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+if(CMAKE_CONFIGURATION_TYPES)
+    string(APPEND _server_config_output_dir "/$<CONFIG>")
+endif()
+add_custom_target(${PROJECT_NAME}-config ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_server_config_output_dir}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/config/config.json"
+    "${_server_config_output_dir}/config.json"
+)
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}-config)
+
 # Tests moved to top-level tests/ (Phase 7); mounted from the root
 # CMakeLists.txt via add_subdirectory(tests).

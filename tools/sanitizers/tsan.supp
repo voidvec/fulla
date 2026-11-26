@@ -33,6 +33,20 @@ race:trantor::MpscQueue
 #    lifecycle semantics, not first-party wiring.
 race:trantor::Connector::handleWrite
 
+# 4. OpenSSL 3.5.7 provider-store initialization during concurrent libpq
+#    PQconnectPoll() calls (Drogon PgConnection::pgPoll). Observed 2026-11-25
+#    on the isolated PostgreSQL TSan run: match_key hashtable.c:549 read vs
+#    alloc_new_value hashtable.c:644 write, both below upstream PgConnection
+#    callbacks and OpenSSL allocation frames. OpenSSL/libpq are intentionally
+#    outside the instrumented dependency boundary; no first-party frame or
+#    AuthForge-owned object appears in either stack. An independent libpq-only
+#    TSan probe did not reproduce the race, so this is not claimed as a minimal
+#    reproduction. The report's top frame can be TSan's memcmp interceptor, so
+#    race_top does not match; these anchored rules match only the exact OpenSSL
+#    function names. CI must reject same-named first-party symbols.
+race:^match_key$
+race:^alloc_new_value$
+
 # If new findings appear, triage them: first-party stacks (libs/**,
 # apps/**) are FIXED, not suppressed — see the OAuth2Plugin admin-scope
 # handshake fix from the same campaign for the example. Extend this file

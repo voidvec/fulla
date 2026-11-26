@@ -195,6 +195,8 @@ if(BUILD_EXAMPLES)
                 ${_sdk_smoke_feature_options}
                 ${_sdk_smoke_build_options}
             --test-command "${CMAKE_CTEST_COMMAND}" -C "$<CONFIG>" --output-on-failure
+                --no-tests=error --output-junit
+                "${CMAKE_BINARY_DIR}/examples/full-stack-host/smoke-junit.xml"
     )
     set_tests_properties(SdkSmoke.FullStack PROPERTIES LABELS "SdkSmoke")
 endif()

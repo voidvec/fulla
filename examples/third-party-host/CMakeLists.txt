@@ -37,4 +37,6 @@ target_link_libraries(${PROJECT_NAME}
     fulla::storage::memory
 )
 
+oauth2_apply_sanitizer(${PROJECT_NAME})
+
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)

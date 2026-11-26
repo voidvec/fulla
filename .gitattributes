@@ -16,3 +16,6 @@ tools/refactor-baseline/**/*.yaml text eol=lf
 tools/refactor-baseline/**/*.py text eol=lf
 tools/diff-endpoint-baseline.py text eol=lf
 tools/check-orm-exempt.sh text eol=lf
+
+# TSan rejects CRLF suppression files on Windows checkouts.
+tools/sanitizers/*.supp text eol=lf

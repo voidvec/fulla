@@ -33,6 +33,22 @@ if [ -z "$SERVER_EXE" ]; then
     echo "ERROR: --server-exe is required"
     exit 2
 fi
+# BSD readlink has no -e; follow links explicitly and resolve the parent physically.
+RESOLVED_EXE="$SERVER_EXE"
+for _ in $(seq 1 40); do
+    [ -L "$RESOLVED_EXE" ] || break
+    LINK_TARGET="$(readlink "$RESOLVED_EXE")" || exit 2
+    case "$LINK_TARGET" in
+        /*) RESOLVED_EXE="$LINK_TARGET" ;;
+        *)  RESOLVED_EXE="$(dirname "$RESOLVED_EXE")/$LINK_TARGET" ;;
+    esac
+done
+if [ -L "$RESOLVED_EXE" ] || [ ! -f "$RESOLVED_EXE" ] || [ ! -x "$RESOLVED_EXE" ]; then
+    echo "ERROR: server executable is not an executable file: $SERVER_EXE"
+    exit 2
+fi
+SERVER_DIR="$(cd "$(dirname "$RESOLVED_EXE")" && pwd -P)" || exit 2
+SERVER_EXE="$SERVER_DIR/$(basename "$RESOLVED_EXE")"
 
 RESULT=0
 
@@ -44,31 +60,49 @@ RESULT=0
 fuser -k 5555/tcp 2>/dev/null || true
 sleep 1
 
-SERVER_DIR="$(dirname "$SERVER_EXE")"
-echo "[endpoint-wrapper] Starting server: $SERVER_EXE"
-echo "[endpoint-wrapper] Working dir:     $SERVER_DIR"
+RUN_DIR="$(mktemp -d "$SERVER_DIR/.endpoint-tests.XXXXXX")" || exit 2
+SERVER_PID=""
+cleanup() {
+    if [ -n "$SERVER_PID" ]; then
+        echo "[endpoint-wrapper] Stopping server (PID $SERVER_PID)"
+        kill "$SERVER_PID" 2>/dev/null || true
+        # Grace period for clean shutdown, then force-kill + reap. Do NOT use
+        # bare `wait` before SIGKILL -- it hangs if the server ignores SIGTERM.
+        for _ in 1 2 3 4 5; do
+            kill -0 "$SERVER_PID" 2>/dev/null || break
+            sleep 1
+        done
+        kill -9 "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true  # reap zombie (safe after SIGKILL)
+    fi
+    rm -rf -- "$RUN_DIR"
+}
+trap cleanup EXIT
 
-cd "$SERVER_DIR"
+# Drogon relaunches a failed daemon; TSan cannot create threads after that fork.
+# Keep runtime files beside the normal server resources while preserving the
+# parent-directory .env lookup.
+if ! jq --arg server_dir "$SERVER_DIR" \
+    '.app.relaunch_on_error = false
+     | .app.run_as_daemon = false
+     | .app.document_root = $server_dir
+     | .app.upload_path = ($server_dir + "/uploads")
+     | .app.dynamic_views_path = [($server_dir + "/views")]
+     | .app.log.log_path = ($server_dir + "/logs")' \
+    "$SERVER_DIR/config.json" >"$RUN_DIR/config.json"; then
+    echo "[endpoint-wrapper] Failed to create isolated runtime config"
+    exit 2
+fi
+echo "[endpoint-wrapper] Starting server: $SERVER_EXE"
+echo "[endpoint-wrapper] Working dir:     $RUN_DIR"
+
+cd "$RUN_DIR" || exit 2
 # Redirect server stdout/stderr to a log file so it does NOT inherit the
 # wrapper's stdout pipe -- otherwise ctest waits for EOF on the pipe even
 # after the wrapper exits (the server holds the write end open).
 "$SERVER_EXE" >/tmp/fulla-ep-test.log 2>&1 &
 SERVER_PID=$!
 disown "$SERVER_PID" 2>/dev/null || true  # detach so bash won't wait on exit
-
-cleanup() {
-    echo "[endpoint-wrapper] Stopping server (PID $SERVER_PID)"
-    kill "$SERVER_PID" 2>/dev/null || true
-    # Grace period for clean shutdown, then force-kill + reap. Do NOT use
-    # bare `wait` before SIGKILL -- it hangs if the server ignores SIGTERM.
-    for _ in 1 2 3 4 5; do
-        kill -0 "$SERVER_PID" 2>/dev/null || break
-        sleep 1
-    done
-    kill -9 "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true  # reap zombie (safe after SIGKILL)
-}
-trap cleanup EXIT
 
 # Wait for health readiness (up to 30s).
 ready=false
