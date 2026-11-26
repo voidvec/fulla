@@ -15,29 +15,100 @@
 namespace fulla::oauth2
 {
 
-void JwkManager::log(fulla::common::ports::LogLevel level, const std::string &message) const
+struct JwkManager::KeySet
 {
-    if (logger_)
-    {
-        logger_->log(level, message);
-    }
-}
+    std::vector<KeyEntry> keys;
+    std::string activeKid;
 
-JwkManager::~JwkManager()
-{
-    for (auto &entry : keys_)
+    KeySet() = default;
+    KeySet(KeySet &&) noexcept = default;
+    KeySet &operator=(KeySet &&) noexcept = default;
+    KeySet(const KeySet &) = delete;
+    KeySet &operator=(const KeySet &) = delete;
+
+    ~KeySet()
     {
-        if (entry.pkey)
+        for (auto &entry : keys)
         {
-            EVP_PKEY_free(static_cast<EVP_PKEY *>(entry.pkey));
-            entry.pkey = nullptr;
+            if (entry.pkey)
+            {
+                EVP_PKEY_free(static_cast<EVP_PKEY *>(entry.pkey));
+                entry.pkey = nullptr;
+            }
         }
     }
+};
+
+void JwkManager::log(fulla::common::ports::LogLevel level, const std::string &message) const
+{
+    if (auto *logger = logger_.load(std::memory_order_acquire))
+    {
+        logger->log(level, message);
+    }
 }
 
-const JwkManager::KeyEntry *JwkManager::findEntry(const std::string &kid) const
+JwkManager::~JwkManager() = default;
+
+JwkManager::JwkManager(const JwkManager &other)
 {
-    for (const auto &entry : keys_)
+    std::lock_guard<std::mutex> lock(other.initMutex_);
+    logger_.store(other.logger_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    std::atomic_store(&keySet_, std::atomic_load(&other.keySet_));
+}
+
+JwkManager &JwkManager::operator=(const JwkManager &other)
+{
+    if (this != &other)
+    {
+        std::scoped_lock lock(initMutex_, other.initMutex_);
+        logger_.store(other.logger_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        std::atomic_store(&keySet_, std::atomic_load(&other.keySet_));
+    }
+    return *this;
+}
+
+JwkManager::JwkManager(JwkManager &&other)
+{
+    std::lock_guard<std::mutex> lock(other.initMutex_);
+    logger_.store(other.logger_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    auto keySet = std::atomic_load(&other.keySet_);
+    std::atomic_store(&keySet_, std::move(keySet));
+    std::atomic_store(&other.keySet_, std::shared_ptr<const KeySet>{});
+}
+
+JwkManager &JwkManager::operator=(JwkManager &&other)
+{
+    if (this != &other)
+    {
+        std::scoped_lock lock(initMutex_, other.initMutex_);
+        logger_.store(other.logger_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        auto keySet = std::atomic_load(&other.keySet_);
+        std::atomic_store(&keySet_, std::move(keySet));
+        std::atomic_store(&other.keySet_, std::shared_ptr<const KeySet>{});
+    }
+    return *this;
+}
+
+const std::string &JwkManager::getKeyId() const
+{
+    const auto keySet = std::atomic_load(&keySet_);
+    if (keySet)
+        return keySet->activeKid;
+    static const std::string empty;
+    return empty;
+}
+
+bool JwkManager::isInitialized() const
+{
+    return static_cast<bool>(std::atomic_load(&keySet_));
+}
+
+const JwkManager::KeyEntry *JwkManager::findEntry(
+  const KeySet &keySet,
+  const std::string &kid
+) const
+{
+    for (const auto &entry : keySet.keys)
     {
         if (entry.kid == kid)
             return &entry;
@@ -45,14 +116,10 @@ const JwkManager::KeyEntry *JwkManager::findEntry(const std::string &kid) const
     return nullptr;
 }
 
-const JwkManager::KeyEntry *JwkManager::activeEntry() const
-{
-    return findEntry(activeKid_);
-}
-
 bool JwkManager::init(const Json::Value &config)
 {
-    if (initialized_)
+    std::lock_guard<std::mutex> lock(initMutex_);
+    if (std::atomic_load(&keySet_))
     {
         log(
           fulla::common::ports::LogLevel::Error,
@@ -61,6 +128,14 @@ bool JwkManager::init(const Json::Value &config)
         );
         return true;
     }
+
+    KeySet pending;
+    const auto publishSingleKey = [&](KeyEntry entry) {
+        pending.keys.push_back(std::move(entry));
+        pending.activeKid = pending.keys.front().kid;
+        std::atomic_store(&keySet_, std::make_shared<const KeySet>(std::move(pending)));
+        return true;
+    };
 
     // #110-B (decision B): the multi-key keystore directory is the richest
     // source and takes precedence -- when configured it is authoritative
@@ -71,14 +146,15 @@ bool JwkManager::init(const Json::Value &config)
     const std::string keystoreDir = config.get("signing_keystore_dir", "").asString();
     if (!keystoreDir.empty())
     {
-        if (loadKeystoreDir(keystoreDir))
+        if (loadKeystoreDir(pending, keystoreDir))
         {
-            initialized_ = true;
+            auto published = std::make_shared<const KeySet>(std::move(pending));
+            std::atomic_store(&keySet_, published);
             log(
               fulla::common::ports::LogLevel::Info,
-              "JwkManager: Loaded " + std::to_string(keys_.size()) +
-                " signing key(s) from keystore dir " + keystoreDir + " (active kid: " +
-                activeKid_ + ")"
+              "JwkManager: Loaded " + std::to_string(published->keys.size()) +
+                " signing key(s) from keystore dir " + keystoreDir +
+                " (active kid: " + published->activeKid + ")"
             );
             return true;
         }
@@ -98,18 +174,16 @@ bool JwkManager::init(const Json::Value &config)
         entry.kid = config.get("kid", "key-1").asString();
         if (loadPemInto(entry, keyEnv))
         {
-            keys_.push_back(std::move(entry));
-            activeKid_ = keys_.front().kid;
-            initialized_ = true;
             log(
               fulla::common::ports::LogLevel::Info,
               "JwkManager: Loaded signing key from FULLA_SIGNING_KEY env"
             );
-            return true;
+            return publishSingleKey(std::move(entry));
         }
     }
 
-    const char *keyPathEnv = fulla::common::config::ConfigManager::getProcessEnv("FULLA_JWT_KEY_PATH");
+    const char *keyPathEnv =
+      fulla::common::config::ConfigManager::getProcessEnv("FULLA_JWT_KEY_PATH");
     if (keyPathEnv && std::strlen(keyPathEnv) > 0)
     {
         std::ifstream file(keyPathEnv);
@@ -121,15 +195,12 @@ bool JwkManager::init(const Json::Value &config)
             entry.kid = config.get("kid", "key-1").asString();
             if (loadPemInto(entry, ss.str()))
             {
-                keys_.push_back(std::move(entry));
-                activeKid_ = keys_.front().kid;
-                initialized_ = true;
                 log(
                   fulla::common::ports::LogLevel::Info,
                   "JwkManager: Loaded signing key from FULLA_JWT_KEY_PATH=" +
                     std::string(keyPathEnv)
                 );
-                return true;
+                return publishSingleKey(std::move(entry));
             }
         }
         log(
@@ -150,19 +221,14 @@ bool JwkManager::init(const Json::Value &config)
             entry.kid = config.get("kid", "key-1").asString();
             if (loadPemInto(entry, ss.str()))
             {
-                keys_.push_back(std::move(entry));
-                activeKid_ = keys_.front().kid;
-                initialized_ = true;
                 log(
                   fulla::common::ports::LogLevel::Info,
                   "JwkManager: Loaded signing key from " + keyPath
                 );
-                return true;
+                return publishSingleKey(std::move(entry));
             }
         }
-        log(
-          fulla::common::ports::LogLevel::Warn, "JwkManager: Failed to load key from " + keyPath
-        );
+        log(fulla::common::ports::LogLevel::Warn, "JwkManager: Failed to load key from " + keyPath);
     }
 
     // #102: the ephemeral fallback is DEV ONLY. In production a per-boot
@@ -202,10 +268,7 @@ bool JwkManager::init(const Json::Value &config)
         {
             // generateEphemeralKey() hands its EVP_PKEY to the pending entry
             // (see its #110-B note).
-            keys_.push_back(std::move(entry));
-            activeKid_ = keys_.front().kid;
-            initialized_ = true;
-            return true;
+            return publishSingleKey(std::move(entry));
         }
     }
 
@@ -224,9 +287,7 @@ bool JwkManager::loadPemInto(KeyEntry &entry, const std::string &pemData)
 
     if (!pkey)
     {
-        log(
-          fulla::common::ports::LogLevel::Error, "JwkManager: Failed to parse PEM private key"
-        );
+        log(fulla::common::ports::LogLevel::Error, "JwkManager: Failed to parse PEM private key");
         return false;
     }
 
@@ -260,7 +321,7 @@ bool JwkManager::loadPemInto(KeyEntry &entry, const std::string &pemData)
     return true;
 }
 
-bool JwkManager::loadKeystoreDir(const std::string &dir)
+bool JwkManager::loadKeystoreDir(KeySet &keySet, const std::string &dir)
 {
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -316,9 +377,7 @@ bool JwkManager::loadKeystoreDir(const std::string &dir)
     // Trim CR/whitespace on BOTH ends for hand-edited markers (convention:
     // the kid starts at column 0; leading whitespace would otherwise silently
     // mismatch -- PR #176 review NIT).
-    const auto isSpace = [](char c) {
-        return c == '\r' || c == ' ' || c == '\t';
-    };
+    const auto isSpace = [](char c) { return c == '\r' || c == ' ' || c == '\t'; };
     while (!activeKid.empty() && isSpace(activeKid.back()))
         activeKid.pop_back();
     while (!activeKid.empty() && isSpace(activeKid.front()))
@@ -391,8 +450,8 @@ bool JwkManager::loadKeystoreDir(const std::string &dir)
         return false;
     }
 
-    keys_ = std::move(loaded);
-    activeKid_ = activeKid;
+    keySet.keys = std::move(loaded);
+    keySet.activeKid = activeKid;
     return true;
 }
 
@@ -485,8 +544,9 @@ std::string JwkManager::base64UrlEncode(const std::string &data)
 
 std::string JwkManager::signJwt(const Json::Value &payload) const
 {
-    const KeyEntry *active = activeEntry();
-    if (!initialized_ || !active)
+    const auto keySet = std::atomic_load(&keySet_);
+    const KeyEntry *active = keySet ? findEntry(*keySet, keySet->activeKid) : nullptr;
+    if (!active)
     {
         log(
           fulla::common::ports::LogLevel::Error,
@@ -598,10 +658,9 @@ bool JwkManager::base64UrlDecode(const std::string &input, std::string &output)
             return false;
         if (count == 3 && (v[2] & 0x03) != 0)
             return false;
-        const unsigned int triple = (static_cast<unsigned int>(v[0]) << 18) |
-                                    (static_cast<unsigned int>(v[1]) << 12) |
-                                    (static_cast<unsigned int>(v[2]) << 6) |
-                                    static_cast<unsigned int>(v[3]);
+        const unsigned int triple =
+          (static_cast<unsigned int>(v[0]) << 18) | (static_cast<unsigned int>(v[1]) << 12) |
+          (static_cast<unsigned int>(v[2]) << 6) | static_cast<unsigned int>(v[3]);
         output += static_cast<char>((triple >> 16) & 0xFF);
         if (count > 2)
             output += static_cast<char>((triple >> 8) & 0xFF);
@@ -662,11 +721,10 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
   Json::Value *verifiedPayloadOut
 ) const
 {
-    if (!initialized_ || keys_.empty())
+    const auto keySet = std::atomic_load(&keySet_);
+    if (!keySet || keySet->keys.empty())
     {
-        log(
-          fulla::common::ports::LogLevel::Error, "JwkManager::verifyJwt: not initialized"
-        );
+        log(fulla::common::ports::LogLevel::Error, "JwkManager::verifyJwt: not initialized");
         return JwtVerificationResult::NotInitialized;
     }
 
@@ -675,8 +733,10 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
     if (firstDot == std::string::npos || firstDot == 0)
         return JwtVerificationResult::Malformed;
     const size_t secondDot = jwt.find('.', firstDot + 1);
-    if (secondDot == std::string::npos || secondDot == firstDot + 1 ||
-        secondDot + 1 == jwt.size() || jwt.find('.', secondDot + 1) != std::string::npos)
+    if (
+      secondDot == std::string::npos || secondDot == firstDot + 1 || secondDot + 1 == jwt.size() ||
+      jwt.find('.', secondDot + 1) != std::string::npos
+    )
         return JwtVerificationResult::Malformed;
 
     const std::string headerB64 = jwt.substr(0, firstDot);
@@ -695,8 +755,7 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
         if (!Json::parseFromStream(builder, iss, &header, nullptr))
             return JwtVerificationResult::Malformed;
     }
-    if (!header.isMember("alg") || !header["alg"].isString() ||
-        header["alg"].asString() != "RS256")
+    if (!header.isMember("alg") || !header["alg"].isString() || header["alg"].asString() != "RS256")
         return JwtVerificationResult::BadAlg;
     // #110-B: route by kid across ALL loaded keys. A kid naming no loaded
     // key is a hard KidMismatch (previously: != the single configured kid).
@@ -705,7 +764,7 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
     const KeyEntry *entry = nullptr;
     if (header.isMember("kid") && header["kid"].isString() && !header["kid"].asString().empty())
     {
-        entry = findEntry(header["kid"].asString());
+        entry = findEntry(*keySet, header["kid"].asString());
         if (!entry)
             return JwtVerificationResult::KidMismatch;
     }
@@ -724,7 +783,7 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
     {
         // Absent kid: try every loaded key (RFC 7515 §4.1.4 permits this when
         // the verifier holds several keys).
-        for (const auto &candidate : keys_)
+        for (const auto &candidate : keySet->keys)
         {
             if (verifyRs256Signature(candidate.pkey, signingInput, signature))
             {
@@ -747,11 +806,14 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
         if (!Json::parseFromStream(builder, iss, &payload, nullptr))
             return JwtVerificationResult::Malformed;
     }
-    if (!payload.isMember("iss") || !payload["iss"].isString() ||
-        payload["iss"].asString() != expectedIssuer)
+    if (
+      !payload.isMember("iss") || !payload["iss"].isString() ||
+      payload["iss"].asString() != expectedIssuer
+    )
         return JwtVerificationResult::IssuerMismatch;
-    if (!payload.isMember("exp") || !payload["exp"].isNumeric() ||
-        payload["exp"].asInt64() <= nowSecs)
+    if (
+      !payload.isMember("exp") || !payload["exp"].isNumeric() || payload["exp"].asInt64() <= nowSecs
+    )
         return JwtVerificationResult::Expired;
     // #87 M2: nbf is optional, but when present it must be a numeric claim
     // with nbf <= nowSecs (RFC 7519 §4.1.5; no leeway, mirroring exp above).
@@ -763,8 +825,7 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
         if (payload["nbf"].asInt64() > nowSecs)
             return JwtVerificationResult::NotYetValid;
     }
-    if (!payload.isMember("sub") || !payload["sub"].isString() ||
-        payload["sub"].asString().empty())
+    if (!payload.isMember("sub") || !payload["sub"].isString() || payload["sub"].asString().empty())
         return JwtVerificationResult::MissingSubject;
     // #87 M1: optional audience pinning. aud may be a string or an array of
     // strings (RFC 7519 §4.1.3); the expected audience must appear in it.
@@ -793,7 +854,9 @@ JwkManager::JwtVerificationResult JwkManager::verifyCore(
 }
 
 bool JwkManager::verifyRs256Signature(
-  const void *pkeyVoid, const std::string &signingInput, const std::string &signature
+  const void *pkeyVoid,
+  const std::string &signingInput,
+  const std::string &signature
 )
 {
     EVP_MD_CTX *mdCtx = EVP_MD_CTX_new();
@@ -801,13 +864,13 @@ bool JwkManager::verifyRs256Signature(
         return false;
     bool ok = false;
     EVP_PKEY *pkey = static_cast<EVP_PKEY *>(const_cast<void *>(pkeyVoid));
-    if (EVP_DigestVerifyInit(mdCtx, nullptr, EVP_sha256(), nullptr, pkey) == 1 &&
-        EVP_DigestVerifyUpdate(mdCtx, signingInput.data(), signingInput.size()) == 1)
+    if (
+      EVP_DigestVerifyInit(mdCtx, nullptr, EVP_sha256(), nullptr, pkey) == 1 &&
+      EVP_DigestVerifyUpdate(mdCtx, signingInput.data(), signingInput.size()) == 1
+    )
     {
         const int rc = EVP_DigestVerifyFinal(
-          mdCtx,
-          reinterpret_cast<const unsigned char *>(signature.data()),
-          signature.size()
+          mdCtx, reinterpret_cast<const unsigned char *>(signature.data()), signature.size()
         );
         ok = (rc == 1);
     }
@@ -856,13 +919,14 @@ Json::Value JwkManager::getJwks() const
     Json::Value jwks;
     jwks["keys"] = Json::Value(Json::arrayValue);
 
-    if (!initialized_)
+    const auto keySet = std::atomic_load(&keySet_);
+    if (!keySet)
         return jwks;
 
     // #110-B: publish EVERY loaded key so verifiers keep resolving tokens
     // signed by a since-deactivated (but still trusted) key during the
     // rotation grace window.
-    for (const auto &entry : keys_)
+    for (const auto &entry : keySet->keys)
     {
         std::string n, e;
         if (!getPublicKeyComponents(entry, n, e))
