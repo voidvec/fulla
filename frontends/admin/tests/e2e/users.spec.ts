@@ -356,13 +356,9 @@ test.describe('User Management', () => {
   })
 
   test('without access to the role catalog the dialog keeps the current roles and says so', async ({ page }) => {
-    let roleRequestBody: any = null
     let putSeen = false
     await page.route('**/api/admin/users/*/roles', async (route) => {
-      if (route.request().method() === 'PUT') {
-        putSeen = true
-        roleRequestBody = route.request().postDataJSON()
-      }
+      if (route.request().method() === 'PUT') putSeen = true
       await route.continue()
     })
     await page.route('**/api/admin/roles', (route) =>

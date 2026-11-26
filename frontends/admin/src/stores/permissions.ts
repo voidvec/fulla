@@ -112,7 +112,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
   async function probeRead(url: string): Promise<boolean> {
     try {
       return (await axios.get(url)).status === 200
-    } catch (e: unknown) {
+    } catch {
       return false
     }
   }
