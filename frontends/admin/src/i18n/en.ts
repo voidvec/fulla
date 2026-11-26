@@ -436,6 +436,9 @@ export default {
       exportLabel: 'Export CSV',
       exportFromLabel: 'From:',
       exportToLabel: 'To:',
+      // AF-05: the explicit full export (all=true).
+      exportAllLabel: 'Whole log',
+      exportAllHint: 'No time window; the row cap still applies.',
     },
     claimMappings: {
       title: 'Claim Mappings',
