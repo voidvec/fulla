@@ -22,9 +22,10 @@
 
 #include <string>
 #include <json/json.h>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
-#include <vector>
 
 namespace fulla::oauth2
 {
@@ -53,19 +54,17 @@ namespace fulla::oauth2
  *      restart -> old key fully retired.
  *
  * ── Concurrency contract: init-once, then read-only ─────────────────────
- * This class follows an "initialize exactly once during startup, read-only
- * at runtime" contract:
- *   - init() MUST be called exactly once, before the server begins
- *     accepting requests. init() is the ONLY mutating method; a second
- *     call logs an error and is a no-op (does NOT re-allocate keys_ or
- *     overwrite activeKid_), removing the run-time mutation entry point.
- *   - signJwt(), getJwks(), getKeyId(), isInitialized() are all const and
- *     only read the key state; safe to call concurrently from many
- *     threads with no per-call locking, PROVIDED init() has already
- *     completed-before (happens-before) the first concurrent read (the
- *     production wiring publishes this object as
- *     std::shared_ptr<const JwkManager> after init() to enforce this at
- *     the type level -- see OAuth2Plugin::initAndStart()).
+ * init() is serialized and atomically publishes one immutable key snapshot.
+ * A second call logs an error and is a no-op, preserving the first key set.
+ * signJwt(), verifyJwt(), getJwks(), getKeyId(), and isInitialized() load
+ * that snapshot and are safe concurrently, including before or during the
+ * first init(); until publication they observe the uninitialized state.
+ * Production also publishes this object as std::shared_ptr<const JwkManager>
+ * after init() (see OAuth2Plugin::initAndStart()). Copies share the immutable
+ * snapshot without copying keys; moves transfer it and leave the source
+ * uninitialized. Copy/move construction and assignment serialize with init()
+ * and assignment on the other object. A reference returned by getKeyId() is
+ * invalidated by assignment, like any reference into a replaced value.
  *
  * OpenSSL concurrency assumption: see the comment on signJwt() --
  * concurrent signing is safe only under OpenSSL >= 1.1.0 with threads
@@ -90,6 +89,11 @@ class JwkManager
     explicit JwkManager(fulla::common::ports::ILogger *logger = nullptr) : logger_(logger)
     {
     }
+
+    JwkManager(const JwkManager &other);
+    JwkManager &operator=(const JwkManager &other);
+    JwkManager(JwkManager &&other);
+    JwkManager &operator=(JwkManager &&other);
 
     ~JwkManager();
 
@@ -129,16 +133,17 @@ class JwkManager
     enum class JwtVerificationResult
     {
         Ok,
-        NotInitialized,  ///< no key loaded; fail closed (cannot verify)
-        Malformed,       ///< not 3 non-empty segments / bad base64url / bad JSON
-        BadAlg,          ///< header alg absent or != RS256 (strict: no "none"/HS256 confusion)
-        KidMismatch,     ///< header kid present but != the current key id
-        BadSignature,    ///< RS256 signature check failed
-        IssuerMismatch,  ///< payload iss != expectedIssuer
-        Expired,         ///< payload exp <= nowSecs, or exp absent (fail closed)
-        NotYetValid,     ///< #87 M2: payload nbf present and > nowSecs (RFC 7519 §4.1.5)
-        MissingSubject,  ///< payload sub absent or empty
-        AudienceMismatch ///< #87 M1: expectedAudience requested but the aud claim does not contain it
+        NotInitialized,   ///< no key loaded; fail closed (cannot verify)
+        Malformed,        ///< not 3 non-empty segments / bad base64url / bad JSON
+        BadAlg,           ///< header alg absent or != RS256 (strict: no "none"/HS256 confusion)
+        KidMismatch,      ///< header kid present but != the current key id
+        BadSignature,     ///< RS256 signature check failed
+        IssuerMismatch,   ///< payload iss != expectedIssuer
+        Expired,          ///< payload exp <= nowSecs, or exp absent (fail closed)
+        NotYetValid,      ///< #87 M2: payload nbf present and > nowSecs (RFC 7519 §4.1.5)
+        MissingSubject,   ///< payload sub absent or empty
+        AudienceMismatch  ///< #87 M1: expectedAudience requested but the aud claim does not contain
+                          ///< it
     };
 
     /**
@@ -199,16 +204,10 @@ class JwkManager
     Json::Value getJwks() const;
 
     /// Get the current key ID.
-    const std::string &getKeyId() const
-    {
-        return activeKid_;
-    }
+    const std::string &getKeyId() const;
 
     /// Check if manager is initialized with a valid key.
-    bool isInitialized() const
-    {
-        return initialized_;
-    }
+    bool isInitialized() const;
 
   private:
     /// One loaded signing key. `pkey` is an EVP_PKEY* kept opaque (void*) so
@@ -220,25 +219,22 @@ class JwkManager
         void *pkey = nullptr;  // EVP_PKEY* (owned)
     };
 
-    /// All loaded keys (>=1 once initialized_). Order = load order; the
-    /// keystore sorts by filename, single-key sources append their one entry.
-    std::vector<KeyEntry> keys_;
-    std::string activeKid_;  // kid of the signing key (equals keys_[i].kid)
-    bool initialized_ = false;
-    fulla::common::ports::ILogger *logger_ = nullptr;  // non-owning; may be nullptr
+    struct KeySet;
+
+    std::atomic<fulla::common::ports::ILogger *> logger_{nullptr};  // non-owning
+    mutable std::mutex initMutex_;
+    std::shared_ptr<const KeySet> keySet_;
 
     /// Find a loaded entry by kid; nullptr when unknown.
-    const KeyEntry *findEntry(const std::string &kid) const;
-    /// The active (signing) entry; nullptr when uninitialized.
-    const KeyEntry *activeEntry() const;
+    const KeyEntry *findEntry(const KeySet &keySet, const std::string &kid) const;
 
     bool generateEphemeralKey(KeyEntry &entry);
     /// Parse one PEM into `entry.pkey`; returns false on parse failure
     /// (kid must be set by the caller).
     bool loadPemInto(KeyEntry &entry, const std::string &pemData);
     /// #110-B: load <kid>.pem files + the active_kid marker from `dir`.
-    /// Returns false (with keys_ untouched) on any structural error.
-    bool loadKeystoreDir(const std::string &dir);
+    /// Returns false (with keySet untouched) on any structural error.
+    bool loadKeystoreDir(KeySet &keySet, const std::string &dir);
 
     static std::string base64UrlEncode(const unsigned char *data, size_t len);
     static std::string base64UrlEncode(const std::string &data);
@@ -252,7 +248,9 @@ class JwkManager
 
     /// Verify the RS256 signature of `signingInput` against one key.
     static bool verifyRs256Signature(
-      const void *pkey, const std::string &signingInput, const std::string &signature
+      const void *pkey,
+      const std::string &signingInput,
+      const std::string &signature
     );
 
     /// Shared verification core of verifyJwt()/verifyAndDecode(): runs the

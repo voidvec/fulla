@@ -3,10 +3,10 @@
 Spec: `concurrency-lifetime-safety-audit` — Task 2.
 Property 2: **Bug Condition — Data-Race Freedom** (TSan). Covers defects **1.4** and **1.5**.
 
-> Methodology note: these are *exploratory reproduction* tests that run on the
-> **UNFIXED** code (F). A reproduction test that detects the bug (ThreadSanitizer
-> reports a data race) is the **SUCCESS** case per the bugfix workflow. No
-> production code is changed in this task.
+> Methodology note: these tests preserve the original Category B reproductions.
+> Defect 1.5 was observed on the unfixed code under Linux TSan and is now fixed;
+> the same historical test remains enabled and passes. Defect 1.4 remains an
+> exploratory reproduction and has not yet been observed under TSan here.
 
 ## Files added
 
@@ -14,7 +14,7 @@ Property 2: **Bug Condition — Data-Race Freedom** (TSan). Covers defects **1.4
 |---|---|---|
 | `ConcurrencyRaceSupport.h` | (shared) | TSan detection (`kTsanEnabled`), `SpinBarrier` (simultaneous release), seeded `InterleavingGenerator` (scoped-PBT interleavings). |
 | `CategoryB_AuthorizationFilterRaceTest.cc` | **1.4** | Concurrent first-time `AuthorizationFilter::doFilter() → loadConfig()`. |
-| `CategoryB_JwkManagerRaceTest.cc` | **1.5** | One `JwkManager::init()` writer racing many `signJwt()`/`getJwks()` readers. |
+| `CategoryB_JwkManagerRaceTest.cc` | **1.5** | Historical one-writer reproduction plus concurrent multi-writer/reader snapshot consistency. |
 
 These land under `tests/integration/concurrency/`, auto-collected by
 `GLOB_RECURSE INTEGRATION_TESTS` in `tests/CMakeLists.txt` and compiled
@@ -24,7 +24,7 @@ into the `fulla-tests` target (ctest name `OAuth2Tests`).
 
 ### 1.4 — `AuthorizationFilter::loadConfig()` (check-then-act, no lock)
 
-`OAuth2Plugin/src/filters/AuthorizationFilter.cc`:
+`libs/drogon/src/filters/AuthorizationFilter.cc`:
 
 ```cpp
 void AuthorizationFilter::loadConfig() {
@@ -45,14 +45,16 @@ this through a **token-less request**, which runs `loadConfig()` then returns 40
 *before* touching the `OAuth2Plugin` — isolating the reproduction to
 `rules_ / publicPaths_ / initialized_`.
 
-### 1.5 — `JwkManager::init()` write vs `signJwt()`/`getJwks()` read (no sync)
+### 1.5 — `JwkManager::init()` write vs `signJwt()`/`getJwks()` read (historical race)
 
-`OAuth2Plugin/src/utils/JwkManager.cc`: `init()` writes `rsaKey_` (`void*`),
-`kid_` (`std::string`), `initialized_` (`bool`); `signJwt() const` and
-`getJwks() const` read all three. No mutex/atomic/enforced happens-before exists
-between them — correctness rests on the undocumented "init once at startup,
-read-only afterwards" assumption. The test uses exactly **one** `init()` writer
-(avoiding a second `EVP_PKEY` allocation into `rsaKey_`) racing **N** readers.
+Before the fix, `libs/oauth2/src/jwk/JwkManager.cc` had `init()` write
+`rsaKey_` (`void*`), `kid_` (`std::string`), and `initialized_` (`bool`), while
+`signJwt() const` and `getJwks() const` read them without synchronization. The
+historical reproduction used exactly **one** `init()` writer (avoiding a second
+`EVP_PKEY` allocation into `rsaKey_`) racing **N** readers. The current
+implementation builds a pending `KeySet` under the initialization mutex and
+atomically publishes an immutable shared snapshot; readers only load that
+snapshot.
 
 ## How the tests reliably trip TSan
 
@@ -113,48 +115,85 @@ Linux/macOS with a GCC/Clang toolchain (TSan and ASan are mutually exclusive —
 this is the TSan build):
 
 ```bash
-# From the repo root (fulla/)
-bash scripts/backend/build.sh --tsan        # == --sanitizer=thread, implies --debug
+# From the repo root, after configuring the linux-release-tsan Conan preset:
+export PATH="$(python3 tools/sanitizers/verify_tsan_dependencies.py \
+  build/linux-release-tsan/conan-tsan-graph.json --print-drogon-bin):$PATH"
+cmake --build --preset linux-release-tsan
 
-# Run the full suite (ctest name OAuth2Tests) under TSan:
-cd build && ctest --output-on-failure -R OAuth2Tests
+# Run every registered CTest target under TSan (OAuth2Tests is only the
+# aggregate Drogon Test binary, not the complete gate):
+TZ=UTC ctest --test-dir build/linux-release-tsan --output-on-failure \
+  --no-tests=error --timeout 900
 
-# Or run only the two Category B reproductions directly:
-./tests/fulla-tests \
-  Integration_P1_Concurrency_1_4_AuthorizationFilter_LoadConfig_DataRace_Repro \
+# Or run the Category B cases directly from the test executable directory:
+cd build/linux-release-tsan/tests
+./fulla-tests -r \
+  Integration_P1_Concurrency_1_4_AuthorizationFilter_LoadConfig_DataRace_Repro
+./fulla-tests -r \
   Integration_P1_Concurrency_1_5_JwkManager_InitVsSign_DataRace_Repro
+./fulla-tests -r \
+  Integration_P1_Concurrency_1_5_JwkManager_ConcurrentInitAndReaders_AreConsistent
+./fulla-tests -r \
+  Integration_P1_Concurrency_1_5_JwkManager_ConcurrentAssignmentAndInit_AreSafe
 ```
 
-CMake plumbing (already in place from Task 0): `-DFULLA_SANITIZER=thread` →
+CMake plumbing: `-DFULLA_SANITIZER=thread` →
 `cmake/Sanitizers.cmake::oauth2_apply_sanitizer()` appends
-`-fsanitize=thread -g -fno-omit-frame-pointer` to the `fulla-tests` target's
-compile + link options (GCC/Clang + Debug only).
+`-fsanitize=thread -g -fno-omit-frame-pointer` to compile options and
+`-fsanitize=thread` to link options for instrumented first-party targets.
+Non-Debug builds emit a warning but still apply the flags.
 
 Optional, to make the run fail hard on the first race (recommended for CI gating):
 
 ```bash
-export TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1"
+export TZ=UTC
+export TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1:suppressions=$PWD/tools/sanitizers/tsan.supp"
 ```
 
-## Verification status (HONEST)
+## Verification status (2026-11-25)
 
-- **Environment limitation (from Task 0):** this host builds with **MSVC**
-  (Visual Studio 17 2022); MSVC has **no `-fsanitize=thread` runtime**, and
-  Clang targeting the MSVC ABI has no TSan runtime either. `cmake/Sanitizers.cmake`
-  deliberately ignores `FULLA_SANITIZER=thread` on those toolchains (with a
-  warning) so the normal build still succeeds. The WSL box lacks a
-  toolchain/Drogon. **Therefore TSan could NOT be executed in this environment.**
-- **What the tests do here:** they are written so that on a normal
-  (non-instrumented) build they execute the SAME production code paths
-  **serially / in the happens-before-correct order** (no UB, no genuine race),
-  and pass deterministically. The genuine concurrent racing workload only runs
-  when `kTsanEnabled` is true (compiled with `-fsanitize=thread`).
-- **Pending confirmation:** the actual TSan data-race observation for 1.4 and
-  1.5 must be confirmed on a **Linux/macOS GCC/Clang TSan build** (e.g. CI via
-  `scripts/backend/build.sh --tsan`). The race stacks above are the EXPECTED
-  shape; they have **not** been observed on this host and are **not** fabricated
-  sanitizer output.
-- **PBT/bug-condition status:** the bug-condition reproductions for 1.4/1.5 are
-  authored to FAIL (detect the race) on the unfixed code under TSan. Because TSan
-  is unavailable here, race detection is reported as **pending a TSan-capable
-  build**, not as observed.
+- **Defect 1.5 red:** on the unfixed `linux-release-tsan` build, the historical
+  `Integration_P1_Concurrency_1_5_JwkManager_InitVsSign_DataRace_Repro` exited 66.
+  TSan reported a write in `std::vector<KeyEntry>::push_back` from
+  `JwkManager::init()` racing a read in `findEntry()`/`activeEntry()` from
+  `signJwt()` (summary at `vector.tcc:521`).
+- **Defect 1.5 green:** after serializing initialization and atomically publishing
+  immutable key snapshots, the unchanged historical test passed under TSan with
+  16 assertions in 1 test case and no TSan warning. The positive
+  `ConcurrentInitAndReaders_AreConsistent` case also passed under TSan with 16
+  assertions in 1 test case.
+- **Normal-build controls:** Windows Release passed the OAuth2 GTest suite
+  (199/199), the historical case (55 assertions), and the positive case
+  (16 assertions).
+- **Defect 1.4:** still pending a dedicated TSan-capable observation. No sanitizer
+  output is claimed for it here.
+- **Environment note:** MSVC itself has no TSan runtime. The observations above
+  were made in WSL Ubuntu with GCC 13 and the `linux-release-tsan` preset, using
+  `setarch "$(uname -m)" -R` for WSL's high-address mapping constraint.
+- **Assignment red:** the concurrent copy/move-assignment versus init/read regression
+  exposed a second unsynchronized access before the fix. TSan exited 66 with a
+  read in `JwkManager::log()` racing the write to the logger pointer in
+  `JwkManager::operator=`. The regression alternates copy assignment with
+  reinitialization while another thread continuously calls init/sign/JWKS readers.
+  After atomic logger publication and two-way initialization-mutex serialization for
+  assignment, the same regression passed under TSan with 5 assertions.
+- **Compatibility and coverage:** `JwkManager` copy/move operations share or
+  transfer the immutable `KeySet` snapshot, preserving the previous public
+  copy/move surface without duplicating `EVP_PKEY` ownership. The common testing
+  support archive is now TSan-instrumented and verified; its 43 tests passed.
+- **Out-of-process controls:** `SocialLoginState_OutOfProcess` now consumes the
+  build-tree config. The endpoint wrapper uses an isolated runtime config with
+  daemon/relaunch disabled, avoiding unsupported TSan post-fork thread creation;
+  both endpoint tests passed in the full run.
+- **Full gate (2026-11-26):** the final WSL GCC TSan run passed **701/701**
+  registered tests in **575.7 seconds**, with `TZ=UTC`, `halt_on_error=1`, and an
+  isolated PostgreSQL/Redis pair. Both the outer CTest JUnit and the SDK smoke
+  JUnit passed the no-empty/no-skip checker. Dependency verification covered
+  nine first-party targets plus the full-stack SDK smoke, including framework
+  archive instrumentation and selected TSan link paths.
+- **Configuration/test isolation:** canonical portal aliases win over legacy
+  aliases, empty aliases fall back without erasing the JSON baseline, and the
+  serial-only `.env` test seam snapshots/restores the loaded table. Regression
+  probes covered `.env` shadowing and restoration. The endpoint wrapper resolves
+  symlinks without GNU `readlink -e`, rejects directories/cycles, and preserves
+  the target executable's physical directory.

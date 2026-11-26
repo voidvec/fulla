@@ -26,6 +26,7 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <string>
+#include <type_traits>
 
 namespace
 {
@@ -131,6 +132,19 @@ TEST(JwkManagerTest, InitWithoutLogger_GeneratesEphemeralKey)
     EXPECT_FALSE(jwk.getKeyId().empty());
 }
 
+TEST(JwkManagerTest, GetKeyId_ReferenceRemainsValidUntilAssignment)
+{
+    Json::Value config;
+    config["kid"] = "reference-key";
+    JwkManager jwk;
+    ASSERT_TRUE(jwk.init(config));
+
+    const std::string &keyId = jwk.getKeyId();
+    EXPECT_EQ(keyId.size(), 13u);
+    EXPECT_EQ(keyId, "reference-key");
+    EXPECT_EQ(jwk.getKeyId(), keyId);
+}
+
 TEST(JwkManagerTest, SignJwt_BeforeInit_ReturnsEmptyString)
 {
     JwkManager jwk;
@@ -169,6 +183,64 @@ TEST(JwkManagerTest, GetJwks_AfterInit_ContainsOneRsaKey)
     EXPECT_EQ(jwks["keys"][0]["alg"].asString(), "RS256");
     EXPECT_EQ(jwks["keys"][0]["kid"].asString(), jwk.getKeyId());
     EXPECT_FALSE(jwks["keys"][0]["n"].asString().empty());
+}
+
+TEST(JwkManagerTest, CopyAndMove_PreserveUsableKeySnapshot)
+{
+    static_assert(std::is_copy_constructible_v<JwkManager>);
+    static_assert(std::is_copy_assignable_v<JwkManager>);
+    static_assert(std::is_move_constructible_v<JwkManager>);
+    static_assert(std::is_move_assignable_v<JwkManager>);
+
+    Json::Value config;
+    config["kid"] = "copyable-key";
+    JwkManager source;
+    ASSERT_TRUE(source.init(config));
+    const auto expectedJwks = source.getJwks().toStyledString();
+
+    JwkManager copied(source);
+    EXPECT_TRUE(copied.isInitialized());
+    EXPECT_EQ(copied.getKeyId(), "copyable-key");
+    EXPECT_EQ(copied.getJwks().toStyledString(), expectedJwks);
+
+    JwkManager assigned;
+    assigned = source;
+    EXPECT_TRUE(assigned.isInitialized());
+    EXPECT_EQ(assigned.getJwks().toStyledString(), expectedJwks);
+
+    JwkManager moved(std::move(copied));
+    EXPECT_TRUE(moved.isInitialized());
+    EXPECT_EQ(moved.getJwks().toStyledString(), expectedJwks);
+    EXPECT_FALSE(copied.isInitialized());
+
+    JwkManager moveAssigned;
+    moveAssigned = std::move(assigned);
+    EXPECT_TRUE(moveAssigned.isInitialized());
+    EXPECT_EQ(moveAssigned.getJwks().toStyledString(), expectedJwks);
+    EXPECT_FALSE(assigned.isInitialized());
+}
+
+TEST(JwkManagerTest, CopySnapshot_OutlivesSourceAndVerifies)
+{
+    Json::Value claims;
+    claims["iss"] = "https://issuer.example";
+    claims["sub"] = "user-123";
+    claims["exp"] = Json::Int64(std::time(nullptr) + 300);
+
+    std::string jwt;
+    JwkManager copy;
+    {
+        JwkManager source;
+        ASSERT_TRUE(source.init(Json::Value(Json::objectValue)));
+        jwt = source.signJwt(claims);
+        copy = source;
+    }
+
+    ASSERT_FALSE(jwt.empty());
+    EXPECT_EQ(
+      copy.verifyJwt(jwt, claims["iss"].asString(), std::time(nullptr)),
+      JwkManager::JwtVerificationResult::Ok
+    );
 }
 
 TEST(JwkManagerTest, InitCalledTwice_SecondCallIsNoOpAndReturnsTrue)
