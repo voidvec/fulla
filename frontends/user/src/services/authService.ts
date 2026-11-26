@@ -251,6 +251,21 @@ export const authService = {
     }
   },
 
+  /**
+   * UF-05: resend the verification link to an address whose owner is stuck
+   * at sign-in (auth.require_email_verification answers the login with 403
+   * AUTHZ_ACCESS_DENIED until the address is verified). Unauthenticated by
+   * design — the account holds no token yet — and anti-enumeration: the
+   * server answers unknown, already-verified and mailed addresses alike,
+   * so the caller must show the same confirmation whatever was typed. Only
+   * a rejected request (429 rate limit, 400 malformed) throws.
+   */
+  async resendVerificationByEmail(email: string): Promise<void> {
+    await http.post('/api/verify-email/resend-by-email', JSON.stringify({ email }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  },
+
   async requestPasswordReset(email: string): Promise<void> {
     await http.post('/api/password-reset/request', JSON.stringify({ email }), {
       headers: { 'Content-Type': 'application/json' },

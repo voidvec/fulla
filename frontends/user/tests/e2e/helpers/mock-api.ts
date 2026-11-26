@@ -135,6 +135,20 @@ export async function setupMocks(page: Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Verification email sent' }) })
   })
 
+  // UF-05: anonymous resend by address (EmailVerificationService::
+  // requestVerificationByEmail). Anti-enumeration: unknown, already-verified
+  // and mailed addresses all get the same 200; only a missing address is a
+  // 400. Registered after the broader '**/api/verify-email**' so this one
+  // wins (LIFO) — that route lets POSTs through to the network.
+  await page.route('**/api/verify-email/resend-by-email', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}')
+    if (!body.email) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VALIDATION_MISSING_REQUIRED_FIELD', category: 'VALIDATION', message: 'resend-by-email: email is required' } }) })
+    } else {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'If the email exists and is unverified, a verification link has been sent' }) })
+    }
+  })
+
   await page.route('**/api/me', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PROFILE) })

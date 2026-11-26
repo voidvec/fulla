@@ -97,6 +97,14 @@ export default {
         timedOut: 'Passkey request timed out or was cancelled.',
         failed: 'Passkey sign-in failed. Please try again or use your password.',
       },
+      // UF-05: sign-in refused because the email address is not verified.
+      verifyEmail: {
+        title: 'Email address not verified',
+        body: 'Sign-in is blocked until this address is verified. Enter the email address to receive a new verification link.',
+        emailLabel: 'Email address',
+        submit: 'Resend verification email',
+        sent: 'If the email exists and is unverified, a verification link has been sent.',
+      },
       wechatNote:
         'WeChat sign-in uses the mobile app scan flow — scan the QR code shown by your provider on a WeChat-enabled device.',
       mfa: {
