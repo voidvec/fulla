@@ -37,9 +37,24 @@ import { join, resolve } from 'node:path'
 // (418.6KB CI-measured vs the 414.0KB cap; main 155.2KB stayed inside at
 // 157.6KB — both bases moved to the CI-measured numbers for consistency).
 // user.total base 376.4KB -> 418.6KB, main 143.3KB -> 155.2KB.
+// Re-baselined 2026-11-26 for the frontend gap remediation (phase 1+2):
+// passkey sign-in and the verification-link panel on the login page,
+// passkey delete, application edit / owner / transfer, the invitations
+// list, consent-request withdrawal, the permission-aware admin console,
+// catalog-driven role pickers, the full audit export, and the bilingual
+// catalogs and error-code copy for all of it. Local and CI builds measure
+// the same now (master built here: user 428.3/162.5KB, admin 495.5/168.1KB,
+// identical to the CI lines). On top of that this adds user +30.3KB total
+// and +9.2KB main, admin +8.1KB total and +3.4KB main — no new dependency,
+// every chunk's growth is feature code or message text — which crosses the
+// headroom on user.main (171.7KB vs the 170.7KB cap) and admin.total
+// (503.6KB vs the 501.6KB cap). All four bases move to the measured numbers
+// so the next change starts from the current size. user.total 418.6KB ->
+// 458.6KB, main 155.2KB -> 171.7KB; admin.total 456.0KB -> 503.6KB, main
+// 156.2KB -> 171.5KB.
 const BUDGETS = {
-  user: { total: 428646, main: 158931 },
-  admin: { total: 466944, main: 159949 },
+  user: { total: 469603, main: 175842 },
+  admin: { total: 515692, main: 175578 },
 }
 const HEADROOM = 1.1
 
