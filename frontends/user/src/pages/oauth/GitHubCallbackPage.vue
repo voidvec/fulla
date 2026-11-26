@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useSocialCallback } from '../../composables/useSocialCallback'
-const { errorText } = useSocialCallback('github')
+const { errorText, needsLinking } = useSocialCallback('github')
 </script>
 
 <template>
@@ -17,6 +17,19 @@ const { errorText } = useSocialCallback('github')
         <p class="text-error-600 text-sm mt-2">
           {{ errorText }}
         </p>
+        <!-- The account is not linked: offer the way forward (the link flow
+             lives on the security page) rather than only a way back. The
+             route needs a session, so a signed-out visitor is sent through
+             sign-in first and lands here afterwards. -->
+        <router-link
+          v-if="needsLinking"
+          to="/security"
+          data-testid="social-link-guide"
+          class="mt-4 mr-4 inline-block text-brand-600 hover:text-brand-800 rounded-ctl
+                 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+        >
+          {{ $t('oauth.social.linkGuide') }}
+        </router-link>
         <router-link
           to="/login"
           class="mt-4 inline-block text-brand-600 hover:text-brand-800 rounded-ctl

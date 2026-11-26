@@ -55,6 +55,11 @@ export const zhCN: Record<string, string> = {
   AUTH_MFA_CODE_INVALID: '验证码不正确',
   AUTH_MFA_NOT_CONFIGURED: '尚未设置双重验证，请先完成设置',
 
+  // --- 用户可达但此前没有文案的码（UF-08）---
+  AUTH_SOCIAL_ACCOUNT_NOT_LINKED: '该第三方账号尚未绑定本地账户，请先在安全设置中绑定后重试',
+  WEBAUTHN_INVALID_ATTESTATION: '该安全密钥使用的格式或算法不受支持，请换一个设备或安全密钥重试',
+  WEBAUTHN_CHALLENGE_MISMATCH: '安全密钥注册校验失败，请重新开始注册',
+
   // --- OAuth2 / RFC 6749 protocol error codes ---
   invalid_request: '请求参数缺失或无效',
   invalid_client: '客户端认证失败',

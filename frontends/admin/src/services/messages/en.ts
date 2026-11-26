@@ -60,6 +60,12 @@ export const en: Record<string, string> = {
   AUTH_MFA_CODE_INVALID: 'Incorrect verification code',
   AUTH_MFA_NOT_CONFIGURED: 'Two-factor authentication is not configured yet. Set it up first',
 
+  // --- user-reachable codes that had no entry (UF-08); mirrored verbatim
+  //     from frontends/user (checked by scripts/check-ui-sync.mjs) ---
+  AUTH_SOCIAL_ACCOUNT_NOT_LINKED: 'This third-party account is not linked to a user yet. Link it in Security settings first, then try again',
+  WEBAUTHN_INVALID_ATTESTATION: 'This passkey uses a format or algorithm that is not supported. Try another device or security key',
+  WEBAUTHN_CHALLENGE_MISMATCH: 'The passkey registration could not be verified. Please start again',
+
   // --- OAuth2 / RFC 6749 protocol error codes ---
   invalid_request: 'Missing or invalid request parameters',
   invalid_client: 'Client authentication failed',

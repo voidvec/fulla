@@ -214,6 +214,8 @@ export default {
     },
     social: {
       completing: 'Completing {provider} sign-in…',
+      // UF-08: AUTH_SOCIAL_ACCOUNT_NOT_LINKED on the callback page.
+      linkGuide: 'Open Security settings to link the account',
     },
     noCodeFromProvider: 'No authorization code from {provider}',
     linkMissingState:
