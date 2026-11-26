@@ -431,10 +431,10 @@ test.describe('My Organizations — consent-request approvals (manager)', () => 
   test("another member's request offers no withdrawal", async ({ page }) => {
     // Wait for the profile round trip the recognition depends on, so the
     // count below is not taken before the button could have appeared.
-    const profile = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/me')
     await page.reload()
-    await profile
+    const profile = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/me')
     await page.click('button:has-text("Org authorizations")')
+    await profile
 
     const pending = page.getByTestId('org-pending-requests')
     await expect(pending.getByText('member-lee')).toBeVisible()
