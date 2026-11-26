@@ -321,7 +321,7 @@ async function createOrg() {
 // expansion and reset the per-panel state on switch.
 let membersRequestSeq = 0
 
-async function toggleMembers(slug: string) {
+async function toggleMembers(slug: string, manager = false) {
   if (expandedSlug.value === slug) {
     expandedSlug.value = ''
     return
@@ -331,6 +331,8 @@ async function toggleMembers(slug: string) {
   members.value = []
   inviteEmail.value = ''
   lastInviteToken.value = ''
+  pendingInvites.value = []
+  invitationsRequestSeq++
   try {
     const resp = await http.get(`/api/me/organizations/${slug}/members`)
     if (seq !== membersRequestSeq || expandedSlug.value !== slug) return
@@ -338,6 +340,39 @@ async function toggleMembers(slug: string) {
   } catch (e: unknown) {
     if (seq === membersRequestSeq) error.value = normalizeError(e)
   }
+  // Only an owner/admin may list invitations; a plain member's panel never
+  // asks, so it never draws the 403.
+  if (manager) void fetchInvitations(slug)
+}
+
+// UF-02: invitations sent and not yet accepted, for the open members panel.
+// Sequence-guarded like the members list: the panel is shared across orgs,
+// so a late answer for org A must not render into org B's panel.
+const pendingInvites = ref<any[]>([])
+let invitationsRequestSeq = 0
+
+async function fetchInvitations(slug: string) {
+  const seq = ++invitationsRequestSeq
+  try {
+    const resp = await http.get(`/api/me/organizations/${slug}/invitations`)
+    if (seq !== invitationsRequestSeq || expandedSlug.value !== slug) return
+    pendingInvites.value = resp.data?.invitations || []
+  } catch (e: unknown) {
+    if (seq === invitationsRequestSeq) error.value = normalizeError(e)
+  }
+}
+
+function revokeInvitation(slug: string, inv: { id: number; email: string }) {
+  askConfirm(t('account.organizations.inviteRevokeConfirm', { email: inv.email }), async () => {
+    try {
+      await http.delete(`/api/me/organizations/${slug}/invitations/${inv.id}`)
+      success.value = t('account.organizations.inviteRevoked', { email: inv.email })
+      setTimeout(() => { success.value = '' }, 3000)
+      await fetchInvitations(slug)
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 // Refresh the OPEN members panel in place (post-mutation): unlike a
@@ -367,6 +402,8 @@ async function invite(slug: string) {
     inviteEmail.value = ''
     success.value = t('account.organizations.invited')
     setTimeout(() => { success.value = '' }, 3000)
+    // The new invitation belongs in the pending list straight away.
+    await fetchInvitations(slug)
   } catch (e: unknown) {
     error.value = normalizeError(e)
   }
@@ -568,7 +605,7 @@ onMounted(fetchOrgs)
             <button
               class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
                      focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
-              @click="toggleMembers(org.slug)"
+              @click="toggleMembers(org.slug, isManager(org.role))"
             >
               {{ $t('account.organizations.members') }}
             </button>
@@ -628,6 +665,43 @@ onMounted(fetchOrgs)
             >
               {{ $t('account.organizations.invite') }}
             </button>
+          </div>
+          <!-- UF-02: invitations sent and not yet accepted. The expiry is the
+               server's own timestamp, shown verbatim: it carries no time
+               zone, so the page states it rather than guessing a countdown. -->
+          <div
+            v-if="isManager(org.role) && pendingInvites.length > 0"
+            class="pt-2 border-t border-neutral-100 space-y-2"
+            data-testid="pending-invitations"
+          >
+            <p class="text-sm font-medium text-neutral-700">
+              {{ $t('account.organizations.pendingInvites') }}
+            </p>
+            <div
+              v-for="inv in pendingInvites"
+              :key="inv.id"
+              class="flex items-center justify-between gap-2"
+              data-testid="pending-invitation"
+            >
+              <span class="text-sm text-neutral-900 break-all">
+                {{ inv.email }}
+                <AppBadge
+                  size="sm"
+                  class="ml-1"
+                >{{ inv.role }}</AppBadge>
+                <span class="text-xs text-neutral-500 ml-2">
+                  {{ $t('account.organizations.inviteExpires', { time: shortDateTime(inv.expires_at) }) }}
+                </span>
+              </span>
+              <button
+                class="text-sm text-error-600 hover:text-error-800 whitespace-nowrap
+                       focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring rounded-ctl"
+                data-testid="revoke-invitation"
+                @click="revokeInvitation(org.slug, inv)"
+              >
+                {{ $t('account.organizations.inviteRevoke') }}
+              </button>
+            </div>
           </div>
           <div
             v-if="org.role === 'owner'"
