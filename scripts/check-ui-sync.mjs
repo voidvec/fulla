@@ -12,8 +12,8 @@
 //      the admin app with the identical literal. This lives here and not in
 //      a vitest property because test files must never import across apps
 //      (.claude/rules/frontend-contract.md), so no frontend test can see
-//      both catalogs; the one that tries to (crossAppConsistency.property
-//      .test.ts) falls back to comparing the user catalog with itself.
+//      both catalogs; crossAppConsistency.property.test.ts only checks
+//      determinism and completeness of the canonical user catalog.
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
