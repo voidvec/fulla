@@ -8,17 +8,25 @@ import { setupMocks, loginUser } from './helpers/mock-api'
 // per the established pattern. The encode/decode conversions themselves are
 // pinned by tests/unit/webauthnService.test.ts; these specs cover the flow.
 
-/** Stub navigator.credentials with a `get()` that answers a full assertion
+/**
+ * Stub navigator.credentials with a `get()` that answers a full assertion
  * (authenticatorData/clientDataJSON/signature/userHandle as ArrayBuffers —
- * the exact shapes the finish-payload conversion reads). */
-function stubAssertion(withUserHandle = true) {
+ * the exact shapes the finish-payload conversion reads).
+ *
+ * The returned function is handed to page.addInitScript, which re-evaluates
+ * its source in the page: it must therefore be self-contained. A reference
+ * to anything from this scope (a parameter, an import) is a ReferenceError
+ * there, the stub is never installed, and the real browser API is what
+ * runs. The assertion without a userHandle is covered by the unit tests.
+ */
+function stubAssertion() {
   return () => {
     const bytes = (n: number) => new Uint8Array(n).buffer
     const response: Record<string, ArrayBuffer | undefined> = {
       authenticatorData: bytes(37),
       clientDataJSON: bytes(120),
       signature: bytes(70),
-      userHandle: withUserHandle ? bytes(16) : undefined,
+      userHandle: bytes(16),
     }
     Object.defineProperty(window, 'PublicKeyCredential', {
       value: window.PublicKeyCredential || class {},
@@ -78,10 +86,17 @@ test.describe('Passkey login (UF-01)', () => {
     expect(body.response.authenticatorData).toBeTruthy()
     expect(body.response.clientDataJSON).toBeTruthy()
     expect(body.response.signature).toBeTruthy()
-    expect(body.response.userHandle === undefined || typeof body.response.userHandle === 'string').toBe(true)
+    // userHandle is a top-level field of the credential, not part of
+    // response.
+    expect(typeof body.userHandle).toBe('string')
 
-    // Session established → authorize → callback exchange → portal home.
-    await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 })
+    // Session established → the SPA's own authorize round-trip → /callback
+    // redeems the code with the stashed verifier → portal home, signed in.
+    // The access token lives in memory only (frontend contract); the
+    // persisted refresh token is the observable proof that the exchange
+    // stored a session.
+    await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 10000 })
+    expect(await page.evaluate(() => localStorage.getItem('refresh_token'))).toBeTruthy()
   })
 
   test('maps a rejected assertion to the generic credential copy (anti-enumeration)', async ({ page }) => {
