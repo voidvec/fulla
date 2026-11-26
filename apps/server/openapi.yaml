@@ -2626,8 +2626,41 @@ paths:
       - Scopes
   /api/admin/tokens:
     get:
-      description: Get a list of active OAuth2 tokens.
+      description: >-
+        List active OAuth2 tokens (not expired and not revoked), newest
+        first, with optional pagination (page, per_page) and filtering
+        (client_id, user_id; exact match, combined with AND). Returns total
+        count.
       operationId: get_api_admin_tokens
+      parameters:
+      - description: Page number (1-based)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 1
+      - description: Items per page (1-100)
+        in: query
+        name: per_page
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 100
+      - description: Only tokens issued to this client_id
+        in: query
+        name: client_id
+        required: false
+        schema:
+          type: string
+      - description: Only tokens issued to this user_id
+        in: query
+        name: user_id
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Tokens list

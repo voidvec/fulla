@@ -2143,7 +2143,24 @@ export type GetApiAdminScopesResourcesResponse = GetApiAdminScopesResourcesRespo
 export type GetApiAdminTokensData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (1-100)
+         */
+        per_page?: number;
+        /**
+         * Only tokens issued to this client_id
+         */
+        client_id?: string;
+        /**
+         * Only tokens issued to this user_id
+         */
+        user_id?: string;
+    };
     url: '/api/admin/tokens';
 };
 
