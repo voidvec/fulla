@@ -40,7 +40,7 @@ test.describe('Claim Mappings Page', () => {
       include_in: 'both',
     })
     // The mock's in-memory row appears after the refresh.
-    await expect(page.locator('text=region_code')).toBeVisible()
+    await expect(page.locator('tr', { hasText: 'region_code' })).toBeVisible()
   })
 
   test('reserved claim name surfaces the localized catalog error', async ({ page }) => {
