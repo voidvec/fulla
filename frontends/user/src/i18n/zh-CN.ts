@@ -34,6 +34,7 @@ export default {
     loading: '加载中…',
     dismiss: '关闭',
     cancel: '取消',
+    done: '完成',
     save: '保存',
     backToLogin: '返回登录',
     goToLogin: '前往登录',
@@ -351,6 +352,9 @@ export default {
       requestOrgAuthSubmit: '提交申请',
       requestOrgAuthNoOrgs: '加入组织后才能为该应用申请组织授权。',
       requestOrgAuthSuccess: '申请已提交，等待管理员审批',
+      // UF-07：与应用页面共用的申请弹窗。
+      requestOrgAuthWithdraw: '撤回申请',
+      requestOrgAuthWithdrawn: '申请已撤回。',
     },
     applications: {
       title: '我的应用',
@@ -383,6 +387,9 @@ export default {
       requestOrgAuthSubmit: '提交申请',
       requestOrgAuthNoOrgs: '加入组织后才能为该应用申请组织授权。',
       requestOrgAuthSuccess: '申请已提交，等待管理员审批',
+      // UF-07：提交后当场撤回（弹窗的已提交状态）。
+      requestOrgAuthWithdraw: '撤回申请',
+      requestOrgAuthWithdrawn: '申请已撤回。',
       // T1.3（UF-04a）：编辑模态（PATCH 仅送脏字段）。
       edit: '编辑',
       editTitle: '编辑“{app}”',
@@ -469,6 +476,10 @@ export default {
         '批准“{requester}”为“{client}”提交的授权申请？该应用将获得组织同意。',
       pendingRejectConfirm:
         '拒绝“{requester}”为“{client}”提交的授权申请？申请人之后仍可重新提交。',
+      // UF-07：申请人撤回自己提交的待审批申请。
+      withdraw: '撤回',
+      pendingWithdrawConfirm: '确定撤回您为“{client}”提交的授权申请？',
+      requestWithdrawn: '授权申请已撤回',
     },
   },
 }

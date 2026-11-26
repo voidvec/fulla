@@ -377,6 +377,9 @@ export async function mockPasswordChangeError(page: Page, errorCode: string) {
  *                                     identical pending client_id replays the
  *                                     SAME id with the already-pending message)
  *   POST {base}/{id}/approve|reject → 200 {id, client_id, status, scopes?, message}
+ *   DELETE {base}/{id}             → 200 {id, status, message} — the requester
+ *                                     withdraws their own PENDING request;
+ *                                     anything else answers the same 404
  * The caller owns `state` (seed `requests` before the test); every mutating
  * call is recorded in `state.calls` so specs can assert the wire traffic
  * without waitForRequest plumbing. Trailing '**' on the glob so the
@@ -424,6 +427,23 @@ export async function mockOrgConsentRequests(page: Page, slug: string, state: Or
       }
       state.requests.push(created)
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(created) })
+      return
+    }
+    if (method === 'DELETE') {
+      const id = path.slice(base.length + 1)
+      state.calls.push({ method, path, body: null })
+      const index = state.requests.findIndex((r) => String(r.id) === id && r.status === 'pending')
+      if (index < 0) {
+        // Anti-enumeration: another member's id and an unknown id look the same.
+        await route.fulfill({ status: 404, body: '{}' })
+        return
+      }
+      const [withdrawn] = state.requests.splice(index, 1)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: withdrawn.id, status: 'withdrawn', message: 'Consent request withdrawn' }),
+      })
       return
     }
     if (method === 'POST' && (path.endsWith('/approve') || path.endsWith('/reject'))) {

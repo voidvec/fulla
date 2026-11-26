@@ -154,6 +154,8 @@ async function toggleConsents(slug: string) {
   grantRedirectUri.value = ''
   grantLink.value = ''
   fetchPendingRequests(slug)
+  // For recognising the user's own rows in the queue (withdraw, UF-07).
+  if (!myUsername.value) void loadMyUsername()
   try {
     const resp = await http.get(`/api/me/organizations/${slug}/consents`)
     if (seq !== consentsRequestSeq || expandedConsentsSlug.value !== slug) return
@@ -230,6 +232,42 @@ function rejectConsentRequest(slug: string, req: any) {
       }
     },
   )
+}
+
+// UF-07: the requester takes back their own pending request. Only a manager
+// can read this queue, so this button is how a manager withdraws one they
+// filed themselves; the queue names the requester by username, and the
+// profile is the only place this SPA learns its own (usernames are unique),
+// so that is the match. The server decides regardless — anyone else's id
+// answers the same 404 as an unknown one.
+const myUsername = ref('')
+
+async function loadMyUsername() {
+  try {
+    const resp = await http.get('/api/me')
+    myUsername.value = resp.data?.username || ''
+  } catch {
+    // Without it no row is recognised as the user's own, so nothing is
+    // offered; that is the safe side of the failure.
+  }
+}
+
+function isMyRequest(req: any): boolean {
+  return myUsername.value !== '' && req.requester_username === myUsername.value
+}
+
+function withdrawConsentRequest(slug: string, req: any) {
+  askConfirm(t('account.organizations.pendingWithdrawConfirm', { client: req.client_id }), async () => {
+    error.value = null
+    try {
+      await http.delete(`/api/me/organizations/${slug}/consent-requests/${req.id}`)
+      success.value = t('account.organizations.requestWithdrawn')
+      setTimeout(() => { success.value = '' }, 3000)
+      await fetchPendingRequests(slug)
+    } catch (e: unknown) {
+      error.value = normalizeError(e)
+    }
+  })
 }
 
 function revokeConsents(slug: string, clientId: string) {
@@ -773,6 +811,16 @@ onMounted(fetchOrgs)
                 {{ shortDateTime(r.requested_at) }}
               </span>
               <span class="flex items-center gap-2 whitespace-nowrap">
+                <!-- UF-07: only the requester's own rows can be withdrawn. -->
+                <button
+                  v-if="isMyRequest(r)"
+                  class="px-3 py-1.5 text-sm text-neutral-600 border border-neutral-300 rounded-ctl hover:bg-neutral-50 transition-colors
+                         focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                  data-testid="withdraw-consent-request"
+                  @click="withdrawConsentRequest(org.slug, r)"
+                >
+                  {{ $t('account.organizations.withdraw') }}
+                </button>
                 <button
                   class="px-3 py-1.5 text-sm text-brand-600 border border-brand-200 rounded-ctl hover:bg-brand-50 transition-colors
                          focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"

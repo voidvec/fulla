@@ -28,6 +28,30 @@ const loading = ref(false)
 const noOrgs = ref(false)
 const submitting = ref(false)
 
+// UF-07: a request filed by mistake can be taken back on the spot. The
+// filing response is the only time a plain member is told the request's id —
+// the queue is readable by managers only — so instead of closing at once the
+// dialog stays on its filed state and offers the withdrawal. Once it is
+// closed that id is gone from this browser; finding it again needs a list of
+// the member's own requests, which the backend does not offer.
+const filed = ref<{ id: number | string; slug: string } | null>(null)
+const filedMessage = ref('')
+const withdrawn = ref(false)
+const withdrawing = ref(false)
+
+async function withdraw() {
+  if (!filed.value || withdrawing.value) return
+  withdrawing.value = true
+  try {
+    await http.delete(`/api/me/organizations/${filed.value.slug}/consent-requests/${filed.value.id}`)
+    withdrawn.value = true
+  } catch (e: unknown) {
+    emit('error', e)
+  } finally {
+    withdrawing.value = false
+  }
+}
+
 const options = computed(() =>
   orgs.value.map((o: any) => ({ value: o.slug, label: `${o.name} (${o.slug})` })),
 )
@@ -41,6 +65,8 @@ watch(
     orgs.value = []
     slug.value = ''
     noOrgs.value = false
+    filed.value = null
+    withdrawn.value = false
     loading.value = true
     try {
       const resp = await http.get('/api/me/organizations')
@@ -68,8 +94,15 @@ async function submit() {
     )
     // The backend's message distinguishes first filing from the idempotent
     // already-pending replay — surface it verbatim.
-    emit('success', resp.data?.message || t(`${props.scope}.requestOrgAuthSuccess`))
-    emit('close')
+    const message = resp.data?.message || t(`${props.scope}.requestOrgAuthSuccess`)
+    emit('success', message)
+    if (resp.data?.id == null) {
+      // Nothing to withdraw without an id: close as this dialog always did.
+      emit('close')
+      return
+    }
+    filed.value = { id: resp.data.id, slug: slug.value }
+    filedMessage.value = message
   } catch (e: unknown) {
     emit('error', e)
     emit('close')
@@ -99,6 +132,49 @@ async function submit() {
     >
       {{ t(`${scope}.requestOrgAuthNoOrgs`) }}
     </p>
+    <!-- UF-07: filed. Stays open so the request can be taken back at once. -->
+    <div
+      v-else-if="filed"
+      class="space-y-4"
+      data-testid="request-org-auth-filed"
+    >
+      <p
+        class="text-sm text-neutral-700"
+        data-testid="request-org-auth-filed-message"
+      >
+        {{ filedMessage }}
+      </p>
+      <p
+        v-if="withdrawn"
+        class="text-sm text-neutral-600"
+        data-testid="request-org-auth-withdrawn"
+      >
+        {{ t(`${scope}.requestOrgAuthWithdrawn`) }}
+      </p>
+      <div class="flex justify-end gap-2">
+        <button
+          v-if="!withdrawn"
+          type="button"
+          :disabled="withdrawing"
+          class="px-4 py-2 text-sm text-error-600 border border-error-200 rounded-ctl hover:bg-error-50
+                 disabled:opacity-50 transition-colors
+                 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          data-testid="request-org-auth-withdraw"
+          @click="withdraw"
+        >
+          {{ t(`${scope}.requestOrgAuthWithdraw`) }}
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700 transition-colors
+                 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+          data-testid="request-org-auth-done"
+          @click="emit('close')"
+        >
+          {{ $t('common.done') }}
+        </button>
+      </div>
+    </div>
     <form
       v-else
       class="space-y-4"
