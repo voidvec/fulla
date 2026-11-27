@@ -33,4 +33,9 @@ void registerAllControllers();
 // implied by ADD_METHOD_TO string lookups) MUST have already run.
 void wireControllerPluginDependencies();
 
+// Clears the cached OAuth2Plugin pointers on registered controllers and
+// filters during server teardown so DrClassMap singletons do not retain
+// dangling pointers after PluginsManager destroys OAuth2Plugin.
+void clearControllerPluginDependencies();
+
 }  // namespace bootstrap

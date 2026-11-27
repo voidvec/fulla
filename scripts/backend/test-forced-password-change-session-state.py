@@ -414,6 +414,13 @@ def run(args):
                     allowed = (0, -15) if os.name != "nt" else (0, 1)
                     if exit_code not in allowed:
                         cleanup_errors.append("unexpected server exit code: " + str(exit_code))
+                if cleanup_errors:
+                    log_path = work / "server.log"
+                    if log_path.is_file():
+                        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                        print("[forced-password-session] server.log tail (last 60 lines):")
+                        for line in lines[-60:]:
+                            print("  " + line)
                 for problem in cleanup_errors:
                     print("[forced-password-session] cleanup FAILED: " + problem)
                 if cleanup_errors and not already_failed:

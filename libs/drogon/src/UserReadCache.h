@@ -136,6 +136,14 @@ class UserReadCache
         return redisClient_ != nullptr;
     }
 
+    // Clears the cached RedisClientPtr and in-process memo during plugin shutdown.
+    void reset()
+    {
+        redisClient_.reset();
+        std::lock_guard<std::mutex> lock(memoMutex_);
+        memo_.clear();
+    }
+
     // Called by the write-path invalidation hook (in-process, synchronous)
     // so a revoked user's memo never outlives the DEL.
     void dropMemo(const std::string &subject)

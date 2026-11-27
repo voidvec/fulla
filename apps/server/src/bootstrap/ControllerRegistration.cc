@@ -151,35 +151,19 @@ void registerAllControllers()
     );
 }
 
-void wireControllerPluginDependencies()
+namespace
 {
-    // M3 Task 23: fetch the plugin exactly once (config-reflection
-    // construction has completed by the time registerBeginningAdvice
-    // callbacks run -- see this function's header comment for the
-    // ordering requirement) and push it into every controller/filter that
-    // exposes a setPlugin(). Using drogon::DrClassMap::getSingleInstance<T>()
-    // rather than re-constructing each controller: registerController()
-    // already called DrClassMap::setSingleInstance(ctrlPtr), so the
-    // SAME instance drogon dispatches requests to is the one we mutate
-    // here (a fresh std::make_shared<T>() would wire a different, unused
-    // object).
-    auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
-    if (!plugin)
-    {
-        // Recoverable: an explicit per-request getPlugin<OAuth2Plugin>()
-        // fallback exists, so startup continues (just less efficiently).
-        LOG_WARN << "wireControllerPluginDependencies: OAuth2Plugin not found; "
-                    "controllers/filters will fall back to per-request "
-                    "getPlugin<OAuth2Plugin>() lookups";
-        return;
-    }
 
+void assignControllerPluginDependencies(OAuth2Plugin *plugin)
+{
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::HealthController>()
       ->setPlugin(plugin);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::DeviceAuthController>()
       ->setPlugin(plugin);
 #ifdef WITH_SOCIAL
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
+      ->setPlugin(plugin);
+    drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
       ->setPlugin(plugin);
 #endif  // WITH_SOCIAL
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::MfaController>()
@@ -209,6 +193,39 @@ void wireControllerPluginDependencies()
       ->setPlugin(plugin);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::filters::OAuth2AuthFilter>()
       ->setPlugin(plugin);
+}
+
+}  // namespace
+
+void wireControllerPluginDependencies()
+{
+    // M3 Task 23: fetch the plugin exactly once (config-reflection
+    // construction has completed by the time registerBeginningAdvice
+    // callbacks run -- see this function's header comment for the
+    // ordering requirement) and push it into every controller/filter that
+    // exposes a setPlugin(). Using drogon::DrClassMap::getSingleInstance<T>()
+    // rather than re-constructing each controller: registerController()
+    // already called DrClassMap::setSingleInstance(ctrlPtr), so the
+    // SAME instance drogon dispatches requests to is the one we mutate
+    // here (a fresh std::make_shared<T>() would wire a different, unused
+    // object).
+    auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
+    if (!plugin)
+    {
+        // Recoverable: an explicit per-request getPlugin<OAuth2Plugin>()
+        // fallback exists, so startup continues (just less efficiently).
+        LOG_WARN << "wireControllerPluginDependencies: OAuth2Plugin not found; "
+                    "controllers/filters will fall back to per-request "
+                    "getPlugin<OAuth2Plugin>() lookups";
+        return;
+    }
+
+    assignControllerPluginDependencies(plugin);
+}
+
+void clearControllerPluginDependencies()
+{
+    assignControllerPluginDependencies(nullptr);
 }
 
 }  // namespace bootstrap

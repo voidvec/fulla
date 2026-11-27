@@ -870,11 +870,24 @@ void OAuth2Plugin::shutdown()
     if (cleanupService_)
         cleanupService_->stop();
 
+    ::fulla::drogon::ClientCacheInvalidator::instance().registerHook({});
+    ::fulla::drogon::UserCacheInvalidator::instance().registerHook({});
+    ::fulla::drogon::UserReadCache::instance().reset();
+
     cleanupService_.reset();
+    {
+        std::lock_guard<std::mutex> lock(adminScopesMu_);
+        authorizationService_.reset();
+        pendingAdminScopes_.clear();
+    }
     tokenService_.reset();
     clientService_.reset();
     identityService_.reset();
+    subjectResolver_.reset();
     roleProvider_.reset();
+    rolePermissionResolver_.reset();
+    claimMappingsCache_.reset();
+    claimMappingsProvider_.reset();
 
     // Drop the repository handles (releases the bundle's underlying state once
     // the last in-flight callback completes).
@@ -885,6 +898,15 @@ void OAuth2Plugin::shutdown()
     roleRepo_.reset();
     userRepo_.reset();
     subjectMappingRepo_.reset();
+
+    jwkManager_.reset();
+    auditSink_.reset();
+    metrics_.reset();
+    if (ownerStatusMemo_)
+    {
+        std::lock_guard<std::mutex> lock(ownerStatusMemo_->ownerStatusMutex_);
+        ownerStatusMemo_->ownerStatusCache_.clear();
+    }
 }
 
 // ========== Delegate to Services ==========

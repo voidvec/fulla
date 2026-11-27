@@ -47,14 +47,106 @@
 #include "bootstrap/OpenApiSetup.h"
 #include "bootstrap/SecurityHeaders.h"
 
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <future>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
+#ifndef _WIN32
+#include <pthread.h>
+#include <signal.h>
+#endif
+
+struct StartupTaskRunner
+{
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool stopRequested = false;
+    std::vector<std::thread> threads;
+
+    bool waitForRetry(std::chrono::milliseconds delay)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return !cv.wait_for(lock, delay, [this]() { return stopRequested; });
+    }
+
+    bool shouldStop()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return stopRequested;
+    }
+
+    void spawn(std::function<void()> fn)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (stopRequested)
+            return;
+        threads.emplace_back(std::move(fn));
+    }
+
+    void requestStop()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            stopRequested = true;
+        }
+        cv.notify_all();
+    }
+
+    void joinAll()
+    {
+        requestStop();
+        std::vector<std::thread> toJoin;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            toJoin.swap(threads);
+        }
+        for (auto &t : toJoin)
+        {
+            if (t.joinable())
+                t.join();
+        }
+    }
+};
+
+template <typename Fn>
+static void spawnStartupRetryTask(
+  StartupTaskRunner &runner,
+  const char *taskName,
+  Fn &&attemptFn
+)
+{
+    runner.spawn([&runner, taskName, fn = std::forward<Fn>(attemptFn)]() {
+        // Retry with backoff: on a cold boot the auto-migrate thread may still
+        // be creating tables; the lookup fails soft and is retried before giving up.
+        for (int attempt = 1; attempt <= 5; ++attempt)
+        {
+            if (!runner.waitForRetry(std::chrono::seconds(2 * attempt)))
+                return;
+            auto result = std::make_shared<std::promise<bool>>();
+            fn([result, taskName](bool ok, const std::string &detail) {
+                if (ok)
+                    LOG_INFO << taskName << ": " << detail;
+                else
+                    LOG_WARN << taskName << " attempt: " << detail;
+                result->set_value(ok);
+            });
+            if (result->get_future().get())
+                return;
+            if (runner.shouldStop())
+                return;
+            LOG_WARN << taskName << " retry " << attempt << "/5 scheduled";
+        }
+    });
+}
 
 // Helper to parse JSON (replaces deprecated Json::Reader)
 static bool parseJsonString(std::istream &stream, Json::Value &json)
@@ -346,6 +438,8 @@ int main(int argc, char *argv[])
         fulla::drogon::validation::RuleSet::setPasswordMinLength(minLen);
     }
 
+    StartupTaskRunner startupRunner;
+
     // 5b. First-boot admin bootstrap (#103): when enabled and no user holds
     // the admin role, create 'admin' with a PBKDF2 password (env-provided or
     // random-printed-once). Delayed past the auto-migrate thread's start;
@@ -361,41 +455,24 @@ int main(int argc, char *argv[])
         }
         if (bootstrapEnabled)
         {
-            drogon::app().registerBeginningAdvice([]() {
-                std::thread([]() {
-                    // Retry with backoff: on a cold boot the auto-migrate
-                    // thread may still be creating tables; the roles lookup
-                    // fails soft and is retried before giving up.
-                    for (int attempt = 1; attempt <= 5; ++attempt)
-                    {
-                        std::this_thread::sleep_for(
-                          std::chrono::seconds(2 * attempt)
-                        );
-                        const char *envPwd =
-                          fulla::common::config::ConfigManager::getProcessEnv(
-                            "FULLA_BOOTSTRAP_ADMIN_PASSWORD");
-                        auto result = std::make_shared<std::promise<bool>>();
-                        bootstrap::AdminBootstrapper::run(
-                          envPwd ? std::string(envPwd) : std::string(),
-                          [result](bool ok, const std::string &detail) {
-                              if (!ok)
-                                  LOG_WARN << "AdminBootstrap attempt: " << detail;
-                              else
-                                  LOG_INFO << "AdminBootstrap: " << detail;
-                              result->set_value(ok);
-                          }
-                        );
-                        if (result->get_future().get())
-                            break;
-                        LOG_WARN << "AdminBootstrap retry " << attempt << "/5 scheduled";
-                    }
-                }).detach();
+            drogon::app().registerBeginningAdvice([&startupRunner]() {
+                spawnStartupRetryTask(
+                  startupRunner,
+                  "AdminBootstrap",
+                  [](std::function<void(bool, const std::string &)> cb) {
+                      const char *envPwd =
+                        fulla::common::config::ConfigManager::getProcessEnv(
+                          "FULLA_BOOTSTRAP_ADMIN_PASSWORD");
+                      bootstrap::AdminBootstrapper::run(
+                        envPwd ? std::string(envPwd) : std::string(),
+                        std::move(cb));
+                  });
             });
         }
     }
 
     // 5c. #143 startup self-heal: every user must own a (local, <id>) subject
-    // mapping — consent resolves users exclusively through that table and a
+    // mapping -- consent resolves users exclusively through that table and a
     // user without a row 500s on authorize->consent. V027 backfills existing
     // rows once at migration time; this pass turns it into a startup
     // invariant that also converges transient creation-path failures.
@@ -403,25 +480,13 @@ int main(int argc, char *argv[])
     // needs the users table to exist, and ON CONFLICT DO NOTHING makes it
     // idempotent against races with migrations or the bootstrap thread.
     {
-        drogon::app().registerBeginningAdvice([]() {
-            std::thread([]() {
-                for (int attempt = 1; attempt <= 5; ++attempt)
-                {
-                    std::this_thread::sleep_for(std::chrono::seconds(2 * attempt));
-                    auto result = std::make_shared<std::promise<bool>>();
-                    bootstrap::AdminBootstrapper::backfillLocalSubjectMappings(
-                      [result](bool ok, const std::string &detail) {
-                          if (ok)
-                              LOG_INFO << "SubjectMappingHeal: " << detail;
-                          else
-                              LOG_WARN << "SubjectMappingHeal attempt: " << detail;
-                          result->set_value(ok);
-                      }
-                    );
-                    if (result->get_future().get())
-                        break;
-                }
-            }).detach();
+        drogon::app().registerBeginningAdvice([&startupRunner]() {
+            spawnStartupRetryTask(
+              startupRunner,
+              "SubjectMappingHeal",
+              [](std::function<void(bool, const std::string &)> cb) {
+                  bootstrap::AdminBootstrapper::backfillLocalSubjectMappings(std::move(cb));
+              });
         });
     }
 
@@ -430,46 +495,75 @@ int main(int argc, char *argv[])
     // no config->DB path for clients (the dev seed SQL is DEV-ONLY), so a
     // fresh deployment passed credential + email-verified checks at login
     // and then failed code issuance with 3001 (the P0-4 client-existence
-    // guard) — a validation-class failure that logs nothing at ERROR level.
+    // guard) -- a validation-class failure that logs nothing at ERROR level.
     // ON CONFLICT DO NOTHING keeps runtime/admin client edits authoritative
     // across restarts. Memory mode initializes clients from config
     // in-process and is skipped (no DB client).
     {
-        drogon::app().registerBeginningAdvice([]() {
-            std::thread([]() {
-                auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
-                if (!plugin || plugin->getStorageType() == "memory")
-                    return;
-                const auto &clients = plugin->clientsSeedConfig();
-                if (!clients.isObject() || clients.empty())
-                    return;
-                for (int attempt = 1; attempt <= 5; ++attempt)
-                {
-                    std::this_thread::sleep_for(
-                      std::chrono::seconds(2 * attempt)
-                    );
-                    auto result = std::make_shared<std::promise<bool>>();
-                    bootstrap::ClientSeeder::run(
-                      clients,
-                      [result](bool ok, const std::string &detail) {
-                          if (ok)
-                              LOG_INFO << "ClientSeeder: " << detail;
-                          else
-                              LOG_WARN << "ClientSeeder attempt: " << detail;
-                          result->set_value(ok);
-                      }
-                    );
-                    if (result->get_future().get())
-                        break;
-                    LOG_WARN << "ClientSeeder retry " << attempt << "/5 scheduled";
-                }
-            }).detach();
+        drogon::app().registerBeginningAdvice([&startupRunner]() {
+            auto plugin = drogon::app().getPlugin<OAuth2Plugin>();
+            if (!plugin || plugin->getStorageType() == "memory")
+                return;
+            const auto &clients = plugin->clientsSeedConfig();
+            if (!clients.isObject() || clients.empty())
+                return;
+            spawnStartupRetryTask(
+              startupRunner,
+              "ClientSeeder",
+              [clients](std::function<void(bool, const std::string &)> cb) {
+                  bootstrap::ClientSeeder::run(clients, std::move(cb));
+              });
         });
     }
 
     registerLeakDiagHook();
 
+#ifndef _WIN32
+    // Block SIGTERM/SIGINT before drogon::app().run() starts IO/DB/Redis threads
+    // so every worker inherits the signal mask and sigwait() handles shutdown
+    // synchronously in normal thread context (avoids async-signal-unsafe calls
+    // inside Drogon's TERMFunction).
+    drogon::app().disableSigtermHandling();
+    sigset_t shutdownSigset;
+    sigemptyset(&shutdownSigset);
+    sigaddset(&shutdownSigset, SIGTERM);
+    sigaddset(&shutdownSigset, SIGINT);
+    if (pthread_sigmask(SIG_BLOCK, &shutdownSigset, nullptr) != 0)
+    {
+        LOG_WARN << "Failed to block SIGTERM/SIGINT on main thread";
+    }
+    std::atomic<bool> normalExitRequested{false};
+    std::atomic<bool> signalHandled{false};
+    std::thread signalWatcher(
+      [&shutdownSigset, &normalExitRequested, &signalHandled, &startupRunner]() {
+          int sig = 0;
+          if (sigwait(&shutdownSigset, &sig) == 0 &&
+              !normalExitRequested.load(std::memory_order_acquire))
+          {
+              signalHandled.store(true, std::memory_order_release);
+              LOG_WARN << "Received signal " << sig << ", initiating graceful shutdown";
+              startupRunner.requestStop();
+              drogon::app().quit();
+          }
+      });
+#endif
+
     // 6. Start the server
     drogon::app().run();
+
+#ifndef _WIN32
+    normalExitRequested.store(true, std::memory_order_release);
+    if (signalWatcher.joinable())
+    {
+        if (!signalHandled.load(std::memory_order_acquire))
+            pthread_kill(signalWatcher.native_handle(), SIGTERM);
+        signalWatcher.join();
+    }
+#endif
+
+    startupRunner.joinAll();
+    bootstrap::shutdownMigrations();
+    bootstrap::shutdownIdentityServices();
+    bootstrap::clearControllerPluginDependencies();
     return 0;
 }

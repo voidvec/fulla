@@ -3,17 +3,51 @@
 #include <fulla/common/config/ConfigManager.h>
 #include "../SchemaManager.h"
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace bootstrap
 {
 
 namespace
 {
+
+struct MigrationThreadState
+{
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool stopRequested = false;
+    std::vector<std::thread> threads;
+};
+
+MigrationThreadState &migrationThreadState()
+{
+    static MigrationThreadState state;
+    return state;
+}
+
+bool waitBeforeMigrationTask(std::chrono::milliseconds delay)
+{
+    auto &state = migrationThreadState();
+    std::unique_lock<std::mutex> lock(state.mutex);
+    return !state.cv.wait_for(lock, delay, [&state]() { return state.stopRequested; });
+}
+
+void launchMigrationThread(std::function<void()> task)
+{
+    auto &state = migrationThreadState();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (state.stopRequested)
+        return;
+    state.threads.emplace_back(std::move(task));
+}
 
 // Locates the migrations directory by probing the same relative paths the
 // repo layout and the docker image layout (/app/sql/migrations) use.
@@ -78,10 +112,11 @@ void setupMigrations()
 
     std::string migrationsDirStr = migrationsDir.string();
     drogon::app().registerBeginningAdvice([migrationsDirStr]() {
-        // Run in a detached thread to avoid blocking the event loop
-        std::thread([migrationsDirStr]() {
+        // Run in a joinable worker thread to avoid blocking the event loop
+        launchMigrationThread([migrationsDirStr]() {
             // Small delay to ensure DB pool is ready
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            if (!waitBeforeMigrationTask(std::chrono::milliseconds(500)))
+                return;
             if (!schema::SchemaManager::migrate(migrationsDirStr))
             {
                 // Task 37: a half-migrated schema serving traffic is worse
@@ -90,7 +125,7 @@ void setupMigrations()
                 LOG_FATAL << "Schema migration failed! Terminating server.";
                 std::exit(1);
             }
-        }).detach();
+        });
     });
 }
 
@@ -102,8 +137,9 @@ void setupSchemaSelfCheck()
 
     std::string migrationsDirStr = migrationsDir.string();
     drogon::app().registerBeginningAdvice([migrationsDirStr]() {
-        std::thread([migrationsDirStr]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        launchMigrationThread([migrationsDirStr]() {
+            if (!waitBeforeMigrationTask(std::chrono::milliseconds(500)))
+                return;
             auto db = drogon::app().getDbClient();
             if (!db)
                 return;
@@ -125,8 +161,25 @@ void setupSchemaSelfCheck()
             {
                 LOG_WARN << "Schema self-check could not be completed";
             }
-        }).detach();
+        });
     });
+}
+
+void shutdownMigrations()
+{
+    auto &state = migrationThreadState();
+    std::vector<std::thread> threadsToJoin;
+    {
+        std::lock_guard<std::mutex> lock(state.mutex);
+        state.stopRequested = true;
+        threadsToJoin.swap(state.threads);
+    }
+    state.cv.notify_all();
+    for (auto &t : threadsToJoin)
+    {
+        if (t.joinable())
+            t.join();
+    }
 }
 
 int runMigrateOnly(const Json::Value &config)
