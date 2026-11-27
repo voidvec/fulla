@@ -193,54 +193,164 @@ function deleteApp(app: any) {
 }
 
 // T2.2 (UF-04b): move the management anchor — personal <-> an organization
-// the caller manages. The server keeps the client ID, existing consents and
-// issued tokens; only who may manage the application changes. Opening the
-// dialog and pressing its submit are the two deliberate steps.
+// the caller manages. The server only supports personal -> org and
+// org -> personal (rejects org -> org with 400), and keeps the client ID,
+// existing consents and issued tokens; returning an org app to personal
+// ownership preserves creator_user_id, so another admin loses access.
+const myUsername = ref('')
+let meRequest: Promise<string> | null = null
+function loadMyUsername(): Promise<string> {
+  if (!meRequest) {
+    meRequest = http.get('/api/me')
+      .then((resp) => {
+        myUsername.value = resp.data?.username || ''
+        return myUsername.value
+      })
+      .catch(() => {
+        meRequest = null
+        return ''
+      })
+  }
+  return meRequest
+}
+
 const transferOpen = ref(false)
 const transferring = ref(false)
 const transferringApp = ref<any>(null)
-// '' = personal ownership, otherwise an organization slug.
+// '' = personal ownership (org -> personal) or placeholder (personal -> org),
+// otherwise an organization slug.
 const transferTarget = ref('')
+const transferCreatorLoading = ref(false)
+const transferCreatorKind = ref<'self' | 'other' | 'unknown'>('unknown')
+const transferCreatorLabel = ref('')
+let transferInspectSeq = 0
 
-// Every owner the application is not already under.
+// Only personal -> org lists organizations; org -> personal never lists other orgs.
 const transferTargets = computed(() =>
-  manageableOrgs.value.filter((o) => o.id !== transferringApp.value?.org_id))
+  transferringApp.value?.org_id == null ? manageableOrgs.value : [])
 
-// True while the selection is the current owner: nothing to send.
+// Personal -> org requires choosing an organization; org -> personal only has
+// one option ('' -> org_slug: null) and is immediately ready once resolved.
 const transferUnchanged = computed(() => {
   const app = transferringApp.value
-  return !app || transferTarget.value === ownerSlugOf(app)
+  if (!app) return true
+  return app.org_id == null && transferTarget.value === ''
 })
+
+const transferPersonalOptionLabel = computed(() => {
+  if (transferCreatorLoading.value) return t('account.applications.transferLoadingCreator')
+  if (transferCreatorKind.value === 'self') return t('account.applications.transferTargetSelf')
+  if (transferCreatorKind.value === 'other') {
+    return t('account.applications.transferTargetOther', { creator: transferCreatorLabel.value })
+  }
+  const creatorId = transferringApp.value?.creator_user_id
+  return creatorId != null
+    ? t('account.applications.transferTargetUnknownWithId', { id: creatorId })
+    : t('account.applications.transferTargetUnknown')
+})
+
+const transferCreatorWarningText = computed(() => {
+  const app = transferringApp.value
+  if (!app || app.org_id == null || transferCreatorLoading.value) return ''
+  if (transferCreatorKind.value === 'self') return ''
+  if (transferCreatorKind.value === 'other') {
+    return t('account.applications.transferCreatorWarning', { creator: transferCreatorLabel.value })
+  }
+  return app.creator_user_id != null
+    ? t('account.applications.transferCreatorUnknownWarningWithId', { id: app.creator_user_id })
+    : t('account.applications.transferCreatorUnknownWarning')
+})
+
+async function resolveTransferCreator(app: any, seq: number) {
+  transferCreatorLoading.value = true
+  transferCreatorKind.value = 'unknown'
+  transferCreatorLabel.value = ''
+  try {
+    const orgSlug = ownerSlugOf(app)
+    const creatorId = app.creator_user_id
+    if (!orgSlug || creatorId == null) return
+    const [username, membersResp] = await Promise.all([
+      loadMyUsername(),
+      http.get(`/api/me/organizations/${orgSlug}/members`).catch(() => null),
+    ])
+    if (seq !== transferInspectSeq || transferringApp.value !== app) return
+    const membersList: any[] = membersResp?.data?.members || []
+    const creator = membersList.find((m) => Number(m.user_id) === Number(creatorId))
+    if (creator && creator.username) {
+      if (username && creator.username === username) {
+        transferCreatorKind.value = 'self'
+        transferCreatorLabel.value = creator.username
+      } else if (username) {
+        transferCreatorKind.value = 'other'
+        transferCreatorLabel.value = `${creator.username} (#${creatorId})`
+      } else {
+        // Caller username unavailable: stay on the conservative unknown fallback
+        // rather than claiming either identity.
+        transferCreatorKind.value = 'unknown'
+      }
+    }
+  } finally {
+    if (seq === transferInspectSeq) transferCreatorLoading.value = false
+  }
+}
 
 async function openTransfer(app: any) {
   error.value = null
+  const seq = ++transferInspectSeq
   transferringApp.value = app
   transferTarget.value = ''
+  transferCreatorLoading.value = app.org_id != null
+  transferCreatorKind.value = 'unknown'
+  transferCreatorLabel.value = ''
   transferOpen.value = true
   if (!await loadManageableOrgs()) {
+    if (seq !== transferInspectSeq) return
     transferOpen.value = false
+    transferCreatorLoading.value = false
     error.value = orgsError.value ?? t('account.applications.loadFailed')
+    return
   }
-  // Pre-select the current owner, so submitting without choosing another one
-  // does nothing rather than moving the application by accident.
-  transferTarget.value = ownerSlugOf(app)
+  if (seq !== transferInspectSeq) return
+  transferTarget.value = ''
+  if (app.org_id != null) {
+    await resolveTransferCreator(app, seq)
+  }
 }
 
 async function confirmTransfer() {
   const app = transferringApp.value
-  if (!app || transferring.value || transferUnchanged.value) return
+  if (!app || transferring.value || transferUnchanged.value || transferCreatorLoading.value) return
   transferring.value = true
   error.value = null
   try {
+    const targetSlug = app.org_id == null ? transferTarget.value : null
     await http.post(`/api/me/applications/${app.client_id}/transfer`, JSON.stringify({
       // The key is required; null means "back to personal".
-      org_slug: transferTarget.value || null,
+      org_slug: targetSlug || null,
     }), { headers: { 'Content-Type': 'application/json' } })
-    const owner = transferTarget.value
-      ? (manageableOrgs.value.find((o) => o.slug === transferTarget.value)?.name || transferTarget.value)
-      : t('account.applications.ownerPersonal')
+    const appName = app.name || app.client_id
+    if (targetSlug) {
+      const owner = manageableOrgs.value.find((o) => o.slug === targetSlug)?.name || targetSlug
+      success.value = t('account.applications.transferred', { app: appName, owner })
+    } else if (transferCreatorKind.value === 'self') {
+      success.value = t('account.applications.transferred', {
+        app: appName,
+        owner: t('account.applications.ownerPersonal'),
+      })
+    } else if (transferCreatorKind.value === 'other') {
+      success.value = t('account.applications.transferredToCreator', {
+        app: appName,
+        creator: transferCreatorLabel.value,
+      })
+    } else {
+      success.value = app.creator_user_id != null
+        ? t('account.applications.transferredToUnknownCreatorWithId', {
+            app: appName,
+            id: app.creator_user_id,
+          })
+        : t('account.applications.transferredToUnknownCreator', { app: appName })
+    }
     transferOpen.value = false
-    success.value = t('account.applications.transferred', { app: app.name || app.client_id, owner })
     setTimeout(() => { success.value = '' }, 3000)
     await fetchApps()
   } catch (e: unknown) {
@@ -283,9 +393,14 @@ function openEdit(app: any) {
 }
 
 function toggleEditGrant(gt: string) {
+  if (gt === 'client_credentials' && editingApp.value?.client_type === 'PUBLIC') return
   const index = editGrants.value.indexOf(gt)
-  if (index >= 0) editGrants.value.splice(index, 1)
-  else editGrants.value.push(gt)
+  if (index >= 0) {
+    if (editGrants.value.length === 1) return
+    editGrants.value.splice(index, 1)
+  } else {
+    editGrants.value.push(gt)
+  }
 }
 
 // Backend-mirroring validation (F-014): every URI must parse and be https,
@@ -712,21 +827,37 @@ onMounted(() => {
             class="mt-1 w-full rounded-ctl border border-neutral-300 px-3 py-2 text-neutral-900 bg-surface
                    focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
           >
-            <option value="">{{ $t('account.applications.ownerPersonalOption') }}</option>
+            <template v-if="transferringApp?.org_id == null">
+              <option
+                disabled
+                value=""
+              >{{ $t('account.applications.transferSelectPlaceholder') }}</option>
+              <option
+                v-for="org in transferTargets"
+                :key="org.slug"
+                :value="org.slug"
+              >{{ org.name }}</option>
+            </template>
             <option
-              v-for="org in transferTargets"
-              :key="org.slug"
-              :value="org.slug"
-            >{{ org.name }}</option>
+              v-else
+              value=""
+            >{{ transferPersonalOptionLabel }}</option>
           </select>
           <p
-            v-if="transferTargets.length === 0"
+            v-if="transferringApp?.org_id == null && transferTargets.length === 0"
             class="mt-1 text-xs text-neutral-500"
             data-testid="app-transfer-no-targets"
           >
             {{ $t('account.applications.transferNoTargets') }}
           </p>
         </div>
+        <AppAlert
+          v-if="transferCreatorWarningText"
+          type="warning"
+          data-testid="app-transfer-creator-warning"
+        >
+          {{ transferCreatorWarningText }}
+        </AppAlert>
         <div class="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -737,7 +868,7 @@ onMounted(() => {
           </button>
           <button
             type="button"
-            :disabled="transferring || transferUnchanged"
+            :disabled="transferring || transferUnchanged || transferCreatorLoading"
             data-testid="app-transfer-submit"
             class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-ctl hover:bg-brand-700
                    disabled:opacity-50 transition-colors
@@ -795,6 +926,8 @@ onMounted(() => {
               <input
                 type="checkbox"
                 :checked="editGrants.includes(gt)"
+                :disabled="(gt === 'client_credentials' && editingApp?.client_type === 'PUBLIC')
+                           || (editGrants.length === 1 && editGrants.includes(gt))"
                 :data-testid="`app-edit-grant-${gt}`"
                 class="rounded border-neutral-300"
                 @change="toggleEditGrant(gt)"
