@@ -1680,8 +1680,7 @@ void SessionController::consent(
                             m->incrementCounter(
                               "oauth2_requests_total",
                               fulla::common::ports::MetricLabels{
-                                {"endpoint", "authorize"}},
-                              static_cast<double>(200)
+                                {"endpoint", "authorize"}, {"status", "200"}}
                             );
                         (*sharedCb)(jsonResp);
                         return;
@@ -1690,8 +1689,8 @@ void SessionController::consent(
                     if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                         m->incrementCounter(
                           "oauth2_requests_total",
-                          fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                          static_cast<double>(302)
+                          fulla::common::ports::MetricLabels{
+                            {"endpoint", "authorize"}, {"status", "302"}}
                         );
                     (*sharedCb)(resp);
                 },

@@ -34,12 +34,14 @@ Json::Value successResult()
     return result;
 }
 
-void expectCounter(const FakeMetrics::Sample &sample, double status)
+void expectCounter(const FakeMetrics::Sample &sample, int status)
 {
     EXPECT_EQ(sample.kind, FakeMetrics::Kind::Counter);
     EXPECT_EQ(sample.name, "oauth2_requests_total");
-    EXPECT_EQ(sample.labels, (MetricLabels{{"endpoint", "token"}}));
-    EXPECT_EQ(sample.value, status);
+    EXPECT_EQ(
+      sample.labels, (MetricLabels{{"endpoint", "token"}, {"status", std::to_string(status)}})
+    );
+    EXPECT_EQ(sample.value, 1.0);
 }
 
 void expectDirectError(const ::drogon::HttpResponsePtr &response, const Json::Value &result)
@@ -72,7 +74,7 @@ TEST(TokenGrantResponseTest, SuccessPreservesJsonAndGrantSpecificMetricOrder)
 
         const bool authorizationCode = kind == TokenGrantResponseKind::AuthorizationCode;
         ASSERT_EQ(metrics->count(), authorizationCode ? 2U : 1U);
-        expectCounter(metrics->samples()[0], 200.0);
+        expectCounter(metrics->samples()[0], 200);
         if (authorizationCode)
         {
             const auto &gauge = metrics->samples()[1];
@@ -84,7 +86,7 @@ TEST(TokenGrantResponseTest, SuccessPreservesJsonAndGrantSpecificMetricOrder)
     }
 }
 
-TEST(TokenGrantResponseTest, ErrorsPreserveBodyHeadersAndStatusValuedCounter)
+TEST(TokenGrantResponseTest, ErrorsPreserveBodyHeadersAndStatusLabeledCounter)
 {
     const std::array<std::pair<const char *, int>, 8> cases{
       {{"invalid_grant", 400},
@@ -111,7 +113,7 @@ TEST(TokenGrantResponseTest, ErrorsPreserveBodyHeadersAndStatusValuedCounter)
             expectDirectError(response, result);
             EXPECT_EQ(static_cast<int>(response->getStatusCode()), status);
             ASSERT_EQ(metrics->count(), 1U);
-            expectCounter(metrics->samples()[0], static_cast<double>(status));
+            expectCounter(metrics->samples()[0], status);
         }
     }
 }
@@ -131,7 +133,7 @@ TEST(TokenGrantResponseTest, UnknownEmptyAndNullErrorMembersStayErrors)
             EXPECT_EQ(response->getStatusCode(), ::drogon::k400BadRequest);
             EXPECT_FALSE(response->getJsonObject()->isMember("error_description"));
             ASSERT_EQ(metrics->count(), 1U);
-            expectCounter(metrics->samples()[0], 400.0);
+            expectCounter(metrics->samples()[0], 400);
         }
     }
 }

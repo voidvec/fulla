@@ -22,8 +22,10 @@ namespace fulla::drogon::controllers::detail
         if (metrics)
             metrics->incrementCounter(
               "oauth2_requests_total",
-              ::fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-              static_cast<double>(static_cast<int>(status))
+              ::fulla::common::ports::MetricLabels{
+                {"endpoint", "token"},
+                {"status", std::to_string(static_cast<int>(status))}
+              }
             );
         // Direct grant errors preserve the original result and headers. The
         // public error responder also adds defaults and authentication headers.
@@ -34,8 +36,7 @@ namespace fulla::drogon::controllers::detail
     {
         metrics->incrementCounter(
           "oauth2_requests_total",
-          ::fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-          static_cast<double>(200)
+          ::fulla::common::ports::MetricLabels{{"endpoint", "token"}, {"status", "200"}}
         );
         if (kind == TokenGrantResponseKind::AuthorizationCode)
             metrics->setGauge("oauth2_active_tokens", ::fulla::common::ports::MetricLabels{}, 1.0);

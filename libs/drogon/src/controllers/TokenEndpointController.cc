@@ -962,8 +962,7 @@ void TokenEndpointController::token(
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
               "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-              static_cast<double>(400)
+              fulla::common::ports::MetricLabels{{"endpoint", "token"}, {"status", "400"}}
             );
         return;
     }
@@ -1365,8 +1364,8 @@ void TokenEndpointController::token(
                               if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                                   m->incrementCounter(
                                     "oauth2_requests_total",
-                                    fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                    static_cast<double>(200)
+                                    fulla::common::ports::MetricLabels{
+                                      {"endpoint", "token"}, {"status", "200"}}
                                   );
                               // F-019 (RFC 6749 §5.1): token responses MUST NOT be cached.
                               applyNoStoreHeaders(resp);
@@ -1435,8 +1434,7 @@ void TokenEndpointController::token(
             if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                 m->incrementCounter(
                   "oauth2_requests_total",
-                  fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                  static_cast<double>(400)
+                  fulla::common::ports::MetricLabels{{"endpoint", "token"}, {"status", "400"}}
                 );
             callback(resp);
             return;
@@ -1490,8 +1488,8 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(400)
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"}, {"status", "400"}}
                           );
                       (*sharedCb)(resp);
                       return;
@@ -1515,8 +1513,8 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(400)
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"}, {"status", "400"}}
                           );
                       (*sharedCb)(resp);
                       return;
@@ -1537,8 +1535,8 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(400)
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"}, {"status", "400"}}
                           );
                       (*sharedCb)(resp);
                       return;
@@ -1557,8 +1555,8 @@ void TokenEndpointController::token(
                           if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                               m->incrementCounter(
                                 "oauth2_requests_total",
-                                fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                static_cast<double>(400)
+                                fulla::common::ports::MetricLabels{
+                                  {"endpoint", "token"}, {"status", "400"}}
                               );
                           (*sharedCb)(resp);
                       };
@@ -1589,8 +1587,8 @@ void TokenEndpointController::token(
                               )
                                   m->incrementCounter(
                                     "oauth2_requests_total",
-                                    fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                    static_cast<double>(400)
+                                    fulla::common::ports::MetricLabels{
+                                      {"endpoint", "token"}, {"status", "400"}}
                                   );
                               (*sharedCb)(resp);
                           };
@@ -1638,8 +1636,8 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(400)
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"}, {"status", "400"}}
                           );
                       (*sharedCb)(resp);
                       return;
@@ -1655,8 +1653,8 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(400)
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"}, {"status", "400"}}
                           );
                       (*sharedCb)(resp);
                       return;
@@ -1706,8 +1704,8 @@ void TokenEndpointController::token(
                                 )
                                     m->incrementCounter(
                                       "oauth2_requests_total",
-                                      fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                                      static_cast<double>(400)
+                                      fulla::common::ports::MetricLabels{
+                                        {"endpoint", "token"}, {"status", "400"}}
                                     );
                                 (*sharedCb)(resp);
                                 return;
@@ -1787,9 +1785,7 @@ void TokenEndpointController::token(
                                       m->incrementCounter(
                                         "oauth2_requests_total",
                                         fulla::common::ports::MetricLabels{
-                                          {"endpoint", "token"}
-                                        },
-                                        static_cast<double>(200)
+                                          {"endpoint", "token"}, {"status", "200"}}
                                       );
                                   if (
                                     auto m =
@@ -1917,8 +1913,7 @@ void TokenEndpointController::token(
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
               "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-              static_cast<double>(400)
+              fulla::common::ports::MetricLabels{{"endpoint", "token"}, {"status", "400"}}
             );
         callback(resp);
     }
@@ -1991,10 +1986,9 @@ void TokenEndpointController::token(
                       if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                           m->incrementCounter(
                             "oauth2_requests_total",
-                            fulla::common::ports::MetricLabels{{"endpoint", "token"}},
-                            static_cast<double>(
-                              static_cast<int>(resp->getStatusCode())
-                            )
+                            fulla::common::ports::MetricLabels{
+                              {"endpoint", "token"},
+                              {"status", std::to_string(static_cast<int>(resp->getStatusCode()))}}
                           );
                       (*dispatchCb)(resp);
                       return;
