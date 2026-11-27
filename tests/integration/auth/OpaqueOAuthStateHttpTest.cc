@@ -196,10 +196,22 @@ std::string locationOf(const ::drogon::HttpResponsePtr &response, bool jsonMode,
     if (!jsonMode)
     {
         ensure(response->getStatusCode() == ::drogon::k302Found, "expected OAuth redirect");
+        if (field == "code")
+            ensure(!response->getHeader("Location").empty(),
+                   "authorization-code redirect has no Location");
         return response->getHeader("Location");
     }
     const auto body = jsonOf(response, ::drogon::k200OK);
     ensure(body[field].isString() && body["location"].isString(), "OAuth JSON envelope changed");
+    if (field == "code")
+    {
+        ensure(body.isObject() && body.size() == 2,
+               "authorization-code JSON must contain exactly code and location");
+        ensure(response->getHeader("content-type").find("application/json") == 0,
+               "authorization-code JSON Content-Type changed");
+        ensure(response->getHeader("Location").empty(),
+               "authorization-code JSON unexpectedly has a redirect header");
+    }
     const auto location = body["location"].asString();
     ensure(one(queryPairs(location), field) == body[field].asString(),
            "OAuth JSON field differs from location");
@@ -215,6 +227,13 @@ std::string checkCallback(const std::string &location, const Flow &flow,
     const auto pairs = queryPairs(location);
     ensure(flow.state.empty() ? absent(pairs, "state") : one(pairs, "state") == flow.state,
            "opaque callback state changed");
+    if (field == "code" && flow.state == "opaque state+&=value%26?#")
+    {
+        const std::string suffix = "&state=opaque%20state%2B%26%3Dvalue%2526%3F%23";
+        ensure(location.size() >= suffix.size() &&
+                 location.compare(location.size() - suffix.size(), suffix.size(), suffix) == 0,
+               "authorization-code callback raw state encoding changed");
+    }
     const size_t omittedState = flow.state.empty() ? 1u : 0u;
     if (flow.redirect == kQueryCallback)
     {
@@ -461,6 +480,25 @@ DROGON_TEST(Integration_P1_OpaqueState_OAuthHttpRoundTrip)
         fixture.setup();
         const auto &client = fixture.clients[0];
         const auto &other = fixture.clients[1];
+        for (bool jsonBody : {false, true})
+        {
+            for (const auto &scope : {std::string(""), std::string("openid profile")})
+            {
+                Browser browser;
+                Flow flow;
+                flow.scope = scope;
+                flow.state = "opaque state+&=value%26?#";
+                auto params = flow.params(client.id);
+                params.emplace_back("username", fixture.user);
+                params.emplace_back("password", fixture.password);
+                const auto response = browser.send(
+                  ::drogon::Post, "/oauth2/login?json=TRUE", params, jsonBody);
+                const auto code =
+                  checkCallback(locationOf(response, false, "code"), flow, "code");
+                fixture.exchange(browser, client, flow, code);
+                CHECK(true);
+            }
+        }
         {
             Browser browser;
             Flow flow;
