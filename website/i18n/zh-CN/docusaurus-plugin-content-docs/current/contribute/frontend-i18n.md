@@ -75,7 +75,7 @@
 ### 2.3 约束本工作的跨应用不变量
 
 - `components/ui/*.vue` 两应用**字节一致**，由 CI 的 `scripts/check-ui-sync.mjs` 强制 —— 共享组件（含 `LocaleSwitcher.vue`）必须两侧同步修改。组件模板只用 `$t()`（不引脚本依赖），同步因此天然成立。
-- `services/errorAdapter.ts` + `services/messages/` 为镜像文件（权威源：user 应用）；`crossAppConsistency.property.test.ts` 断言两应用对每个 `(code, locale)` 产出相同消息。镜像文件保持**零依赖**（不引 vue-i18n、不碰 DOM）：当前语言经由 `services/locale.ts` 纯模块传递，由 i18n 引导层推送。
+- `services/errorAdapter.ts` + `services/messages/` 为镜像文件（权威源：user 应用）。镜像一致性由 **`scripts/check-ui-sync.mjs` 的错误目录检查**强制：user 目录中的每一条都必须在 admin 目录的对应语言中以完全相同的字面量存在（admin 可额外携带仅用于管理端的错误码）。前端测试无法跨应用检查这一点，因为测试文件禁止跨应用导入——`crossAppConsistency.property.test.ts` 只验证权威源自身是确定性的。镜像文件保持**零依赖**（不引 vue-i18n、不碰 DOM）：当前语言经由 `services/locale.ts` 纯模块传递，由 i18n 引导层推送。
 - Property 13（`messageCatalog.property.test.ts`）要求**每个后端 Error_Code 与协议码**都有干净、非空的条目 —— 覆盖**每个已登记语言**。
 - e2e 套件固定 `en-US` 运行（`playwright.config.ts` 的 `use.locale`）；中文路径由每应用专属 `i18n.spec.ts` 覆盖。
 
