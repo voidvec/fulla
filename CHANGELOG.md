@@ -36,6 +36,8 @@ Changelog entries are written in English (see CONTRIBUTING).
 
 - Code-issuance redirect-URI rejections have their own error code. `POST /oauth2/login`, `POST /oauth2/consent` (approve and deny) and `GET /oauth2/consent/context` now answer an unregistered `redirect_uri` with `VALIDATION_CLIENT_REDIRECT_URI_NOT_REGISTERED` (numeric code 3027, HTTP 400) instead of `VALIDATION_REDIRECT_URI_NOT_REGISTERED` (3013). 3013 is again end-session-only: its client-safe message ("logout redirect URI is not registered") misled integrators who saw it on a failed login (found in the WeKnora RP integration). Callers that match 3013 on the code-issuance paths must switch to the new code; `end_session` behavior is unchanged. The SDK clients, the error-code catalog tables, both frontend message mirrors and the OpenAPI descriptions are updated.
 
+- **Go SDK (`clients/go`)**: adding the four optional query parameters (`page`, `per_page`, `client_id`, `user_id`) to `GET /api/admin/tokens` in `apps/server/openapi.yaml` changes the generated Go client signatures — `Client.GetApiAdminTokens`, `ClientWithResponses.GetApiAdminTokensWithResponse`, and `NewGetApiAdminTokensRequest` (plus the `ClientInterface` and `ClientWithResponsesInterface` interfaces) now accept `params *GetApiAdminTokensParams` (pass `nil` to preserve the previous unfiltered default). Regenerate callers and pass `nil` or a `&GetApiAdminTokensParams{...}` struct when upgrading.
+
 ### Security
 
 - Sanitize bundled Nginx callback access/error logs and prevent caching/referrer
@@ -44,6 +46,10 @@ Changelog entries are written in English (see CONTRIBUTING).
   could contain upstream credentials. No database migration or release/tag is included.
 
 ### Added
+
+- **User portal and admin console frontend gap remediation (phase 1+2)**:
+  - **User portal (`frontends/user`)**: added passkey (WebAuthn) sign-in on `/login` and per-credential passkey deletion on `/security`; added application editing (`PATCH /api/me/applications/{clientId}`), initial org ownership selection, and ownership transfer (`personal <-> org`, identifying the original creator when returning an org app to personal); added pending organization invitations listing and revocation; added an unverified-email verification resend panel on `/login`; and added self-service withdrawal of pending organization consent requests.
+  - **Admin console (`frontends/admin`)**: added delegated permission probing and sidebar/action convergence (including users write-button gating); added role-catalog-driven user management and a first-sign-in forced password change option on user creation; added full audit-log export and paginated/filtered `GET /api/admin/tokens` support (`page`, `per_page`, `client_id`, `user_id`) across OpenAPI and generated Python/Go/TypeScript SDKs.
 
 - Add a native-Linux capacity evidence harness with isolated OAuth sessions, full
   failure/tail retention, strict pilot resource gates, production-limited soak and
