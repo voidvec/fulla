@@ -48,7 +48,7 @@ std::string base64urlDecode(const std::string &s)
     for (int i = 0; i < 64; ++i)
         table[static_cast<unsigned char>(alpha[i])] = static_cast<int8_t>(i);
 
-    int val = 0, bits = 0;
+    unsigned int val = 0, bits = 0;
     std::string out;
     for (char c : s)
     {
