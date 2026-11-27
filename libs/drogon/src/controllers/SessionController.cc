@@ -1,5 +1,6 @@
 #include "PasswordLoginSessionState.h"
 #include "ForcedPasswordChangeSessionState.h"
+#include "AuthorizationCodeResponse.h"
 
 #include <mutex>
 #include <fulla/common/observability/AuditActions.h>
@@ -1051,21 +1052,9 @@ void SessionController::login(
                                       "login: failed to generate authorization code: " + error);
                                     return;
                                 }
-                                std::string location =
-                                  redirectUri +
-                                  ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
-                                  "code=" + ::drogon::utils::urlEncodeComponent(code);
-                                if (!state.empty())
-                                    location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
-                                if (req->getParameter("json") == "true")
-                                {
-                                    Json::Value ret;
-                                    ret["code"] = code;
-                                    ret["location"] = location;
-                                    (*sharedCb)(::drogon::HttpResponse::newHttpJsonResponse(ret));
-                                    return;
-                                }
-                                (*sharedCb)(::drogon::HttpResponse::newRedirectionResponse(location));
+                                (*sharedCb)(detail::buildAuthorizationCodeResponse(
+                                  redirectUri, code, state, req->getParameter("json") == "true"
+                                ));
                             },
                             sessAuthTime, sessAmr, orgId);
                           return;
@@ -1150,24 +1139,9 @@ void SessionController::login(
 
                                   // F-020 (RFC 6749 §4.1.2/§4.1.3):
                                   // urlEncode code and state.
-                                  std::string location =
-                                    redirectUri +
-                                    ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
-                                    "code=" + ::drogon::utils::urlEncodeComponent(code);
-                                  if (!state.empty())
-                                      location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
-                                  if (req->getParameter("json") == "true")
-                                  {
-                                      Json::Value ret;
-                                      ret["code"] = code;
-                                      ret["location"] = location;
-                                      auto resp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
-                                      (*sharedCb)(resp);
-                                      return;
-                                  }
-                                  auto resp =
-                                    ::drogon::HttpResponse::newRedirectionResponse(location);
-                                  (*sharedCb)(resp);
+                                  (*sharedCb)(detail::buildAuthorizationCodeResponse(
+                                    redirectUri, code, state, req->getParameter("json") == "true"
+                                  ));
                               },
                               sessAuthTime,
                               sessAmr,
@@ -1662,20 +1636,13 @@ void SessionController::consent(
                     }
 
                     // F-020 (RFC 6749 §4.1.2/§4.1.3): urlEncode code + state.
-                    std::string location =
-                      redirectUri +
-                      ::fulla::drogon::utils::authorizeUrlQuerySeparator(redirectUri) +
-                      "code=" + ::drogon::utils::urlEncodeComponent(code);
-                    if (!state.empty())
-                        location += "&state=" + ::drogon::utils::urlEncodeComponent(state);
                     if (jsonMode)
                     {
                         // Same envelope as the /oauth2/login json=true path;
                         // the SPA performs the top-level navigation itself.
-                        Json::Value ret;
-                        ret["code"] = code;
-                        ret["location"] = location;
-                        auto jsonResp = ::drogon::HttpResponse::newHttpJsonResponse(ret);
+                        auto jsonResp = detail::buildAuthorizationCodeResponse(
+                          redirectUri, code, state, true
+                        );
                         if (auto m =
                               ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                             m->incrementCounter(
@@ -1686,7 +1653,9 @@ void SessionController::consent(
                         (*sharedCb)(jsonResp);
                         return;
                     }
-                    auto resp = ::drogon::HttpResponse::newRedirectionResponse(location);
+                    auto resp = detail::buildAuthorizationCodeResponse(
+                      redirectUri, code, state, false
+                    );
                     if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                         m->incrementCounter(
                           "oauth2_requests_total",
