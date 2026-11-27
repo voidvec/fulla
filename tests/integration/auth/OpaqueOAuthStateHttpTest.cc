@@ -229,7 +229,7 @@ std::string checkCallback(const std::string &location, const Flow &flow,
            "opaque callback state changed");
     if (field == "code" && flow.state == "opaque state+&=value%26?#")
     {
-        const std::string suffix = "&state=opaque%20state%2B%26%3Dvalue%2526%3F%23";
+        const std::string suffix = "&state=opaque+state%2B%26%3Dvalue%2526%3F%23";
         ensure(location.size() >= suffix.size() &&
                  location.compare(location.size() - suffix.size(), suffix.size(), suffix) == 0,
                "authorization-code callback raw state encoding changed");
