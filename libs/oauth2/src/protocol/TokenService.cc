@@ -433,216 +433,222 @@ void TokenService::exchangeCodeForToken(
                   [self, callback, authCode, now](
                     std::optional<fulla::common::ports::OrgContextInfo> orgCtx
                   ) {
-                  self->resolveRoles(
-                    authCode.userId,
-                    [self, callback, authCode, now, orgCtx](std::vector<std::string> roles) {
-                      Json::Value rolesJson(Json::arrayValue);
-                      for (const auto &r : roles)
-                          rolesJson.append(r);
+                      self->resolveRoles(
+                        authCode.userId,
+                        [self, callback, authCode, now, orgCtx](std::vector<std::string> roles) {
+                            Json::Value rolesJson(Json::arrayValue);
+                            for (const auto &r : roles)
+                                rolesJson.append(r);
 
-                      auto tokenStr = generateSecureToken(*self->crypto_);
-                      auto refreshTokenStr = generateSecureToken(*self->crypto_);
-                      auto familyId = generateSecureToken(*self->crypto_, 16);
-                      // P2-1: refuse issuance on CSPRNG failure ("" results).
-                      if (tokenStr.empty() || refreshTokenStr.empty() || familyId.empty())
-                      {
-                          self->audit(
-                            ae::kTokenIssued, "failure", authCode.userId, "token", ""
-                          );
-                          callback(makeError("server_error", "Token generation failed"));
-                          return;
-                      }
-                      fulla::oauth2::model::OAuth2AccessToken token;
-                      token.token = hashToken(*self->crypto_, tokenStr);
-                      token.clientId = authCode.clientId;
-                      token.userId = authCode.userId;
-                      token.scope = authCode.scope;
-                      // P2 #10: record the real issue time so introspection's
-                      // iat (RFC 7662 §2.2) is populated, not left at the 0
-                      // default (which the introspect endpoint silently omits).
-                      token.issuedAt = now;
-                      token.expiresAt = now + self->accessTokenTtl_;
-                      // F-016: stamp the configured issuer at issuance so
-                      // introspection's iss matches the discovery document
-                      // (previously the column was never written and the DB
-                      // default leaked a hardcoded example.com URL).
-                      token.issuer = self->issuer_;
-                      // v1.4.0 M1 (design §2.1 item 4): the org binding
-                      // inherited from the code rides the token pair.
-                      token.orgId = authCode.orgId;
-                      // P0-4 (#258): the audience column finally earns its
-                      // keep — aud = the client the token was issued to, so
-                      // introspection's aud stops being permanently empty.
-                      token.audience = authCode.clientId;
-
-                      fulla::oauth2::model::OAuth2RefreshToken refreshToken;
-                      refreshToken.token = hashToken(*self->crypto_, refreshTokenStr);
-                      refreshToken.accessToken = token.token;
-                      refreshToken.clientId = authCode.clientId;
-                      refreshToken.userId = authCode.userId;
-                      refreshToken.scope = authCode.scope;
-                      refreshToken.expiresAt = now + self->refreshTokenTtl_;
-                      refreshToken.familyId = familyId;
-                      refreshToken.orgId = authCode.orgId;
-
-                      self->tokens_->saveTokenPair(
-                        token,
-                        refreshToken,
-                        [self,
-                         callback,
-                         tokenStr,
-                         refreshTokenStr,
-                         rolesJson,
-                         authCode,
-                         now,
-                         orgCtx](bool ok) {
-                            if (!ok)
+                            auto tokenStr = generateSecureToken(*self->crypto_);
+                            auto refreshTokenStr = generateSecureToken(*self->crypto_);
+                            auto familyId = generateSecureToken(*self->crypto_, 16);
+                            // P2-1: refuse issuance on CSPRNG failure ("" results).
+                            if (tokenStr.empty() || refreshTokenStr.empty() || familyId.empty())
                             {
-                                // Persistence failed: the tokens we would
-                                // hand out were never stored, so issuing
-                                // them anyway would be a silent failure
-                                // (introspection/refresh lookups all miss).
                                 self->audit(
-                                  ae::kTokenIssued,
-                                  "failure",
-                                  authCode.userId,
-                                  "token",
-                                  ""
+                                  ae::kTokenIssued, "failure", authCode.userId, "token", ""
                                 );
-                                callback(makeError("server_error", "Failed to persist token pair"));
+                                callback(makeError("server_error", "Token generation failed"));
                                 return;
                             }
-                            Json::Value json;
-                            json["access_token"] = tokenStr;
-                            json["token_type"] = "Bearer";
-                            // P1 #6: advertise the real configured lifetime, not a
-                            // hardcoded 3600 (RFC 6749 §5.1 requires expires_in to
-                            // be the token's actual remaining lifetime).
-                            json["expires_in"] = (Json::Int64)(self->accessTokenTtl_);
-                            json["refresh_token"] = refreshTokenStr;
-                            json["roles"] = rolesJson;
+                            fulla::oauth2::model::OAuth2AccessToken token;
+                            token.token = hashToken(*self->crypto_, tokenStr);
+                            token.clientId = authCode.clientId;
+                            token.userId = authCode.userId;
+                            token.scope = authCode.scope;
+                            // P2 #10: record the real issue time so introspection's
+                            // iat (RFC 7662 §2.2) is populated, not left at the 0
+                            // default (which the introspect endpoint silently omits).
+                            token.issuedAt = now;
+                            token.expiresAt = now + self->accessTokenTtl_;
+                            // F-016: stamp the configured issuer at issuance so
+                            // introspection's iss matches the discovery document
+                            // (previously the column was never written and the DB
+                            // default leaked a hardcoded example.com URL).
+                            token.issuer = self->issuer_;
+                            // v1.4.0 M1 (design §2.1 item 4): the org binding
+                            // inherited from the code rides the token pair.
+                            token.orgId = authCode.orgId;
+                            // P0-4 (#258): the audience column finally earns its
+                            // keep — aud = the client the token was issued to, so
+                            // introspection's aud stops being permanently empty.
+                            token.audience = authCode.clientId;
 
-                            if (
-                              self->jwkManager_ && self->jwkManager_->isInitialized() &&
-                              scopeContains(authCode.scope, "openid")
-                            )
-                            {
-                                Json::Value idTokenClaims;
-                                idTokenClaims["iss"] = self->issuer_;
-                                idTokenClaims["sub"] = authCode.userId;
-                                idTokenClaims["aud"] = authCode.clientId;
-                                idTokenClaims["iat"] = (Json::Int64)now;
-                                // P1 #6: id_token exp follows the access token TTL
-                                // (OIDC Core §2 requires exp to be the real expiry).
-                                idTokenClaims["exp"] = (Json::Int64)(now + self->accessTokenTtl_);
-                                if (!authCode.nonce.empty())
-                                {
-                                    idTokenClaims["nonce"] = authCode.nonce;
-                                }
-                                // F-022 (OIDC Core §2/§3.1.3.7): auth_time is
-                                // REQUIRED when max_age is requested; we always
-                                // emit it so RPs can enforce max_age client-side.
-                                if (authCode.authTime > 0)
-                                {
-                                    idTokenClaims["auth_time"] = (Json::Int64)authCode.authTime;
-                                }
-                                // F-022: acr/amr reflect the authentication
-                                // strength. acr "1" = password only, "2" = MFA
-                                // (amr contains "mfa"); emit only when amr is set.
-                                if (!authCode.amr.empty())
-                                {
-                                    Json::Value amrArray(Json::arrayValue);
-                                    // amr is space-separated on the code; split
-                                    // into the JSON array per OIDC Core §2.
-                                    size_t s = 0;
-                                    while (s < authCode.amr.size())
-                                    {
-                                        size_t e = authCode.amr.find(' ', s);
-                                        if (e == std::string::npos)
-                                            e = authCode.amr.size();
-                                        if (e > s)
-                                            amrArray.append(authCode.amr.substr(s, e - s));
-                                        s = e + 1;
-                                    }
-                                    if (!amrArray.empty())
-                                    {
-                                        idTokenClaims["amr"] = amrArray;
-                                        // MFA if any amr entry is "mfa",
-                                        // otherwise password-level only.
-                                        bool mfa = false;
-                                        for (const auto &v : amrArray)
-                                        {
-                                            if (v.asString() == "mfa")
-                                            {
-                                                mfa = true;
-                                                break;
-                                            }
-                                        }
-                                        // R-1 (OIDC Core §2): acr is a STRING
-                                        // claim, and discovery advertises string
-                                        // values "1"/"2" -- emit as string, not
-                                        // integer.
-                                        idTokenClaims["acr"] = mfa ? "2" : "1";
-                                    }
-                                }
-                                // v1.4.0 M1 (design §2.1 item 3): org_ctx =
-                                // the active org + the user's CURRENT roles
-                                // in it (O7: the resolver re-checks
-                                // membership, so a removed member's refresh
-                                // stops carrying org_ctx). orgCtx present
-                                // implies authCode.orgId present.
-                                if (orgCtx.has_value() && authCode.orgId.has_value())
-                                {
-                                    Json::Value orgCtxClaim;
-                                    orgCtxClaim["org_id"] =
-                                      (Json::Int64)*authCode.orgId;
-                                    orgCtxClaim["org_name"] = orgCtx->orgName;
-                                    Json::Value orgRoles(Json::arrayValue);
-                                    for (const auto &r : orgCtx->roles)
-                                    {
-                                        orgRoles.append(r);
-                                    }
-                                    orgCtxClaim["roles"] = orgRoles;
-                                    idTokenClaims["org_ctx"] = orgCtxClaim;
-                                }
+                            fulla::oauth2::model::OAuth2RefreshToken refreshToken;
+                            refreshToken.token = hashToken(*self->crypto_, refreshTokenStr);
+                            refreshToken.accessToken = token.token;
+                            refreshToken.clientId = authCode.clientId;
+                            refreshToken.userId = authCode.userId;
+                            refreshToken.scope = authCode.scope;
+                            refreshToken.expiresAt = now + self->refreshTokenTtl_;
+                            refreshToken.familyId = familyId;
+                            refreshToken.orgId = authCode.orgId;
 
-                                // P1-3 (#280): mapped claims merge after
-                                // the standard set; the write-time
-                                // reserved-word blacklist guarantees no
-                                // collision. Refresh re-evaluates (disable
-                                // drops the claim on the next rotation —
-                                // the org_ctx O7 semantics).
-                                self->resolveMappedClaims(
-                                  authCode.userId,
-                                  authCode.scope,
-                                  "id_token",
-                                  [self, json, callback, idTokenClaims,
-                                   actorId = authCode.userId](
-                                    Json::Value mappedClaims) mutable {
-                                      for (const auto &k : mappedClaims.getMemberNames())
-                                          idTokenClaims[k] = mappedClaims[k];
-                                      std::string idToken =
-                                        self->jwkManager_->signJwt(idTokenClaims);
-                                      if (!idToken.empty())
-                                      {
-                                          json["id_token"] = idToken;
-                                      }
+                            self->tokens_->saveTokenPair(
+                              token,
+                              refreshToken,
+                              [self,
+                               callback,
+                               tokenStr,
+                               refreshTokenStr,
+                               rolesJson,
+                               authCode,
+                               now,
+                               orgCtx](bool ok) {
+                                  if (!ok)
+                                  {
+                                      // Persistence failed: the tokens we would
+                                      // hand out were never stored, so issuing
+                                      // them anyway would be a silent failure
+                                      // (introspection/refresh lookups all miss).
                                       self->audit(
-                                        ae::kTokenIssued, "success", actorId, "token", ""
+                                        ae::kTokenIssued,
+                                        "failure",
+                                        authCode.userId,
+                                        "token",
+                                        ""
                                       );
-                                      callback(json);
-                                  });
-                                return;
-                            }
+                                      callback(
+                                        makeError("server_error", "Failed to persist token pair")
+                                      );
+                                      return;
+                                  }
+                                  Json::Value json;
+                                  json["access_token"] = tokenStr;
+                                  json["token_type"] = "Bearer";
+                                  // P1 #6: advertise the real configured lifetime, not a
+                                  // hardcoded 3600 (RFC 6749 §5.1 requires expires_in to
+                                  // be the token's actual remaining lifetime).
+                                  json["expires_in"] = (Json::Int64)(self->accessTokenTtl_);
+                                  json["refresh_token"] = refreshTokenStr;
+                                  json["roles"] = rolesJson;
 
-                            self->audit(ae::kTokenIssued, "success", authCode.userId, "token", "");
-                            callback(json);
+                                  if (
+                                    self->jwkManager_ && self->jwkManager_->isInitialized() &&
+                                    scopeContains(authCode.scope, "openid")
+                                  )
+                                  {
+                                      Json::Value idTokenClaims;
+                                      idTokenClaims["iss"] = self->issuer_;
+                                      idTokenClaims["sub"] = authCode.userId;
+                                      idTokenClaims["aud"] = authCode.clientId;
+                                      idTokenClaims["iat"] = (Json::Int64)now;
+                                      // P1 #6: id_token exp follows the access token TTL
+                                      // (OIDC Core §2 requires exp to be the real expiry).
+                                      idTokenClaims["exp"] =
+                                        (Json::Int64)(now + self->accessTokenTtl_);
+                                      if (!authCode.nonce.empty())
+                                      {
+                                          idTokenClaims["nonce"] = authCode.nonce;
+                                      }
+                                      // F-022 (OIDC Core §2/§3.1.3.7): auth_time is
+                                      // REQUIRED when max_age is requested; we always
+                                      // emit it so RPs can enforce max_age client-side.
+                                      if (authCode.authTime > 0)
+                                      {
+                                          idTokenClaims["auth_time"] =
+                                            (Json::Int64)authCode.authTime;
+                                      }
+                                      // F-022: acr/amr reflect the authentication
+                                      // strength. acr "1" = password only, "2" = MFA
+                                      // (amr contains "mfa"); emit only when amr is set.
+                                      if (!authCode.amr.empty())
+                                      {
+                                          Json::Value amrArray(Json::arrayValue);
+                                          // amr is space-separated on the code; split
+                                          // into the JSON array per OIDC Core §2.
+                                          size_t s = 0;
+                                          while (s < authCode.amr.size())
+                                          {
+                                              size_t e = authCode.amr.find(' ', s);
+                                              if (e == std::string::npos)
+                                                  e = authCode.amr.size();
+                                              if (e > s)
+                                                  amrArray.append(authCode.amr.substr(s, e - s));
+                                              s = e + 1;
+                                          }
+                                          if (!amrArray.empty())
+                                          {
+                                              idTokenClaims["amr"] = amrArray;
+                                              // MFA if any amr entry is "mfa",
+                                              // otherwise password-level only.
+                                              bool mfa = false;
+                                              for (const auto &v : amrArray)
+                                              {
+                                                  if (v.asString() == "mfa")
+                                                  {
+                                                      mfa = true;
+                                                      break;
+                                                  }
+                                              }
+                                              // R-1 (OIDC Core §2): acr is a STRING
+                                              // claim, and discovery advertises string
+                                              // values "1"/"2" -- emit as string, not
+                                              // integer.
+                                              idTokenClaims["acr"] = mfa ? "2" : "1";
+                                          }
+                                      }
+                                      // v1.4.0 M1 (design §2.1 item 3): org_ctx =
+                                      // the active org + the user's CURRENT roles
+                                      // in it (O7: the resolver re-checks
+                                      // membership, so a removed member's refresh
+                                      // stops carrying org_ctx). orgCtx present
+                                      // implies authCode.orgId present.
+                                      if (orgCtx.has_value() && authCode.orgId.has_value())
+                                      {
+                                          Json::Value orgCtxClaim;
+                                          orgCtxClaim["org_id"] = (Json::Int64)*authCode.orgId;
+                                          orgCtxClaim["org_name"] = orgCtx->orgName;
+                                          Json::Value orgRoles(Json::arrayValue);
+                                          for (const auto &r : orgCtx->roles)
+                                          {
+                                              orgRoles.append(r);
+                                          }
+                                          orgCtxClaim["roles"] = orgRoles;
+                                          idTokenClaims["org_ctx"] = orgCtxClaim;
+                                      }
+
+                                      // P1-3 (#280): mapped claims merge after
+                                      // the standard set; the write-time
+                                      // reserved-word blacklist guarantees no
+                                      // collision. Refresh re-evaluates (disable
+                                      // drops the claim on the next rotation —
+                                      // the org_ctx O7 semantics).
+                                      self->resolveMappedClaims(
+                                        authCode.userId,
+                                        authCode.scope,
+                                        "id_token",
+                                        [self, json, callback, idTokenClaims,
+                                         actorId = authCode.userId](
+                                          Json::Value mappedClaims) mutable {
+                                            for (const auto &k : mappedClaims.getMemberNames())
+                                                idTokenClaims[k] = mappedClaims[k];
+                                            std::string idToken =
+                                              self->jwkManager_->signJwt(idTokenClaims);
+                                            if (!idToken.empty())
+                                            {
+                                                json["id_token"] = idToken;
+                                            }
+                                            self->audit(
+                                              ae::kTokenIssued, "success", actorId, "token", ""
+                                            );
+                                            callback(json);
+                                        }
+                                      );
+                                      return;
+                                  }
+
+                                  self->audit(
+                                    ae::kTokenIssued, "success", authCode.userId, "token", ""
+                                  );
+                                  callback(json);
+                              }
+                            );
                         }
                       );
                   }
-              );
-                  }
-              );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
+                );  // resolveOrgContextForClaims (v1.4.0 M1 org_ctx hop)
             }
           );
       }
