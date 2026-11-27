@@ -138,8 +138,7 @@ void AuthorizationEndpointController::authorize(
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
               "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-              static_cast<double>(400)
+              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}, {"status", "400"}}
             );
         return;
     }
@@ -210,8 +209,7 @@ void AuthorizationEndpointController::authorize(
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
               "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-              static_cast<double>(400)
+              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}, {"status", "400"}}
             );
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
@@ -237,8 +235,7 @@ void AuthorizationEndpointController::authorize(
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
               "oauth2_requests_total",
-              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-              static_cast<double>(400)
+              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}, {"status", "400"}}
             );
         if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
             m->incrementCounter(
@@ -317,8 +314,7 @@ void AuthorizationEndpointController::authorize(
               if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                   m->incrementCounter(
                     "oauth2_requests_total",
-                    fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                    static_cast<double>(400)
+                    fulla::common::ports::MetricLabels{{"endpoint", "authorize"}, {"status", "400"}}
                   );
               if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                   m->incrementCounter(
@@ -658,8 +654,8 @@ void AuthorizationEndpointController::authorize(
                                        ->getMetrics())
                             m->incrementCounter(
                               "oauth2_requests_total",
-                              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                              static_cast<double>(403)
+                              fulla::common::ports::MetricLabels{
+                                {"endpoint", "authorize"}, {"status", "403"}}
                             );
                         auto resp = ::drogon::HttpResponse::newHttpResponse();
                         resp->setStatusCode(::drogon::k403Forbidden);
@@ -684,8 +680,8 @@ void AuthorizationEndpointController::authorize(
                                        ->getMetrics())
                             m->incrementCounter(
                               "oauth2_requests_total",
-                              fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                              static_cast<double>(400)
+                              fulla::common::ports::MetricLabels{
+                                {"endpoint", "authorize"}, {"status", "400"}}
                             );
                         auto resp = ::drogon::HttpResponse::newHttpResponse();
                         resp->setStatusCode(::drogon::k400BadRequest);
@@ -928,8 +924,8 @@ void AuthorizationEndpointController::authorize(
                             if (auto m = ::drogon::app().getPlugin<::OAuth2Plugin>()->getMetrics())
                                 m->incrementCounter(
                                   "oauth2_requests_total",
-                                  fulla::common::ports::MetricLabels{{"endpoint", "authorize"}},
-                                  static_cast<double>(302)
+                                  fulla::common::ports::MetricLabels{
+                                    {"endpoint", "authorize"}, {"status", "302"}}
                                 );
                             callback(resp);
                         },
