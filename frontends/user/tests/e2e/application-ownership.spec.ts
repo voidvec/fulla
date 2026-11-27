@@ -17,16 +17,36 @@ const ORGS = [
   { id: 3, slug: 'admin-org', name: 'Admin Org', role: 'admin' },
 ]
 
+const DEFAULT_MEMBERS: Record<string, { user_id: number; username: string; role: string }[]> = {
+  'qa-org': [
+    { user_id: 1, username: 'testuser', role: 'owner' },
+    { user_id: 42, username: 'alice', role: 'admin' },
+  ],
+  'admin-org': [
+    { user_id: 1, username: 'testuser', role: 'admin' },
+  ],
+}
+
 // A placeholder for the mock's one-time secret; the same obviously fake value
 // the open-platform spec uses.
 const ONCE_SHOWN_SECRET = 'once-shown-secret'
 
 interface AppState {
-  apps: { client_id: string; name: string; client_type: string; status: string; org_id: number | null; allowed_grant_types: string[] }[]
+  apps: {
+    client_id: string
+    name: string
+    client_type: string
+    status: string
+    org_id: number | null
+    creator_user_id?: number
+    allowed_grant_types: string[]
+  }[]
   creates: Record<string, unknown>[]
   transfers: { path: string; body: unknown }[]
   /** When set, the transfer endpoint answers with this instead of moving. */
   refuseTransferWith: { status: number; body: string } | null
+  membersBySlug?: Record<string, { user_id: number; username: string; role: string }[]>
+  failMembersLookup?: boolean
 }
 
 async function mockApplications(page: Page, state: AppState) {
@@ -37,6 +57,20 @@ async function mockApplications(page: Page, state: AppState) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ organizations: ORGS, total: ORGS.length }),
+    })
+  })
+  await page.route('**/api/me/organizations/*/members*', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    if (state.failMembersLookup) {
+      return route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+    }
+    const match = new URL(route.request().url()).pathname.match(/^\/api\/me\/organizations\/([^/]+)\/members$/)
+    const slug = match ? decodeURIComponent(match[1]) : ''
+    const members = state.membersBySlug?.[slug] ?? DEFAULT_MEMBERS[slug] ?? []
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ members, total: members.length }),
     })
   })
   await page.route('**/api/me/applications', (route) => {
@@ -50,6 +84,7 @@ async function mockApplications(page: Page, state: AppState) {
       client_type: body.client_type,
       status: 'active',
       org_id: org ? org.id : null,
+      creator_user_id: 1,
       allowed_grant_types: body.allowed_grant_types,
     })
     return route.fulfill({
@@ -83,13 +118,52 @@ async function mockApplications(page: Page, state: AppState) {
         })
       }
       const app = state.apps.find((a) => a.client_id === decodeURIComponent(transfer[1]))
+      if (!app) {
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
+      }
+      // Backend ApplicationService::transfer only supports personal -> org and
+      // org -> personal; org -> org and personal -> personal are rejected 400.
+      if (app.org_id != null && body.org_slug != null) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'VALIDATION_INVALID_INPUT',
+              category: 'VALIDATION',
+              message: 'transfer: target organization required (application already belongs to one)',
+            },
+          }),
+        })
+      }
+      if (app.org_id == null && body.org_slug == null) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'VALIDATION_INVALID_INPUT',
+              category: 'VALIDATION',
+              message: 'transfer: application is already personal',
+            },
+          }),
+        })
+      }
       // The server refuses a slug the caller does not manage, the same way
       // for an unknown one.
       const org = body.org_slug == null ? null : ORGS.find((o) => o.slug === body.org_slug)
-      if (!app || (body.org_slug != null && (!org || org.role === 'member'))) {
+      if (body.org_slug != null && (!org || org.role === 'member')) {
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
       }
-      app.org_id = org ? org.id : null
+      if (org) {
+        app.org_id = org.id
+      } else {
+        app.org_id = null
+        // Returning to personal preserves creator_user_id; another admin loses access.
+        if (app.creator_user_id != null && app.creator_user_id !== 1) {
+          state.apps = state.apps.filter((a) => a.client_id !== app.client_id)
+        }
+      }
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -110,6 +184,7 @@ const personal = (n: number) => ({
   client_type: 'PUBLIC',
   status: 'active',
   org_id: null,
+  creator_user_id: 1,
   allowed_grant_types: ['authorization_code'],
 })
 
@@ -221,9 +296,10 @@ test.describe('Application transfer (UF-04b)', () => {
     await page.getByTestId('app-transfer-button').click()
     const dialog = page.getByTestId('app-transfer-dialog')
     await expect(dialog).toContainText('Move this application to a different owner')
-    // The target list leaves out the organization the caller only belongs to.
-    await expect(dialog.locator('option')).toHaveText(['Personal (no organization)', 'QA Org', 'Admin Org'])
-    // The current owner is pre-selected, and confirming it does nothing.
+    // The target list leaves out the organization the caller only belongs to,
+    // and starts on a disabled placeholder so choosing nothing cannot submit.
+    await expect(dialog.locator('option')).toHaveText(['Select an organization…', 'QA Org', 'Admin Org'])
+    await expect(dialog.locator('option').first()).toBeDisabled()
     await expect(page.getByTestId('app-transfer-submit')).toBeDisabled()
 
     await page.getByTestId('app-transfer-target').selectOption('admin-org')
@@ -237,21 +313,76 @@ test.describe('Application transfer (UF-04b)', () => {
     await expect(page.getByTestId('app-transfer-dialog')).toHaveCount(0)
   })
 
-  test('moving back to personal sends the key with null, not a missing key', async ({ page }) => {
+  test('org-owned app created by caller only offers returning to you (personal) and sends org_slug: null', async ({ page }) => {
     const state = stateWith([
-      { client_id: 'app_org_1', name: 'Org App', client_type: 'PUBLIC', status: 'active', org_id: 1, allowed_grant_types: ['authorization_code'] },
+      { client_id: 'app_org_1', name: 'Org App', client_type: 'PUBLIC', status: 'active', org_id: 1, creator_user_id: 1, allowed_grant_types: ['authorization_code'] },
     ])
     await mockApplications(page, state)
     await openApps(page)
 
     await page.getByTestId('app-transfer-button').click()
-    await page.getByTestId('app-transfer-target').selectOption('')
+    const dialog = page.getByTestId('app-transfer-dialog')
+    // Org -> org is unsupported by backend; only personal ownership is offered.
+    await expect(dialog.locator('option')).toHaveText(['Personal — you (personal)'])
+    await expect(page.getByTestId('app-transfer-no-targets')).toHaveCount(0)
+    await expect(page.getByTestId('app-transfer-creator-warning')).toHaveCount(0)
+    await expect(page.getByTestId('app-transfer-submit')).toBeEnabled()
+
     await page.getByTestId('app-transfer-submit').click()
 
     await expect(page.getByTestId('app-owner')).toHaveText('Managed by: you (personal)')
+    await expect(page.getByText('Application "Org App" is now managed by you (personal)')).toBeVisible()
     expect(state.transfers).toHaveLength(1)
     expect(state.transfers[0].body).toEqual({ org_slug: null })
     expect(Object.hasOwn(state.transfers[0].body as object, 'org_slug')).toBe(true)
+  })
+
+  test('org-owned app created by another user warns with original creator name before confirmation and in success banner', async ({ page }) => {
+    const state = stateWith([
+      { client_id: 'app_org_other', name: 'Alice Org App', client_type: 'PUBLIC', status: 'active', org_id: 1, creator_user_id: 42, allowed_grant_types: ['authorization_code'] },
+    ])
+    await mockApplications(page, state)
+    await openApps(page)
+
+    await page.getByTestId('app-transfer-button').click()
+    const dialog = page.getByTestId('app-transfer-dialog')
+    await expect(dialog.locator('option')).toHaveText(['Original creator: alice (#42) (personal)'])
+    const warning = page.getByTestId('app-transfer-creator-warning')
+    await expect(warning).toBeVisible()
+    await expect(warning).toContainText('alice (#42)')
+    await expect(warning).toContainText('lose management access')
+    await expect(warning).toContainText('disappear from your list')
+
+    await page.getByTestId('app-transfer-submit').click()
+
+    await expect(page.getByText('Application "Alice Org App" was returned to its original creator (alice (#42))')).toBeVisible()
+    await expect(page.getByText('you (personal)')).toHaveCount(0)
+    expect(state.transfers).toEqual([
+      { path: '/api/me/applications/app_org_other/transfer', body: { org_slug: null } },
+    ])
+  })
+
+  test('org-owned app falls back conservatively when creator lookup fails', async ({ page }) => {
+    const state = stateWith([
+      { client_id: 'app_org_unknown', name: 'Unknown Creator App', client_type: 'PUBLIC', status: 'active', org_id: 1, creator_user_id: 99, allowed_grant_types: ['authorization_code'] },
+    ])
+    state.failMembersLookup = true
+    await mockApplications(page, state)
+    await openApps(page)
+
+    await page.getByTestId('app-transfer-button').click()
+    const dialog = page.getByTestId('app-transfer-dialog')
+    await expect(dialog.locator('option')).toHaveText(['Original creator #99 (personal)'])
+    const warning = page.getByTestId('app-transfer-creator-warning')
+    await expect(warning).toBeVisible()
+    await expect(warning).toContainText('#99')
+    await expect(warning).toContainText('lose management access')
+    await expect(dialog).not.toContainText('you (personal)')
+
+    await page.getByTestId('app-transfer-submit').click()
+
+    await expect(page.getByText('Application "Unknown Creator App" was returned to its original creator (#99)')).toBeVisible()
+    await expect(page.getByText('you (personal)')).toHaveCount(0)
   })
 
   test('cancelling the dialog sends nothing', async ({ page }) => {
@@ -311,5 +442,40 @@ test.describe('Application transfer (UF-04b)', () => {
     await expect(page.getByTestId('app-transfer-no-targets')).toBeVisible()
     await expect(page.getByTestId('app-transfer-submit')).toBeDisabled()
     expect(state.transfers).toEqual([])
+  })
+})
+
+test.describe('Application edit modal grants', () => {
+  test('disables client_credentials for PUBLIC clients and keeps at least one grant checked', async ({ page }) => {
+    const state = stateWith([
+      personal(1),
+      {
+        client_id: 'app_conf_1',
+        name: 'Conf App',
+        client_type: 'CONFIDENTIAL',
+        status: 'active',
+        org_id: null,
+        creator_user_id: 1,
+        allowed_grant_types: ['authorization_code'],
+      },
+    ])
+    await mockApplications(page, state)
+    await openApps(page)
+
+    // PUBLIC client: client_credentials is disabled; single checked grant is disabled.
+    await page.getByTestId('app-edit-button').first().click()
+    await expect(page.getByTestId('app-edit-grant-client_credentials')).toBeDisabled()
+    await expect(page.getByTestId('app-edit-grant-authorization_code')).toBeChecked()
+    await expect(page.getByTestId('app-edit-grant-authorization_code')).toBeDisabled()
+    await page.getByTestId('app-edit-form').getByRole('button', { name: 'Cancel' }).click()
+
+    // CONFIDENTIAL client: client_credentials is enabled and unlocks unchecking authorization_code.
+    await page.getByTestId('app-edit-button').nth(1).click()
+    const cc = page.getByTestId('app-edit-grant-client_credentials')
+    const code = page.getByTestId('app-edit-grant-authorization_code')
+    await expect(cc).toBeEnabled()
+    await expect(code).toBeDisabled()
+    await cc.check()
+    await expect(code).toBeEnabled()
   })
 })
