@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-admin-endpoints.sh - Admin API endpoint tests (Linux/macOS)
-# Equivalent of test-admin-endpoints.ps1
+# Maintained in parity with test-admin-endpoints.ps1 (two-dialect contract: .sh + .ps1)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

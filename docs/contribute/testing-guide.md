@@ -319,8 +319,8 @@ gcovr is still usable for per-file HTML reports (`--html-details`), but **for su
 
 Beyond the automated test suite, the project also provides tools and scripts for manually validating endpoint functionality.
 
-### 8.1 PowerShell automation script
-The project ships a complete OAuth2 endpoint test script: `scripts/backend/test-oauth2-endpoints.ps1`.
+### 8.1 Endpoint automation scripts (`.sh` / `.ps1`)
+The project ships complete endpoint test suites (`test-oauth2-endpoints` and `test-admin-endpoints`) maintained in two parity dialects: `.sh` for Linux/macOS and `.ps1` for Windows (invoked via `./manage.sh` / `./manage.ps1`; there is no `.bat` dialect).
 
 **Usage:**
 ```powershell
