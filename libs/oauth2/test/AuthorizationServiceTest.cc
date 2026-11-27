@@ -5,11 +5,16 @@
 // IdentityService + OAuth2StandardController with no single owner).
 
 #include <fulla/common/model/Subject.h>
+#include <fulla/common/ports/IOrgConsentResolver.h>
 #include <fulla/oauth2/protocol/AuthorizationService.h>
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <memory>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -472,4 +477,227 @@ TEST(AuthorizationServiceTest, EvaluateScopes_ThrowingRepo_Propagates_UncaughtBy
       },
       std::runtime_error
     );
+}
+
+namespace
+{
+class FakeOrgConsentResolver : public fulla::common::ports::IOrgConsentResolver
+{
+  public:
+    std::unordered_map<std::string, bool> orgConsents;
+    int calls = 0;
+
+    static std::string key(int32_t userId, const std::string &clientId, const std::string &scope)
+    {
+        return std::to_string(userId) + ":" + clientId + ":" + scope;
+    }
+
+    void hasOrgConsentForUser(
+      int32_t internalUserId,
+      const std::string &clientId,
+      const std::string &scope,
+      BoolCallback &&cb
+    ) override
+    {
+        ++calls;
+        auto it = orgConsents.find(key(internalUserId, clientId, scope));
+        cb(it != orgConsents.end() && it->second);
+    }
+};
+
+class DeferredConsentRepo : public IConsentRepository
+{
+  public:
+    std::vector<std::pair<BoolCallback, bool>> pending;
+    std::unordered_map<std::string, bool> consents;
+
+    void hasUserConsent(
+      const UserRef &user,
+      const std::string &clientId,
+      const std::string &scope,
+      BoolCallback &&cb
+    ) override
+    {
+        auto it = consents.find(FakeConsentRepo::key(user, clientId, scope));
+        pending.emplace_back(std::move(cb), it != consents.end() && it->second);
+    }
+
+    void saveUserConsent(const UserRef &, const std::string &, const std::string &, BoolCallback &&cb)
+      override
+    {
+        cb(true);
+    }
+
+    void revokeUserConsent(
+      const UserRef &, const std::string &, const std::string &, VoidCallback &&cb
+    ) override
+    {
+        cb();
+    }
+
+    void flushAll()
+    {
+        auto items = std::move(pending);
+        pending.clear();
+        for (auto &[cb, val] : items)
+            cb(val);
+    }
+};
+
+std::shared_ptr<FakeClientRepo> makeAllScopesClientRepo()
+{
+    auto repo = std::make_shared<FakeClientRepo>();
+    OAuth2Client c;
+    c.clientId = "test-client";
+    c.clientType = ClientType::CONFIDENTIAL;
+    c.allowedScopes = {"openid", "profile", "email", "admin"};
+    repo->clients["test-client"] = c;
+    return repo;
+}
+}  // namespace
+
+TEST(AuthorizationServiceTest, EvaluateScopes_OrgConsentUnion_PersonalShortCircuits)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<FakeConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    auto orgResolver = std::make_shared<FakeOrgConsentResolver>();
+    subjectResolver->mapping["local:alice"] = 42;
+    consents->consents[FakeConsentRepo::key(UserRef{42}, "test-client", "openid")] = true;
+    orgResolver->orgConsents[FakeOrgConsentResolver::key(42, "test-client", "openid")] = true;
+
+    AuthorizationService svc(clients, consents, subjectResolver, nullptr);
+    svc.setOrgConsentResolver(orgResolver);
+
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc.evaluateScopes("test-client", "local:alice", {"openid"}, [&](auto s) {
+        summary = std::move(s);
+    });
+    EXPECT_TRUE(summary.canProceed());
+    ASSERT_EQ(summary.valid.size(), 1u);
+    EXPECT_EQ(summary.valid[0], "openid");
+    EXPECT_EQ(orgResolver->calls, 0);
+}
+
+TEST(AuthorizationServiceTest, EvaluateScopes_OrgConsentUnion_OrgConsentGrantsWhenPersonalAbsent)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<FakeConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    auto orgResolver = std::make_shared<FakeOrgConsentResolver>();
+    subjectResolver->mapping["local:alice"] = 42;
+    orgResolver->orgConsents[FakeOrgConsentResolver::key(42, "test-client", "profile")] = true;
+
+    AuthorizationService svc(clients, consents, subjectResolver, nullptr);
+    svc.setOrgConsentResolver(orgResolver);
+
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc.evaluateScopes("test-client", "local:alice", {"profile"}, [&](auto s) {
+        summary = std::move(s);
+    });
+    EXPECT_TRUE(summary.canProceed());
+    ASSERT_EQ(summary.valid.size(), 1u);
+    EXPECT_EQ(summary.valid[0], "profile");
+    EXPECT_EQ(orgResolver->calls, 1);
+}
+
+TEST(AuthorizationServiceTest, EvaluateScopes_OrgConsentUnion_NeitherConsentedPrompts)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<FakeConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    auto orgResolver = std::make_shared<FakeOrgConsentResolver>();
+    subjectResolver->mapping["local:alice"] = 42;
+
+    AuthorizationService svc(clients, consents, subjectResolver, nullptr);
+    svc.setOrgConsentResolver(orgResolver);
+
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc.evaluateScopes("test-client", "local:alice", {"email"}, [&](auto s) {
+        summary = std::move(s);
+    });
+    EXPECT_TRUE(summary.needsConsent());
+    ASSERT_EQ(summary.consentRequired.size(), 1u);
+    EXPECT_EQ(summary.consentRequired[0], "email");
+    EXPECT_EQ(orgResolver->calls, 1);
+}
+
+TEST(AuthorizationServiceTest, EvaluateScopes_OrgConsentUnion_UnwiredResolverDefaultsToConsentRequired)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<FakeConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    subjectResolver->mapping["local:alice"] = 42;
+
+    AuthorizationService svc(clients, consents, subjectResolver, nullptr);
+
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc.evaluateScopes("test-client", "local:alice", {"openid"}, [&](auto s) {
+        summary = std::move(s);
+    });
+    EXPECT_TRUE(summary.needsConsent());
+    ASSERT_EQ(summary.consentRequired.size(), 1u);
+    EXPECT_EQ(summary.consentRequired[0], "openid");
+}
+
+TEST(AuthorizationServiceTest, EvaluateScopes_OrgConsentUnion_MixedScopesFiresCallbackExactlyOnce)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<FakeConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    auto orgResolver = std::make_shared<FakeOrgConsentResolver>();
+    subjectResolver->mapping["local:alice"] = 42;
+    consents->consents[FakeConsentRepo::key(UserRef{42}, "test-client", "openid")] = true;
+    orgResolver->orgConsents[FakeOrgConsentResolver::key(42, "test-client", "profile")] = true;
+
+    AuthorizationService svc(clients, consents, subjectResolver, nullptr);
+    svc.setOrgConsentResolver(orgResolver);
+
+    int callCount = 0;
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc.evaluateScopes(
+      "test-client",
+      "local:alice",
+      {"openid", "profile", "email"},
+      [&](auto s) {
+          ++callCount;
+          summary = std::move(s);
+      }
+    );
+    EXPECT_EQ(callCount, 1);
+    EXPECT_EQ(orgResolver->calls, 2);
+    EXPECT_TRUE(summary.needsConsent());
+    EXPECT_EQ(summary.valid, (std::vector<std::string>{"openid", "profile"}));
+    EXPECT_EQ(summary.consentRequired, (std::vector<std::string>{"email"}));
+}
+
+TEST(AuthorizationServiceTest, EvaluateScopes_CallbackAfterServiceDestroyed_SafeWithoutThisCapture)
+{
+    auto clients = makeAllScopesClientRepo();
+    auto consents = std::make_shared<DeferredConsentRepo>();
+    auto subjectResolver = std::make_shared<FakeSubjectResolver>();
+    auto orgResolver = std::make_shared<FakeOrgConsentResolver>();
+    auto roleProvider = std::make_shared<FakeRoleProvider>();
+    subjectResolver->mapping["local:alice"] = 42;
+    roleProvider->roles[42] = {"admin"};
+    orgResolver->orgConsents[FakeOrgConsentResolver::key(42, "test-client", "admin")] = true;
+
+    auto svc = std::make_unique<AuthorizationService>(
+      clients, consents, subjectResolver, roleProvider
+    );
+    svc->setOrgConsentResolver(orgResolver);
+
+    int callCount = 0;
+    fulla::oauth2::access::ScopeValidationSummary summary;
+    svc->evaluateScopes("test-client", "local:alice", {"admin"}, [&](auto s) {
+        ++callCount;
+        summary = std::move(s);
+    });
+    ASSERT_EQ(consents->pending.size(), 1u);
+    svc.reset();  // Destroy service before deferred async continuation runs.
+
+    consents->flushAll();
+    EXPECT_EQ(callCount, 1);
+    EXPECT_TRUE(summary.canProceed());
+    EXPECT_EQ(summary.valid, (std::vector<std::string>{"admin"}));
 }

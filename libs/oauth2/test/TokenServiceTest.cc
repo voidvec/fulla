@@ -17,6 +17,7 @@
 #include <fulla/common/model/PkceChallenge.h>
 #include <fulla/common/observability/AuditEvent.h>
 #include <fulla/common/ports/IAuditSink.h>
+#include <fulla/common/ports/IOrgContextResolver.h>
 #include <fulla/common/ports/IRoleProvider.h>
 #include <fulla/common/ports/ISubjectResolver.h>
 #include <fulla/common/testing/FakeCryptoProvider.h>
@@ -300,6 +301,7 @@ class FakeTokenRepo : public ITokenRepository
         intro.sub = it->second.userId;
         intro.scope = it->second.scope;
         intro.exp = it->second.expiresAt;
+        intro.orgId = it->second.orgId;
         cb(intro);
     }
 
@@ -1850,4 +1852,364 @@ TEST(TokenServiceTest, RefreshRetainedUsedRecordStillDetectsReplayAfterExpiry)
     EXPECT_TRUE(repo->refreshTokens[current.token].revoked);
     EXPECT_TRUE(repo->accessTokens[access.token].revoked);
     EXPECT_EQ(repo->refreshTokens.size(), 2u);
+}
+
+namespace
+{
+class FakeOrgContextResolver : public fulla::common::ports::IOrgContextResolver
+{
+  public:
+    int calls = 0;
+    std::string lastSubject;
+    int32_t lastOrgId = 0;
+    std::optional<fulla::common::ports::OrgContextInfo> nextResult;
+
+    void resolveOrgContext(
+      const std::string &subject,
+      int32_t orgId,
+      OrgContextCallback &&cb
+    ) override
+    {
+        ++calls;
+        lastSubject = subject;
+        lastOrgId = orgId;
+        cb(nextResult);
+    }
+};
+}  // namespace
+
+TEST(TokenServiceTest, ExchangeCode_OpenidAndOrgScope_EmitsOrgCtxClaimAndPersistsOrgId)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult =
+      fulla::common::ports::OrgContextInfo{"Acme Corp", {"owner", "admin"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    const std::string redirectUri = "https://example.test/cb";
+    std::string rawCode;
+    svc->generateAuthorizationCode(
+      "test-client",
+      "alice",
+      "openid org",
+      redirectUri,
+      "",
+      "",
+      "",
+      [&](bool, std::string code, std::string) { rawCode = std::move(code); },
+      0,
+      "",
+      42
+    );
+
+    Json::Value r;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 1);
+    EXPECT_EQ(orgResolver->lastSubject, "alice");
+    EXPECT_EQ(orgResolver->lastOrgId, 42);
+    ASSERT_TRUE(r.isMember("id_token"));
+
+    Json::Value claims = decodeIdTokenPayload(r["id_token"].asString(), *crypto);
+    ASSERT_TRUE(claims.isMember("org_ctx"));
+    EXPECT_EQ(claims["org_ctx"]["org_id"].asInt64(), 42);
+    EXPECT_EQ(claims["org_ctx"]["org_name"].asString(), "Acme Corp");
+    ASSERT_EQ(claims["org_ctx"]["roles"].size(), 2u);
+    EXPECT_EQ(claims["org_ctx"]["roles"][0].asString(), "owner");
+    EXPECT_EQ(claims["org_ctx"]["roles"][1].asString(), "admin");
+
+    const std::string accessHash = hashToken(*crypto, r["access_token"].asString());
+    const std::string refreshHash = hashToken(*crypto, r["refresh_token"].asString());
+    ASSERT_TRUE(tokens->accessTokens.count(accessHash));
+    ASSERT_TRUE(tokens->refreshTokens.count(refreshHash));
+    EXPECT_EQ(tokens->accessTokens[accessHash].orgId, std::optional<int32_t>(42));
+    EXPECT_EQ(tokens->refreshTokens[refreshHash].orgId, std::optional<int32_t>(42));
+}
+
+TEST(TokenServiceTest, ExchangeCode_OrgScopeWithoutOpenid_SkipsOrgContextResolver)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = fulla::common::ports::OrgContextInfo{"Acme Corp", {"member"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    const std::string redirectUri = "https://example.test/cb";
+    std::string rawCode;
+    svc->generateAuthorizationCode(
+      "test-client",
+      "alice",
+      "org profile",
+      redirectUri,
+      "",
+      "",
+      "",
+      [&](bool, std::string code, std::string) { rawCode = std::move(code); },
+      0,
+      "",
+      42
+    );
+
+    Json::Value r;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 0);
+    EXPECT_FALSE(r.isMember("id_token"));
+
+    const std::string accessHash = hashToken(*crypto, r["access_token"].asString());
+    const std::string refreshHash = hashToken(*crypto, r["refresh_token"].asString());
+    ASSERT_TRUE(tokens->accessTokens.count(accessHash));
+    ASSERT_TRUE(tokens->refreshTokens.count(refreshHash));
+    EXPECT_EQ(tokens->accessTokens[accessHash].orgId, std::optional<int32_t>(42));
+    EXPECT_EQ(tokens->refreshTokens[refreshHash].orgId, std::optional<int32_t>(42));
+}
+
+TEST(TokenServiceTest, ExchangeCode_OpenidWithoutOrgScope_SkipsOrgContextResolver)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = fulla::common::ports::OrgContextInfo{"Acme Corp", {"member"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    const std::string redirectUri = "https://example.test/cb";
+    std::string rawCode;
+    svc->generateAuthorizationCode(
+      "test-client",
+      "alice",
+      "openid profile",
+      redirectUri,
+      "",
+      "",
+      "",
+      [&](bool, std::string code, std::string) { rawCode = std::move(code); },
+      0,
+      "",
+      42
+    );
+
+    Json::Value r;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 0);
+    ASSERT_TRUE(r.isMember("id_token"));
+    Json::Value claims = decodeIdTokenPayload(r["id_token"].asString(), *crypto);
+    EXPECT_FALSE(claims.isMember("org_ctx"));
+}
+
+TEST(TokenServiceTest, ExchangeCode_UninitializedJwk_SkipsOrgContextResolver)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = fulla::common::ports::OrgContextInfo{"Acme Corp", {"member"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    svc->setOrgContextResolver(orgResolver);
+
+    const std::string redirectUri = "https://example.test/cb";
+    std::string rawCode;
+    svc->generateAuthorizationCode(
+      "test-client",
+      "alice",
+      "openid org",
+      redirectUri,
+      "",
+      "",
+      "",
+      [&](bool, std::string code, std::string) { rawCode = std::move(code); },
+      0,
+      "",
+      42
+    );
+
+    Json::Value r;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 0);
+    EXPECT_FALSE(r.isMember("id_token"));
+}
+
+TEST(TokenServiceTest, ExchangeCode_OrgResolverReturnsNullopt_OmitsOrgCtx)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = std::nullopt;
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    const std::string redirectUri = "https://example.test/cb";
+    std::string rawCode;
+    svc->generateAuthorizationCode(
+      "test-client",
+      "alice",
+      "openid org",
+      redirectUri,
+      "",
+      "",
+      "",
+      [&](bool, std::string code, std::string) { rawCode = std::move(code); },
+      0,
+      "",
+      42
+    );
+
+    Json::Value r;
+    svc->exchangeCodeForToken(
+      rawCode, "test-client", "secret", redirectUri, "", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 1);
+    ASSERT_TRUE(r.isMember("id_token"));
+    Json::Value claims = decodeIdTokenPayload(r["id_token"].asString(), *crypto);
+    EXPECT_FALSE(claims.isMember("org_ctx"));
+}
+
+TEST(TokenServiceTest, RefreshToken_OpenidAndOrgScope_ReResolvesAndDropsOnNullopt)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = fulla::common::ports::OrgContextInfo{"Acme Corp", {"admin"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    OAuth2RefreshToken rt;
+    rt.token = hashToken(*crypto, "raw-org-rt-1");
+    rt.accessToken = "at";
+    rt.clientId = "test-client";
+    rt.userId = "alice";
+    rt.scope = "openid org";
+    rt.familyId = "fam-org-1";
+    rt.orgId = 42;
+    rt.expiresAt = std::numeric_limits<int64_t>::max();
+    tokens->refreshTokens[rt.token] = rt;
+
+    Json::Value r1;
+    svc->refreshAccessToken("raw-org-rt-1", "test-client", [&](const Json::Value &j) { r1 = j; });
+    EXPECT_EQ(orgResolver->calls, 1);
+    ASSERT_TRUE(r1.isMember("id_token"));
+    Json::Value claims1 = decodeIdTokenPayload(r1["id_token"].asString(), *crypto);
+    ASSERT_TRUE(claims1.isMember("org_ctx"));
+    EXPECT_EQ(claims1["org_ctx"]["org_id"].asInt64(), 42);
+    EXPECT_EQ(claims1["org_ctx"]["org_name"].asString(), "Acme Corp");
+
+    // Simulate membership removal on the next rotation.
+    orgResolver->nextResult = std::nullopt;
+    Json::Value r2;
+    svc->refreshAccessToken(
+      r1["refresh_token"].asString(), "test-client", [&](const Json::Value &j) { r2 = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 2);
+    ASSERT_TRUE(r2.isMember("id_token"));
+    Json::Value claims2 = decodeIdTokenPayload(r2["id_token"].asString(), *crypto);
+    EXPECT_FALSE(claims2.isMember("org_ctx"));
+}
+
+TEST(TokenServiceTest, RefreshToken_OrgScopeWithoutOpenid_SkipsOrgContextResolver)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto orgResolver = std::make_shared<FakeOrgContextResolver>();
+    orgResolver->nextResult = fulla::common::ports::OrgContextInfo{"Acme Corp", {"member"}};
+
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+    auto jwk = std::make_shared<fulla::oauth2::JwkManager>();
+    ASSERT_TRUE(jwk->init(Json::Value::nullSingleton()));
+    svc->setJwkManager(jwk);
+    svc->setOrgContextResolver(orgResolver);
+
+    OAuth2RefreshToken rt;
+    rt.token = hashToken(*crypto, "raw-org-rt-no-openid");
+    rt.accessToken = "at";
+    rt.clientId = "test-client";
+    rt.userId = "alice";
+    rt.scope = "org";
+    rt.familyId = "fam-org-2";
+    rt.orgId = 42;
+    rt.expiresAt = std::numeric_limits<int64_t>::max();
+    tokens->refreshTokens[rt.token] = rt;
+
+    Json::Value r;
+    svc->refreshAccessToken(
+      "raw-org-rt-no-openid", "test-client", [&](const Json::Value &j) { r = j; }
+    );
+    EXPECT_EQ(orgResolver->calls, 0);
+    EXPECT_FALSE(r.isMember("id_token"));
+
+    const std::string accessHash = hashToken(*crypto, r["access_token"].asString());
+    const std::string refreshHash = hashToken(*crypto, r["refresh_token"].asString());
+    ASSERT_TRUE(tokens->accessTokens.count(accessHash));
+    ASSERT_TRUE(tokens->refreshTokens.count(refreshHash));
+    EXPECT_EQ(tokens->accessTokens[accessHash].orgId, std::optional<int32_t>(42));
+    EXPECT_EQ(tokens->refreshTokens[refreshHash].orgId, std::optional<int32_t>(42));
+}
+
+TEST(TokenServiceTest, IntrospectToken_PreservesOrgId)
+{
+    auto clients = makeSeededClients();
+    auto grants = std::make_shared<FakeGrantRepo>();
+    auto tokens = std::make_shared<FakeTokenRepo>();
+    auto crypto = std::make_shared<fulla::common::testing::FakeCryptoProvider>();
+    auto svc = std::make_shared<TokenService>(clients, grants, tokens, crypto);
+
+    OAuth2AccessToken at;
+    at.token = hashToken(*crypto, "raw-at-org");
+    at.clientId = "test-client";
+    at.userId = "alice";
+    at.scope = "openid org";
+    at.orgId = 42;
+    at.expiresAt = std::numeric_limits<int64_t>::max();
+    tokens->accessTokens[at.token] = at;
+
+    std::optional<TokenIntrospection> intro;
+    svc->introspectToken("raw-at-org", [&](auto v) { intro = std::move(v); });
+    ASSERT_TRUE(intro.has_value());
+    EXPECT_TRUE(intro->active);
+    EXPECT_EQ(intro->orgId, std::optional<int32_t>(42));
+    Json::Value json = intro->toJson();
+    ASSERT_TRUE(json.isMember("org_id"));
+    EXPECT_EQ(json["org_id"].asInt64(), 42);
 }
