@@ -135,11 +135,15 @@ void TokenService::resolveOrgContextForClaims(
   std::function<void(std::optional<fulla::common::ports::OrgContextInfo>)> &&cb
 )
 {
-    // Claim release is gated on the `org` scope (design §2.1 item 3): the
-    // org_id parameter SELECTS the context, the scope AUTHORIZES its
-    // release to the RP. No binding, no scope, or no resolver -> no claim
-    // (org_ctx is claim data; its failure mode is absence).
-    if (!orgContextResolver_ || !orgId.has_value() || !scopeContains(scope, "org"))
+    // Claim release is gated on both `org` and `openid` (plus an initialized
+    // JwkManager): org_ctx is only emitted inside id_token claims, so API-only
+    // tokens skip the 3-hop resolver while still persisting orgId on the
+    // issued access/refresh tokens. No binding, missing scope, or no resolver
+    // -> nullopt (org_ctx is claim data; its failure mode is absence).
+    if (
+      !orgContextResolver_ || !orgId.has_value() || !scopeContains(scope, "org") ||
+      !scopeContains(scope, "openid") || !jwkManager_ || !jwkManager_->isInitialized()
+    )
     {
         cb(std::nullopt);
         return;

@@ -85,9 +85,25 @@ void AuthorizationService::evaluateScopes(
         return;
     }
 
+    // Copy members before entering async callbacks so continuations stay safe
+    // even if the caller destroys AuthorizationService before completion.
+    auto adminScopes = adminScopes_;
+    auto subjectResolver = subjectResolver_;
+    auto consents = consents_;
+    auto orgConsentResolver = orgConsentResolver_;
+    auto roleProvider = roleProvider_;
+
     clients_->getClient(
       clientId,
-      [this, clientId, subject, requestedScopes, callback = std::move(callback)](
+      [clientId,
+       subject,
+       requestedScopes,
+       adminScopes,
+       subjectResolver,
+       consents,
+       orgConsentResolver,
+       roleProvider,
+       callback = std::move(callback)](
         std::optional<fulla::oauth2::model::OAuth2Client> clientOpt
       ) mutable {
           if (!clientOpt)
@@ -97,36 +113,42 @@ void AuthorizationService::evaluateScopes(
           }
 
           auto client = std::make_shared<fulla::oauth2::model::Client>(std::move(*clientOpt));
-          bool needsAdminCheck = anyRequiresAdminRole(requestedScopes, adminScopes_);
+          bool needsAdminCheck = anyRequiresAdminRole(requestedScopes, adminScopes);
 
           // Resolve internalUserId once (used for both the admin-role check
           // and the per-scope consent lookup below).
-          auto resolveInternalUserId =
-            [this](const std::string &subj, std::function<void(std::optional<int32_t>)> &&cb) {
-                if (!subjectResolver_)
-                {
-                    cb(std::nullopt);
-                    return;
-                }
-                fulla::common::model::Subject subjectValue(subj);
-                subjectResolver_->resolve(subjectValue, std::move(cb));
-            };
+          auto resolveInternalUserId = [subjectResolver](
+                                         const std::string &subj,
+                                         std::function<void(std::optional<int32_t>)> &&cb) {
+              if (!subjectResolver)
+              {
+                  cb(std::nullopt);
+                  return;
+              }
+              fulla::common::model::Subject subjectValue(subj);
+              subjectResolver->resolve(subjectValue, std::move(cb));
+          };
 
           resolveInternalUserId(
             subject,
-            [this,
-             client,
+            [client,
              clientId,
              subject,
              requestedScopes,
              needsAdminCheck,
+             adminScopes,
+             consents,
+             orgConsentResolver,
+             roleProvider,
              callback = std::move(callback)](std::optional<int32_t> internalUserId) mutable {
-                auto proceedWithAdminFlag = [this,
-                                             client,
+                auto proceedWithAdminFlag = [client,
                                              clientId,
                                              subject,
                                              requestedScopes,
                                              internalUserId,
+                                             adminScopes,
+                                             consents,
+                                             orgConsentResolver,
                                              callback =
                                                std::move(callback)](
                   bool hasAdminRole,
@@ -137,7 +159,7 @@ void AuthorizationService::evaluateScopes(
                     // every requested scope, even ones that will end up
                     // Invalid, is simpler than pre-filtering and is at most
                     // a few redundant lookups).
-                    if (!consents_ || !internalUserId)
+                    if (!consents || !internalUserId)
                     {
                         fulla::oauth2::access::ScopeValidationSummary summary =
                           fulla::oauth2::access::evaluateScopes(
@@ -149,8 +171,8 @@ void AuthorizationService::evaluateScopes(
                             // the admin tier when the user's permission
                             // set covers it (hasAdminRole stays literal:
                             // the admin super-role passes regardless).
-                            [this, &userPermissions](const std::string &s) {
-                                return adminScopes_.count(s) > 0 &&
+                            [adminScopes, &userPermissions](const std::string &s) {
+                                return adminScopes.count(s) > 0 &&
                                        std::find(userPermissions.begin(),
                                                  userPermissions.end(),
                                                  s) == userPermissions.end();
@@ -188,8 +210,8 @@ void AuthorizationService::evaluateScopes(
                             // the admin tier when the user's permission
                             // set covers it (hasAdminRole stays literal:
                             // the admin super-role passes regardless).
-                            [this, &userPermissions](const std::string &s) {
-                                return adminScopes_.count(s) > 0 &&
+                            [adminScopes, &userPermissions](const std::string &s) {
+                                return adminScopes.count(s) > 0 &&
                                        std::find(userPermissions.begin(),
                                                  userPermissions.end(),
                                                  s) == userPermissions.end();
@@ -213,8 +235,8 @@ void AuthorizationService::evaluateScopes(
                         // pre-M2). shared_ptr finisher: both hops funnel
                         // into it exactly once each.
                         auto finisher = std::make_shared<std::function<void(bool)>>(
-                          [this, consentMap, remaining, finisherMu, scope, client, hasAdminRole,
-                           requestedScopes, callback,
+                          [consentMap, remaining, finisherMu, scope, client, hasAdminRole,
+                           requestedScopes, callback, adminScopes,
                            userPermissions](bool hasConsent) mutable {
                               bool fire = false;
                               {
@@ -237,8 +259,8 @@ void AuthorizationService::evaluateScopes(
                                           auto it = consentMap->find(s);
                                           return it != consentMap->end() && it->second;
                                       },
-                                      [this, userPermissions](const std::string &s) {
-                                          return adminScopes_.count(s) > 0 &&
+                                      [adminScopes, userPermissions](const std::string &s) {
+                                          return adminScopes.count(s) > 0 &&
                                                  std::find(userPermissions.begin(),
                                                            userPermissions.end(),
                                                            s) == userPermissions.end();
@@ -252,11 +274,11 @@ void AuthorizationService::evaluateScopes(
                               }
                           }
                         );
-                        consents_->hasUserConsent(
+                        consents->hasUserConsent(
                           userRef,
                           clientId,
                           scope,
-                          [orgResolver = orgConsentResolver_, internalUserId, clientId, scope,
+                          [orgResolver = orgConsentResolver, internalUserId, clientId, scope,
                            finisher](bool hasConsent) mutable {
                               if (hasConsent || !orgResolver)
                               {
@@ -276,15 +298,15 @@ void AuthorizationService::evaluateScopes(
                     }
                 };
 
-                if (!needsAdminCheck || !roleProvider_ || !internalUserId)
+                if (!needsAdminCheck || !roleProvider || !internalUserId)
                 {
                     proceedWithAdminFlag(false, {});
                     return;
                 }
 
-                roleProvider_->getRoles(
+                roleProvider->getRoles(
                   *internalUserId,
-                  [this, proceedWithAdminFlag = std::move(proceedWithAdminFlag)](
+                  [roleProvider, proceedWithAdminFlag = std::move(proceedWithAdminFlag)](
                     std::vector<std::string> roles) mutable {
                       bool hasAdmin = std::find(roles.begin(), roles.end(), "admin") != roles.end();
                       // P1-8 (#285): determination needs the permission
@@ -292,12 +314,12 @@ void AuthorizationService::evaluateScopes(
                       // permission path keep the historical behavior
                       // (empty set -> admin-class scopes require the
                       // literal admin role).
-                      if (!roleProvider_->supportsPermissionLookup())
+                      if (!roleProvider->supportsPermissionLookup())
                       {
                           proceedWithAdminFlag(hasAdmin, {});
                           return;
                       }
-                      roleProvider_->getRolePermissions(
+                      roleProvider->getRolePermissions(
                         roles,
                         [hasAdmin, proceedWithAdminFlag = std::move(proceedWithAdminFlag)](
                           std::vector<std::string> permissions) mutable {
