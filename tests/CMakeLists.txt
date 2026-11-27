@@ -427,7 +427,31 @@ endif()
 
 # The legacy scripts assert full WebAuthn/provider routes. Trimmed products
 # use the feature-surface probe below, which asserts their absence explicitly.
-if(WITH_SOCIAL AND WITH_WEBAUTHN)
+# The legacy endpoint scripts exercise persisted users, roles, audit rows and
+# admin APIs. They require the PostgreSQL-backed server config; memory-storage
+# builds cover the login failure path with
+# Integration_P1_Auth_InvalidCredentials_DoNotCrashServer instead.
+set(_FULLA_SERVER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/../apps/server/config/config.json")
+if(NOT EXISTS "${_FULLA_SERVER_CONFIG}")
+    message(FATAL_ERROR "Server config not found: ${_FULLA_SERVER_CONFIG}")
+endif()
+file(READ "${_FULLA_SERVER_CONFIG}" _FULLA_SERVER_CONFIG_JSON)
+string(JSON _FULLA_PLUGIN_COUNT LENGTH "${_FULLA_SERVER_CONFIG_JSON}" plugins)
+math(EXPR _FULLA_LAST_PLUGIN "${_FULLA_PLUGIN_COUNT} - 1")
+set(_FULLA_STORAGE_TYPE "")
+foreach(_FULLA_PLUGIN_INDEX RANGE 0 ${_FULLA_LAST_PLUGIN})
+    string(JSON _FULLA_PLUGIN_NAME GET "${_FULLA_SERVER_CONFIG_JSON}"
+           plugins ${_FULLA_PLUGIN_INDEX} name)
+    if(_FULLA_PLUGIN_NAME STREQUAL "OAuth2Plugin")
+        string(JSON _FULLA_STORAGE_TYPE GET "${_FULLA_SERVER_CONFIG_JSON}"
+               plugins ${_FULLA_PLUGIN_INDEX} config storage_type)
+    endif()
+endforeach()
+if(NOT _FULLA_STORAGE_TYPE STREQUAL "postgres")
+    message(STATUS "Not registering DB-dependent EndpointTests_OutOfProcess for storage_type=${_FULLA_STORAGE_TYPE}")
+endif()
+
+if(WITH_SOCIAL AND WITH_WEBAUTHN AND _FULLA_STORAGE_TYPE STREQUAL "postgres")
 if(WIN32)
     set(_ENDPOINT_WRAPPER "${_ENDPOINT_SCRIPTS_DIR}/run-endpoint-tests.ps1")
     set(_SERVER_BIN "${CMAKE_BINARY_DIR}/apps/server/Release/fulla-server.exe")
@@ -459,7 +483,7 @@ if(_ENDPOINT_TEST_REGISTERED)
     set_tests_properties(EndpointTests_OutOfProcess PROPERTIES
         LABELS "Endpoint"
         RUN_SERIAL TRUE
-        SKIP_RETURN_CODE 77  # wrapper returns 77 when PG/Redis/DB unavailable -> SKIPPED, not FAILED
+        TIMEOUT 300
     )
 endif()
 
