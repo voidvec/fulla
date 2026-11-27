@@ -1,3 +1,5 @@
+﻿# test-oauth2-endpoints.ps1 - OAuth2 endpoint tests (Windows)
+# Maintained in parity with test-oauth2-endpoints.sh (two-dialect contract: .sh + .ps1)
 param(
     [string]$BaseUrl = "http://127.0.0.1:5555"
 )

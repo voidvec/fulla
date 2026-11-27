@@ -1,3 +1,5 @@
+﻿# test-admin-endpoints.ps1 - Admin API endpoint tests (Windows)
+# Maintained in parity with test-admin-endpoints.sh (two-dialect contract: .sh + .ps1)
 param(
     [string]$BaseUrl = "http://127.0.0.1:5555"
 )

@@ -308,8 +308,8 @@ gcovr 仍可用于生成逐文件 HTML 报告（`--html-details`），但**汇�
 
 除了自动化测试套件外，项目还提供了用于手动验证端点功能的工具和脚本。
 
-### 8.1 PowerShell 自动化验证脚本
-项目提供了完整的 OAuth2 端点测试脚本：`scripts/backend/test-oauth2-endpoints.ps1`。
+### 8.1 端点自动化验证脚本（`.sh` / `.ps1`）
+项目提供了完整的端点测试套件（`test-oauth2-endpoints` 与 `test-admin-endpoints`），按双脚本契约同步维护：Linux/macOS 使用 `.sh`，Windows 使用 `.ps1`（通过 `./manage.sh` / `./manage.ps1` 调用；不再维护 `.bat` 包装脚本）。
 
 **使用方法：**
 ```powershell

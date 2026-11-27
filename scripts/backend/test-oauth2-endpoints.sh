@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-oauth2-endpoints.sh - OAuth2 endpoint tests (Linux/macOS)
-# Equivalent of test-oauth2-endpoints.ps1
+# Maintained in parity with test-oauth2-endpoints.ps1 (two-dialect contract: .sh + .ps1)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
