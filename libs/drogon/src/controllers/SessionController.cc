@@ -1254,6 +1254,16 @@ void SessionController::login(
     // tests/e2e-backend's direct-construction tests, until they are
     // updated). Both AuthResult shapes carry an int32 internalId (Task 39
     // direction Y), matching onValidated's signature above.
+    if (!identityAuthService_)
+    {
+        auto plugin = ::drogon::app().getPlugin<::OAuth2Plugin>();
+        if (plugin && plugin->getStorageType() == "memory")
+        {
+            onValidated(false, 0, "", false, false, false);
+            return;
+        }
+    }
+
     if (identityAuthService_)
     {
         identityAuthService_->validateUser(
