@@ -59,8 +59,8 @@ try {
         }
     }
     if (-not $ready) {
-        Write-Host "[endpoint-wrapper] Server did not become ready within 30s (PostgreSQL/Redis/DB seed may be unavailable) -- SKIPPING endpoint tests"
-        exit 77  # SKIP_RETURN_CODE: ctest treats 77 as SKIPPED, not FAILED
+        Write-Host "[endpoint-wrapper] Server did not become ready within 30s (PostgreSQL/Redis/DB seed may be unavailable)"
+        exit 1
     }
     Write-Host "[endpoint-wrapper] Server ready (PID $($proc.Id))"
 
