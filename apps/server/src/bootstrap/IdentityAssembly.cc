@@ -56,6 +56,38 @@
 namespace bootstrap
 {
 
+namespace
+{
+
+struct IdentityState
+{
+    std::shared_ptr<fulla::identity::AuthService> authService;
+    std::shared_ptr<fulla::drogon::adapters::DrogonOAuthHttpClient> oauthHttpClient;
+    std::shared_ptr<fulla::drogon::adapters::BackchannelLogoutNotifier> notifier;
+    std::shared_ptr<fulla::identity::SessionManager> sessionManager;
+    std::shared_ptr<fulla::identity::MfaService> mfaService;
+#ifdef WITH_WEBAUTHN
+    std::shared_ptr<fulla::identity::WebAuthnService> webAuthnService;
+#endif  // WITH_WEBAUTHN
+#ifdef WITH_SOCIAL
+    std::shared_ptr<fulla::identity::GoogleAuthService> googleAuthService;
+    std::shared_ptr<fulla::identity::WeChatAuthService> weChatAuthService;
+    std::shared_ptr<fulla::identity::GitHubAuthService> gitHubAuthService;
+    std::shared_ptr<fulla::identity::SocialLinkService> socialLinkService;
+    std::shared_ptr<fulla::identity::OidcUpstreamAuthService> oidcUpstreamService;
+    std::shared_ptr<fulla::drogon::services::UpstreamProviderRuntime> upstreamRuntime;
+    trantor::TimerId upstreamRefreshTimerId = 0;
+#endif  // WITH_SOCIAL
+};
+
+IdentityState &identityState()
+{
+    static IdentityState state;
+    return state;
+}
+
+}  // namespace
+
 void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
 {
     // Memory-only config (e.g. config.ci.json: "storage_type":"memory",
@@ -128,14 +160,11 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
     }
 #endif  // WITH_WEBAUTHN
 
-    // Owned for the lifetime of the process (same static-local-in-a-
-    // free-function pattern OAuth2Plugin.cc's static jwkManagerLogger
-    // uses) -- SessionController/MfaController hold non-owning raw
-    // pointers to these (see SessionController.h's/MfaController.h's
-    // setIdentityAuthService()/setSessionManager()/setMfaService()/
-    // setUserRepository() comments), and this function's only caller
-    // (main.cc's registerBeginningAdvice) runs exactly once at startup.
-    static auto authService =
+    // Owned via IdentityState for explicit teardown in shutdownIdentityServices()
+    // -- controllers hold non-owning raw pointers to these services during
+    // server execution, and wireIdentityServices() runs once at startup.
+    auto &state = identityState();
+    state.authService =
       std::make_shared<fulla::identity::AuthService>(userRepo, crypto, clock);
     // #103: auth.allow_legacy_hash — legacy unsalted-SHA256 verification
     // window, CLOSED by default: a missing key explicitly disables the
@@ -149,11 +178,11 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         bool allowLegacy = false;
         if (custom.isMember("auth") && custom["auth"].isMember("allow_legacy_hash"))
             allowLegacy = custom["auth"]["allow_legacy_hash"].asBool();
-        authService->setAllowLegacyHash(allowLegacy);
+        state.authService->setAllowLegacyHash(allowLegacy);
         // Observability (#103): surface legacy-format rejections to the
         // server log (the domain layer stays logging-free). Response body
         // stays the generic AUTH_INVALID_CREDENTIALS — no oracle.
-        authService->setLegacyHashRejectionNotifier([](int32_t internalUserId) {
+        state.authService->setLegacyHashRejectionNotifier([](int32_t internalUserId) {
             LOG_WARN << "AUTH_LEGACY_HASH_REJECTED: login denied for user "
                      << internalUserId
                      << " (stored hash is legacy-format and auth.allow_legacy_hash is "
@@ -163,7 +192,7 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
     }
     // B1: shared outbound-HTTP client (Drogon-backed) used by both the
     // backchannel-logout notifier and, when built, the social auth services.
-    static auto oauthHttpClient =
+    state.oauthHttpClient =
       std::make_shared<fulla::drogon::adapters::DrogonOAuthHttpClient>();
     // B1 (OIDC Back-Channel Logout 1.0): real notifier -- finds each relying
     // party with an active session + a registered backchannel_logout_uri and
@@ -171,14 +200,14 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
     // key / audit sink is unavailable, notify() degrades to a no-op fan-out
     // (the logout flow is never blocked). plugin is initialized by the time
     // this runs (getStorageType() above already relied on initAndStart()).
-    static auto notifier =
+    state.notifier =
       std::make_shared<fulla::drogon::adapters::BackchannelLogoutNotifier>(
         dbClient,
         plugin ? plugin->getJwkManager() : nullptr,
         plugin ? plugin->getIssuer() : std::string{},
-        oauthHttpClient,
+        state.oauthHttpClient,
         plugin ? plugin->getAuditSink() : nullptr);
-    static auto sessionManager = std::make_shared<fulla::identity::SessionManager>(notifier);
+    state.sessionManager = std::make_shared<fulla::identity::SessionManager>(state.notifier);
     // TOTP issuer shown by authenticator apps (custom_config.mfa.totp_issuer,
     // env override FULLA_MFA_TOTP_ISSUER); "Fulla" instead of the historical
     // "OAuth2Server" default, which is what users saw in their authenticator.
@@ -189,17 +218,17 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         if (!configured.empty())
             totpIssuer = configured;
     }
-    static auto mfaService =
+    state.mfaService =
       std::make_shared<fulla::identity::MfaService>(mfaRepo, crypto, clock, totpIssuer);
 #ifdef WITH_WEBAUTHN
-    static auto webAuthnService =
+    state.webAuthnService =
       std::make_shared<fulla::identity::WebAuthnService>(webAuthnRepo, crypto, rpId, rpName);
     // #142: strict origin allowlist — verification fails closed while
     // empty (an unconfigured deployment must not accept assertions from
     // ANY origin). Clone detection surfaces as an audit action (the
     // domain service stays logging-free).
-    webAuthnService->setRpOrigins(rpOrigins);
-    webAuthnService->setCloneDetectorNotifier([](int32_t userId, const std::string &credentialId) {
+    state.webAuthnService->setRpOrigins(rpOrigins);
+    state.webAuthnService->setCloneDetectorNotifier([](int32_t userId, const std::string &credentialId) {
         LOG_WARN << "WEBAUTHN_CLONE_DETECTED: user " << userId << " credential "
                  << credentialId
                  << " presented a non-increasing signCount — assertion rejected "
@@ -301,14 +330,14 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
     auto socialAccountRepo =
       std::make_shared<fulla::storage::postgres::PostgresSocialAccountRepository>(dbClient);
 
-    static auto googleAuthService = std::make_shared<fulla::identity::GoogleAuthService>(
-      oauthHttpClient, googleClientId, googleClientSecret, googleRedirectUri
+    state.googleAuthService = std::make_shared<fulla::identity::GoogleAuthService>(
+      state.oauthHttpClient, googleClientId, googleClientSecret, googleRedirectUri
     );
-    static auto weChatAuthService = std::make_shared<fulla::identity::WeChatAuthService>(
-      oauthHttpClient, wechatAppId, wechatSecret
+    state.weChatAuthService = std::make_shared<fulla::identity::WeChatAuthService>(
+      state.oauthHttpClient, wechatAppId, wechatSecret
     );
-    static auto gitHubAuthService = std::make_shared<fulla::identity::GitHubAuthService>(
-      oauthHttpClient, socialAccountRepo, githubClientId, githubClientSecret
+    state.gitHubAuthService = std::make_shared<fulla::identity::GitHubAuthService>(
+      state.oauthHttpClient, socialAccountRepo, githubClientId, githubClientSecret
     );
     // #70: Google/WeChat get the same account-linking repository GitHub was
     // constructed with (additive setter seam — their constructors and the
@@ -323,20 +352,19 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
             autoCreate =
               customConfig["external_auth"]["auto_create_on_first_login"].asBool();
         }
-        googleAuthService->setAccountRepository(socialAccountRepo);
-        googleAuthService->setAutoCreate(autoCreate);
-        weChatAuthService->setAccountRepository(socialAccountRepo);
-        weChatAuthService->setAutoCreate(autoCreate);
-        gitHubAuthService->setAutoCreate(autoCreate);
+        state.googleAuthService->setAccountRepository(socialAccountRepo);
+        state.googleAuthService->setAutoCreate(autoCreate);
+        state.weChatAuthService->setAccountRepository(socialAccountRepo);
+        state.weChatAuthService->setAutoCreate(autoCreate);
+        state.gitHubAuthService->setAutoCreate(autoCreate);
         if (!autoCreate)
             LOG_INFO << "IdentityAssembly: social first-login auto-create disabled "
                         "(external_auth.auto_create_on_first_login=false; unlinked "
                         "provider logins will answer AUTH_SOCIAL_ACCOUNT_NOT_LINKED)";
     }
     // B2 social link/unlink: the same provider services + mapping repository
-    // back the self-service /api/me/social/links* routes. Process-lifetime
-    // static (same contract as the services above) so the raw pointer handed
-    // to the controller singleton stays valid.
+    // back the self-service /api/me/social/links* routes. Owned via
+    // IdentityState and cleared by shutdownIdentityServices().
     // #73b: the last-credential guard also counts WebAuthn credentials when
     // built with WebAuthn support (passkey-only users may unlink their last
     // social link). cryptoProvider is wired for the server-side link-state
@@ -365,13 +393,13 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         linkStateStore = std::make_shared<fulla::drogon::adapters::RedisSocialLinkStateStore>(socialRedis, crypto);
     else
         LOG_WARN << "Social state storage unconfigured; login and linking fail closed";
-    static auto socialLinkService = std::make_shared<fulla::identity::SocialLinkService>(
+    state.socialLinkService = std::make_shared<fulla::identity::SocialLinkService>(
       // #111: disabled providers enter as nullptr -> NotConfigured at the
       // link endpoints (same error surface as the login controllers). The
       // tier flags fold into the same effective-enablement booleans.
-      githubEnabled ? gitHubAuthService : nullptr,
-      googleEnabled ? googleAuthService : nullptr,
-      wechatEnabled ? weChatAuthService : nullptr,
+      githubEnabled ? state.gitHubAuthService : nullptr,
+      googleEnabled ? state.googleAuthService : nullptr,
+      wechatEnabled ? state.weChatAuthService : nullptr,
       socialAccountRepo,
       linkGuardWebAuthnRepo,
       crypto,
@@ -380,16 +408,16 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
 #endif  // WITH_SOCIAL
 
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::SessionController>()
-      ->setIdentityAuthService(authService.get());
+      ->setIdentityAuthService(state.authService.get());
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::SessionController>()
-      ->setSessionManager(sessionManager.get());
+      ->setSessionManager(state.sessionManager.get());
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::MfaController>()
-      ->setMfaService(mfaService.get());
+      ->setMfaService(state.mfaService.get());
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::MfaController>()
       ->setUserRepository(userRepo.get());
 #ifdef WITH_WEBAUTHN
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WebAuthnController>()
-      ->setWebAuthnService(webAuthnService.get());
+      ->setWebAuthnService(state.webAuthnService.get());
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WebAuthnController>()
       ->setUserRepository(userRepo.get());
 #endif  // WITH_WEBAUTHN
@@ -398,13 +426,13 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
     // request time instead of a doomed upstream call). Effective enablement
     // includes the v1.4.0 tier flags.
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>()
-      ->setGoogleAuthService(googleEnabled ? googleAuthService.get() : nullptr);
+      ->setGoogleAuthService(googleEnabled ? state.googleAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>()
-      ->setWeChatAuthService(wechatEnabled ? weChatAuthService.get() : nullptr);
+      ->setWeChatAuthService(wechatEnabled ? state.weChatAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>()
-      ->setGitHubAuthService(githubEnabled ? gitHubAuthService.get() : nullptr);
+      ->setGitHubAuthService(githubEnabled ? state.gitHubAuthService.get() : nullptr);
     drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UserSelfServiceController>()
-      ->setSocialLinkService(socialLinkService.get());
+      ->setSocialLinkService(state.socialLinkService.get());
 #endif  // WITH_SOCIAL
 
     // v1.4.0 provider discovery: the login SPA renders its external-login
@@ -522,12 +550,12 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
                         std::string(resp->getBody().data(), resp->getBody().size()));
               });
         };
-        static auto oidcUpstreamService = std::make_shared<fulla::identity::OidcUpstreamAuthService>(
+        state.oidcUpstreamService = std::make_shared<fulla::identity::OidcUpstreamAuthService>(
           socialAccountRepo, upstreamAutoCreate, httpGet, httpPostForm);
-        static auto upstreamRuntime =
+        state.upstreamRuntime =
           std::make_shared<fulla::drogon::services::UpstreamProviderRuntime>(
             upstreamRepo,
-            oidcUpstreamService,
+            state.oidcUpstreamService,
             loginGuard,
             [customConfig](const std::string &key) {
                 // Same per-key override convention as the social providers
@@ -611,12 +639,10 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
         // guard (the social mock fixture swaps guards mid-test-process) and
         // holds only a weak runtime reference (the runtime owns the applier
         // -- a strong capture would be a self-cycle). The three services
-        // are function-local statics (process lifetime) and are referenced
-        // WITHOUT capture -- lambdas cannot capture statics and do not need
-        // to.
+        // live in IdentityState and are cleared by shutdownIdentityServices().
         std::weak_ptr<fulla::drogon::services::UpstreamProviderRuntime> weakRuntime =
-          upstreamRuntime;
-        upstreamRuntime->setLegacyApplier(
+          state.upstreamRuntime;
+        state.upstreamRuntime->setLegacyApplier(
           [weakRuntime](
             const std::string &key, const std::string &clientId,
             const std::string &clientSecret, bool enabled) {
@@ -624,28 +650,35 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
               {
                   runtime->updateLegacyGuardEntry(key, clientId, clientSecret, enabled);
               }
-              if (key == "google")
-                  googleAuthService->setCredentials(clientId, clientSecret);
-              else if (key == "wechat")
-                  weChatAuthService->setCredentials(clientId, clientSecret);
-              else if (key == "github")
-                  gitHubAuthService->setCredentials(clientId, clientSecret);
+              auto &s = identityState();
+              if (key == "google" && s.googleAuthService)
+                  s.googleAuthService->setCredentials(clientId, clientSecret);
+              else if (key == "wechat" && s.weChatAuthService)
+                  s.weChatAuthService->setCredentials(clientId, clientSecret);
+              else if (key == "github" && s.gitHubAuthService)
+                  s.gitHubAuthService->setCredentials(clientId, clientSecret);
               ::drogon::DrClassMap::getSingleInstance<
                 fulla::drogon::controllers::AuthProvidersController>()
                 ->setStaticProviderEnabled(key, enabled);
           });
 
-        upstreamRuntime->refresh();
-        ::drogon::app().getLoop()->runEvery(
-          60.0, [runtime = upstreamRuntime]() { runtime->refresh(); });
+        state.upstreamRuntime->refresh();
+        if (auto *loop = ::drogon::app().getLoop())
+        {
+            state.upstreamRefreshTimerId = loop->runEvery(
+              60.0, [weakRuntime]() {
+                  if (auto runtime = weakRuntime.lock())
+                      runtime->refresh();
+              });
+        }
         drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
-          ->setRuntime(upstreamRuntime);
+          ->setRuntime(state.upstreamRuntime);
         drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamLoginController>()
           ->setSocialLoginGuard(loginGuard);
         drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::UpstreamProviderAdminController>()
-          ->setRuntime(upstreamRuntime);
+          ->setRuntime(state.upstreamRuntime);
         drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::AuthProvidersController>()
-          ->setUpstreamRuntime(upstreamRuntime);
+          ->setUpstreamRuntime(state.upstreamRuntime);
     }
 #else
     // No social support compiled in: no provider is ever offered.
@@ -658,6 +691,106 @@ void wireIdentityServices([[maybe_unused]] const Json::Value &runtimeConfig)
                 "WebAuthnController/Google|WeChat|GitHubController "
                 "(fulla::identity::AuthService + SessionManager + MfaService + "
                 "WebAuthnService + Social auth services)";
+}
+
+void shutdownIdentityServices()
+{
+    auto &state = identityState();
+
+#ifdef WITH_SOCIAL
+    if (state.upstreamRefreshTimerId != 0)
+    {
+        if (auto *loop = ::drogon::app().getLoop(); loop && loop->isRunning())
+        {
+            loop->invalidateTimer(state.upstreamRefreshTimerId);
+        }
+        state.upstreamRefreshTimerId = 0;
+    }
+#endif  // WITH_SOCIAL
+
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::SessionController>())
+    {
+        ctrl->setIdentityAuthService(nullptr);
+        ctrl->setSessionManager(nullptr);
+    }
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::MfaController>())
+    {
+        ctrl->setMfaService(nullptr);
+        ctrl->setUserRepository(nullptr);
+    }
+#ifdef WITH_WEBAUTHN
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WebAuthnController>())
+    {
+        ctrl->setWebAuthnService(nullptr);
+        ctrl->setUserRepository(nullptr);
+    }
+#endif  // WITH_WEBAUTHN
+#ifdef WITH_SOCIAL
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GoogleController>())
+    {
+        ctrl->setGoogleAuthService(nullptr);
+        ctrl->setSocialLoginGuard(nullptr);
+    }
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::WeChatController>())
+    {
+        ctrl->setWeChatAuthService(nullptr);
+        ctrl->setSocialLoginGuard(nullptr);
+    }
+    if (auto ctrl =
+          drogon::DrClassMap::getSingleInstance<fulla::drogon::controllers::GitHubController>())
+    {
+        ctrl->setGitHubAuthService(nullptr);
+        ctrl->setSocialLoginGuard(nullptr);
+    }
+    if (auto ctrl = drogon::DrClassMap::getSingleInstance<
+          fulla::drogon::controllers::UserSelfServiceController>())
+    {
+        ctrl->setSocialLinkService(nullptr);
+    }
+    if (auto ctrl = drogon::DrClassMap::getSingleInstance<
+          fulla::drogon::controllers::UpstreamLoginController>())
+    {
+        ctrl->setRuntime(nullptr);
+        ctrl->setSocialLoginGuard(nullptr);
+    }
+    if (auto ctrl = drogon::DrClassMap::getSingleInstance<
+          fulla::drogon::controllers::UpstreamProviderAdminController>())
+    {
+        ctrl->setRuntime(nullptr);
+    }
+#endif  // WITH_SOCIAL
+    if (auto ctrl = drogon::DrClassMap::getSingleInstance<
+          fulla::drogon::controllers::AuthProvidersController>())
+    {
+        ctrl->setSocialLoginGuard(nullptr);
+        ctrl->setUpstreamRuntime(nullptr);
+    }
+
+#ifdef WITH_SOCIAL
+    if (state.upstreamRuntime)
+    {
+        state.upstreamRuntime->setLegacyApplier(nullptr);
+    }
+    state.upstreamRuntime.reset();
+    state.oidcUpstreamService.reset();
+    state.socialLinkService.reset();
+    state.gitHubAuthService.reset();
+    state.weChatAuthService.reset();
+    state.googleAuthService.reset();
+#endif  // WITH_SOCIAL
+#ifdef WITH_WEBAUTHN
+    state.webAuthnService.reset();
+#endif  // WITH_WEBAUTHN
+    state.mfaService.reset();
+    state.sessionManager.reset();
+    state.notifier.reset();
+    state.oauthHttpClient.reset();
+    state.authService.reset();
 }
 
 }  // namespace bootstrap

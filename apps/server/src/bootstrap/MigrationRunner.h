@@ -34,6 +34,10 @@ void setupMigrations();
 // crashloop during a rolling upgrade window.
 void setupSchemaSelfCheck();
 
+// Wakes and joins any background migration or schema self-check threads so
+// shutdown does not leave detached threads racing static teardown.
+void shutdownMigrations();
+
 // Synchronously applies all pending migrations using a self-constructed
 // DbClient built from config["db_clients"][0] (drogon::app().run() is
 // never entered). Returns a process exit code: 0 = schema up to date,

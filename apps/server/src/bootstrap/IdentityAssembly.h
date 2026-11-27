@@ -39,4 +39,8 @@ namespace bootstrap
 // comments).
 void wireIdentityServices(const Json::Value &runtimeConfig);
 
+// Stops the upstream refresh timer, clears controller service injections,
+// and resets the identity-layer shared_ptrs before static destruction.
+void shutdownIdentityServices();
+
 }  // namespace bootstrap
